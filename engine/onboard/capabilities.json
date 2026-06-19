@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "comment": "The tool-neutral integration contract for nervepack. The onboarding agent satisfies each capability for its host and records HOW (+ a verify command) in its adapter.json. np-doctor.sh reads this file: 'check:core' capabilities are verified by the doctor's shipped host-neutral checks; 'check:adapter' capabilities are verified by running the command the adapter recorded. MUST failures are errors; SHOULD failures are warnings; a host that cannot satisfy a SHOULD marks it 'unsupported'.",
+  "capabilities": [
+    {
+      "id": "knowledge",
+      "tier": "MUST",
+      "check": "adapter",
+      "title": "nervepack skills are reachable by the model every session",
+      "why": "The whole point: the model must see skills/ (and the consult-nervepack directive) or nervepack does nothing.",
+      "accept": "Starting a fresh session, the model can name/use a known skill without being handed the file by the user.",
+      "hints": {
+        "claude-code": "symlink each skills/*/SKILL.md into ~/.claude/skills/ (reference: setup/30-link-skills.sh).",
+        "goose": "expose skills via .goosehints (point at INDEX.md) and/or a recipe that loads the skill dir.",
+        "generic": "make the markdown under skills/ part of the model's standing/system context each session.",
+        "cursor": "Cursor reads AGENTS.md + .cursor/rules/*.mdc natively (skills as standing context). For the consult-nervepack directive on a host without a session-start hook, append the managed block: setup/np-instruction-block.sh install <project>/AGENTS.md (or .cursor/rules/nervepack.mdc).",
+        "codex": "Codex reads AGENTS.md natively. Add the directive via the managed block: setup/np-instruction-block.sh install AGENTS.md.",
+        "instruction-file": "For any host that surfaces standing context through an instruction file but has NO session-start hook, run setup/np-instruction-block.sh install <native instruction file>. It appends only a fenced @import block (additive, idempotent, removable) — never run it on a host that already injects the directive via a session-start hook (e.g. Claude Code), to avoid double-injection. Verify: grep -q 'nervepack:begin' <file>."
+      }
+    },
+    {
+      "id": "llm-cli",
+      "tier": "MUST",
+      "check": "core",
+      "title": "np-llm.sh returns text for a stdin prompt",
+      "why": "Capture, evaluator and maintenance all summarize/judge/act through this one wrapper; if it can't reach a model, the runtime is dead.",
+      "accept": "echo a prompt | np-llm.sh complete -> non-empty text on stdout.",
+      "hints": {
+        "claude-code": "default backend; NP_LLM_BACKEND=claude, CLAUDE_BIN points at the claude CLI.",
+        "goose": "set NP_LLM_BACKEND=goose (or ollama) and the model env; np-llm.sh routes complete/agent to it.",
+        "generic": "set NP_LLM_BACKEND + NP_LLM_MODEL_CHEAP/_AGENT so np-llm.sh can shell out to your model. For a local model set NP_LLM_BACKEND=local + NP_LLM_BASE_URL (OpenAI-compatible) + NP_LLM_MODEL_CHEAP; agent mode needs NP_LLM_AGENT_CMD."
+      }
+    },
+    {
+      "id": "git-sync",
+      "tier": "MUST",
+      "check": "core",
+      "title": "the repo is a clone of origin and can fast-forward sync",
+      "why": "nervepack is git-synced across machines; knowledge and committed layers flow through origin/main.",
+      "accept": "git rev-parse inside ~/Code/nervepack succeeds and an origin remote is configured.",
+      "hints": { "generic": "clone https://github.com/pat-browne/nervepack to ~/Code/nervepack; gh auth login for push." }
+    },
+    {
+      "id": "toggles",
+      "tier": "MUST",
+      "check": "core",
+      "title": "feature toggles resolve",
+      "why": "Every runtime behavior is gated through np_enabled; a broken toggle layer silently disables features.",
+      "accept": "np_enabled memory resolves (returns 0 when on).",
+      "hints": { "generic": "ship setup/toggles.conf as-is; per-machine overrides in ~/.config/nervepack/toggles.local." }
+    },
+    {
+      "id": "content",
+      "tier": "MUST",
+      "check": "core",
+      "title": "the engine can locate a content overlay (skills + memory dirs)",
+      "why": "Engine machinery is reusable; a user's skills/episodic/playbooks/strategies/sources/wiki live in a content overlay resolved by np_content_dir. Default is the repo root (single-repo install).",
+      "accept": "np_content_dir resolves to an existing directory.",
+      "hints": { "generic": "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to your content repo; default is the engine repo root." }
+    },
+    {
+      "id": "session-start",
+      "tier": "SHOULD",
+      "check": "adapter",
+      "title": "sync + consult-nervepack directive fire at session start",
+      "why": "Keeps the repo current and forces sessions to actually consult nervepack instead of working from scratch.",
+      "accept": "A new session triggers 40-sync and injects nervepack-session-directive.",
+      "hints": {
+        "claude-code": "SessionStart hooks in ~/.claude/settings.json (reference: 50/51). Also wire per-prompt recall hooks (UserPromptSubmit -> episodic-recall, playbook-recall, strategy-recall; reference: 52/53) so past notes/playbooks/strategies are injected on topic match.",
+        "goose": "SessionStart + UserPromptSubmit hooks in ~/.agents/plugins/nervepack/hooks/hooks.json (Open Plugins spec); map the recall hooks to your prompt-submit event.",
+        "generic": "wire your host's session-start event to run 40-sync-nervepack.sh + emit the directive, and its per-prompt event to run the *-recall.sh hooks."
+      }
+    },
+    {
+      "id": "session-end-capture",
+      "tier": "SHOULD",
+      "check": "adapter",
+      "title": "the session is captured to the episodic inbox on exit",
+      "why": "Immediate working-memory capture so the next session can recall where you left off (cron is only a backup).",
+      "accept": "Ending a session runs episodic-capture.sh against the transcript and writes an inbox note.",
+      "hints": {
+        "claude-code": "SessionEnd hook -> episodic-capture.sh session-end (reference: 52 install script).",
+        "goose": "SessionEnd hook (Open Plugins spec) -> episodic-capture.sh, mapping the host payload to {transcript_path,cwd,session_id}.",
+        "generic": "if your host has no session-end event, wrap it: run the host, then run episodic-capture after it exits."
+      }
+    },
+    {
+      "id": "session-end-flush",
+      "tier": "SHOULD",
+      "check": "adapter",
+      "title": "evaluator + promotion run on exit",
+      "why": "Scores the session and promotes inbox -> episodic themes + metrics immediately; crons become backup.",
+      "accept": "Ending a session runs np-evaluator.sh and np-session-flush.sh.",
+      "hints": {
+        "claude-code": "SessionEnd hooks -> np-evaluator.sh and np-session-flush.sh (reference: 54/55 install scripts).",
+        "generic": "same trigger as capture; the flush carries the NERVEPACK_AGENT guard so it won't recurse. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs."
+      }
+    },
+    {
+      "id": "scheduled-maint",
+      "tier": "SHOULD",
+      "check": "adapter",
+      "title": "promote / aggregate / skill-maintain run on a schedule",
+      "why": "The backup cadence that consolidates memory, metrics and skill budgets even if on-exit promotion is missed.",
+      "accept": "A scheduler (cron or host-native) runs 71/72/73/75 on their cadences.",
+      "hints": {
+        "claude-code": "user crontab (reference: 70-install-memory-cron.sh).",
+        "claude-code-macos": "launchd LaunchAgents, not crontab (reference: 70-install-memory-launchd.sh); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
+        "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs."
+      }
+    }
+  ]
+}

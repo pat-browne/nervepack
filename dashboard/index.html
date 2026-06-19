@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nervepack · Performance</title>
+<style>
+  :root {
+    --bg:#fbfaf8; --surface:#fff; --surface-alt:#f5f3ef; --border:#e8e5df;
+    --text:#181614; --text-secondary:#5e5b56; --text-tertiary:#9b9892;
+    --radius-sm:6px; --radius-md:9px; --radius-lg:12px;
+    --shadow:0 4px 16px rgba(0,0,0,.06);
+    /* Semantic status scale (AAA ~7:1 on --bg) */
+    --status-pos:#3a5a43; --status-warn:#6f5829; --status-neg:#8c3a2d;
+    --status-pos-bg:#eaf1ec; --status-warn-bg:#f1ead9; --status-neg-bg:#f3e3df;
+    /* Data-viz palette */
+    --viz-line:#3a5a43; --viz-fill:#eaf1ec; --viz-grid:#e8e5df; --viz-muted:#857f78;
+    --accent-sage:#476b51;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:Inter,system-ui,-apple-system,sans-serif; font-size:15px;
+         line-height:1.55; padding:28px; max-width:1340px; margin:0 auto; }
+
+  /* Shell: wiki sidebar (left) + dashboard content (right). On narrow viewports
+     the sidebar stacks above the content. */
+  .shell { display:flex; gap:20px; align-items:flex-start; }
+  .content { flex:1; min-width:0; max-width:1080px; }
+  .wikinav { flex:0 0 260px; position:sticky; top:28px; align-self:flex-start;
+             max-height:calc(100vh - 56px); display:flex; flex-direction:column;
+             background:var(--surface); border:1px solid var(--border);
+             border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:14px; }
+  @media (max-width:900px) {
+    .shell { flex-direction:column; }
+    .wikinav { position:static; flex-basis:auto; width:100%; max-height:none; }
+    .content { max-width:none; }
+  }
+  .wikinav .lbl { display:block; margin-bottom:8px; }
+  .wikisearch { width:100%; font:inherit; font-size:13px; padding:7px 10px;
+                border:1px solid var(--border); border-radius:var(--radius-sm);
+                background:var(--surface-alt); color:var(--text); margin-bottom:10px; }
+  .wikisearch:focus-visible { outline:2px solid var(--accent-sage); outline-offset:1px; }
+  .wikilist { overflow-y:auto; flex:1; margin:0 -4px; padding:0 4px; }
+  .wikicount { font-size:11px; color:var(--text-tertiary); margin-bottom:8px; }
+  .wikiitem { display:block; padding:8px 8px; border-radius:var(--radius-sm);
+              text-decoration:none; color:inherit; border-top:1px solid var(--border); }
+  .wikilist .wikiitem:first-child { border-top:none; }
+  .wikiitem:hover { background:var(--surface-alt); }
+  .wikiitem:focus-visible { outline:2px solid var(--accent-sage); outline-offset:-2px; }
+  .wikiitem .wn { font-size:13px; font-weight:600; color:var(--text); display:flex;
+                  align-items:baseline; justify-content:space-between; gap:6px; }
+  .wikiitem .wk { font-size:9px; text-transform:uppercase; letter-spacing:.04em;
+                  color:var(--text-tertiary); font-weight:600; flex:0 0 auto; }
+  .wikiitem .wx { font-size:11px; color:var(--text-secondary); margin-top:2px;
+                  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+                  overflow:hidden; }
+  .wikiitem .wd { font-size:10px; color:var(--text-tertiary); margin-top:3px; }
+  .wikigroup { border:none; margin:0 -4px; }
+  .wikigroup > summary { list-style:none; cursor:pointer; padding:7px 8px;
+    font-size:10px; text-transform:uppercase; letter-spacing:.05em; font-weight:700;
+    color:var(--text-tertiary); display:flex; justify-content:space-between;
+    border-radius:var(--radius-sm); }
+  .wikigroup > summary::-webkit-details-marker { display:none; }
+  .wikigroup > summary:hover { background:var(--surface-alt); }
+  .wikigroup > summary::before { content:"\25BE"; margin-right:6px; font-size:9px; }
+  .wikigroup:not([open]) > summary::before { content:"\25B8"; }
+  .wikitopic { margin:2px 0 2px 10px; }
+  .wikitopic > summary { list-style:none; cursor:pointer; padding:4px 8px;
+    font-size:11px; font-weight:600; color:var(--text-secondary);
+    border-radius:var(--radius-sm); }
+  .wikitopic > summary::-webkit-details-marker { display:none; }
+  .wikitopic > summary::before { content:"\25BE"; margin-right:6px; font-size:8px;
+    color:var(--text-tertiary); }
+  .wikitopic:not([open]) > summary::before { content:"\25B8"; }
+  .wikinest { margin-left:6px; }
+  h1 { font-size:20px; font-weight:600; margin:0; }
+  .sub { color:var(--text-tertiary); font-size:12px; margin-top:2px; }
+  .grid { display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr 1fr; }
+  .panel { background:var(--surface); border:1px solid var(--border);
+           border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:16px; }
+  .panel.full { grid-column:1 / -1; }
+  .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.04em;
+         color:var(--status-pos); font-weight:600; }
+  .empty { color:var(--text-tertiary); font-size:13px; padding:18px 0; text-align:center; }
+  .statstrip { display:flex; gap:18px; margin:8px 0 12px; flex-wrap:wrap; }
+  .stat b { display:block; font-size:18px; color:var(--text); }
+  .stat span { font-size:11px; color:var(--text-secondary); }
+
+  /* Charts: vertical viewBox units == pixels (svg height fixed 120px); x stretches
+     to fill — so the line uses viewBox coords, static dots use left:% (resize-proof),
+     and the hover dot/tooltip are positioned in pixel space from the wrapper rect. */
+  .chartwrap { position:relative; width:100%; height:120px; margin-top:4px; }
+  .chart { width:100%; height:120px; display:block; }
+  .chart line.grid { stroke:var(--viz-grid); stroke-width:1; }
+  .chart polyline { fill:none; stroke:var(--viz-line); stroke-width:2;
+                    vector-effect:non-scaling-stroke; }
+  .pt { position:absolute; width:7px; height:7px; border-radius:50%;
+        background:var(--viz-line); transform:translate(-50%,-50%); opacity:.5;
+        box-shadow:0 0 0 1px var(--surface); pointer-events:none; }
+  .pt.on { opacity:1; width:11px; height:11px; box-shadow:0 0 0 2px var(--surface); }
+  .tip { position:absolute; z-index:5; pointer-events:none; background:var(--surface);
+         border:1px solid var(--border); border-radius:var(--radius-md);
+         box-shadow:var(--shadow); padding:8px 10px; font-size:12px; min-width:130px;
+         color:var(--text); }
+  .tip .t-date { font-size:10px; text-transform:uppercase; letter-spacing:.04em;
+                 color:var(--text-tertiary); margin-bottom:4px; }
+  .tip .t-hd { font-weight:700; font-size:14px; margin-bottom:4px; }
+  .tip .t-row { display:flex; justify-content:space-between; gap:16px; }
+  .tip .t-row span:last-child { color:var(--text-secondary); }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px;
+            font-size:11px; color:var(--text-secondary); align-items:center; }
+  .legend .key { display:inline-flex; align-items:center; gap:6px; }
+  .legend .sw { width:18px; height:3px; border-radius:2px; background:var(--viz-line); }
+  .legend .sw.dot { width:9px; height:9px; border-radius:50%; }
+  .legend .sw.grid { height:0; border-top:1px dashed var(--viz-grid); width:18px; }
+  .legend .muted { color:var(--text-tertiary); }
+
+  .sug { display:flex; align-items:flex-start; gap:8px; padding:8px 0;
+         border-top:1px solid var(--border); }
+  .sug:first-child { border-top:none; }
+  .sug .txt { flex:1; font-size:13px; }
+  .sug .meta { font-size:11px; color:var(--text-tertiary); margin-top:2px; }
+  .pill { display:inline-flex; align-items:center; gap:4px; font-size:11px;
+          font-weight:600; padding:2px 8px; border-radius:var(--radius-sm);
+          border:1px solid; box-shadow:inset 0 0 0 1px rgba(0,0,0,.04); }
+  .pill.pos { color:var(--status-pos); background:var(--status-pos-bg); border-color:#b3ccba; }
+  .pill.neg { color:var(--status-neg); background:var(--status-neg-bg); border-color:#dcb3aa; }
+  .pill.warn { color:var(--status-warn); background:var(--status-warn-bg); border-color:#d9c9a3; }
+  .tag { font-size:10px; color:var(--text-secondary); background:var(--surface-alt);
+         border:1px solid var(--border); border-radius:var(--radius-sm); padding:1px 6px; }
+  .score { font-size:34px; font-weight:700; }
+  .pills { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .kv { font-size:12px; color:var(--text-secondary); margin-top:8px; }
+  .bar { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:12px; }
+  .bar .track { flex:1; height:10px; background:var(--surface-alt);
+                border-radius:var(--radius-sm); overflow:hidden; }
+  .bar .fill { display:block; height:100%; background:var(--viz-line);
+               box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); }
+  .bar.muted .fill { background:var(--viz-muted); }
+  .bar .name { width:230px; white-space:nowrap; overflow:hidden;
+               text-overflow:ellipsis; color:var(--text); }
+  .bar.muted .name { color:var(--text-tertiary); }
+
+  /* Action buttons — only shown when the dashboard is SERVED over http (a backend
+     exists). Under file:// they are hidden and the page behaves exactly as before. */
+  .panelhead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .btnrow { display:flex; gap:8px; }
+  .rowacts { display:inline-flex; gap:6px; margin-left:8px; align-items:center; }
+  .note.ok { color:var(--status-pos); background:var(--status-pos-bg); border:1px solid #cfe0d4;
+             border-radius:6px; padding:6px 10px; font-weight:600; margin:6px 0; }
+  .btn { font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+         border:1px solid var(--border); border-radius:var(--radius-sm);
+         background:var(--surface-alt); color:var(--text); padding:4px 10px; }
+  .btn:hover { background:var(--bg); }
+  .btn.primary { background:var(--accent-sage); border-color:var(--accent-sage); color:#fff; }
+  .btn.sm { padding:2px 8px; font-size:11px; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn:focus-visible { outline:2px solid var(--accent-sage); outline-offset:2px; }
+  .verdict { font-size:11px; margin-top:3px; font-weight:600; }
+  .verdict.implement { color:var(--status-pos); }
+  .verdict.skip { color:var(--text-tertiary); }
+  .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="wikinav" aria-label="Wiki navigation">
+      <span class="lbl">Wiki</span>
+      <input type="text" class="wikisearch" id="wiki-search"
+             placeholder="Search wiki…" aria-label="Search wiki" autocomplete="off">
+      <div class="wikicount" id="wiki-count"></div>
+      <nav class="wikilist" id="wiki-list"></nav>
+    </aside>
+    <main class="content">
+      <header>
+        <h1>Nervepack · Performance</h1>
+        <div class="sub" id="subtitle">loading…</div>
+      </header>
+
+      <section class="panel full" id="panel-trend"></section>
+      <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
+      <div class="grid">
+        <section class="panel" id="panel-wins"></section>
+        <section class="panel" id="panel-suggestions"></section>
+      </div>
+      <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-assets" style="margin-top:16px"></section>
+    </main>
+  </div>
+
+<script src="data/metrics.js"></script>
+<script>
+  // ---- pure helpers ----
+  function scoreClass(n) { return n <= 33 ? "neg" : n <= 66 ? "warn" : "pos"; }
+  function scoreColor(n) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue("--status-" + scoreClass(n)).trim();
+  }
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function fmtDate(ts) { return (ts || "").slice(0, 10); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g,
+      c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+  }
+  function avg(nums) {
+    return nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+  }
+  function fmtTok(n) {
+    n = n || 0;
+    return n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
+         : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+  }
+  function aggregateTokens(records) {
+    const sum = { input: 0, output: 0, cache_read: 0, cache_creation: 0, total: 0 };
+    const series = []; // output tokens per session — the cost driver
+    records.forEach(r => {
+      const t = (r.signals || {}).tokens || {};
+      ["input", "output", "cache_read", "cache_creation", "total"]
+        .forEach(k => sum[k] += t[k] || 0);
+      series.push(t.output || 0);
+    });
+    return { sum, series };
+  }
+  function flattenSuggestions(records) {
+    const out = [];
+    records.forEach(r => (r.suggestions || []).forEach(s =>
+      out.push(Object.assign({ ts: r.ts }, s))));
+    return out.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+  }
+  // Suggestions implemented/rejected in THIS page session — filtered out of every
+  // render and removed from the DOM (incl. duplicates), so a resolved item never
+  // lingers or reappears on a long-open tab. (Server-side build.py filters on reload.)
+  const resolvedTexts = new Set();
+  const normSug = t => (t || "").replace(/\s+/g, " ").trim().toLowerCase();
+  function dropResolved(text) {
+    resolvedTexts.add(normSug(text));
+    elSug.querySelectorAll("[data-reject]").forEach(b => {
+      if (normSug(b.getAttribute("data-reject")) === normSug(text)) b.closest(".sug")?.remove();
+    });
+  }
+  function aggregateAssets(records) {
+    const m = new Map(); // asset -> {asset, kind, used, seen}
+    records.forEach(r => (r.assets_used || []).forEach(a => {
+      const e = m.get(a.asset) || { asset: a.asset, kind: a.kind, used: 0, seen: 0 };
+      e.seen += 1; if (a.used) e.used += 1;
+      m.set(a.asset, e);
+    }));
+    return [...m.values()].sort((a, b) => b.used - a.used || b.seen - a.seen);
+  }
+  function aggregateHelped(records, limit) {
+    // records are ts-ascending; walk newest-first so recent wins lead.
+    const out = [];
+    for (let i = records.length - 1; i >= 0 && out.length < limit; i--) {
+      const r = records[i];
+      (r.helped || []).forEach(h => out.push({ ts: r.ts, text: h }));
+    }
+    return out.slice(0, limit);
+  }
+
+  // ---- reusable line chart: line + static dots (CSS %) + hover tooltip ----
+  const W = 1000, H = 120, pad = 6;
+  const xVB = (i, n) => n === 1 ? W / 2 : pad + i * (W - 2 * pad) / (n - 1);
+
+  // points: [{ vy (viewBox y 0..120), color?, tip (html) }]; grids: [viewBox y]
+  function chartHTML(points, grids) {
+    const n = points.length;
+    points.forEach((p, i) => { p.vx = xVB(i, n); });
+    const validPts = points.filter(p => isFinite(p.vx) && isFinite(p.vy));
+    const line = validPts.map(p => `${p.vx.toFixed(1)},${p.vy.toFixed(1)}`).join(" ");
+    const g = (grids || []).map(v =>
+      `<line class="grid" x1="0" y1="${v}" x2="${W}" y2="${v}"></line>`).join("");
+    // SVG circle markers: make each point visible even when the line hugs the baseline
+    const markers = validPts.map(p =>
+      `<circle cx="${p.vx.toFixed(1)}" cy="${p.vy.toFixed(1)}" r="8"` +
+      ` fill="${p.color || "var(--viz-line)"}" stroke="var(--bg)" stroke-width="2"></circle>`).join("");
+    const dots = points.map((p, i) => {
+      const left = Number.isFinite(p.vx) ? (p.vx / W * 100) : 0;
+      const top  = Number.isFinite(p.vy) ? p.vy : (H - pad);
+      return `<span class="pt" data-i="${i}" style="left:${left.toFixed(2)}%;` +
+        `top:${top.toFixed(1)}px;${p.color ? `background:${p.color};` : ""}"></span>`;
+    }).join("");
+    return `<div class="chartwrap">
+        <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+          ${g}<polyline points="${line}"></polyline>${markers}
+        </svg>${dots}
+        <div class="tip" hidden></div>
+      </div>`;
+  }
+
+  function wireChart(wrap, points) {
+    if (!wrap || !points.length) return;
+    const tip = wrap.querySelector(".tip");
+    const dots = [...wrap.querySelectorAll(".pt")];
+    const n = points.length;
+    let cur = -1;
+    function show(i) {
+      if (i === cur) return;
+      cur = i;
+      const p = points[i], r = wrap.getBoundingClientRect();
+      const px = p.vx / W * r.width, py = p.vy;
+      tip.innerHTML = p.tip;
+      tip.hidden = false;
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      let tx = Math.max(0, Math.min(px - tw / 2, r.width - tw));
+      let ty = py - th - 12; if (ty < 0) ty = py + 16;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+      dots.forEach((el, j) => el.classList.toggle("on", j === i));
+    }
+    function hide() {
+      cur = -1; tip.hidden = true; dots.forEach(el => el.classList.remove("on"));
+    }
+    wrap.addEventListener("mousemove", e => {
+      const r = wrap.getBoundingClientRect();
+      let i = n === 1 ? 0 : Math.round((e.clientX - r.left) / r.width * (n - 1));
+      show(Math.max(0, Math.min(n - 1, i)));
+    });
+    wrap.addEventListener("mouseleave", hide);
+  }
+
+  function legend(keys) {
+    return `<div class="legend">` + keys.map(k =>
+      `<span class="key"><span class="sw ${k.cls || ""}" ${k.color ? `style="background:${k.color}"` : ""}></span>${k.label}</span>`
+    ).join("") + `</div>`;
+  }
+
+  // ---- backend (only when SERVED over http) ----
+  const SERVED = location.protocol === "http:" || location.protocol === "https:";
+  async function api(path, body) {
+    const res = await fetch(path, {
+      method: "POST",
+      // X-Requested-With is the CSRF guard: a cross-origin form POST can't set a
+      // custom header without a preflight the server refuses (see np-dashboard-server.py).
+      headers: { "Content-Type": "application/json", "X-Requested-With": "nervepack" },
+      body: body ? JSON.stringify(body) : null,
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  // ---- render ----
+  const M = (window.METRICS || []).slice();
+  const S = window.TOKENS_SAVED || { total: 0, per_session: 0 };
+  const elTrend = document.getElementById("panel-trend");
+  const elTokens = document.getElementById("panel-tokens");
+  const elSug = document.getElementById("panel-suggestions");
+  const elLatest = document.getElementById("panel-latest");
+  const elAssets = document.getElementById("panel-assets");
+  const elWins = document.getElementById("panel-wins");
+  const elGrad = document.getElementById("panel-graduation");
+  const empty = msg => `<div class="empty">${msg}</div>`;
+  const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
+  const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
+
+  // Graduation candidates: strategies/playbooks that have proven themselves (high `seen`)
+  // or outgrown the skill body budget (bytes) and are overdue to GRADUATE into a
+  // human-reviewed skill via np-core-contribute. Independent of session records, so it
+  // renders in both the empty and populated branches. Fail-open: no/empty data -> empty
+  // state, never a crash.
+  function renderGraduation() {
+    const G = window.GRADUATION || { candidates: [], thresholds: {} };
+    const cands = Array.isArray(G.candidates) ? G.candidates : [];
+    const th = G.thresholds || {};
+    const thNote = (th.graduate_seen != null && th.graduate_kb != null)
+      ? `<div class="note">overdue when seen ≥ ${th.graduate_seen} or body &gt; ${th.graduate_kb} KB · run <code>np-core-contribute</code> to graduate</div>`
+      : "";
+    elGrad.innerHTML = `<span class="lbl">Graduation candidates</span>` + (cands.length
+      ? cands.map(c => `<div class="sug">
+          <div class="txt">
+            <span class="tag">${esc(c.kind || "")}</span> <b>${esc(c.name || "")}</b>
+            <div class="meta">seen ${c.seen || 0} · ${((c.bytes || 0) / 1024).toFixed(1)} KB · ${
+              (Array.isArray(c.reasons) ? c.reasons : []).map(r => esc(r)).join(" + ") || "—"}</div>
+          </div>
+        </div>`).join("") + thNote
+      : empty("No strategies or playbooks are overdue to graduate."));
+  }
+
+  if (!M.length) {
+    document.getElementById("subtitle").textContent = "0 sessions recorded yet" + learnedNote;
+    elTrend.innerHTML = `<span class="lbl">Trend</span>` + empty("No sessions recorded yet.");
+    elTokens.innerHTML = `<span class="lbl">Token usage</span>` + empty("No token data yet.");
+    elSug.innerHTML = `<span class="lbl">Suggestions</span>` + empty("Nothing to act on yet.");
+    elLatest.innerHTML = `<span class="lbl">Latest session</span>` + empty("No session yet.");
+    elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + empty("No asset usage yet.");
+    elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>` + empty("No wins recorded yet.");
+    renderGraduation();
+  } else {
+    const scores = M.map(r => r.contribution_score || 0);
+    const struggles = M.reduce((a, r) => a + ((r.signals || {}).struggles || 0), 0);
+    const wins = M.reduce((a, r) => a + ((r.helped || []).length), 0);
+    document.getElementById("subtitle").textContent =
+      `${M.length} sessions · ${fmtDate(M[0].ts)} – ${fmtDate(M[M.length - 1].ts)} · updated daily` + learnedNote;
+
+    // A · Trend (hero) — score per session, colored by band, hover for detail
+    // Fixed 0–100 scale (honest: a low score must look low).
+    // Point markers (SVG circles) make a flat low line readable against baseline.
+    const y = v => H - pad - (v / 100) * (H - 2 * pad);
+    const trendPts = scores.map((v, i) => {
+      const r = M[i], s = r.signals || {};
+      return {
+        vy: y(v), color: scoreColor(v),
+        tip: `<div class="t-date">${fmtDate(r.ts)}${r.project ? " · " + esc(r.project) : ""}</div>
+          <div class="t-hd" style="color:${scoreColor(v)}">${v}<span style="font-size:11px;color:var(--text-tertiary)">/100</span></div>
+          <div class="t-row"><span>tool calls</span><span>${s.tool_calls || 0}</span></div>
+          <div class="t-row"><span>skills</span><span>${(s.skills_invoked || []).length}</span></div>
+          <div class="t-row"><span>output tok</span><span>${fmtTok((s.tokens || {}).output)}</span></div>
+          <div class="t-row"><span>wins</span><span>${(r.helped || []).length}</span></div>
+          <div class="t-row"><span>struggles</span><span>${s.struggles || 0}</span></div>
+          ${(s.playbook_fires || 0) ? `<div class="t-row"><span>playbooks</span><span>${s.playbook_heeded || 0}/${s.playbook_fires} heeded</span></div>` : ""}`,
+      };
+    });
+    elTrend.innerHTML = `
+      <span class="lbl">Trend · contribution score</span>
+      <div class="statstrip">
+        <div class="stat"><b>${avg(scores)}</b><span>avg score</span></div>
+        <div class="stat"><b>${M.length}</b><span>sessions</span></div>
+        <div class="stat"><b>${wins}</b><span>total wins</span></div>
+        <div class="stat"><b>${struggles}</b><span>total struggles</span></div>
+      </div>
+      ${chartHTML(trendPts, [y(33), y(67)])}
+      ${legend([
+        { cls: "dot", color: "var(--status-pos)", label: "score (green ≥67 · amber 34–66 · clay ≤33)" },
+        { cls: "grid", label: "33 / 67 band thresholds" },
+        { label: "hover a point for session stats" },
+      ])}`;
+    wireChart(elTrend.querySelector(".chartwrap"), trendPts);
+
+    // A2 · Token usage (deterministic — summed once per assistant message.id)
+    // Log scale: token counts span orders of magnitude; log prevents one outlier
+    // from collapsing the other sessions into a bottom-3px sliver.
+    const tk = aggregateTokens(M);
+    const tmax = Math.max(10, ...tk.series);  // floor at 10 to avoid log10(0)/negative
+    const ty = v => H - pad - (Math.log10(Math.max(v, 1)) / Math.log10(tmax)) * (H - 2 * pad);
+    const tokPts = tk.series.map((v, i) => {
+      const r = M[i], t = (r.signals || {}).tokens || {};
+      return {
+        vy: ty(v),
+        tip: `<div class="t-date">${fmtDate(r.ts)}${r.project ? " · " + esc(r.project) : ""}</div>
+          <div class="t-hd">${fmtTok(v)}<span style="font-size:11px;color:var(--text-tertiary)"> out</span></div>
+          <div class="t-row"><span>total</span><span>${fmtTok(t.total)}</span></div>
+          <div class="t-row"><span>input</span><span>${fmtTok(t.input)}</span></div>
+          <div class="t-row"><span>cache read</span><span>${fmtTok(t.cache_read)}</span></div>
+          <div class="t-row"><span>cache write</span><span>${fmtTok(t.cache_creation)}</span></div>`,
+      };
+    });
+    // Est. tokens saved: cache_read lower bound, net of directive overhead.
+    // Formula: sum of max(0, cache_read - directive_tokens) per session.
+    const savedFormula = "∑ max(0, cache_read − directive_tokens) per session\n" +
+      "cache_read: tokens served from cache (not reprocessed)\n" +
+      "directive_tokens: nervepack's own injection cost (subtracted)\n" +
+      "Lower bound — does not include skill/recall counterfactuals.";
+    elTokens.innerHTML = `
+      <span class="lbl">Token usage · deterministic · output / session · log scale</span>
+      <div class="statstrip">
+        <div class="stat"><b>${fmtTok(tk.sum.output)}</b><span>output (generated)</span></div>
+        <div class="stat"><b>${fmtTok(tk.sum.input)}</b><span>input (fresh)</span></div>
+        <div class="stat"><b>${fmtTok(tk.sum.cache_creation)}</b><span>cache write</span></div>
+        <div class="stat"><b>${fmtTok(tk.sum.cache_read)}</b><span>cache read</span></div>
+        <div class="stat"><b>${fmtTok(avg(tk.series))}</b><span>avg output / session</span></div>
+      </div>
+      <div class="statstrip" style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px">
+        <div class="stat" title="${esc(savedFormula)}" style="cursor:help">
+          <b style="color:var(--status-pos)">${fmtTok(S.total)}</b>
+          <span>est. tokens saved (cache lower bound) ⓘ</span>
+        </div>
+        <div class="stat" title="${esc(savedFormula)}" style="cursor:help">
+          <b style="color:var(--status-pos)">${fmtTok(S.per_session)}</b>
+          <span>est. saved / session ⓘ</span>
+        </div>
+      </div>
+      ${chartHTML(tokPts)}
+      ${legend([
+        { color: "var(--viz-line)", label: "output tokens / session" },
+        { label: "hover a point for the full token breakdown" },
+      ])}`;
+    wireChart(elTokens.querySelector(".chartwrap"), tokPts);
+
+    // B · Suggestions (+ http-only actions: per-row Implement / Reject, header Review / Clear)
+    let sugs = flattenSuggestions(M);
+
+    function sugRow(s) {
+      const conf = Math.round((s.confidence || 0) * 100);
+      const cls = conf <= 33 ? "neg" : conf <= 66 ? "warn" : "pos";
+      const verdict = s.verdict ? `<div class="verdict ${s.verdict.decision === "implement" ? "implement" : "skip"}">${s.verdict.decision === "implement" ? "✓ build" : "↓ skip"} — ${esc(s.verdict.reason || "")}</div>` : "";
+      const rowActs = SERVED ? `<span class="rowacts">
+            <button class="btn sm primary" data-implement="${esc(s.text)}">Implement</button>
+            <button class="btn sm" data-reject="${esc(s.text)}">Reject</button>
+          </span>` : "";
+      return `<div class="sug">
+        <div class="txt">${esc(s.text)}${verdict}
+          <div class="meta"><span class="tag">${esc(s.target || "other")}</span>
+            ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""} · ${fmtDate(s.ts)}</div>
+        </div>
+        <span class="pill ${cls}">${conf}%</span>${rowActs}
+      </div>`;
+    }
+
+    function renderSug(list, note) {
+      list = (list || []).filter(s => !resolvedTexts.has(normSug(s.text)));   // never show resolved
+      const actions = SERVED
+        ? `<div class="btnrow">
+             <button class="btn" id="btn-mode" title="How Implement applies a change — PR: branch + pull request for review; direct: commit to main and push (no review gate)">Mode: …</button>
+             <button class="btn" id="btn-review">Review</button>
+             <button class="btn primary" id="btn-clear">Clear</button>
+           </div>`
+        : "";
+      elSug.innerHTML = `<div class="panelhead"><span class="lbl">Suggestions</span>${actions}</div>`
+        + (list.length ? list.map(sugRow).join("") : empty("Nothing to act on yet."))
+        + (note ? `<div class="note">${note}</div>` : "")
+        + (SERVED ? "" : `<div class="note">Open the served dashboard (evaluator.dashboard_serve on) for the Review / Clear and per-row Implement / Reject buttons.</div>`);
+      if (SERVED) wireSugActions(list);
+    }
+
+    function wireSugActions(list) {
+      // Implement mode selector (pr | direct) — writes a per-machine toggle override
+      const modeBtn = document.getElementById("btn-mode");
+      if (modeBtn) {
+        const paint = m => {
+          const direct = m === "direct";
+          modeBtn.dataset.mode = direct ? "direct" : "pr";
+          modeBtn.textContent = "Mode: " + (direct ? "direct ⚠" : "PR");
+          modeBtn.classList.toggle("primary", direct);
+        };
+        fetch("/api/config").then(r => r.json()).then(c => paint(c.implement_mode)).catch(() => paint("pr"));
+        modeBtn.addEventListener("click", async () => {
+          const next = modeBtn.dataset.mode === "direct" ? "pr" : "direct";
+          if (next === "direct" && !confirm(
+            "Direct mode commits straight to main and pushes — no PR review gate. Switch to direct?")) return;
+          modeBtn.disabled = true;
+          try { paint((await api("/api/implement-mode", { mode: next })).mode); }
+          catch (e) { alert("Mode switch failed: " + e.message); }
+          finally { modeBtn.disabled = false; }
+        });
+      }
+      // Reject → resolve (disregard, off the list)
+      elSug.querySelectorAll("[data-reject]").forEach(b =>
+        b.addEventListener("click", async () => {
+          b.disabled = true;
+          try { await api("/api/resolve", { text: b.getAttribute("data-reject") });
+                dropResolved(b.getAttribute("data-reject")); }
+          catch (e) { b.disabled = false; alert("Reject failed: " + e.message); }
+        }));
+      // Implement → start the async agentic job, then POLL its status so the row
+      // updates itself (✓ done & removed, or back to the buttons on failure) with no
+      // manual refresh. The agent takes ~1-2 min; the pill shows live progress.
+      elSug.querySelectorAll("[data-implement]").forEach(b =>
+        b.addEventListener("click", () => startImplement(b)));
+
+      async function startImplement(b) {
+        const text = b.getAttribute("data-implement");
+        const row = b.closest(".sug"), acts = row.querySelector(".rowacts");
+        const buttons = [...row.querySelectorAll("button")];
+        buttons.forEach(x => x.style.display = "none");
+        const pill = document.createElement("span");
+        acts.appendChild(pill);
+        const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
+        const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
+        setPill("warn", "⋯ Implementing…");
+        try { await api("/api/implement", { text }); }
+        catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
+        let tries = 0;
+        const poll = () => setTimeout(async () => {
+          let s;
+          try { s = await (await fetch("/api/implement-status?text=" + encodeURIComponent(text))).json(); }
+          catch { return (++tries < 220) && poll(); }
+          if (s.state === "done") {
+            const ref = s.ref || "", isUrl = /^https?:\/\//.test(ref);
+            const link = isUrl
+              ? ` — <a href="${esc(ref)}" target="_blank">${esc(ref.replace(/^https?:\/\/github\.com\//, ""))}</a>`
+              : (ref ? " — " + esc(ref) : "");
+            const note = document.createElement("div");
+            note.className = "note ok"; note.innerHTML = "✓ Implemented" + link;
+            elSug.querySelector(".panelhead").after(note);
+            dropResolved(text);
+          } else if (s.state === "not_implementable") {
+            setPill("warn", "▲ Not a code change — left open"); buttons.forEach(x => x.style.display = "");
+          } else if (s.state === "failed") {
+            setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
+          } else if (s.state === "busy") {
+            setPill("warn", "⋯ Another job running — try again"); buttons.forEach(x => x.style.display = "");
+          } else if (++tries < 220) { poll(); }       // running / not-yet — keep polling (~11 min cap)
+          else { setPill("warn", "… still running — check back later"); }
+        }, 3000);
+        poll();
+      }
+      const review = document.getElementById("btn-review");
+      if (review) review.addEventListener("click", async () => {
+        review.disabled = true; review.textContent = "Reviewing…";
+        try {
+          const r = await api("/api/review", {});
+          const rows = (r.rows || []).map(x => Object.assign({ ts: x.ts || "" }, x));
+          renderSug(rows, r.degraded
+            ? "Ranked by confidence — model verdicts unavailable (np-llm seam offline)."
+            : "Verdicts from a single Haiku pass — Implement or Reject each, or Clear all.");
+        } catch (e) { review.disabled = false; review.textContent = "Review"; alert("Review failed: " + e.message); }
+      });
+      const clear = document.getElementById("btn-clear");
+      if (clear) clear.addEventListener("click", async () => {
+        if (!confirm("Resolve ALL open suggestions so they reset and accumulate again?")) return;
+        clear.disabled = true; clear.textContent = "Clearing…";
+        try { const r = await api("/api/clear", {});
+              renderSug([], `Cleared ${r.count || 0} suggestion(s). New ones will accumulate.`); }
+        catch (e) { clear.disabled = false; clear.textContent = "Clear"; alert("Clear failed: " + e.message); }
+      });
+    }
+
+    renderSug(sugs);
+
+    // B2 · Wins & learnings (positive mirror of struggles): strategies-learned
+    // count + chips, then the 6 most-recent helped[] items (✓ + --status-pos).
+    const winsList = aggregateHelped(M, 6);
+    const stratTags = (L.strategy_names || [])
+      .map(n => `<span class="tag">${esc(n)}</span>`).join(" ");
+    elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>
+      <div class="statstrip">
+        <div class="stat"><b>${L.strategies}</b><span>strategies learned</span></div>
+      </div>
+      ${stratTags ? `<div class="pills">${stratTags}</div>` : ""}
+      ${winsList.length ? winsList.map(w => `<div class="sug">
+        <div class="txt"><span style="color:var(--status-pos);font-weight:700">✓</span> ${esc(w.text)}
+          <div class="meta">${fmtDate(w.ts)}</div></div>
+      </div>`).join("") : empty("No wins recorded yet.")}`;
+
+    // B3 · Graduation candidates (overdue strategies/playbooks → skills)
+    renderGraduation();
+
+    // D · Latest session
+    const last = M[M.length - 1];
+    const ls = last.signals || {};
+    const sc = last.contribution_score || 0;
+    elLatest.innerHTML = `
+      <span class="lbl">Latest session · ${fmtDate(last.ts)}</span>
+      <div class="score" style="color:${scoreColor(sc)}">${sc}<span style="font-size:14px;color:var(--text-tertiary)">/100</span></div>
+      <div class="pills">
+        ${(last.helped || []).map(h => `<span class="pill pos">✓ ${esc(h)}</span>`).join("")}
+        ${(last.shortfalls || []).map(h => `<span class="pill neg">▲ ${esc(h)}</span>`).join("")}
+        ${ls.struggles ? `<span class="pill neg">✕ ${ls.struggles} struggle(s)</span>` : ""}
+      </div>
+      <div class="kv">${ls.tool_calls || 0} tool calls ·
+        ${(ls.skills_invoked || []).length} skill(s) ·
+        ${fmtTok((ls.tokens || {}).output)} out tok ·
+        directive ${ls.directive_present ? "present" : "absent"}</div>`;
+
+    // C · Asset usefulness
+    const assets = aggregateAssets(M);
+    const maxUsed = Math.max(1, ...assets.map(a => a.used));
+    elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + (assets.length ? assets.map(a =>
+      `<div class="bar ${a.used === 0 ? "muted" : ""}">
+        <span class="name">${esc(a.asset)}</span>
+        <span class="track"><span class="fill" style="width:${Math.round(a.used / maxUsed * 100)}%"></span></span>
+        <span>${a.used}/${a.seen}</span>
+      </div>`).join("") : empty("No asset usage yet."));
+  }
+
+  // ---- wiki nav (left): grouped + collapsible (Topics / Concepts) over window.WIKI;
+  // links open the build-rendered .html in a new tab.
+  // Shape: {topics:[{topic,synthesis,sources[]}],concepts:[]} (see build.py).
+  (function renderWiki() {
+    const W = window.WIKI || { topics: [], concepts: [] };
+    const elList = document.getElementById("wiki-list");
+    const elCount = document.getElementById("wiki-count");
+    const elSearch = document.getElementById("wiki-search");
+    if (!elList) return;
+
+    // Flatten to leaves with a precomputed lowercase haystack for search.
+    const leaves = [];
+    (W.topics || []).forEach(t => {
+      if (t.synthesis) leaves.push({ ...t.synthesis, group: "Topics", topic: t.topic, isSynthesis: true });
+      (t.sources || []).forEach(s => leaves.push({ ...s, group: "Topics", topic: t.topic, isSynthesis: false }));
+    });
+    (W.concepts || []).forEach(c => leaves.push({ ...c, group: "Concepts", topic: null }));
+    leaves.forEach(l => {
+      l._hay = [l.name, l.kind, l.topic, l.excerpt, (l.sources || []).join(" ")]
+        .filter(Boolean).join(" ").toLowerCase();
+    });
+    const total = leaves.length;
+
+    function leafHTML(l) {
+      const meta = (l.topic && !l.isSynthesis)
+        ? esc(l.topic) + (l.version ? " · " + esc(l.version) : "")
+        : esc(fmtDate(l.last_updated));
+      return `<a class="wikiitem" href="${esc(l.html)}" target="_blank" rel="noopener" title="${esc(l.name)}">
+        <span class="wn"><span>${esc(l.name)}</span><span class="wk">${esc(l.kind || "")}</span></span>
+        ${l.excerpt ? `<div class="wx">${esc(l.excerpt)}</div>` : ""}
+        <div class="wd">${meta}</div></a>`;
+    }
+
+    function groupHTML(title, items, open) {
+      if (!items.length) return "";
+      const o = open ? " open" : "";
+      return `<details class="wikigroup"${o}><summary><span>${esc(title)}</span><span>${items.length}</span></summary>
+        <div class="wikinest">${items.map(leafHTML).join("")}</div></details>`;
+    }
+
+    function topicGroupHTML(items, topicsOpen) {
+      // group leaves by topic, render nested <details> per topic (synthesis first)
+      const byTopic = {};
+      items.forEach(l => { (byTopic[l.topic] = byTopic[l.topic] || []).push(l); });
+      const topics = Object.keys(byTopic).sort();
+      if (!topics.length) return "";
+      const ot = topicsOpen ? " open" : "";
+      const inner = topics.map(t => {
+        const ls = byTopic[t].slice().sort((a, b) => (b.isSynthesis ? 1 : 0) - (a.isSynthesis ? 1 : 0));
+        return `<details class="wikitopic"${ot}><summary>${esc(t)} <span>${ls.length}</span></summary>
+          <div class="wikinest">${ls.map(leafHTML).join("")}</div></details>`;
+      }).join("");
+      return `<details class="wikigroup" open><summary><span>Topics</span><span>${items.length}</span></summary>
+        <div class="wikinest">${inner}</div></details>`;
+    }
+
+    function draw(items, expandAll) {
+      elCount.textContent = total ? `${items.length} of ${total} page(s)` : "";
+      if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
+      if (!items.length) { elList.innerHTML = empty("No matches."); return; }
+      // filter into topics + concepts
+      const tops = items.filter(l => l.group === "Topics");
+      const cons = items.filter(l => l.group === "Concepts");
+      elList.innerHTML =
+        topicGroupHTML(tops, expandAll) +
+        groupHTML("Concepts", cons, expandAll);
+    }
+
+    function filter() {
+      const q = (elSearch.value || "").trim().toLowerCase();
+      // searching expands topics + concepts so matches are visible
+      draw(q ? leaves.filter(l => l._hay.includes(q)) : leaves, !!q);
+    }
+
+    if (elSearch) elSearch.addEventListener("input", filter);
+    // default: Topics group open, individual topics collapsed; Concepts collapsed
+    draw(leaves, false);
+  })();
+</script>
+</body>
+</html>

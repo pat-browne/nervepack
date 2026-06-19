@@ -1,0 +1,182 @@
+# nervepack
+
+> **A modpack for AI cognition. Skills, memory, tools, and workflows in one harness.**
+
+nervepack is a context hub you run across your machines: the source of truth for the
+skills, rules, and dev-environment setup an AI coding assistant should know about, so a
+fresh box and a year-old box behave like the same collaborator. It works with Claude
+Code and any other agentic host that can read files and run shell commands.
+
+The reference instance lives at `github.com/pat-browne/nervepack`; fork it and make it
+your own.
+
+> **If you're a Claude session, read `CLAUDE.md` first.** It's the agent manual. The
+> directory contract, the sync and contribute protocols, and what's off-limits all
+> live there.
+
+## The two halves
+
+nervepack ships in two repos, and the split is the whole idea.
+
+- **The engine** (this repo) is the reusable machinery. Hooks, crons, the toggle
+  system, onboarding, the MCP server, and the generic `np-core-*` / `np-kb-*` /
+  `np-env-*` skills. No personal data lives here, and a CI guard keeps it that way.
+- **Your content** is everything personal the engine reads and writes as you use it.
+  Your own skills, your sources and wiki, the memory it accrues, your metrics. It
+  lives in a separate overlay repo that the engine finds through `NP_CONTENT_DIR`.
+
+Keeping them apart means the engine can be public and shareable while your content
+stays yours. Want to see what an overlay looks like before you build one? The
+[`nervepack-content-example`](https://github.com/pat-browne/nervepack-content-example)
+repo is a filled-in example with one real file in every layer. Fork it, point the
+engine at it, and you're running.
+
+## How the layers work
+
+Knowledge lives in layers with a strict pecking order:
+**`skills > sources > wiki > playbooks > episodic`** (with strategies sitting beside
+playbooks). The rule is simple: **human-reviewed knowledge always beats auto-captured
+knowledge.**
+
+- **Skills** are the curated top layer — the rules and how-to reviewed and promoted
+  into every session. They load passively; a SessionStart directive is what makes a
+  session actually reach for them instead of starting from scratch.
+- **Sources + wiki** are the reference layer — version-pinned docs you consult
+  repeatedly, plus synthesis pages that cross-link them.
+- **Playbooks** are auto-distilled from past *failures*, and they're the one layer
+  that's **enforced at the moment you act** — a playbook can inject "don't make this
+  mistake" right before the tool call, which a passive skill can't do.
+- **Strategies** are the mirror image: auto-distilled from past *successes*, surfaced
+  as advice when the topic comes up.
+- **Episodic** is the bottom layer — a prunable narrative of what was worked on and
+  where it left off, so a session next week can pick up the thread.
+
+Two pipelines keep the auto layers fed. A **capture** pipeline summarizes each
+session into episodic memory and distills its failures/successes into
+playbooks/strategies. A **performance** pipeline scores how much nervepack actually
+helped and renders it on a dashboard. Everything is toggle-gated and fails open — no
+layer can break a session.
+
+The auto layers are a **staging pool**, not a dead end: when a playbook or strategy
+keeps proving itself (or outgrows what a skill is even allowed to be), the daily
+maintenance routine flags it to **graduate** into a real, human-reviewed skill. That's
+how a hard-won lesson climbs from "the system noticed this once" to "this is a rule
+now."
+
+For the full tour — every feature's purpose, the workflow that enforces it, and a
+worked example of each flow — see [`docs/FEATURES.md`](docs/FEATURES.md).
+
+## Layout
+
+```
+CLAUDE.md          # Agent manual. Read this if you're an AI session.
+README.md          # You are here.
+INDEX.md           # Auto-generated skill index. Read before adding a skill.
+docs/
+  GETTING-STARTED.md # First-time-user walkthrough: clone → onboard → verify.
+  ARCHITECTURE.md  # The cheap high-level map. Read before any code change.
+  FEATURES.md      # Feature guide: purpose, enforcing workflow, worked example per flow.
+  ROADMAP.md       # Deferred work + the trigger to revisit each item.
+CONTRIBUTING.md    # How to contribute to the engine.
+CHANGELOG.md       # Notable engine changes.
+skills/            # The generic engine skills, delivered into every session.
+engine/
+  setup/           # Idempotent bootstrap, hooks, crons, libs, tests.
+  onboard/         # Host-neutral onboarding contract (works beyond Claude Code).
+  bin/             # The MCP launcher.
+agents/            # Prompts for /schedule, /loop, and the cron agents.
+dashboard/         # The performance dashboard (code).
+publish/           # The secret/PII guard that keeps personal data out of the engine.
+.claude-plugin/    # Plugin manifest for `claude plugin install`.
+```
+
+Your content layers (`sources/`, `wiki/`, `episodic/`, `playbooks/`, `strategies/`,
+`dashboard/data/`, your personal skills, design specs) do not live here. They live in
+your overlay. See `AGENTS.md` for the full directory contract.
+
+## Host compatibility
+
+nervepack is tool-neutral: it onboards onto any agentic host via the contract in
+`engine/onboard/ONBOARD.md`. Maturity varies by host.
+
+| Host | Status | Loads the constitution via | Notes |
+|---|---|---|---|
+| Claude Code (Linux) | ✅ Proven | `CLAUDE.md`→`@AGENTS.md`; SessionStart hook; skills symlinked | reference implementation |
+| Claude Code (macOS) | ✅ Proven | same; launchd not cron | `claude-code-macos` adapter |
+| Cursor | 🟡 WIP | `AGENTS.md` native + `.cursor/rules/nervepack.mdc` | new; not yet validated end-to-end |
+| Codex CLI | 🟡 WIP | `AGENTS.md` native | contract-compatible; untested |
+| Goose | 🟡 WIP | `.goosehints`/recipe; local Ollama or hosted Claude | in progress |
+| OpenHands · Cline · Continue · Gemini CLI · Windsurf · Zed · Aider | ⚪ Contract-only | `AGENTS.md` native or capabilities adapter | unvalidated; reports/PRs welcome |
+
+> **Warning.** ✅ Proven = validated end-to-end (`np-doctor` green + a real session). 🟡 WIP /
+> ⚪ Contract-only = the wiring/contract exists but has **not** been run end-to-end — expect
+> rough edges, run `engine/setup/np-doctor.sh`, and report gaps. Don't assume feature parity:
+> lifecycle capture/evaluator need a session-end event the host may lack.
+
+## Getting started
+
+New to nervepack? **[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)** is the
+first-time-user walkthrough — clone the engine, install the toolchain, onboard your
+host, point at a content overlay, and verify. It leads with Claude Code; other hosts
+follow the same steps via [`engine/onboard/ONBOARD.md`](engine/onboard/ONBOARD.md).
+
+Already onboarded? Check any install with `engine/setup/np-doctor.sh`. Connecting a
+non-Claude MCP client instead? See [`engine/onboard/MCP.md`](engine/onboard/MCP.md).
+
+## Continual sync, in one picture
+
+```
+  ┌──────────────┐  pull  ┌──────────────┐  symlink   ┌────────────────────┐
+  │ origin/main  │ ─────▶ │ ~/Code/      │ ────────▶  │ ~/.claude/skills/  │
+  │              │        │   nervepack  │            │                    │
+  └──────────────┘        └──────────────┘            └────────────────────┘
+         ▲                       │                            │
+         │ push                  │ /np-core-contribute        │ loaded into
+         │                       ▼                            ▼ every session
+  ┌──────────────┐        ┌──────────────────────────────────────┐
+  │ scheduled    │ ──────▶│  any AI session, anywhere you work   │
+  │ refine agent │        └──────────────────────────────────────┘
+  └──────────────┘
+```
+
+- **Pull** happens on the `SessionStart` hook (`40-sync-nervepack.sh`) and on demand
+  with `/np-core-sync`.
+- **Push** happens through `/np-core-contribute` (which asks first) and the
+  pre-authorized scheduled-refine agent.
+
+## Why both `skills/` and a `.claude-plugin/`?
+
+Two ways to ship the same content.
+
+- **As user skills**, which is the day-to-day path. `30-link-skills.sh` symlinks each
+  `skills/*/SKILL.md` into `~/.claude/skills/`, so they're live in every session with
+  no install step.
+- **As a plugin**, which is better for sharing. `.claude-plugin/plugin.json` lets
+  someone else `claude plugin install` this repo by URL. Same skills, different
+  wrapping.
+
+## The maintenance agents
+
+A handful of agents keep the repo healthy so it doesn't rot. Some run as local crons
+(they need the local memory store, which the cloud can't reach), some run as cloud
+routines. The cadence and the exact prompts live in [`agents/README.md`](agents/README.md),
+and `docs/ARCHITECTURE.md` has the authoritative wiring. The short version:
+
+| Agent | Where | Job |
+|---|---|---|
+| `memory-promote` | Local cron | Triage the local memory store, promote durable entries into the right skill, drop the stale ones. |
+| `episodic-maintain` | Local cron | Drain the session inbox into themed episodic memory, compact oversized themes, regenerate the index. |
+| `skill-maintain` | Local cron | Keep skill bodies inside budget, splitting overflow into `references/`. |
+| `nervepack-refine` | Cloud | Lint frontmatter, audit cross-references. |
+| `nervepack-compact` | Cloud | Dedup near-identical skills, propose splits for the oversized ones. |
+
+They run at staggered times so no two are pushing at once, and everything they write
+goes through the same conventions a human would follow. Retired skills move to
+`archive/` in your overlay rather than getting deleted, so the history stays readable.
+
+---
+
+<sub>nervepack's coding rules (`np-kb-coding-rules`) adapt Andrej Karpathy's coding
+guidelines, and its process workflow is built to compose with the
+[superpowers](https://github.com/obra/superpowers) plugin. Full third-party
+attribution lives in [`NOTICE`](NOTICE).</sub>

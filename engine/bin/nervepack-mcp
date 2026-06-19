@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stable spawn command for the nervepack MCP server (stdio).
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$HERE/../setup/np-mcp-server.py" "$@"

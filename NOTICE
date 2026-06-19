@@ -1,0 +1,23 @@
+nervepack
+Copyright 2026 Pat Browne
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+It includes ideas and material adapted from the third-party sources below.
+
+------------------------------------------------------------------------------
+Karpathy coding guidelines
+------------------------------------------------------------------------------
+The `np-kb-coding-rules` skill adapts behavioral coding guidelines originally
+published as "andrej-karpathy-skills" (multica-ai/andrej-karpathy-skills),
+MIT License. nervepack condensed them into native coding rules, reorganized the
+structure, and extended them with nervepack-specific rules.
+Source: https://github.com/multica-ai/andrej-karpathy-skills
+
+------------------------------------------------------------------------------
+superpowers (process workflow patterns)
+------------------------------------------------------------------------------
+nervepack's process expectations (explore-before-build, test-first, root-cause
+debugging, plan execution) are designed to compose with the "superpowers" Claude
+Code plugin when it is installed. nervepack does not vendor or depend on it; it is
+referenced as an optional companion process toolkit.
+Source: https://github.com/obra/superpowers

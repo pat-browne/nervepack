@@ -1,0 +1,12 @@
+{
+  "host": "claude-code",
+  "os": "macos",
+  "comment": "Reference adapter for Claude Code on macOS. Identical to claude-code.example.json except scheduled-maint: macOS schedules via launchd LaunchAgents (setup/70-install-memory-launchd.sh), not crontab. The ~/.claude layout (skills/, settings.json) is the same as on Linux, so the other verify commands are unchanged. Copy to ~/.config/nervepack/adapter.json (per-machine; not committed).",
+  "capabilities": {
+    "knowledge":           { "status": "wired", "verify": "test -e ~/.claude/skills/np-core-sync/SKILL.md" },
+    "session-start":       { "status": "wired", "verify": "grep -q nervepack-session-directive ~/.claude/settings.json" },
+    "session-end-capture": { "status": "wired", "verify": "grep -q episodic-capture ~/.claude/settings.json" },
+    "session-end-flush":   { "status": "wired", "verify": "grep -q np-session-flush ~/.claude/settings.json" },
+    "scheduled-maint":     { "status": "wired", "verify": "launchctl list 2>/dev/null | grep -q com.nervepack" }
+  }
+}

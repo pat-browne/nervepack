@@ -1,0 +1,10 @@
+---
+description: nervepack engine — read the tool-neutral manual before editing this repo
+alwaysApply: true
+---
+
+This repo is the nervepack engine. The authoritative, tool-neutral contributor manual is
+**`AGENTS.md`** at the repo root (Cursor also reads it natively) — read it before changing
+any code or docs. The session "constitution" Pat expects every assistant to honor is
+`engine/setup/nervepack-session-directive.md`. Claude-Code-specific wiring lives in
+`CLAUDE.md`; per-feature design + the change-impact map live in `docs/ARCHITECTURE.md`.

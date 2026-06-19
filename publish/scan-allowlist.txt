@@ -1,0 +1,16 @@
+# Vetted false positives for np-publish-scan.py. Format: <relpath>	<exact-matched-text>
+# These are intentional FAKE tokens in OTHER engine tests' fixtures (the secret
+# scrubber and the capture/playbook/evaluator tests) that plant real-looking values
+# to verify those features behave. The scanner's OWN source + its own tests +
+# this allowlist file are not listed here — they are excluded wholesale via
+# np-publish-scan.py's SKIP_FILES (they hold the detection regexes / planted
+# fixtures by design). Every entry below is printed on each run — keep it tiny and audited.
+engine/setup/tests/episodic/test_scrub.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
+engine/setup/tests/episodic/test_scrub.sh	gho_ABCDEFGHIJKLMNOPQRSTUVWX
+engine/setup/tests/episodic/test_scrub.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
+engine/setup/tests/episodic/test_capture.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
+engine/setup/tests/episodic/test_scrub_failure.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
+# Fake gh-token strings embedded in playbook/evaluator test JSON payloads:
+engine/setup/tests/playbook/test_capture_struggles.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
+engine/setup/tests/playbook/test_capture_strategies.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
+engine/setup/tests/evaluator/test_evaluator.sh	ghp_ABCDEFGHIJKLMNOPQRSTU

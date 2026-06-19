@@ -1,0 +1,11 @@
+{
+  "host": "claude-code",
+  "comment": "Reference adapter manifest produced by onboarding nervepack to Claude Code. Copy to ~/.config/nervepack/adapter.json (per-machine; not committed). Each 'verify' is a deterministic shell command the doctor runs (exit 0 = the capability is genuinely wired). The wiring it verifies is what setup/30-link-skills.sh and setup/5x-install-*.sh produce — read those as the worked example.",
+  "capabilities": {
+    "knowledge":           { "status": "wired", "verify": "test -e ~/.claude/skills/np-core-sync/SKILL.md" },
+    "session-start":       { "status": "wired", "verify": "grep -q nervepack-session-directive ~/.claude/settings.json" },
+    "session-end-capture": { "status": "wired", "verify": "grep -q episodic-capture ~/.claude/settings.json" },
+    "session-end-flush":   { "status": "wired", "verify": "grep -q np-session-flush ~/.claude/settings.json" },
+    "scheduled-maint":     { "status": "wired", "verify": "crontab -l 2>/dev/null | grep -q nervepack" }
+  }
+}

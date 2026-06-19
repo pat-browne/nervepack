@@ -1,0 +1,242 @@
+# nervepack — architecture map (read before any code change)
+
+> **Purpose.** The cheap, high-level model of how nervepack fits together. Read
+> *this* before modifying any code so you know **what your change touches** and
+> stay consistent with patterns that already work. It does not repeat the detail
+> in `CLAUDE.md` or the per-feature specs — it points at them. When the map and a
+> spec disagree, the spec wins; tell the user so this file gets fixed.
+>
+> **Per-feature purpose, enforcing workflow, and a worked example:
+> [`FEATURES.md`](FEATURES.md).** This map stays terse on *what* a feature
+> does and focuses on *what your change touches*; FEATURES carries the narrative.
+>
+> Authority of docs: `CLAUDE.md` (protocol) ≈ this file (map) → `docs/.../specs`
+> (design) → skills (behavior). Authority of *knowledge layers*:
+> `skills > sources > wiki > playbooks > episodic`.
+
+## What nervepack is, in one breath
+
+A versioned hub of skills, rules, memory, and dev-env setup that follows Pat
+across machines, **delivered into each AI session as user skills** (via
+`.claude-plugin/`) and **wired into the session lifecycle by hooks + crons**. It
+is mostly Bash/Python glue around the `claude` CLI plus Markdown knowledge. No
+service, no daemon — everything is a hook, a cron, or a committed file. (One
+deliberate exception: the dashboard's localhost-only server,
+`evaluator.dashboard_serve`, **default on** (opt-out) — see the Dashboard row.)
+
+## Skill namespaces (tiers)
+
+| Prefix | Tier | Holds |
+|---|---|---|
+| `np-core-` | cognition machinery | capture, recall, sync, toggle, contribute |
+| `np-kb-` | knowledge base | domain how-to (branding, chrome-ext, coding rules…) |
+| `np-env-` | environment | machine setup (ubuntu, plugins, vscode, secrets) |
+| `np-flow-` | workflows | recurring agent prompts (`agents/*.md`) |
+
+## Feature catalog (every feature ↔ its toggle ↔ its code ↔ its design doc)
+
+Toggles are declared in `engine/setup/toggles.conf`; every runtime check goes through
+`np_enabled` in `engine/setup/np-toggle-lib.sh`. Flip with `np-core-toggle`. This table
+is the code/toggle/doc **locator**; each feature's *purpose, enforcing workflow, and a
+worked example* live in [`FEATURES.md`](FEATURES.md).
+
+| Feature | Toggle | Core code | Design doc |
+|---|---|---|---|
+| **Session directive** ("consult nervepack first") | `directive` | `engine/setup/nervepack-session-directive.{sh,md}` | CLAUDE.md §"Why every session…" |
+| **Episodic memory** (auto working-memory) | `memory` | `episodic-capture.sh`, `episodic-recall.sh`, `episodic-match.sh`, `episodic-scrub.sh`, `np-transcript-extract.py`, `agents/np-flow-episodic-maintain.md` | `specs/2026-06-02-episodic-memory-layer-design.md` |
+| **Back-capture sweep** (reliable capture path) | `memory` (`.backcapture`; `backcapture_days`/`backcapture_max` params) | `np-backcapture-sweep.sh` (SessionStart, backgrounded) | CLAUDE.md §"Back-capture sweep"; see invariant 12 |
+| **Local memory promotion** | `memory` | `71-run-memory-promote.sh` | CLAUDE.md §"Memory-store promotion" |
+| **Playbooks** (failure-driven, enforced) | `playbooks` | `playbook-recall.sh`, `playbook-guard.sh` | `specs/2026-06-03-playbook-layer-design.md` |
+| **Strategies** (success-driven, advisory) | `strategies` | `strategy-recall.sh`, `strategies/`; distilled by `np-flow-episodic-maintain` from capture `strategies[]` | `specs/2026-06-05-nervepack-vs-sota-evaluation.md` |
+| **Performance evaluator** | `evaluator` | `np-evaluator.sh`, `np-eval-signals.py` | `specs/2026-06-03-performance-evaluator-design.md` |
+| **Metrics aggregation** | `evaluator` (`.aggregate`; `retain_days=90` TTL prune, 0 = unlimited) | `73-aggregate-metrics.sh` | ↑ same |
+| **Dashboard** | `evaluator` (`.dashboard_open`, default on) | `dashboard/build.py`, `dashboard/index.html`, `74-open-dashboard.sh` (SessionStart, once/boot), `open-dashboard.sh` (manual), `np-dashboard-launch.sh`, `np-core-dashboard`; resolved-suggestions ledger: `np-suggestion-resolve.sh` + `build.py` `load_resolved()` (routed via `np_content_dir`; `NP_RESOLVED_SUGGESTIONS` overrides); graduation panel: `build.py` `load_graduation()` ← committed `graduation-candidates.json` (written by `75-skill-maintain.sh`, content-routed; `NP_GRADUATION_CANDIDATES` overrides) → `window.GRADUATION` | `specs/2026-06-03-p2-dashboard-design.md` |
+| **Wiki navigation** (dashboard left-nav + search) | `evaluator` (`.wiki_nav`, default on) | `build.py` `wiki_index()` → `window.WIKI = {topics[], concepts[]}` in `metrics.js` (indexes overlay `wiki/topics/` + `wiki/concepts/`, resolved via `np_content_dir`; `WIKI_NAV` env gate); `index.html` grouped/collapsible sidebar (Topics — each topic nests its synthesis page + sources — and Concepts) + client-side search + build-rendered HTML pages opened in a new tab (`build.py` `md_to_html`/`render_pages` → `data/wiki/{topics,concepts}/*.html`; content-resident & gitignored). Data resides in the **content** overlay; engine carries code only. | `specs/2026-06-03-p2-dashboard-design.md` |
+| **Suggestions review** | `evaluator` (`.dashboard_serve`, `.dashboard_port`, `.suggestions_top` params) | `np-suggestions-review.py` (list/clear), `np-dashboard-server.py` (opt-in localhost backend), `np-core-suggestions-review` | (this work) |
+| **Suggestion implement/reject** (dashboard P3) | `evaluator` (`.implement`, `.implement_mode` `pr\|direct`) | `np-implement-suggestion.sh` (async agentic job; worktree-isolated), `agents/np-flow-implement-suggestion.md`, `np-dashboard-server.py` `/api/implement`, `index.html` buttons | `specs/2026-06-08-suggestion-implement-reject-design.md` |
+| **Struggle escalation** (mid-session) | `evaluator` (`.escalation`; `escalation_min_struggles=2`, `escalation_min_prompts=3`) | `engine/setup/struggle-escalation.sh` (UserPromptSubmit, once/session), `57-install-escalation-hook.sh` | — |
+| **Skill trigger recall** (prompt-pattern skill routing) | `skills` (`.trigger_recall`) | `engine/setup/skill-trigger-recall.sh` (UserPromptSubmit, once/session), `59-install-skill-trigger-hook.sh` | — |
+| **Skill maintenance** (daily auto-split + advisory checks) | `skills` (`graduate_seen`/`graduate_kb` params) | `75-skill-maintain.sh`, `np-skill-budget.py`, `np-skill-validate.py`, `np-graduation-detect.py` (flags proven/over-budget strategies+playbooks to graduate→skill; surfaces to log + `graduation-candidates` marker, never auto-promotes), `np-architecture-freshness.sh` (advisory map-drift), `agents/np-flow-skill-maintain.md` | `specs/2026-06-05-skill-maintenance-routine-design.md` |
+| **Cross-machine sync** | `sync` | `40-sync-nervepack.sh` | CLAUDE.md §"sync nervepack" |
+| **Feature toggles** | (self) | `np-toggle-lib.sh`, `nervepack-toggle*.sh`, `toggles.conf` | `specs/2026-06-03-feature-toggles-design.md` |
+| **Permission allowlist** | `allowlist` | `90/91-…-permissions.sh` | — |
+| **Secrets refresh** | — | `np-env-secrets-refresh` skill | `specs/2026-05-26-secrets-refresh-design.md` |
+| **Wiki/sources** (curated reference) | — | `wiki/topics/<topic>/` (synthesis + co-located sources), `wiki/concepts/`, `log.md` | AGENTS.md §"Wiki layer" |
+| **LLM-agnostic onboarding** | — | `np-llm.sh` (LLM-CLI seam), `engine/onboard/{ONBOARD.md,capabilities.json,adapters/}`, `np-doctor.sh`, `np-core-onboard` skill | `specs/2026-06-05-agnostic-onboarding-design.md` |
+| **MCP layer** (model-agnostic surface) | `mcp` (`writes`/`contribute` params) | `engine/setup/np-mcp-server.py` (stdlib stdio JSON-RPC dispatcher), `engine/bin/nervepack-mcp` (launcher), `engine/setup/58-install-mcp.sh` (Claude Code registration), `engine/setup/tests/mcp/test_mcp_server.py` | `specs/2026-06-08-nervepack-mcp-layer-design.md` |
+| **Content seam** (engine/overlay split) | — (config: `NP_CONTENT_DIR`) | `engine/setup/np-content-lib.sh` (`np_content_dir` resolver + `np_content_dir_origin`/`np_content_is_explicit` — the single explicit-vs-implicit detector, issue #12; consumed across recall/guard hooks, skill link+index, metrics, MCP, doctor). Personal-content writers (71/72/73/75) **skip their commit** when the dir is the *implicit* engine-root fallback (NP_CONTENT_DIR unset AND no `~/.config/nervepack/content-dir`), so they never pollute the PII-clean engine; the doctor `content` check warns. A deliberate single-repo user opts in via the config file (origin `config`). Example overlay: the public `nervepack-content-example` repo. | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
+| **CI PII guard** (secret/PII gate) | — (always-on CI job) | `publish/np-publish-scan.py` (secret/PII scanner; LAN-IP/RFC1918 rule, never loopback) + `scan-allowlist.txt`; CI job `pii-guard` in `.github/workflows/ci.yml`; pre-publish gate `publish/np-publish-snapshot.sh` (+ `publish/PUBLISH.md`); tests `engine/setup/tests/publish/` | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
+
+## Runtime wiring — what fires what
+
+**Lifecycle hooks** (registered in `~/.claude/settings.json` by `engine/setup/5x-install-*.sh`):
+
+| Event | Scripts (in order) |
+|---|---|
+| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `np-backcapture-sweep.sh &` |
+| `UserPromptSubmit` | `episodic-recall.sh` · `playbook-recall.sh` · `strategy-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` |
+| `PreToolUse` | `playbook-guard.sh` |
+| `PreCompact` | `episodic-capture.sh checkpoint` |
+| `SessionEnd` | `episodic-capture.sh session-end` · `40-sync-nervepack.sh exit &` · `np-evaluator.sh` · `np-session-flush.sh` (promotes both inboxes on exit; crons = backup) |
+
+**Crons** (installed by `70-install-memory-cron.sh`):
+
+| When | Job |
+|---|---|
+| Daily 08:00 | `71-run-memory-promote.sh` |
+| Daily 08:30 | `72-run-episodic-maintain.sh` |
+| Daily 09:00 | `73-aggregate-metrics.sh` |
+| Daily 09:15 | `75-skill-maintain.sh` |
+
+**Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `40`
+sync · `50–56` install hooks · `70` install crons / `71–75` cron bodies · `80–91`
+vscode + permissions. Scripts are idempotent and run in order on a fresh box.
+
+## The two data pipelines (the heart of the system)
+
+Both follow the same shape: **a cheap hook captures → a local
+`~/.cache/nervepack/` inbox → the on-exit flush (`np-session-flush.sh`) promotes
+it into a committed layer immediately → a reader surfaces it.** The daily/weekly
+crons are an **idempotent backup** (empty inbox = no-op).
+
+**The reliable capture trigger is SessionStart, not SessionEnd** (invariant 12).
+Claude Code kills slow SessionEnd `claude -p` hooks before they finish and `/exit`
+doesn't fire SessionEnd at all, so the SessionEnd capture/evaluator are
+**best-effort**; the `np-backcapture-sweep.sh` SessionStart hook is what actually
+back-captures the previous session (from its now-complete on-disk transcript) by
+re-running the same capture + evaluator. Same inboxes, same readers — only the
+trigger differs.
+
+```
+EPISODIC MEMORY
+  SessionEnd ─ episodic-capture.sh ─ claude -p (haiku summary)
+            └─▶ ~/.cache/nervepack/episodic-inbox/*.jsonl
+                 └─ np-session-flush (on exit) → 72-maintain ─▶ episodic/<topic>.md  (committed)
+                      │   [backup cron: Sun 08:30]
+                      └─ read by: episodic-recall.sh (UserPromptSubmit) + np-core-recall (/recall)
+
+PERFORMANCE
+  SessionEnd ─ np-evaluator.sh (np-eval-signals.py extracts signals+tokens) ─ claude -p (haiku verdict)
+            └─▶ ~/.cache/nervepack/evaluator-inbox/*.jsonl
+                 └─ np-session-flush (on exit) → 73-aggregate ─▶ dashboard/data/metrics.jsonl  (committed)
+                      │   [backup cron: daily 09:00]
+                      └─ build.py ─▶ metrics.js ─▶ dashboard/index.html (windowed to last N)
+```
+
+Record shapes (keep these stable — readers depend on them):
+- **episodic inbox**: `{session_id, ts, project, cwd, mode} + {headline, body, candidate_topics[], keywords[], struggles[]}` (`session_id` lets the evaluator count this session's `struggles[]` cross-pipeline)
+- **metrics**: `{session_id, ts, project, signals{skills_invoked[], playbook_fires, playbook_heeded, recall_injections, directive_present, struggles, tool_calls, tokens{…}}, contribution_score, helped[], shortfalls[], suggestions[], assets_used[]}`
+
+## Design invariants — the proven choices. Don't relitigate these silently.
+
+1. **Hooks fail open.** Every lifecycle hook ends `exit 0` and routes each early
+   return through a `bail()` that logs one dated line to a `*.log` in
+   `~/.cache/nervepack/`. A hook must never break or block a session. (→ coding-rules §8)
+2. **Headless `claude -p` rules** (→ `np-kb-claude-headless-scripting`):
+   prompt via **stdin** not a trailing positional (variadic `--allowedTools` eats
+   it); `--append-system-prompt` to stop it continuing the transcript; **cap input**
+   and extract text first (`np-transcript-extract.py`); **and any hook that calls
+   `claude -p` MUST set `NERVEPACK_AGENT=1` on the call and bail when that marker
+   is set** — headless `-p` re-fires the lifecycle hooks, so without the guard a
+   SessionEnd hook recurses forever (§7). The runtime no longer calls `claude -p`
+   directly: it goes through **`np-llm.sh`** (the backend-neutral LLM-CLI seam),
+   which sets `NERVEPACK_AGENT` centrally and lets a non-Claude host swap the backend.
+3. **Everything is toggle-gated.** New runtime behavior checks `np_enabled <feature>`
+   and adds a row to `toggles.conf` (→ `specs/…feature-toggles`). Fail-open: unknown = on.
+4. **Cheap model by default.** Summarizers/judges → `claude-haiku-4-5-20251001`;
+   agentic crons → `claude-sonnet-4-6`. Never Opus in automation. (→ CLAUDE.md §"Model selection")
+5. **Bash for glue, Python for parsing/logic** (→ CLAUDE.md §"Harness language policy").
+6. **Every script has a regression test** in `engine/setup/tests/` (stdlib `unittest` /
+   plain bash; stub `claude` via `CLAUDE_BIN`). The whole suite runs via
+   `engine/setup/tests/run-all.sh` (hermetic, zero third-party deps outside `e2e/`);
+   CI runs it as the blocking `regression` job and gates `main` on it. (→ coding-rules §5)
+7. **Skills stay lean** — ~6 KB soft / 8 KB hard; overflow → `references/`; enforced
+   daily by skill-maintain.
+8. **GUI side-effects guard once-per-boot** (the `74` dashboard open) — SessionStart
+   fires repeatedly and a raw GUI open self-sustains a reconnect loop (§4).
+9. **Commits:** conventional prefix (`skill()/setup()/feat()/fix()/docs()/manual()/evaluator()/agent()`),
+   authored as the repo's configured git identity, **no LLM-attribution trailer** (→ coding-rules §6). Ask before pushing.
+10. **Concurrency-safe sync:** fast-forward only, re-check the tip before any
+    destructive git op; never force-push a concurrent agent's branch.
+11. **Cache-stable context injection** (Manus): the SessionStart directive is a
+    **byte-stable prefix** (no timestamps/volatile fields — regression-tested); all
+    variable, session-specific context (episodic/playbook/strategy recall) is injected
+    **later** via `UserPromptSubmit`, never interleaved into the stable block, so the
+    KV-cache survives. nervepack's own injection cost is attributed via
+    `directive_tokens` in the evaluator signals.
+12. **SessionEnd is unreliable for slow work; SessionStart is the reliable trigger.**
+    Claude Code exits without awaiting slow SessionEnd hooks and `/exit` doesn't fire
+    SessionEnd at all (GH #35892/#41577) — so any SessionEnd step that calls `claude -p`
+    (capture, evaluator) is **best-effort**. The guaranteed path is the SessionStart
+    `np-backcapture-sweep.sh`, which back-captures the previous session from its
+    complete on-disk transcript. New per-session capture/scoring work must ride the
+    sweep (or another awaited trigger), never depend on SessionEnd completing.
+13. **Pre-flight gates check the backend, not the `claude` binary.** A hook/cron that
+    needs a model must gate on `${NP_LLM_BACKEND:-claude}`, never on `[[ -x "$CLAUDE" ]]`
+    alone: require the `claude` binary only on the `claude` backend; the `local` backend
+    has its own prerequisites (`complete` → `NP_LLM_BASE_URL`/`MODEL_CHEAP` via
+    `np-llm-local.py`; `agent` → `NP_LLM_AGENT_CMD`). A bare claude-binary check silently
+    disables the whole pipeline on a non-Claude host even though the backend works — the
+    #4b finding behind the five backend-aware gates (capture, evaluator, `71`/`72`/`75`).
+    (→ invariant 2; the seam already owns backend dispatch — don't re-scatter `claude -p`)
+14. **Markdown is the internal representation; HTML is only for human render.**
+    Everything the model ingests (skills, wiki, sources, injected context) stays
+    **Markdown**. Measured on this corpus (2026-06-17), the *same* content as HTML costs
+    **~26% more tokens** on a clean render (real-world HTML 2–10×; published HTML→MD
+    conversions report ~67–87% token savings), while Markdown is only **~5% over bare
+    plain text** — structure for nearly free, and the format LLMs are trained most on.
+    HTML earns its place **only** for human-facing rendered pages (e.g. the dashboard's
+    "open the source" tab, where the model never reads it) or merged-cell tables
+    (`colspan`/`rowspan`, which nervepack content doesn't use). So: **author/store
+    Markdown, render → HTML at build time for humans, never feed HTML to the model.**
+    (Resolves the highest-priority "HTML vs Markdown efficiency" roadmap item.)
+
+## Change-impact map — touch X, then check Y
+
+| If you change… | Also check / update |
+|---|---|
+| any **lifecycle hook script** | its registration in `settings.json` (`5x-install-*.sh`), fail-open + `bail()`, the `NERVEPACK_AGENT` guard (all globally-registered hooks must carry it — not only those that call `claude -p`), and `engine/setup/tests/` |
+| **`episodic-capture.sh`** (or its prompt/schema) | `episodic-recall`, `episodic-match`, `episodic-scrub`, dedup fingerprint, `np-flow-episodic-maintain` (consumes the inbox shape, incl. `struggles[]`→playbooks and `strategies[]`→strategies), `np-transcript-extract.py` |
+| **strategy/playbook layers** (recall or distillation) | the capture schema (`struggles[]`/`strategies[]`), `np-flow-episodic-maintain` §5b/5c, `playbook-recall`/`strategy-recall` + their install (`53`), the `playbooks`/`strategies` toggles, the dashboard "learned" counts (`build.py`), and the **graduation detector** (`np-graduation-detect.py` reads their frontmatter `seen`/`status` + byte size — keep those stable; `skills.graduate_seen`/`graduate_kb` params; `75-skill-maintain.sh` wiring + `tests/skills/test_graduation_detect.py`) |
+| **`np-evaluator.sh`** / the **metrics record shape** | `np-eval-signals.py`, `73-aggregate-metrics.sh`, `dashboard/build.py`, the panels in `dashboard/index.html`, `sample-metrics.jsonl`, the dashboard test |
+| **add a model call anywhere** | call `np-llm.sh` (don't hardcode `claude -p`); it sets `NERVEPACK_AGENT=1` — still guard the calling hook (invariant 2) |
+| **`np-llm.sh`** (the LLM-CLI seam) | every runtime caller (capture, evaluator, 71/72/75); BOTH backend branches (`claude`, and `local` → `engine/setup/np-llm-local.py` for any OpenAI-compatible endpoint via `NP_LLM_BASE_URL`/`_API_KEY`/`_MODEL_CHEAP`); the `complete`/`agent` contract (`agent` on `local` needs `NP_LLM_AGENT_CMD`); `engine/setup/tests/llm/` |
+| **`engine/onboard/capabilities.json`** (the contract) | `np-doctor.sh` (reads it), `ONBOARD.md`, the `np-core-onboard` skill, and host `adapter.json` manifests |
+| **`np-session-flush.sh`** (on-exit promotion) | its `NERVEPACK_AGENT` guard (the maintain step calls `claude -p`; without it SessionEnd recurses), that it stays LAST in SessionEnd (after capture+evaluator write the inboxes), and that the crons remain idempotent backups |
+| **`np-backcapture-sweep.sh`** (the reliable capture trigger) | it reuses `episodic-capture.sh` + `np-evaluator.sh` (keep their stdin payload contract `{session_id,transcript_path,cwd}` stable); its `56-install-*` registration (SessionStart, `&`); the `memory.backcapture` toggle + `backcapture_days`/`backcapture_max` params; dedup vs `metrics.jsonl` sids + the per-sid claim marker; invariant 12; its test |
+| **`np-mcp-server.py`** (the dispatcher) | the stdin/arg contracts of every wrapped script (`np-doctor.sh`, `episodic-match.sh`, `nervepack-toggle.sh`, `dashboard/build.py`, and the Phase-6 scripts); the `mcp`/`mcp.writes`/`mcp.contribute` toggles; the protocol method allowlist; `engine/setup/tests/mcp/` |
+| **a wrapped script's CLI/stdin contract** | `np-mcp-server.py` is now a second caller alongside the hooks — update its call site |
+| **`np-content-lib.sh`** / content-dir resolution | every content-dir consumer (recall/guard hooks, `30-link-skills`, `60-generate-index`, `73-aggregate`, `np-backcapture-sweep`, `np-mcp-server.py`, `np-suggestion-resolve.sh` (resolved-suggestions ledger default), `build.py` (`_content_dir()` mirrors the resolver — used for playbooks/strategies AND the resolved-suggestions default via `default_resolved()`; `NP_PLAYBOOKS_DIR`/`NP_STRATEGIES_DIR`/`NP_RESOLVED_SUGGESTIONS` still override), `np-doctor` `content` check); the backward-compat default (unset → `$NP`); **`np_content_dir`'s stdout MUST stay byte-identical** — the explicit-vs-implicit signal lives in the sibling `np_content_dir_origin`/`np_content_is_explicit` (issue #12), which the personal-content writers (71/72/73/75) gate their commit on (skip on implicit fallback, fail-open) and the doctor warns on; `engine/setup/tests/content/` (incl. `test_writer_implicit_fallback.sh`) |
+| **`publish/np-publish-scan.py`** (the PII guard) | `scan-allowlist.txt` (vetted fake-token FPs only — never real PII) and the scanner's own `SKIP_FILES` (its source + its tests, incl. `test_snapshot.sh`, + the allowlist hold detection patterns by design — a new test that plants a fake secret MUST be added to `SKIP_FILES`); `publish/np-publish-snapshot.sh` is now a second consumer (it runs the scanner over a history-free export); the `pii-guard` CI job in `.github/workflows/ci.yml`; `engine/setup/tests/publish/{test_scan.py,test_no_engine_pii.py,test_snapshot.sh}` (the second asserts the engine tree scans clean) |
+| **`publish/np-publish-snapshot.sh`** (the pre-publish gate) | the scanner it calls (`np-publish-scan.py`), `publish/PUBLISH.md` (the runbook documenting it), and `engine/setup/tests/publish/test_snapshot.sh`. It NEVER pushes — the public `gh repo create --public` stays a manual, human-gated step (ARCHITECTURE has no auto-publish path) |
+| **maintenance-agent commit identity** (`agents/np-flow-*.md`) | uses the runner's git config, else `NP_GIT_AUTHOR_*`, else a neutral bot (never hardcode a person); `engine/setup/tests/publish/test_no_engine_pii.py`; the onboard env doc. `pat-browne`/the canonical repo URL are KEPT project identity (not PII). |
+| **`engine/setup/tests/run-all.sh`** / the test harness | `_lib/harness.sh` + `_lib/report.sh` (hermetic-env + report helpers); the `meta/test_run_all.sh` meta-test (tests the runner itself); the `regression` CI job in `.github/workflows/ci.yml` (blocking, gates `main`); and `engine/setup/tests/README.md`. Note: `e2e/` stays excluded from the default run; use `--with-e2e` explicitly. |
+| **`engine/setup/tests/e2e/`** (Playwright dashboard suite) | `requirements.txt` (pinned deps — update when Playwright version changes); `harness.py`'s server env contract (`NP_IMPLEMENT`, `NP_METRICS`, `NP_RESOLVED_SUGGESTIONS`, `NP_IMPLEMENT_STATUS_DIR`, `NP_DASH_PORT`); and the `dashboard-e2e` CI job (informational, `continue-on-error: true` — never a merge gate). This is the ONLY suite with a third-party dependency; keep it isolated in `e2e/` so the rest of the suite stays zero-dep. |
+| **`toggles.conf`** (add/rename a feature or param) | every `np_enabled`/`np_param` caller, `nervepack-toggle*` menus, and the feature catalog above; note: adding a param with a default that prunes historic data (e.g. `evaluator.retain_days`) can cause existing test records to be pruned — tests with old timestamps must set `NP_TOGGLES_CONF` to control `retain_days` |
+| **`nervepack-session-directive.md`** | this injects into **every** session globally — high blast radius; keep it lean |
+| **a cron body (`7x`)** | its crontab line via `70-install-memory-cron.sh`; remember its `claude -p` fires SessionEnd hooks (set the guard) |
+| **`dashboard/` data shape or build** | `build.py`, `index.html`, the build test, and the committed `metrics.js` (rebuild from real `metrics.jsonl`). The build emits `window.METRICS`/`LEARNED`/`TOKENS_SAVED`/`WIKI` into one `metrics.js`; `window.WIKI = {topics[], concepts[]}` — the **wiki index** (`wiki_index()`, `evaluator.wiki_nav` / `WIKI_NAV` env, sourced from overlay `wiki/topics/` + `wiki/concepts/`) is **content data** — keep it out of the engine repo, and pass `WIKI_NAV` from `73-aggregate-metrics.sh` + `open-dashboard.sh`; new render step (`md_to_html`/`render_pages`) writes `data/wiki/{topics,concepts}/*.html` — keep escaping + href-sanitization (see render tests) |
+| **the suggestions-review engine** (`np-suggestions-review.py`) | it imports `dashboard/build.py` (`_norm`/`load_resolved`/`load_records`) — keep those stable; the server (`np-dashboard-server.py`) and the `np-core-suggestions-review` skill both shell out to it; its test |
+| **`np-dashboard-server.py`** (the opt-in daemon) | keep it **127.0.0.1-only** + path-sanitized + fixed route allowlist; `np-dashboard-launch.sh` starts it; the `evaluator.dashboard_serve/_port/suggestions_top` params; `index.html`'s http-only buttons; its test |
+| **suggestion implement** (`np-implement-suggestion.sh` / `/api/implement`) | the detached-spawn route stays under the CSRF guard; keep the job's lock + **worktree isolation** (the agent runs in a throwaway `git worktree` off the committed base — a dirty main tree no longer blocks implement and the agent's commit can't sweep the user's WIP; direct mode advances local base only when clean) + `NOT_IMPLEMENTABLE`/no-commit handling; the job MUST commit its resolution artifacts (`resolved-suggestions.txt`+`metrics.js`) so it leaves the tree clean (else the next implement refuses "dirty"); it writes a per-suggestion status file (`implement-status/<hash>.json`) that the dashboard polls via `/api/implement-status`; untrusted text is nonce-delimited (prompt-injection); `agents/np-flow-implement-suggestion.md` (must NOT push/PR — the wrapper owns the remote); `evaluator.implement`/`implement_mode` params; the Implement/Reject + Mode buttons + status polling in `index.html`; both tests (`test_implement.sh`, server test) |
+| **the `evaluator` toggle params** (`dashboard_serve`/`dashboard_port`/`suggestions_top`) | `np-dashboard-launch.sh`, `np-dashboard-server.py`, and the feature catalog above |
+| **np-instruction-block.sh** (managed instruction-file block) | its test (`tests/onboard/`); the `knowledge` capability hint in `capabilities.json`; `ONBOARD.md` recipe; never run by default on a host that already injects the directive via a session-start hook (double-injection) |
+| **add/remove a skill** | `30-link-skills.sh` (relinks + regenerates `INDEX.md`), `.claude-plugin/plugin.json` |
+| **the setup ordering** | idempotency + the `00→91` numbering contract (fresh-box bootstrap runs them in order) |
+
+## Before you commit — the cheap checklist
+
+- [ ] Read this map; confirmed the **change-impact** rows for what you touched.
+- [ ] New runtime behavior is **toggle-gated** and **fails open**.
+- [ ] Any new `claude -p` call sets `NERVEPACK_AGENT=1` and the hook is guarded.
+- [ ] A **regression test** in `engine/setup/tests/` covers the change (red→green).
+- [ ] Conventional commit prefix, authored as the repo's configured git identity, **no AI trailer**.
+- [ ] If you made a new durable decision, fold it into the right skill/spec (→ `np-core-contribute`).
+
+## Where to read more (the "child docs" — depth lives here, not duplicated above)
+
+- **Protocols & conventions:** `AGENTS.md` (tool-neutral manual) + `CLAUDE.md` (Claude Code wiring; `@import`s AGENTS.md).
+- **Per-feature design:** the design specs + plans live in the **content overlay**, not the engine — `$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/` (filenames like `*-design.md` are referenced by name in the feature catalog above for provenance). Brainstorm/plan output is content, so a public engine-only clone won't carry them. Historical/one-time: `2026-06-03-nervepack-rebrand-design.md` (the brain→nervepack rename — not a live subsystem). In progress (Phases 1–5 built — `np-llm.sh`, the onboard contract, the doctor, the Claude adapter, the `np-core-onboard` skill; Goose validation pending): `2026-06-05-agnostic-onboarding-design.md` (LLM-agnostic onboarding).
+- **Behavioral rules / gotchas:** `skills/np-kb-coding-rules`, `skills/np-kb-claude-headless-scripting`, `skills/np-kb-branding`.
+- **Human overview & bringup:** `README.md`. **Deferred work:** `ROADMAP.md`. **Audit trail:** `log.md`.
+- **Skill catalog:** `INDEX.md` (auto-generated — scan before adding a skill).

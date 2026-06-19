@@ -1,0 +1,10 @@
+# Python bytecode caches (harness Python scripts are stdlib-only; no build artifacts)
+__pycache__/
+*.pyc
+
+# superpowers visual-companion brainstorm scratch
+.superpowers/
+/dashboard/data
+
+# Subagent worktree scratch (transient)
+.claude/

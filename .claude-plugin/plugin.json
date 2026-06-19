@@ -1,0 +1,41 @@
+{
+  "name": "nervepack",
+  "description": "Personal AI context hub: skills (behavior), sources (curated technical refs), wiki (LLM-owned synthesis), and re-runnable Ubuntu setup. Karpathy-style LLM-wiki layer on top of a skill library.",
+  "version": "0.3.0",
+  "author": {
+    "name": "pat-browne"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "personal",
+    "guidelines",
+    "setup",
+    "ubuntu",
+    "sync",
+    "wiki",
+    "knowledge-base"
+  ],
+  "skills": [
+    "./skills/np-core-capture-learning",
+    "./skills/np-core-contribute",
+    "./skills/np-core-dashboard",
+    "./skills/np-core-dispatch",
+    "./skills/np-core-handoff",
+    "./skills/np-core-onboard",
+    "./skills/np-core-recall",
+    "./skills/np-core-suggestions-review",
+    "./skills/np-core-sync",
+    "./skills/np-core-toggle",
+    "./skills/np-kb-asset-sourcing",
+    "./skills/np-kb-browser-extension-monetization",
+    "./skills/np-kb-chrome-extension-content-script",
+    "./skills/np-kb-chrome-extension-publishing",
+    "./skills/np-kb-claude-headless-scripting",
+    "./skills/np-kb-coding-rules",
+    "./skills/np-kb-evaluator-signals",
+    "./skills/np-kb-frontend-ui-gotchas",
+    "./skills/np-kb-reader-friendly-monetization",
+    "./skills/np-kb-security-review",
+    "./skills/np-kb-testing-ci"
+  ]
+}
