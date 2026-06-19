@@ -22,10 +22,20 @@ skills. Your **personal content** lives in a **separate overlay repo** (e.g.
 `~/Code/nervepack-content`), resolved at runtime by `NP_CONTENT_DIR` (default, when
 unset: the engine root, for the single-repo legacy layout). The content layers —
 `sources/`, `wiki/`, `episodic/`, `playbooks/`, `strategies/`, `archive/`,
-`compact-proposals/`, `log.md`, `dashboard/data/`, and your **personal**
-`np-kb-*`/`np-env-*` skills (your sites, secrets, machine setup) — **do not
-live in the engine repo**; commit them to the overlay. The engine repo stays
-free of personal data (the `pii-guard` CI job + `np-publish-scan.py` enforce this).
+`compact-proposals/`, `log.md`, `dashboard/data/`, your **personal**
+`np-kb-*`/`np-env-*` skills (your sites, secrets, machine setup), and your
+project's **visual identity** (`brand/` — logos, social card, banner, favicon,
+brand guide, design language) — **do not live in the engine repo**; commit them
+to the overlay. The engine repo stays free of personal data (the `pii-guard` CI
+job + `np-publish-scan.py` enforce this).
+
+**Brand/visual identity is content, not engine.** A specific brand is instance
+identity, not reusable machinery — the engine stays identity-neutral so a forker
+brings their own (the same reason the personal design-palette skill
+`np-kb-branding` lives in the overlay). Only when the brand is final do the
+genuinely public-facing assets (the social-preview card, a README banner/logo)
+get copied into the public engine repo — GitHub needs those public to use them;
+the brand guide, design language, and source stay in the overlay.
 
 ### Engine repo (this tree)
 
