@@ -59,6 +59,17 @@
       "hints": { "generic": "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to your content repo; default is the engine repo root." }
     },
     {
+      "id": "dashboard-data",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the dashboard/data→content symlink bridge resolves",
+      "why": "dashboard/index.html loads data/metrics.js as a relative sibling; in a split layout that file lives in the content overlay, so the engine's dashboard/data must be a symlink into that overlay. Without it a fresh clone shows no metrics.",
+      "accept": "In a split layout, <engine>/dashboard/data is a symlink that resolves to an existing directory. In a single-repo layout, dashboard/data is a real directory. Either way, the dashboard can read its data.",
+      "hints": {
+        "generic": "run engine/setup/35-link-dashboard-data.sh — it creates or repairs the symlink idempotently. Set NP_CONTENT_DIR or ~/.config/nervepack/content-dir first so the script knows where the content overlay lives."
+      }
+    },
+    {
       "id": "session-start",
       "tier": "SHOULD",
       "check": "adapter",
