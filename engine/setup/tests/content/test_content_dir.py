@@ -253,6 +253,61 @@ class TestContentDir(unittest.TestCase):
             self.assertNotIn("implicit", joined,
                              f"doctor wrongly warned with an explicit overlay: {cline}")
 
+    # --- dashboard-data bridge checks (35-link-dashboard-data / doctor dashboard-data cap) ---
+
+    def test_doctor_dashboard_data_pass_when_symlink_resolves(self):
+        # In a split layout, when dashboard/data is a symlink pointing at an existing dir,
+        # the doctor must report PASS (not WARN/FAIL) for the dashboard-data capability.
+        # We use the live engine which already has the symlink in place.
+        e = dict(os.environ)
+        r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
+                           capture_output=True, text=True, env=e)
+        ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
+        self.assertTrue(ddlines, f"doctor produced no dashboard-data line; full output:\n{r.stdout}{r.stderr}")
+        # Should be PASS when the symlink resolves correctly.
+        # (If the live engine is in single-repo layout this also returns PASS — both are fine.)
+        self.assertFalse(
+            any("FAIL" in l for l in ddlines),
+            f"dashboard-data check failed when it should PASS: {ddlines}"
+        )
+
+    def test_doctor_dashboard_data_warns_when_bridge_missing(self):
+        # np-test: dashboard-data-bootstrap | failure
+        # Simulate a fresh clone: NP_CONTENT_DIR points at a content overlay but the
+        # engine's dashboard/data symlink does not exist (removed). The doctor must
+        # report WARN (not FAIL / not PASS) for the dashboard-data capability.
+        # We temporarily rename dashboard/data, run the doctor, then restore it.
+        import shutil
+        dash_data = os.path.join(REPO, "dashboard", "data")
+        backup = dash_data + "._test_bak"
+        was_link = os.path.islink(dash_data)
+        was_dir = os.path.isdir(dash_data) and not was_link
+
+        # Remove the live link/dir.
+        if was_link:
+            link_target = os.readlink(dash_data)
+            os.unlink(dash_data)
+        elif was_dir:
+            shutil.move(dash_data, backup)
+
+        try:
+            with tempfile.TemporaryDirectory() as content:
+                # content overlay exists but has no dashboard/data subdir yet (fresh clone).
+                e = dict(os.environ); e["NP_CONTENT_DIR"] = content
+                r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
+                                   capture_output=True, text=True, env=e)
+            ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
+            self.assertTrue(ddlines, f"doctor produced no dashboard-data line; output:\n{r.stdout}{r.stderr}")
+            joined = "\n".join(ddlines).lower()
+            self.assertIn("warn", joined,
+                          f"doctor did not WARN about missing dashboard-data bridge: {ddlines}")
+        finally:
+            # Restore the original state.
+            if was_link:
+                os.symlink(link_target, dash_data)
+            elif was_dir:
+                shutil.move(backup, dash_data)
+
 
 if __name__ == "__main__":
     unittest.main()

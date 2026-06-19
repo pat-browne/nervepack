@@ -9,6 +9,17 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Fixed
+- **Dashboard shows no metrics on a fresh clone (split layout).** Root cause: the
+  `<engine>/dashboard/data` → `<content>/dashboard/data` symlink bridge had no
+  bootstrap step — it was created once by hand during the engine/content split
+  migration and gitignored, so every new clone was missing it and the dashboard
+  loaded no metrics. Fix: `engine/setup/35-link-dashboard-data.sh` (idempotent
+  bootstrap step, numbered between 30-link-skills and 40-sync) creates or repairs
+  the symlink on a fresh clone. A missing bridge is now surfaced by `np-doctor.sh`
+  as a WARN on the new `dashboard-data` SHOULD capability. Regression test:
+  `engine/setup/tests/setup/test_link_dashboard_data.sh`.
+
 ### Added
 - `76-run-refine.sh` and `77-run-compact.sh`: local cron bodies for the refine
   (frontmatter lint + cross-ref audit) and compact (skill dedup + split proposals)
