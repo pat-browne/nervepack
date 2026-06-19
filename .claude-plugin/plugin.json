@@ -26,6 +26,7 @@
     "./skills/np-core-suggestions-review",
     "./skills/np-core-sync",
     "./skills/np-core-toggle",
+    "./skills/np-flow-merge-gate",
     "./skills/np-kb-asset-sourcing",
     "./skills/np-kb-browser-extension-monetization",
     "./skills/np-kb-chrome-extension-content-script",
