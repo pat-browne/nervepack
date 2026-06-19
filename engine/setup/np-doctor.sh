@@ -48,6 +48,33 @@ core_check() {
       else
         echo PASS
       fi ;;
+    dashboard-data)
+      # In a split layout, dashboard/data must be a symlink resolving to an existing
+      # directory (the bridge created by 35-link-dashboard-data.sh). In a single-repo
+      # layout the real dir is already there — check it directly.
+      local cdir ddlink ddresolved
+      cdir="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_content_dir 2>/dev/null)"
+      ddlink="$NP/dashboard/data"
+      if [[ -z "$cdir" ]]; then
+        echo "WARN (content dir unresolvable — cannot verify dashboard data bridge)"
+      elif [[ "$cdir" == "$NP" ]]; then
+        # Single-repo: real dir should exist.
+        [[ -d "$ddlink" ]] && echo PASS || echo "WARN (dashboard/data dir missing — run 35-link-dashboard-data.sh)"
+      else
+        # Split layout: must be a symlink pointing at the content overlay.
+        if [[ -L "$ddlink" ]]; then
+          ddresolved="$(cd -P "$ddlink" 2>/dev/null && pwd)"
+          if [[ -d "$ddresolved" ]]; then
+            echo PASS
+          else
+            echo "WARN (dashboard/data symlink exists but target does not resolve — run 35-link-dashboard-data.sh)"
+          fi
+        elif [[ -d "$ddlink" ]]; then
+          echo "WARN (dashboard/data is a real directory, not a symlink into the content overlay — metrics may load from the wrong location)"
+        else
+          echo "WARN (dashboard/data bridge missing — run 35-link-dashboard-data.sh to create the symlink into the content overlay; the dashboard will show no metrics until then)"
+        fi
+      fi ;;
     *) echo SKIP ;;
   esac
 }
