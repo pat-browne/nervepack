@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test for 70-install-memory-launchd.sh (macOS scheduled-maint path). Runs on Linux
 # CI via NP_LAUNCHD_FORCE + a stub launchctl + hermetic dirs: asserts it writes the
-# four LaunchAgent plists (well-formed XML, correct label/time/target), loads each
+# six LaunchAgent plists (well-formed XML, correct label/time/target), loads each
 # via launchctl, is idempotent, and refuses on a non-Darwin host without the force.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,12 +28,12 @@ run() { NP_LAUNCHD_FORCE=1 NP_LAUNCHAGENTS_DIR="$la" NP_LAUNCHD_LOG_DIR="$logs" 
 # --- run it ---
 run >/dev/null
 
-# 1. exactly the four expected agents exist
-for j in memory-promote episodic-maintain aggregate-metrics skill-maintain; do
+# 1. exactly the six expected agents exist
+for j in memory-promote episodic-maintain aggregate-metrics skill-maintain refine compact; do
   [[ -f "$la/com.nervepack.$j.plist" ]] || { echo "FAIL: missing plist for $j"; exit 1; }
 done
 n="$(find "$la" -name '*.plist' | wc -l | tr -d '[:space:]')"
-[[ "$n" == 4 ]] || { echo "FAIL: expected 4 plists, got $n"; exit 1; }
+[[ "$n" == 6 ]] || { echo "FAIL: expected 6 plists, got $n"; exit 1; }
 
 # 2. each plist is well-formed XML (parse with python stdlib)
 for p in "$la"/*.plist; do
@@ -54,12 +54,12 @@ grep -q '<key>Hour</key><integer>8</integer>' "$la/com.nervepack.memory-promote.
   || { echo "FAIL: memory-promote hour wrong"; exit 1; }
 
 # 4. launchctl was invoked to load each agent (-w load)
-[[ "$(grep -c 'load -w' "$calls")" == 4 ]] || { echo "FAIL: expected 4 launchctl loads, got $(grep -c 'load -w' "$calls" 2>/dev/null)"; exit 1; }
+[[ "$(grep -c 'load -w' "$calls")" == 6 ]] || { echo "FAIL: expected 6 launchctl loads, got $(grep -c 'load -w' "$calls" 2>/dev/null)"; exit 1; }
 
-# 5. idempotent: a second run still leaves exactly four plists (no duplicates)
+# 5. idempotent: a second run still leaves exactly six plists (no duplicates)
 run >/dev/null
 n2="$(find "$la" -name '*.plist' | wc -l | tr -d '[:space:]')"
-[[ "$n2" == 4 ]] || { echo "FAIL: not idempotent — $n2 plists after second run"; exit 1; }
+[[ "$n2" == 6 ]] || { echo "FAIL: not idempotent — $n2 plists after second run"; exit 1; }
 
 # 6. on a non-Darwin host WITHOUT the force, it refuses and writes nothing
 la2="$tmp/LA2"

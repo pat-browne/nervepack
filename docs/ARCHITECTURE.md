@@ -57,6 +57,8 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Struggle escalation** (mid-session) | `evaluator` (`.escalation`; `escalation_min_struggles=2`, `escalation_min_prompts=3`) | `engine/setup/struggle-escalation.sh` (UserPromptSubmit, once/session), `57-install-escalation-hook.sh` | — |
 | **Skill trigger recall** (prompt-pattern skill routing) | `skills` (`.trigger_recall`) | `engine/setup/skill-trigger-recall.sh` (UserPromptSubmit, once/session), `59-install-skill-trigger-hook.sh` | — |
 | **Skill maintenance** (daily auto-split + advisory checks) | `skills` (`graduate_seen`/`graduate_kb` params) | `75-skill-maintain.sh`, `np-skill-budget.py`, `np-skill-validate.py`, `np-graduation-detect.py` (flags proven/over-budget strategies+playbooks to graduate→skill; surfaces to log + `graduation-candidates` marker, never auto-promotes), `np-architecture-freshness.sh` (advisory map-drift), `agents/np-flow-skill-maintain.md` | `specs/2026-06-05-skill-maintenance-routine-design.md` |
+| **Engine maintenance — refine** (weekly lint + cross-ref audit) | `maintain.refine` (sub of `maintain`, default on) | `76-run-refine.sh`, `agents/np-flow-scheduled-refine.md` | `specs/2026-06-19-provider-agnostic-scheduled-agents-phase1-design.md` |
+| **Engine maintenance — compact** (weekly skill dedup + split proposals) | `maintain.compact` (sub of `maintain`, default on) | `77-run-compact.sh`, `agents/np-flow-weekly-compact.md` | `specs/2026-06-19-provider-agnostic-scheduled-agents-phase1-design.md` |
 | **Cross-machine sync** | `sync` | `40-sync-nervepack.sh` | CLAUDE.md §"sync nervepack" |
 | **Feature toggles** | (self) | `np-toggle-lib.sh`, `nervepack-toggle*.sh`, `toggles.conf` | `specs/2026-06-03-feature-toggles-design.md` |
 | **Permission allowlist** | `allowlist` | `90/91-…-permissions.sh` | — |
@@ -87,9 +89,11 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Daily 08:30 | `72-run-episodic-maintain.sh` |
 | Daily 09:00 | `73-aggregate-metrics.sh` |
 | Daily 09:15 | `75-skill-maintain.sh` |
+| Weekly Sun 09:30 | `76-run-refine.sh` (maintain.refine toggle, default on) |
+| Weekly Wed 10:00 | `77-run-compact.sh` (maintain.compact toggle, default on) |
 
 **Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `40`
-sync · `50–56` install hooks · `70` install crons / `71–75` cron bodies · `80–91`
+sync · `50–56` install hooks · `70` install crons / `71–77` cron bodies · `80–91`
 vscode + permissions. Scripts are idempotent and run in order on a fresh box.
 
 ## The two data pipelines (the heart of the system)
@@ -214,7 +218,7 @@ Record shapes (keep these stable — readers depend on them):
 | **`engine/setup/tests/e2e/`** (Playwright dashboard suite) | `requirements.txt` (pinned deps — update when Playwright version changes); `harness.py`'s server env contract (`NP_IMPLEMENT`, `NP_METRICS`, `NP_RESOLVED_SUGGESTIONS`, `NP_IMPLEMENT_STATUS_DIR`, `NP_DASH_PORT`); and the `dashboard-e2e` CI job (informational, `continue-on-error: true` — never a merge gate). This is the ONLY suite with a third-party dependency; keep it isolated in `e2e/` so the rest of the suite stays zero-dep. |
 | **`toggles.conf`** (add/rename a feature or param) | every `np_enabled`/`np_param` caller, `nervepack-toggle*` menus, and the feature catalog above; note: adding a param with a default that prunes historic data (e.g. `evaluator.retain_days`) can cause existing test records to be pruned — tests with old timestamps must set `NP_TOGGLES_CONF` to control `retain_days` |
 | **`nervepack-session-directive.md`** | this injects into **every** session globally — high blast radius; keep it lean |
-| **a cron body (`7x`)** | its crontab line via `70-install-memory-cron.sh`; remember its `claude -p` fires SessionEnd hooks (set the guard) |
+| **a cron body (`7x`)** | its crontab line via `70-install-memory-cron.sh` (and `70-install-memory-launchd.sh`); remember its `claude -p` fires SessionEnd hooks (set the guard); 76/77 also need their `maintain.refine`/`maintain.compact` toggle rows in `toggles.conf` |
 | **`dashboard/` data shape or build** | `build.py`, `index.html`, the build test, and the committed `metrics.js` (rebuild from real `metrics.jsonl`). The build emits `window.METRICS`/`LEARNED`/`TOKENS_SAVED`/`WIKI` into one `metrics.js`; `window.WIKI = {topics[], concepts[]}` — the **wiki index** (`wiki_index()`, `evaluator.wiki_nav` / `WIKI_NAV` env, sourced from overlay `wiki/topics/` + `wiki/concepts/`) is **content data** — keep it out of the engine repo, and pass `WIKI_NAV` from `73-aggregate-metrics.sh` + `open-dashboard.sh`; new render step (`md_to_html`/`render_pages`) writes `data/wiki/{topics,concepts}/*.html` — keep escaping + href-sanitization (see render tests) |
 | **the suggestions-review engine** (`np-suggestions-review.py`) | it imports `dashboard/build.py` (`_norm`/`load_resolved`/`load_records`) — keep those stable; the server (`np-dashboard-server.py`) and the `np-core-suggestions-review` skill both shell out to it; its test |
 | **`np-dashboard-server.py`** (the opt-in daemon) | keep it **127.0.0.1-only** + path-sanitized + fixed route allowlist; `np-dashboard-launch.sh` starts it; the `evaluator.dashboard_serve/_port/suggestions_top` params; `index.html`'s http-only buttons; its test |

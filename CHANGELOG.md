@@ -9,6 +9,28 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Added
+- `76-run-refine.sh` and `77-run-compact.sh`: local cron bodies for the refine
+  (frontmatter lint + cross-ref audit) and compact (skill dedup + split proposals)
+  agents. Default-on, gated by `maintain.refine` / `maintain.compact` toggles.
+  Installed idempotently by `70-install-memory-cron.sh` (Linux) and
+  `70-install-memory-launchd.sh` (macOS). Run via `np-llm.sh` agent mode —
+  provider-agnostic (claude backend or `NP_LLM_AGENT_CMD`), fail-open.
+- `maintain` / `maintain.refine` / `maintain.compact` toggle entries in
+  `toggles.conf` (default on).
+
+### Changed
+- `agents/np-flow-scheduled-refine.md` and `agents/np-flow-weekly-compact.md`
+  genericized: removed hardcoded repo name, "Anthropic cloud (CCR)" assumption,
+  and residual personal framing. Prompts now read correctly whether run by a local
+  cron, a cloud routine, or an OSS runner.
+- `70-install-memory-cron.sh` and `70-install-memory-launchd.sh` extended to
+  install/remove the 76/77 entries idempotently.
+- `engine/onboard/capabilities.json` `scheduled-maint` updated: accept/hints
+  include 76/77; notes optional cloud/OSS offload → issue #16.
+- `agents/README.md` updated: refine/compact are default-on local crons; cloud
+  routine setup moved to an "optional offload" section.
+
 ## [0.1.0] - 2026-06-19
 
 The first public release of the nervepack engine.
