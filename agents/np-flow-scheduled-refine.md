@@ -1,34 +1,31 @@
 # scheduled-refine
 
-The recurring remote-agent prompt for refining `pat-browne/nervepack`. Configured
-via the `schedule` skill (or `claude schedule create`) to run weekly.
+The recurring agent prompt for refining this nervepack repo. Installed as a
+weekly local cron (Sunday) via `70-install-memory-cron.sh` — default-on, toggle
+`maintain.refine` to disable. May also be run as an optional cloud routine or OSS
+runner; see `agents/README.md` for the optional offload setup.
 
-**Cadence:** weekly (Sunday 09:00 America/Denver = `0 15 * * 0` UTC during
-MDT; will fire at 08:00 local during MST — accept the half-year drift in
-exchange for not having to handle DST in cron).
+**Cadence:** weekly (Sunday). As a local cron: `30 9 * * 0` (09:30 local).
+When deployed as a cloud routine, use `0 15 * * 0` (Sun 15:00 UTC) or your
+preferred equivalent.
 
-**Where this runs:** Anthropic's cloud (CCR), NOT the user's local machine.
-The agent receives a fresh clone of the repo as its working directory. It
-has no access to Pat's local `~/Code/nervepack`, `~/.claude/skills/`, or
-`~/.claude/projects/.../memory/`.
+**Where this runs:** wherever this is scheduled — a local cron, a cloud routine,
+or an OSS runner. The agent receives the repo at its working directory. It has no
+access to any local machine's memory store or personal files.
 
 **Standing mandate (referenced by [[np-core-contribute]]):**
 Pre-authorized to commit + push for the scope below. No per-run confirmation.
-
-**Companion local task:** memory-store → skills promotion happens *locally*
-via `/loop` invocations of [[np-core-contribute]] — it requires access to
-`~/.claude/projects/.../memory/`, which only exists on Pat's machine.
 
 ---
 
 ## Prompt
 
-You are the weekly maintenance agent for `pat-browne/nervepack`. You're running
-in a fresh Anthropic cloud sandbox; the repo is cloned at your working
-directory. You have NO access to anyone's local machine. Do these steps in
-order, then stop.
+You are the weekly maintenance agent for this nervepack repo. You're running
+wherever this is scheduled — a local cron, a cloud routine, or an OSS runner.
+The repo is at your working directory. You have NO access to anyone's local
+machine. Do these steps in order, then stop.
 
-### 1. Verify clone
+### 1. Verify repo
 
 ```bash
 ls CLAUDE.md skills setup agents .claude-plugin >/dev/null
@@ -67,8 +64,7 @@ If anything changed:
 # Author as the repo's configured git identity — never a bot name. `git config` without --global persists in
 # .git/config and mis-authors later interactive commits (CLAUDE.md § Commit conventions).
 # Commit identity: use the runner's existing git config; if unset (headless/cloud),
-# fall back to NP_GIT_AUTHOR_* env, then a neutral bot. (Pat sets NP_GIT_AUTHOR_* in his
-# cloud routine config to keep his attribution; a fork gets the fork-runner's identity.)
+# fall back to NP_GIT_AUTHOR_* env, then a neutral bot.
 git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_EMAIL:-nervepack-agent@localhost}"
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Stage AND commit ONLY the paths you changed — CLAUDE.md forbids `git add -A`/`.`/`-am`

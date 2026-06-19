@@ -70,8 +70,10 @@ install_job memory-promote    8  0 71-run-memory-promote.sh
 install_job episodic-maintain 8 30 72-run-episodic-maintain.sh
 install_job aggregate-metrics 9  0 73-aggregate-metrics.sh
 install_job skill-maintain    9 15 75-skill-maintain.sh
+install_job refine            9 30 76-run-refine.sh
+install_job compact          10  0 77-run-compact.sh
 
 echo
-echo "Logs:   $LOG_DIR/{memory-promote,episodic-maintain,aggregate-metrics,skill-maintain}.log"
+echo "Logs:   $LOG_DIR/{memory-promote,episodic-maintain,aggregate-metrics,skill-maintain,refine,compact}.log"
 echo "Verify: launchctl list | grep com.nervepack"
-echo "Remove: for j in memory-promote episodic-maintain aggregate-metrics skill-maintain; do launchctl unload \"$LA_DIR/com.nervepack.\$j.plist\" 2>/dev/null; rm -f \"$LA_DIR/com.nervepack.\$j.plist\"; done"
+echo "Remove: for j in memory-promote episodic-maintain aggregate-metrics skill-maintain refine compact; do launchctl unload \"$LA_DIR/com.nervepack.\$j.plist\" 2>/dev/null; rm -f \"$LA_DIR/com.nervepack.\$j.plist\"; done"

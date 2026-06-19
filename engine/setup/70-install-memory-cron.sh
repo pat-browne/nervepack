@@ -31,8 +31,12 @@ install_line "nervepack-aggregate-metrics" \
   "0 9 * * * $HOME/Code/nervepack/engine/setup/73-aggregate-metrics.sh # nervepack-aggregate-metrics"
 install_line "nervepack-skill-maintain" \
   "15 9 * * * $HOME/Code/nervepack/engine/setup/75-skill-maintain.sh # nervepack-skill-maintain"
+install_line "nervepack-refine" \
+  "30 9 * * 0 $HOME/Code/nervepack/engine/setup/76-run-refine.sh # nervepack-refine"
+install_line "nervepack-compact" \
+  "0 10 * * 3 $HOME/Code/nervepack/engine/setup/77-run-compact.sh # nervepack-compact"
 
 echo
-echo "Logs: ~/.cache/nervepack/memory-promote.log, ~/.cache/nervepack/episodic-maintain.log, ~/.cache/nervepack/skill-maintain.log"
+echo "Logs: ~/.cache/nervepack/memory-promote.log, ~/.cache/nervepack/episodic-maintain.log, ~/.cache/nervepack/skill-maintain.log, ~/.cache/nervepack/refine.log, ~/.cache/nervepack/compact.log"
 echo "Verify: crontab -l | grep nervepack-"
-echo "Remove: crontab -l | grep -vF 'nervepack-memory-promote' | grep -vF 'nervepack-episodic-maintain' | grep -vF 'nervepack-aggregate-metrics' | grep -vF 'nervepack-skill-maintain' | crontab -"
+echo "Remove: crontab -l | grep -vF 'nervepack-memory-promote' | grep -vF 'nervepack-episodic-maintain' | grep -vF 'nervepack-aggregate-metrics' | grep -vF 'nervepack-skill-maintain' | grep -vF 'nervepack-refine' | grep -vF 'nervepack-compact' | crontab -"

@@ -1,15 +1,18 @@
 # weekly-compact
 
-Recurring remote-agent prompt for *dreaming* — the consolidation pass that
-keeps `nervepack` from accumulating duplicate or bloated skills. Runs in
-Anthropic's cloud on a weekly cron (separate from `nervepack-refine`).
+Recurring agent prompt for *dreaming* — the consolidation pass that keeps this
+nervepack repo from accumulating duplicate or bloated skills. Installed as a
+weekly local cron (Wednesday) via `70-install-memory-cron.sh` — default-on,
+toggle `maintain.compact` to disable. May also be run as an optional cloud
+routine or OSS runner; see `agents/README.md` for the optional offload setup.
 
-**Cadence:** weekly. Scheduled for Wednesday 15:00 UTC (≈ 9am MDT) so it's
-mid-week between `nervepack-refine` runs (Sunday) — avoids both routines
-racing each other to push.
+**Cadence:** weekly (Wednesday). As a local cron: `0 10 * * 3` (10:00 local),
+mid-week between `nervepack-refine` runs (Sunday) — avoids both routines racing
+each other to push. When deployed as a cloud routine, use `0 15 * * 3`
+(Wed 15:00 UTC) or your preferred equivalent.
 
-**Where this runs:** cloud (CCR), fresh clone of the repo at working dir.
-No local-machine access.
+**Where this runs:** wherever this is scheduled — a local cron, a cloud routine,
+or an OSS runner. The repo is at your working directory. No local-machine access.
 
 **Standing mandate:** pre-authorized to auto-merge skills with very high
 similarity (Jaccard ≥ 0.85 on description + section headings) AND to
@@ -20,12 +23,12 @@ file under `compact-proposals/` and let the human decide.
 
 ## Prompt
 
-You are the weekly *compaction* agent for `pat-browne/nervepack`. You run in
-a fresh Anthropic cloud sandbox; the repo is cloned at your working
-directory. You have NO access to anyone's local machine. Do these steps in
-order, then stop.
+You are the weekly *compaction* agent for this nervepack repo. You run wherever
+this is scheduled — a local cron, a cloud routine, or an OSS runner. The repo is
+at your working directory. You have NO access to anyone's local machine. Do these
+steps in order, then stop.
 
-### 1. Verify clone
+### 1. Verify repo
 
 ```bash
 ls CLAUDE.md skills setup INDEX.md >/dev/null
@@ -103,8 +106,7 @@ Make two separate commits if both happened:
 # Author as the repo's configured git identity — never a bot name. `git config` without --global persists in
 # .git/config and mis-authors later interactive commits (CLAUDE.md § Commit conventions).
 # Commit identity: use the runner's existing git config; if unset (headless/cloud),
-# fall back to NP_GIT_AUTHOR_* env, then a neutral bot. (Pat sets NP_GIT_AUTHOR_* in his
-# cloud routine config to keep his attribution; a fork gets the fork-runner's identity.)
+# fall back to NP_GIT_AUTHOR_* env, then a neutral bot.
 git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_EMAIL:-nervepack-agent@localhost}"
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Stage AND commit ONLY the paths you changed — CLAUDE.md forbids `git add -A`/`.`/`-am`
@@ -125,6 +127,7 @@ EOF
 ```bash
 git add compact-proposals/
 git commit -m "compact: $M proposal(s) for review" -- compact-proposals/
+```
 
 Then `git push`.
 
@@ -140,5 +143,5 @@ One short paragraph:
 - Any structural concerns (e.g. "5 skills all in the 0.3-0.4 band — maybe
   consider a topic reorganization")
 
-Scope ends here. Don't lint frontmatter (that's `nervepack-refine`'s job).
+Scope ends here. Don't lint frontmatter (that's the refine agent's job).
 Don't update CLAUDE.md or README. Don't touch `vendor/`.

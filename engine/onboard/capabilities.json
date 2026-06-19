@@ -100,13 +100,13 @@
       "id": "scheduled-maint",
       "tier": "SHOULD",
       "check": "adapter",
-      "title": "promote / aggregate / skill-maintain run on a schedule",
-      "why": "The backup cadence that consolidates memory, metrics and skill budgets even if on-exit promotion is missed.",
-      "accept": "A scheduler (cron or host-native) runs 71/72/73/75 on their cadences.",
+      "title": "promote / aggregate / skill-maintain / refine / compact run on a schedule",
+      "why": "The backup cadence that consolidates memory, metrics and skill budgets even if on-exit promotion is missed; refine/compact keep skills lint-clean and deduped.",
+      "accept": "A scheduler (cron or host-native) runs 71/72/73/75/76/77 on their cadences.",
       "hints": {
-        "claude-code": "user crontab (reference: 70-install-memory-cron.sh).",
+        "claude-code": "user crontab (reference: 70-install-memory-cron.sh). 76 (refine, Sunday) and 77 (compact, Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
         "claude-code-macos": "launchd LaunchAgents, not crontab (reference: 70-install-memory-launchd.sh); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
-        "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs."
+        "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: 76/77 can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
       }
     }
   ]
