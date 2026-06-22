@@ -6,12 +6,12 @@ install on a new box. It leads with **Claude Code** (the proven host); for any o
 agentic host, the same steps apply but the wiring is done by the onboarding contract in
 [`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md).
 
-> **Prerequisite:** an *agentic* host — one that can read/write files and run shell
+> **Prerequisite:** an *agentic* host, one that can read/write files and run shell
 > commands. A plain chat UI can only consume the knowledge as context, not self-wire.
 
 ## 1. Clone the engine
 
-You need git first (the chicken-and-egg) — install just enough to clone:
+You need git first (the chicken-and-egg). Install just enough to clone:
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -45,7 +45,7 @@ directly. Either way, verify any time:
 
 ## 4. Point the engine at your content
 
-The engine is the shared machinery; *your* skills, sources, memory, and metrics live in
+The engine is the shared machinery. Your skills, sources, memory, and metrics live in
 a separate **content overlay** so they stay yours. Tell the engine where it is:
 
 ```bash
@@ -54,7 +54,7 @@ echo "$HOME/Code/nervepack-content" > ~/.config/nervepack/content-dir
 
 No overlay yet? Fork [`nervepack-content-example`](https://github.com/pat-browne/nervepack-content-example),
 rename it to something private, and point at that. Skip this and the engine falls back
-to its own root — which works, but gives you nowhere personal to grow.
+to its own root, which works, but gives you nowhere personal to grow.
 
 ## 5. Authenticate GitHub
 
@@ -65,16 +65,16 @@ gh auth login    # GitHub.com, HTTPS, login with a browser, authenticate Git
 This sets up the credential helper so the maintenance jobs can `git push` your content
 without prompting.
 
-## 6. (Optional) Schedule the maintenance agents
+## 6. Schedule the maintenance agents
 
 nervepack can keep itself tidy with scheduled agents (promote memory, compact skills,
-lint). Some run as local crons, some as cloud routines on *your* AI account. Set up your
+lint). Some run as local crons, some as cloud routines on your AI account. Set up your
 own from the payloads and cadence in [`../agents/README.md`](../agents/README.md). This
-is optional — nervepack works without it.
+step is optional; nervepack works fine without it.
 
 ## 7. Verify and use it
 
-Re-run the doctor; a green report means every MUST capability is wired.
+Re-run the doctor. A green report means every MUST capability is wired.
 
 ```bash
 ~/Code/nervepack/engine/setup/np-doctor.sh
@@ -87,5 +87,5 @@ slash commands.
 ## Prefer to connect over MCP?
 
 If your host speaks MCP (Cursor, Codex, a local-model client), you can skip per-script
-wiring and point your MCP client at the nervepack server instead — see
+wiring and point your MCP client at the nervepack server instead. See
 [`../engine/onboard/MCP.md`](../engine/onboard/MCP.md).

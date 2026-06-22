@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/nervepack-logo.svg" alt="nervepack" width="320"></p>
+
 # nervepack
 
 > **A modpack for AI cognition. Skills, memory, tools, and workflows in one harness.**
@@ -16,7 +18,7 @@ your own.
 
 ## The two halves
 
-nervepack ships in two repos, and the split is the whole idea.
+nervepack has two layers, in two repos.
 
 - **The engine** (this repo) is the reusable machinery. Hooks, crons, the toggle
   system, onboarding, the MCP server, and the generic `np-core-*` / `np-kb-*` /
@@ -35,26 +37,27 @@ engine at it, and you're running.
 
 Knowledge lives in layers with a strict pecking order:
 **`skills > sources > wiki > playbooks > episodic`** (with strategies sitting beside
-playbooks). The rule is simple: **human-reviewed knowledge always beats auto-captured
-knowledge.**
+playbooks). **Human-reviewed knowledge always beats auto-captured knowledge.**
 
-- **Skills** are the curated top layer — the rules and how-to reviewed and promoted
-  into every session. They load passively; a SessionStart directive is what makes a
-  session actually reach for them instead of starting from scratch.
-- **Sources + wiki** are the reference layer — version-pinned docs you consult
+- **Skills** are the curated top layer, the rules and how-to that have been human-reviewed
+  and promoted.
+  - They load passively on every session.
+  - A SessionStart directive is what makes a session actually reach for them instead
+    of starting from scratch.
+- **Sources + wiki** are the reference layer: version-pinned docs you consult
   repeatedly, plus synthesis pages that cross-link them.
 - **Playbooks** are auto-distilled from past *failures*, and they're the one layer
-  that's **enforced at the moment you act** — a playbook can inject "don't make this
+  that's **enforced at the moment you act**. A playbook can inject "don't make this
   mistake" right before the tool call, which a passive skill can't do.
 - **Strategies** are the mirror image: auto-distilled from past *successes*, surfaced
   as advice when the topic comes up.
-- **Episodic** is the bottom layer — a prunable narrative of what was worked on and
+- **Episodic** is the bottom layer, a prunable narrative of what was worked on and
   where it left off, so a session next week can pick up the thread.
 
 Two pipelines keep the auto layers fed. A **capture** pipeline summarizes each
 session into episodic memory and distills its failures/successes into
 playbooks/strategies. A **performance** pipeline scores how much nervepack actually
-helped and renders it on a dashboard. Everything is toggle-gated and fails open — no
+helped and renders it on a dashboard. Everything is toggle-gated and fails open. No
 layer can break a session.
 
 The auto layers are a **staging pool**, not a dead end: when a playbook or strategy
@@ -63,8 +66,8 @@ maintenance routine flags it to **graduate** into a real, human-reviewed skill. 
 how a hard-won lesson climbs from "the system noticed this once" to "this is a rule
 now."
 
-For the full tour — every feature's purpose, the workflow that enforces it, and a
-worked example of each flow — see [`docs/FEATURES.md`](docs/FEATURES.md).
+For the full tour (every feature's purpose, the workflow that enforces it, a worked
+example of each flow) see [`docs/FEATURES.md`](docs/FEATURES.md).
 
 ## Layout
 
@@ -109,14 +112,14 @@ nervepack is tool-neutral: it onboards onto any agentic host via the contract in
 | OpenHands · Cline · Continue · Gemini CLI · Windsurf · Zed · Aider | ⚪ Contract-only | `AGENTS.md` native or capabilities adapter | unvalidated; reports/PRs welcome |
 
 > **Warning.** ✅ Proven = validated end-to-end (`np-doctor` green + a real session). 🟡 WIP /
-> ⚪ Contract-only = the wiring/contract exists but has **not** been run end-to-end — expect
+> ⚪ Contract-only = the wiring/contract exists but has **not** been run end-to-end. Expect
 > rough edges, run `engine/setup/np-doctor.sh`, and report gaps. Don't assume feature parity:
 > lifecycle capture/evaluator need a session-end event the host may lack.
 
 ## Getting started
 
 New to nervepack? **[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)** is the
-first-time-user walkthrough — clone the engine, install the toolchain, onboard your
+first-time-user walkthrough: clone the engine, install the toolchain, onboard your
 host, point at a content overlay, and verify. It leads with Claude Code; other hosts
 follow the same steps via [`engine/onboard/ONBOARD.md`](engine/onboard/ONBOARD.md).
 
