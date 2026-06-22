@@ -53,3 +53,34 @@ np_content_dir_origin() {
 np_content_is_explicit() {
   [[ "$(np_content_dir_origin)" != default ]]
 }
+
+# np_team_dir -> prints the OPTIONAL team overlay root (a shared content layer that
+# overrides the personal overlay). Resolution mirrors np_content_dir:
+#   1. $NP_TEAM_DIR (env)   2. ~/.config/nervepack/team-dir (first line)   3. none
+# Unconfigured -> print nothing, return non-zero (callers treat "no team" as normal).
+# Explicit-but-missing -> loud error, return 1 (parity with np_content_dir).
+np_team_dir() {
+  local d=""
+  if [[ -n "${NP_TEAM_DIR:-}" ]]; then
+    d="$NP_TEAM_DIR"
+  elif [[ -f "$HOME/.config/nervepack/team-dir" ]]; then
+    d="$(head -n1 "$HOME/.config/nervepack/team-dir" 2>/dev/null)"
+  fi
+  [[ -n "$d" ]] || return 1
+  if [[ ! -d "$d" ]]; then
+    echo "np-content: team dir not found: $d" >&2
+    return 1
+  fi
+  printf '%s\n' "$d"
+}
+
+# np_team_dir_origin -> how np_team_dir resolved: env | config | none.
+np_team_dir_origin() {
+  if [[ -n "${NP_TEAM_DIR:-}" ]]; then
+    printf 'env\n'
+  elif [[ -f "$HOME/.config/nervepack/team-dir" ]]; then
+    printf 'config\n'
+  else
+    printf 'none\n'
+  fi
+}
