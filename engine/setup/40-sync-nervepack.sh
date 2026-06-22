@@ -42,7 +42,6 @@ STATUS="$HOME/.cache/np-core-sync-status"
 mkdir -p "$(dirname "$STATUS")"
 
 # Optional team layer: keep a shared team checkout current (strict-safe: ff-only).
-# Runs as an EXIT trap so it fires on every exit path without touching existing logic.
 _np_team_sync() {
   declare -f np_enabled >/dev/null 2>&1 || return 0
   declare -f np_team_dir >/dev/null 2>&1 || return 0
@@ -58,7 +57,15 @@ _np_team_sync() {
     echo "np-core-sync: team layer has local edits — skipping pull" >&2
   fi
 }
-trap '_np_team_sync' EXIT
+
+# Arm the team pull HERE — after the deliberate early-outs above (within-interval
+# throttle / disabled-via-toggle / dry-run) have already exited. Registering the
+# EXIT trap only at this point means those early skips never fire the team fetch
+# (the network call the throttle exists to suppress), while every real engine-sync
+# outcome below — including the not-a-git path and any `set -e` exit on a status
+# write — still triggers it. Non-fatal and self-guarded; never alters the engine
+# sync's own exit behavior.
+trap '_np_team_sync || true' EXIT
 
 write_status() {
   printf '%s\n' "$*" > "$STATUS"
