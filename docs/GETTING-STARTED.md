@@ -26,6 +26,11 @@ git clone https://github.com/pat-browne/nervepack ~/Code/nervepack
 ~/Code/nervepack/engine/setup/20-claude-plugins.sh # Claude Code plugins (Claude host only)
 ```
 
+**On macOS**, `00-apt-baseline.sh` is Linux-only — install the same tools with
+Homebrew instead (`brew install gh jq node python`), then continue from step 3.
+The setup scripts run on the system `/bin/bash` (3.2), so no newer bash is
+required; `gh auth login` (step 5) covers the GitHub credential the clone needs.
+
 ## 3. Onboard your host
 
 Open your agent in `~/Code/nervepack` and run the onboarding walkthrough. Your agent
@@ -49,8 +54,13 @@ The engine is the shared machinery. Your skills, sources, memory, and metrics li
 a separate **content overlay** so they stay yours. Tell the engine where it is:
 
 ```bash
+mkdir -p ~/.config/nervepack
 echo "$HOME/Code/nervepack-content" > ~/.config/nervepack/content-dir
 ```
+
+The `mkdir` is required the first time — `>` creates the *file* but not its parent
+directory, so writing `content-dir` into a `~/.config/nervepack` that doesn't exist
+yet fails with `no such file or directory`.
 
 No overlay yet? Fork [`nervepack-content-example`](https://github.com/pat-browne/nervepack-content-example),
 rename it to something private, and point at that. Skip this and the engine falls back
