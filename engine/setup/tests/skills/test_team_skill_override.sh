@@ -23,6 +23,7 @@ export NP_SKILLS_DST="$tmp/dst"
 export NP_CONTENT_DIR="$tmp/personal"
 export NP_TEAM_DIR="$tmp/team"
 export NP_TOGGLES_CONF="$S/toggles.conf"   # team default on
+export NERVEPACK="$tmp/fakeengine"
 
 bash "$tmp/fakeengine/engine/setup/30-link-skills.sh" >/dev/null
 tgt="$(readlink "$tmp/dst/np-kb-x")"

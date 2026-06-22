@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Symlink every skill from the engine repo's skills/ AND the overlay's skills/
-# into ~/.claude/skills so Claude Code picks them up as user-level skills in
-# every session.  Overlay-wins on a name clash (same dedup rule as npm workspaces).
+# Symlink every skill from the engine repo's skills/, the personal overlay's
+# skills/, AND (when the `team` toggle is on) the team layer's skills/ into
+# ~/.claude/skills so Claude Code picks them up as user-level skills in every
+# session.  Three-layer precedence: engine < personal < team (team wins on a
+# name clash — same dedup rule as npm workspaces applied per layer).
 #
 # Safe to re-run:
 #   - Existing symlinks to the correct target are left alone.
 #   - Any non-symlink at the target path is reported and skipped (no overwrite).
-#   - Dangling symlinks whose target is under either source base are pruned.
+#   - Dangling symlinks whose target is under any managed source base are pruned.
 #   - Symlinks pointing elsewhere are never touched.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -86,5 +88,5 @@ done
 
 # Regenerate INDEX.md so it tracks the current skill set.
 if [[ -x "$HERE/60-generate-index.sh" ]]; then
-  "$HERE/60-generate-index.sh" >/dev/null || true
+  "$HERE/60-generate-index.sh" >/dev/null
 fi
