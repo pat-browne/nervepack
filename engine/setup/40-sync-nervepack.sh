@@ -15,7 +15,10 @@ set -euo pipefail
 # Toggle + scheduling: `exit` mode (SessionEnd, primary) always syncs; `backup`
 # mode (default, SessionStart) is throttled by sync.interval (default 1 day).
 NP_SYNC_MODE="backup"; for _a in "$@"; do [[ "$_a" == "exit" ]] && NP_SYNC_MODE="exit"; done
-_npl="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/np-toggle-lib.sh"
+_npsetup="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_npl="$_npsetup/np-toggle-lib.sh"
+_npcl="$_npsetup/np-content-lib.sh"
+[[ -r "$_npcl" ]] && source "$_npcl"
 if [[ -r "$_npl" ]]; then
   source "$_npl"
   np_enabled sync || { echo "nervepack-sync: disabled via toggle — skipping"; exit 0; }
@@ -37,6 +40,25 @@ VERBOSE=0
 NERVEPACK="$HOME/Code/nervepack"
 STATUS="$HOME/.cache/np-core-sync-status"
 mkdir -p "$(dirname "$STATUS")"
+
+# Optional team layer: keep a shared team checkout current (strict-safe: ff-only).
+# Runs as an EXIT trap so it fires on every exit path without touching existing logic.
+_np_team_sync() {
+  declare -f np_enabled >/dev/null 2>&1 || return 0
+  declare -f np_team_dir >/dev/null 2>&1 || return 0
+  local _team_dir
+  np_enabled team || return 0
+  _team_dir="$(np_team_dir 2>/dev/null)" || return 0
+  git -C "$_team_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  if [[ -z "$(git -C "$_team_dir" status --porcelain 2>/dev/null)" ]]; then
+    git -C "$_team_dir" fetch --quiet origin 2>/dev/null \
+      && git -C "$_team_dir" merge --ff-only --quiet '@{u}' 2>/dev/null \
+      || echo "np-core-sync: team layer not fast-forwarded (diverged/dirty/no upstream) — left as-is" >&2
+  else
+    echo "np-core-sync: team layer has local edits — skipping pull" >&2
+  fi
+}
+trap '_np_team_sync' EXIT
 
 write_status() {
   printf '%s\n' "$*" > "$STATUS"
