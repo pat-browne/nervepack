@@ -1,28 +1,17 @@
 # nervepack — architecture map (read before any code change)
 
-> **Purpose.** The cheap, high-level model of how nervepack fits together. Read
-> *this* before modifying any code so you know **what your change touches** and
-> stay consistent with patterns that already work. It does not repeat the detail
-> in `CLAUDE.md` or the per-feature specs — it points at them. When the map and a
-> spec disagree, the spec wins; tell the user so this file gets fixed.
->
-> **Per-feature purpose, enforcing workflow, and a worked example:
-> [`FEATURES.md`](FEATURES.md).** This map stays terse on *what* a feature
-> does and focuses on *what your change touches*; FEATURES carries the narrative.
->
-> Authority of docs: `CLAUDE.md` (protocol) ≈ this file (map) → `docs/.../specs`
-> (design) → skills (behavior). Authority of *knowledge layers*:
-> `skills > sources > wiki > playbooks > episodic`.
+> Cheap high-level map of how nervepack fits together. Read before any code change
+> so you know what your change touches and can stay consistent with patterns that work.
 
-## What nervepack is, in one breath
+## What nervepack is
 
 A versioned hub of skills, rules, memory, and dev-env setup that follows Pat
 across machines, **delivered into each AI session as user skills** (via
 `.claude-plugin/`) and **wired into the session lifecycle by hooks + crons**. It
 is mostly Bash/Python glue around the `claude` CLI plus Markdown knowledge. No
-service, no daemon — everything is a hook, a cron, or a committed file. (One
+service, no daemon. Everything is a hook, a cron, or a committed file. (One
 deliberate exception: the dashboard's localhost-only server,
-`evaluator.dashboard_serve`, **default on** (opt-out) — see the Dashboard row.)
+`evaluator.dashboard_serve`, **default on** (opt-out). See the Dashboard row.)
 
 ## Skill namespaces (tiers)
 
@@ -108,7 +97,7 @@ Claude Code kills slow SessionEnd `claude -p` hooks before they finish and `/exi
 doesn't fire SessionEnd at all, so the SessionEnd capture/evaluator are
 **best-effort**; the `np-backcapture-sweep.sh` SessionStart hook is what actually
 back-captures the previous session (from its now-complete on-disk transcript) by
-re-running the same capture + evaluator. Same inboxes, same readers — only the
+re-running the same capture + evaluator. Same inboxes, same readers. Only the
 trigger differs.
 
 ```
@@ -127,7 +116,7 @@ PERFORMANCE
                       └─ build.py ─▶ metrics.js ─▶ dashboard/index.html (windowed to last N)
 ```
 
-Record shapes (keep these stable — readers depend on them):
+Record shapes (keep these stable; readers depend on them):
 - **episodic inbox**: `{session_id, ts, project, cwd, mode} + {headline, body, candidate_topics[], keywords[], struggles[]}` (`session_id` lets the evaluator count this session's `struggles[]` cross-pipeline)
 - **metrics**: `{session_id, ts, project, signals{skills_invoked[], playbook_fires, playbook_heeded, recall_injections, directive_present, struggles, tool_calls, tokens{…}}, contribution_score, helped[], shortfalls[], suggestions[], assets_used[]}`
 
@@ -141,7 +130,7 @@ Record shapes (keep these stable — readers depend on them):
    it); `--append-system-prompt` to stop it continuing the transcript; **cap input**
    and extract text first (`np-transcript-extract.py`); **and any hook that calls
    `claude -p` MUST set `NERVEPACK_AGENT=1` on the call and bail when that marker
-   is set** — headless `-p` re-fires the lifecycle hooks, so without the guard a
+   is set.** Headless `-p` re-fires the lifecycle hooks, so without the guard a
    SessionEnd hook recurses forever (§7). The runtime no longer calls `claude -p`
    directly: it goes through **`np-llm.sh`** (the backend-neutral LLM-CLI seam),
    which sets `NERVEPACK_AGENT` centrally and lets a non-Claude host swap the backend.
@@ -154,23 +143,23 @@ Record shapes (keep these stable — readers depend on them):
    plain bash; stub `claude` via `CLAUDE_BIN`). The whole suite runs via
    `engine/setup/tests/run-all.sh` (hermetic, zero third-party deps outside `e2e/`);
    CI runs it as the blocking `regression` job and gates `main` on it. (→ coding-rules §5)
-7. **Skills stay lean** — ~6 KB soft / 8 KB hard; overflow → `references/`; enforced
+7. **Skills stay lean** (~6 KB soft / 8 KB hard; overflow → `references/`), enforced
    daily by skill-maintain.
-8. **GUI side-effects guard once-per-boot** (the `74` dashboard open) — SessionStart
+8. **GUI side-effects guard once-per-boot** (the `74` dashboard open). SessionStart
    fires repeatedly and a raw GUI open self-sustains a reconnect loop (§4).
 9. **Commits:** conventional prefix (`skill()/setup()/feat()/fix()/docs()/manual()/evaluator()/agent()`),
    authored as the repo's configured git identity, **no LLM-attribution trailer** (→ coding-rules §6). Ask before pushing.
 10. **Concurrency-safe sync:** fast-forward only, re-check the tip before any
     destructive git op; never force-push a concurrent agent's branch.
 11. **Cache-stable context injection** (Manus): the SessionStart directive is a
-    **byte-stable prefix** (no timestamps/volatile fields — regression-tested); all
+    **byte-stable prefix** (no timestamps/volatile fields, regression-tested). All
     variable, session-specific context (episodic/playbook/strategy recall) is injected
     **later** via `UserPromptSubmit`, never interleaved into the stable block, so the
     KV-cache survives. nervepack's own injection cost is attributed via
     `directive_tokens` in the evaluator signals.
 12. **SessionEnd is unreliable for slow work; SessionStart is the reliable trigger.**
     Claude Code exits without awaiting slow SessionEnd hooks and `/exit` doesn't fire
-    SessionEnd at all (GH #35892/#41577) — so any SessionEnd step that calls `claude -p`
+    SessionEnd at all (GH #35892/#41577), so any SessionEnd step that calls `claude -p`
     (capture, evaluator) is **best-effort**. The guaranteed path is the SessionStart
     `np-backcapture-sweep.sh`, which back-captures the previous session from its
     complete on-disk transcript. New per-session capture/scoring work must ride the
@@ -180,15 +169,15 @@ Record shapes (keep these stable — readers depend on them):
     alone: require the `claude` binary only on the `claude` backend; the `local` backend
     has its own prerequisites (`complete` → `NP_LLM_BASE_URL`/`MODEL_CHEAP` via
     `np-llm-local.py`; `agent` → `NP_LLM_AGENT_CMD`). A bare claude-binary check silently
-    disables the whole pipeline on a non-Claude host even though the backend works — the
-    #4b finding behind the five backend-aware gates (capture, evaluator, `71`/`72`/`75`).
-    (→ invariant 2; the seam already owns backend dispatch — don't re-scatter `claude -p`)
+    disables the whole pipeline on a non-Claude host even though the backend works. This
+    is the #4b finding behind the five backend-aware gates (capture, evaluator, `71`/`72`/`75`).
+    (→ invariant 2; the seam already owns backend dispatch, don't re-scatter `claude -p`)
 14. **Markdown is the internal representation; HTML is only for human render.**
     Everything the model ingests (skills, wiki, sources, injected context) stays
     **Markdown**. Measured on this corpus (2026-06-17), the *same* content as HTML costs
     **~26% more tokens** on a clean render (real-world HTML 2–10×; published HTML→MD
     conversions report ~67–87% token savings), while Markdown is only **~5% over bare
-    plain text** — structure for nearly free, and the format LLMs are trained most on.
+    plain text** (structure for nearly free, and the format LLMs are trained most on).
     HTML earns its place **only** for human-facing rendered pages (e.g. the dashboard's
     "open the source" tab, where the model never reads it) or merged-cell tables
     (`colspan`/`rowspan`, which nervepack content doesn't use). So: **author/store
@@ -241,7 +230,7 @@ Record shapes (keep these stable — readers depend on them):
 ## Where to read more (the "child docs" — depth lives here, not duplicated above)
 
 - **Protocols & conventions:** `AGENTS.md` (tool-neutral manual) + `CLAUDE.md` (Claude Code wiring; `@import`s AGENTS.md).
-- **Per-feature design:** the design specs + plans live in the **content overlay**, not the engine — `$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/` (filenames like `*-design.md` are referenced by name in the feature catalog above for provenance). Brainstorm/plan output is content, so a public engine-only clone won't carry them. Historical/one-time: `2026-06-03-nervepack-rebrand-design.md` (the brain→nervepack rename — not a live subsystem). In progress (Phases 1–5 built — `np-llm.sh`, the onboard contract, the doctor, the Claude adapter, the `np-core-onboard` skill; Goose validation pending): `2026-06-05-agnostic-onboarding-design.md` (LLM-agnostic onboarding).
+- **Per-feature design:** the design specs + plans live in the **content overlay**, not the engine (`$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/`; filenames like `*-design.md` are referenced by name in the feature catalog above for provenance). Brainstorm/plan output is content, so a public engine-only clone won't carry them. Historical/one-time: `2026-06-03-nervepack-rebrand-design.md` (the brain→nervepack rename, not a live subsystem). In progress (Phases 1–5 built: `np-llm.sh`, the onboard contract, the doctor, the Claude adapter, the `np-core-onboard` skill; Goose validation pending): `2026-06-05-agnostic-onboarding-design.md` (LLM-agnostic onboarding).
 - **Behavioral rules / gotchas:** `skills/np-kb-coding-rules`, `skills/np-kb-claude-headless-scripting`, `skills/np-kb-branding`.
 - **Human overview & bringup:** `README.md`. **Deferred work:** `ROADMAP.md`. **Audit trail:** `log.md`.
-- **Skill catalog:** `INDEX.md` (auto-generated — scan before adding a skill).
+- **Skill catalog:** `INDEX.md` (auto-generated; scan before adding a skill).

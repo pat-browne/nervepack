@@ -5,10 +5,10 @@
 > implement it, and a *situational example* of the flow in action. It is the
 > companion to the two other top docs:
 >
-> - **`ARCHITECTURE.md`** — the cheap map (catalog ↔ toggle ↔ code ↔ doc, wiring
+> - **`ARCHITECTURE.md`**, the cheap map (catalog ↔ toggle ↔ code ↔ doc, wiring
 >   tables, invariants, the "touch X → check Y" change-impact). Read it before
 >   editing code.
-> - **`CLAUDE.md`** — the protocol (auth, commits, language policy, directory
+> - **`CLAUDE.md`**, the protocol (auth, commits, language policy, directory
 >   contract). Read it before doing anything in the repo.
 >
 > This file answers "what does each layer *do* and *why*"; ARCHITECTURE answers
@@ -19,7 +19,7 @@
 nervepack is a versioned hub of skills, rules, memory, and dev-env setup that
 follows you across machines, **delivered into each AI session as user skills** and
 **wired into the session lifecycle by hooks + crons**. Knowledge lives in layers
-with a strict authority order — **`skills > sources > wiki > playbooks > episodic`**
+in strict authority order. **`skills > sources > wiki > playbooks > episodic`**
 (strategies sit beside playbooks as the advisory, success-driven mirror). Human-
 reviewed, curated knowledge (skills) always wins; auto-distilled, review-waived
 layers (playbooks, strategies, episodic) are lower-authority and reversible. Two
@@ -69,8 +69,8 @@ pinning version + scope. Lives in the **content overlay**, not the engine.
 
 **Situational example.** A question about a specific Rust borrow-checker rule recurs.
 Rather than re-deriving it or hitting live docs each time, you ingest the relevant
-chapter to `sources/rust/`, pin the edition, and every future answer cites it — and
-a `wiki/` page can build on it.
+chapter to `sources/rust/`, pin the edition, and every future answer cites it. A
+`wiki/` page can build on it too.
 
 ## Wiki — LLM-owned synthesis ("connect what we know")
 
@@ -90,8 +90,8 @@ here" lands one synthesis page that points at both.
 ## Episodic memory — auto working memory ("what we did / where we left off")
 
 **Purpose.** The lowest-authority layer: narrative record of what was worked on,
-themed by topic. Second-class by design — may be stale, prunable, never holds durable
-rules.
+themed by topic. Second-class by design (may be stale, prunable, never holds durable
+rules).
 
 **Workflow.** *Capture* (best-effort `SessionEnd`/`PreCompact` Haiku summary →
 local inbox) and the **back-capture sweep** (the reliable `SessionStart` trigger)
@@ -104,7 +104,7 @@ injects matching themes on a session's first prompts.
 Toggle: `memory`.
 
 **Situational example.** You spend a session migrating a box's network to a new
-subnet but don't finish. Next week you ask "where did we leave the eero migration?" —
+subnet but don't finish. Next week you ask "where did we leave the eero migration?" and
 recall surfaces the episodic theme with the new IPs and the resume point, instead of
 you reconstructing it from scratch.
 
@@ -112,7 +112,7 @@ you reconstructing it from scratch.
 
 **Purpose.** Auto-distilled procedural interventions from past failure→recovery.
 Above episodic, below skills. Unique trait: **enforced at the tool call**, not just
-advisory — this is the niche a passive skill structurally cannot fill.
+advisory. This is the niche a passive skill structurally cannot fill.
 
 **Workflow.** Capture emits `struggles[]` on sessions with real failures →
 `episodic-maintain` clusters them into `playbooks/<topic>.md` with an `enforce`
@@ -126,7 +126,7 @@ matched ones with imperative framing.
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into the `safe-git-grep` playbook; now
 when a prompt mentions git-grep, the recall hook injects "use long-form flags" *before*
-you make the same mistake again — no skill invocation required.
+you make the same mistake again, no skill invocation required.
 
 ## Strategies — success-driven, advisory ("when X, the approach that worked is Z")
 
@@ -151,15 +151,15 @@ you to search issues first.
 **Purpose.** Playbooks and strategies are a **staging pool**, not a permanent home.
 A pattern that keeps proving itself (high `seen`) or outgrows what a skill body may
 even be (bytes over the skill budget) is overdue to become a curated, human-reviewed
-skill. Without a trigger, entries accrete forever — which is exactly how the
+skill. Without a trigger, entries accrete forever. That is exactly how the
 `security-review` strategy grew to 8 KB.
 
 **Workflow.** The daily `75-skill-maintain.sh` runs `np-graduation-detect.py`
 (deterministic, no LLM) over the overlay's `strategies/` and `playbooks/`. Any entry
 with `seen ≥ graduate_seen` (default 10) or `bytes > graduate_kb` (default 6 KB) that
 isn't already `graduated`/`promoted`/`archived` is **surfaced** to the maintain log
-and a `graduation-candidates` marker — never auto-promoted, because skills keep the
-human-review gate. You then graduate it by hand via `np-core-contribute`: distill the
+and a `graduation-candidates` marker, never auto-promoted (skills keep the
+human-review gate). You then graduate it by hand via `np-core-contribute`: distill the
 method into a `skills/np-*` skill and flip the source's `status: graduated`.
 
 **Assets.** `np-graduation-detect.py`, `75-skill-maintain.sh`,
@@ -167,13 +167,13 @@ method into a `skills/np-*` skill and flip the source's `status: graduated`.
 `skills.graduate_kb`. **Surfaced on the dashboard:** `75-skill-maintain.sh` also writes
 a committed, content-routed `graduation-candidates.json`; `build.py` `load_graduation()`
 emits `window.GRADUATION` and `index.html` renders a Graduation-candidates panel
-(fail-open empty state). Keeps the engine PII-clean — the data lives in the overlay.
+(fail-open empty state). Keeps the engine PII-clean. The data lives in the overlay.
 
 **Situational example.** `security-review` reaches `seen: 30` and 8 KB. The daily
 routine flags it in the marker file **and the dashboard's Graduation panel**. You run
 the graduation: a lean `np-kb-security-review` skill is born (method in the body, depth
 in `references/`), the strategy is marked `graduated`, and the detector stops flagging
-it — while `subagent-development` (seen 12) surfaces as the next candidate.
+it, while `subagent-development` (seen 12) surfaces as the next candidate.
 
 ---
 
@@ -198,7 +198,7 @@ transcript, deduped per `session_id`.
 **Assets.** `episodic-capture.sh`, `np-backcapture-sweep.sh`,
 `np-transcript-extract.py`. Toggle: `memory` (`memory.backcapture`).
 
-**Situational example.** You finish a session and type `/exit` — no SessionEnd fires.
+**Situational example.** You finish a session and type `/exit`. No SessionEnd fires.
 Nothing is lost: when you next start a session, the back-capture sweep finds that
 completed transcript, summarizes it, and scores it, so the work still reaches episodic
 + metrics.
@@ -219,7 +219,7 @@ field reference). Toggle: `evaluator`.
 
 **Situational example.** A session where you invoked three skills and heeded a playbook
 scores higher on "nervepack helped" than one where the directive was present but no
-skill fired — and the low-help session generates a suggestion you can act on later.
+skill fired. The low-help session generates a suggestion you can act on later.
 
 ## Metrics aggregation + dashboard
 
@@ -232,8 +232,8 @@ read on trends, wins, and struggles.
 SessionStart hook opens it once per boot (guarded against the reconnect loop).
 
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
-into `metrics.js` — a grouped, searchable index of the overlay's `wiki/{entities,concepts}/*.md`
-pages and `sources/` by topic (`{name, kind, last_updated, sources[], excerpt, html, topic}`).
+into `metrics.js` (a grouped, searchable index of the overlay's `wiki/{entities,concepts}/*.md`
+pages and `sources/` by topic, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
 `index.html` renders it as a grouped/collapsible left sidebar (entities / concepts /
 sources-by-topic) with a client-side search filter; clicking an entry opens the
 build-rendered HTML page in a new tab; Markdown stays the source (invariant 14).
@@ -248,13 +248,13 @@ shows its empty state (fail-open). The wiki **data stays in the content overlay*
 Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`).
 
 **Situational example.** Over a fortnight the dashboard's struggles panel keeps showing
-"skill not invoked" — a signal the directive routing needs a new row, visible as a
+"skill not invoked" (a signal the directive routing needs a new row), visible as a
 trend rather than a one-off annoyance.
 
 ## Suggestions review + implement/reject
 
 **Purpose.** Close the loop: the evaluator's accumulated suggestions get triaged,
-and the good ones can be built — by an agent — without leaving the dashboard.
+and the good ones can be built by an agent without leaving the dashboard.
 
 **Workflow.** `np-suggestions-review.py` ranks/clears suggestions (the served
 dashboard exposes it as buttons via the localhost-only `np-dashboard-server.py`).
@@ -268,7 +268,7 @@ resolves it. `np-core-suggestions-review` drives the same flow from any host.
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.
 You run `/np-suggestions`, it ranks them, you pick three worth building, hit Implement,
-and each runs as a worktree-isolated agent that opens a PR — your working tree
+and each runs as a worktree-isolated agent that opens a PR, your working tree
 untouched.
 
 ## Skill maintenance (auto-split) + graduation detection
@@ -290,7 +290,7 @@ ARCHITECTURE freshness check (both advisory).
 **Situational example.** You append three verbose rules to a skill and it crosses 8 KB.
 That night the routine detects it, moves the long detail into `references/`, leaves
 one-line pointers in the body, validates the frontmatter + links survived, and commits
-the split — the body is lean again without you touching it.
+the split. The body is lean again without you touching it.
 
 ---
 
@@ -315,7 +315,7 @@ domain defaults, and a trigger→skill routing table. It's a **byte-stable prefi
 
 **Situational example.** You open a session and ask to "build a settings page." The
 directive has already told you to brainstorm first and to check `np-kb-branding` for
-any UI decision — so you reach for both instead of inventing a layout and a palette.
+any UI decision, so you reach for both instead of inventing a layout and a palette.
 
 ## Cross-machine sync
 
@@ -329,7 +329,7 @@ never auto-rebase or autostash. `np-core-sync` does it on demand.
 
 **Situational example.** A cron pushed a new skill from your laptop overnight. You sit
 down at the desktop, start a session, and the SessionStart backup sync fast-forwards
-it in — the new skill is live without a manual pull.
+it in. The new skill is live without a manual pull.
 
 ## Feature toggles
 
@@ -377,7 +377,7 @@ patterns and reminds you to invoke `superpowers:writing-skills` first.
 Toggles: `evaluator.escalation`, `skills.trigger_recall`.
 
 **Situational example.** Three tool calls into a task you keep tripping the playbook
-guard. Escalation fires once: "you've struggled twice — is there a skill for this?" —
+guard. Escalation fires once ("you've struggled twice, is there a skill for this?")
 and you stop to invoke the one you'd been bypassing.
 
 ---
@@ -415,13 +415,13 @@ flight gates check the *backend*, not the `claude` binary.
 **Assets.** `np-llm.sh`, `engine/onboard/`, `np-doctor.sh`, `np-core-onboard`.
 
 **Situational example.** On a Goose box with a local model, `/np-onboard` writes the
-adapter, points the seam at the local endpoint, and the doctor reports PASS — the
+adapter, points the seam at the local endpoint, and the doctor reports PASS. The
 capture/evaluator crons run on the local model with no Claude binary present.
 
 ## Engine / content split + the content seam
 
 **Purpose.** Keep the engine public and shareable while personal content stays
-private — and let one resolver point every consumer at the right tree.
+private, and one resolver points every consumer at the right tree.
 
 **Workflow.** The engine repo holds machinery + generic skills; the overlay
 (`NP_CONTENT_DIR`) holds sources/wiki/episodic/playbooks/strategies/metrics + personal
@@ -431,7 +431,7 @@ unset falls back to the engine root (legacy single-repo).
 **Assets.** `np-content-lib.sh`, `NP_CONTENT_DIR`, the `nervepack-content-example` repo.
 
 **Situational example.** The graduation detector needs to scan *your* strategies. It
-asks `np_content_dir`, gets your overlay path, and scans there — while a public clone
+asks `np_content_dir`, gets your overlay path, and scans there. A public clone
 with no overlay simply finds nothing and no-ops.
 
 ## CI PII guard + publish snapshot
@@ -442,7 +442,7 @@ to-be) engine.
 **Workflow.** `np-publish-scan.py` scans for secrets/PII (incl. RFC1918 LAN IPs) with a
 vetted false-positive allowlist; the `pii-guard` CI job runs it on every push/PR. The
 pre-publish gate (`np-publish-snapshot.sh`) exports a history-free ref, scans it, and
-refuses if dirty — it never pushes (public release stays human-gated).
+refuses if dirty. It never pushes (public release stays human-gated).
 
 **Assets.** `np-publish-scan.py`, `scan-allowlist.txt`, `np-publish-snapshot.sh`,
 `PUBLISH.md`, the `pii-guard` CI job.
@@ -464,16 +464,16 @@ out-of-band.
 **Assets.** `90/91-…-permissions.sh`, `np-env-secrets-refresh`. Toggle: `allowlist`.
 
 **Situational example.** You ask to "refresh AWS creds." The skill pulls the secret
-from Bitwarden and writes the profile with `umask 077` + `chmod 600` — and the value
+from Bitwarden and writes the profile with `umask 077` + `chmod 600`. The value
 never appears in the transcript or prompt cache.
 
 ---
 
 ## See also
 
-- **`ARCHITECTURE.md`** — the change-impact map (touch X → check Y), runtime wiring
+- **`ARCHITECTURE.md`**, the change-impact map (touch X → check Y), runtime wiring
   tables, design invariants, and the record shapes the readers depend on.
-- **`CLAUDE.md`** — directory contract, commit conventions, language/model policy,
+- **`CLAUDE.md`**, directory contract, commit conventions, language/model policy,
   the ingest/lint protocols for sources + wiki.
-- **`ROADMAP.md`** — deferred work and the trigger to revisit each item.
-- **`INDEX.md`** — the auto-generated skill catalog.
+- **`ROADMAP.md`**, deferred work and the trigger to revisit each item.
+- **`INDEX.md`**, the auto-generated skill catalog.
