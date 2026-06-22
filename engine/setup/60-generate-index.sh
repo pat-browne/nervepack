@@ -23,6 +23,7 @@ set -euo pipefail
 
 NERVEPACK="${NERVEPACK:-$HOME/Code/nervepack}"
 source "$NERVEPACK/engine/setup/np-content-lib.sh"
+source "$NERVEPACK/engine/setup/np-toggle-lib.sh"
 ENGINE_SKILLS="$NERVEPACK/skills"
 CONTENT_DIR="$(np_content_dir)"
 OVERLAY_SKILLS="$CONTENT_DIR/skills"
@@ -136,5 +137,9 @@ render_index "$NERVEPACK/INDEX.md" "$ENGINE_SKILLS"
 # local discovery. Skip when content == engine (legacy single-repo) — the engine
 # index already covers the full set there.
 if [[ "$CONTENT_DIR" != "$NERVEPACK" ]]; then
-  render_index "$CONTENT_DIR/INDEX.md" "$ENGINE_SKILLS" "$OVERLAY_SKILLS"
+  _merged_bases=("$ENGINE_SKILLS" "$OVERLAY_SKILLS")
+  if np_enabled team && TEAM_DIR="$(np_team_dir 2>/dev/null)"; then
+    _merged_bases+=("$TEAM_DIR/skills")
+  fi
+  render_index "$CONTENT_DIR/INDEX.md" "${_merged_bases[@]}"
 fi

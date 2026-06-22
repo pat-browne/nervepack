@@ -8,6 +8,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GEN="$HERE/../../60-generate-index.sh"
 LIB="$HERE/../../np-content-lib.sh"
+TLIB="$HERE/../../np-toggle-lib.sh"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
@@ -15,6 +16,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 eng="$tmp/engine-repo"
 mkdir -p "$eng/engine/setup" "$eng/skills/np-eng-demo" "$eng/archive"
 cp "$LIB" "$eng/engine/setup/np-content-lib.sh"
+cp "$TLIB" "$eng/engine/setup/np-toggle-lib.sh"
 cat > "$eng/skills/np-eng-demo/SKILL.md" <<'S'
 ---
 name: np-eng-demo
