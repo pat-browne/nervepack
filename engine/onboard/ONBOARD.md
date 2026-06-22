@@ -3,11 +3,11 @@
 **You are an agentic coding assistant onboarding nervepack onto this machine for
 your own host (Claude Code, Goose, OpenHands, Cline, Continue, …).** nervepack is
 tool-neutral; *you* create the host-specific wiring by satisfying the contract
-below, then prove it with the doctor. There is no privileged path — Claude Code
+below, then prove it with the doctor. There is no privileged path. Claude Code
 onboards through these same docs.
 
-> **Prerequisite:** your host must be *agentic* — able to read/write files and run
-> shell commands. A plain chat UI (e.g. raw Ollama / Open WebUI) cannot self-wire;
+> **Prerequisite:** your host must be *agentic* (able to read/write files and run
+> shell commands). A plain chat UI (e.g. raw Ollama / Open WebUI) cannot self-wire;
 > it can only consume the knowledge as context.
 
 ## The loop
@@ -16,8 +16,8 @@ onboards through these same docs.
    the model, fires lifecycle events (session start/end), and runs a headless model
    call. Check `onboard/capabilities.json` `hints` for a recipe for your host.
 2. **Satisfy each capability** in `onboard/capabilities.json` (the contract). Tiers:
-   - **MUST** — `knowledge`, `llm-cli`, `git-sync`, `toggles`. Onboarding fails without these.
-   - **SHOULD** — `session-start`, `session-end-capture`, `session-end-flush`,
+   - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`. Onboarding fails without these.
+   - **SHOULD**: `session-start`, `session-end-capture`, `session-end-flush`,
      `scheduled-maint`. Wire what your host supports; mark the rest `unsupported`
      (and prefer the wrapper fallbacks the hints describe).
 3. **Record what you did** in an adapter manifest so the doctor can verify it:
@@ -59,14 +59,14 @@ already injects the directive via a session-start hook (double-injection).
 ## Reference output
 
 The Claude Code adapter is reproduced by `setup/30-link-skills.sh` (knowledge) and
-`setup/5x-install-*.sh` (the hooks) — read them as a worked example of what your
+`setup/5x-install-*.sh` (the hooks). Read them as a worked example of what your
 adapter should achieve, then express the equivalent for your host. An example
 manifest lives at `onboard/adapters/<host>.example.json`.
 
 ## Satisfying capabilities via MCP
 
 - **Via MCP (any MCP-speaking host):** instead of wiring each script directly, point
-  your MCP client at `engine/bin/nervepack-mcp` (stdio) — see **[`MCP.md`](MCP.md)** for
+  your MCP client at `engine/bin/nervepack-mcp` (stdio). See **[`MCP.md`](MCP.md)** for
   the `mcpServers` config block, the full tool/resource list, and the write-gating story.
   It exposes every capability as MCP tools/resources/prompts (the programmatic form of
   this contract). Push-on-lifecycle behaviors still need a thin host shim that calls the
@@ -83,7 +83,7 @@ neutral `nervepack agent <nervepack-agent@localhost>`.
 ### Local / self-hosted model backend (OpenAI-compatible)
 
 To run nervepack on a local or self-hosted model instead of Claude, set the `local`
-backend (it speaks the OpenAI-compatible `/chat/completions` protocol — works with Ollama,
+backend (it speaks the OpenAI-compatible `/chat/completions` protocol, works with Ollama,
 Open WebUI, LM Studio, vLLM, llama.cpp):
 
 ```bash
@@ -96,11 +96,11 @@ echo ping | setup/np-llm.sh complete
 ```
 
 `complete` mode (capture + evaluator) works directly. `agent` mode (the weekly maintenance
-crons) needs an agentic runner — set `NP_LLM_AGENT_CMD` to a command that takes the prompt
+crons) needs an agentic runner. Set `NP_LLM_AGENT_CMD` to a command that takes the prompt
 on stdin and the tools in `NP_LLM_TOOLS` (e.g. a Goose/aider invocation); otherwise those
 crons report that an agentic host is required.
 
-**Manual smoke (run against your real endpoint — sub-project #4b validates this):**
+**Manual smoke (run against your real endpoint; sub-project #4b validates this):**
 
 ```bash
 printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
@@ -111,8 +111,8 @@ printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
 
 ## Don't
 
-- Don't edit `onboard/capabilities.json` to make the doctor pass — fix the wiring.
-- Don't skip `git-sync` auth — the maintenance steps push to origin.
+- Don't edit `onboard/capabilities.json` to make the doctor pass. Fix the wiring.
+- Don't skip `git-sync` auth. The maintenance steps push to origin.
 - Don't drop the `NERVEPACK_AGENT` guard: any hook that triggers `np-llm.sh agent`
   (the maintenance/flush path) must bail when `NERVEPACK_AGENT` is set, or the
   model call's own session-end re-fires the hook forever. See
