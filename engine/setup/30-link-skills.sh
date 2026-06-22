@@ -18,12 +18,23 @@ mkdir -p "$DST"
 
 # Ordered source map: engine first, then overlay (overlay-wins on name clash).
 # When content==engine (default) the two are identical -> no dupes.
-declare -A _skill_src
+# Stock macOS ships bash 3.2, which has no associative arrays, so we keep two
+# parallel arrays + a linear upsert instead of `declare -A`. The skill set is
+# small (tens of entries), so O(n^2) is irrelevant — this keeps the harness
+# running on the default bash without requiring bash 4+.
+_skill_names=(); _skill_dirs=()
+_skill_upsert() {   # $1=name $2=dir ; overrides an existing name in place
+  local i
+  for ((i = 0; i < ${#_skill_names[@]}; i++)); do
+    if [[ "${_skill_names[$i]}" == "$1" ]]; then _skill_dirs[$i]="$2"; return; fi
+  done
+  _skill_names+=("$1"); _skill_dirs+=("$2")
+}
 for base in "$ENGINE_SKILLS" "$OVERLAY_SKILLS"; do
   [[ -d "$base" ]] || continue
   for sd in "$base"/*/; do
     [[ -d "$sd" ]] || continue
-    _skill_src["$(basename "$sd")"]="${sd%/}"   # later (overlay) overrides earlier (engine)
+    _skill_upsert "$(basename "$sd")" "${sd%/}"   # later (overlay) overrides earlier (engine)
   done
 done
 
@@ -41,8 +52,9 @@ shopt -u nullglob
 
 # Link pass: iterate the deduped name→dir map, repointing a link when the overlay
 # now overrides what was previously an engine-sourced link.
-for name in "${!_skill_src[@]}"; do
-  skill_dir="${_skill_src[$name]}"
+for ((_i = 0; _i < ${#_skill_names[@]}; _i++)); do
+  name="${_skill_names[$_i]}"
+  skill_dir="${_skill_dirs[$_i]}"
   target="$DST/$name"
   if [[ -L "$target" ]]; then
     cur="$(readlink "$target")"

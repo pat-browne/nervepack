@@ -18,20 +18,45 @@ SETUP="$(cd "$HERE/../.." && pwd)"
 #   date -d / --date   -> not in BSD date — pass epoch, or compute differently
 PATTERNS='stat -c|find[^|]*-printf|readlink -f|grep -P|date -d |date --date'
 
+# bash 4+ -only constructs that break on stock macOS bash 3.2 (its `/bin/bash`):
+#   declare -A / local -A  -> associative arrays; use parallel arrays + a linear upsert
+#   mapfile / readarray    -> read into the array with `while IFS= read -r x; do arr+=("$x"); done`
+# Unlike the GNU-coreutils set above, these break in EVERY script that can run on a
+# Mac — including the numbered onboarding/launchd scripts (30/35/60/71-77), which is
+# exactly why the bug that motivated this lived in 30-link-skills.sh. So the bash-3.2
+# scan is NOT exempted for numbered scripts; only the truly Linux-only bootstrappers
+# (apt baseline, the crontab installer — its launchd sibling is the macOS path) skip it.
+BASH4='(declare|local) -A|^[[:space:]]*(mapfile|readarray)'
+BASH4_LINUX_ONLY=' 00-apt-baseline.sh 70-install-memory-cron.sh '
+
 fail=0
 while IFS= read -r f; do
   base="$(basename "$f")"
-  [[ "$base" =~ ^[0-9] ]] && continue          # NN-*.sh: Linux bootstrappers, exempt
+
+  # --- GNU-coreutils check: numbered NN-*.sh bootstrappers exempt (legacy scope) ---
   # Flag real, executable GNU-only usage only: drop comment-only lines, and drop
   # the deliberate try-GNU-then-BSD fallback idiom (`stat -c ... || stat -f`).
-  hits="$(grep -nE "$PATTERNS" "$f" 2>/dev/null \
-    | grep -vE ':[[:space:]]*#' \
-    | grep -vE 'stat -c.*\|\|.*stat -f' \
-    || true)"
-  if [[ -n "$hits" ]]; then
-    echo "FAIL: GNU-only construct in macOS-runtime script $base:"
-    echo "$hits"
-    fail=1
+  if [[ ! "$base" =~ ^[0-9] ]]; then
+    hits="$(grep -nE "$PATTERNS" "$f" 2>/dev/null \
+      | grep -vE ':[[:space:]]*#' \
+      | grep -vE 'stat -c.*\|\|.*stat -f' \
+      || true)"
+    if [[ -n "$hits" ]]; then
+      echo "FAIL: GNU-only construct in macOS-runtime script $base:"
+      echo "$hits"
+      fail=1
+    fi
+  fi
+
+  # --- bash 3.2 check: every script except the Linux-only bootstrappers ---
+  # Strip trailing comments first so prose naming a builtin doesn't false-positive.
+  if [[ "$BASH4_LINUX_ONLY" != *" $base "* ]]; then
+    b4="$(sed 's/#.*//' "$f" | grep -nE "$BASH4" 2>/dev/null || true)"
+    if [[ -n "$b4" ]]; then
+      echo "FAIL: bash 4+ construct (breaks on stock macOS bash 3.2) in $base:"
+      echo "$b4"
+      fail=1
+    fi
   fi
 done < <(find "$SETUP" -maxdepth 1 -name '*.sh' -type f | sort)
 

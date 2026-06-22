@@ -5,7 +5,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP_TOGGLES_CONF="${NP_TOGGLES_CONF:-$HERE/toggles.conf}"
 NP_TOGGLES_LOCAL="${NP_TOGGLES_LOCAL:-$HOME/.config/nervepack/toggles.local}"
 source "$HERE/np-toggle-lib.sh"
-mapfile -t FEATS < <(awk -F'|' '!/^[[:space:]]*#/ && NF>=4 {gsub(/^ +| +$/,"",$1); print $1}' "$NP_TOGGLES_CONF")
+# bash 3.2 (stock macOS) has no `mapfile` — read into the array with a loop.
+FEATS=()
+while IFS= read -r _f; do FEATS+=("$_f"); done < <(awk -F'|' '!/^[[:space:]]*#/ && NF>=4 {gsub(/^ +| +$/,"",$1); print $1}' "$NP_TOGGLES_CONF")
 
 render() {
   echo "Nervepack feature toggles — number to flip, 's' save & quit, 'q' quit"
