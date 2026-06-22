@@ -82,7 +82,8 @@ if [[ "$(printf '%s' "$report" | jq -r '.catalog_over')" == "true" ]]; then
   echo "$(date -u +%FT%TZ) NOTE: catalog over budget ($(printf '%s' "$report" | jq -r '.catalog_tokens') tok) — tree restructure due (manual/future)" >>"$LOG"
 fi
 
-mapfile -t cands < <(printf '%s' "$report" | jq -r '.split_candidates[].skill' 2>/dev/null)
+cands=()   # bash 3.2 (stock macOS) has no `mapfile` — read into the array with a loop
+while IFS= read -r _c; do cands+=("$_c"); done < <(printf '%s' "$report" | jq -r '.split_candidates[].skill' 2>/dev/null)
 if [[ ${#cands[@]} -eq 0 ]]; then
   echo "$(date -u +%FT%TZ) no skills over split threshold (${SKILL_SPLIT_KB}KB)" >>"$LOG"; exit 0
 fi

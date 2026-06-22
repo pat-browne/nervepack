@@ -55,12 +55,23 @@ extract() {
   ' "$file"
 }
 
+# Deduped name->dir map, kept as parallel arrays so this runs on stock macOS
+# bash 3.2 (no associative arrays). render_index resets them on each call.
+_idx_names=(); _idx_dirs=()
+_idx_upsert() {   # $1=name $2=dir ; overrides an existing name in place
+  local i
+  for ((i = 0; i < ${#_idx_names[@]}; i++)); do
+    if [[ "${_idx_names[$i]}" == "$1" ]]; then _idx_dirs[$i]="$2"; return; fi
+  done
+  _idx_names+=("$1"); _idx_dirs+=("$2")
+}
+
 render_index() {
   # $1 = output file; remaining args = skill base dirs (precedence: later wins).
   local out="$1"; shift
   local tmp; tmp="$(mktemp)"
-  local -A _idx_src
-  local base d name skill_file fm_name fm_desc lines
+  local base d name skill_file fm_name fm_desc lines i
+  _idx_names=(); _idx_dirs=()
 
   {
     echo "# nervepack — skill index"
@@ -80,13 +91,14 @@ render_index() {
       shopt -s nullglob
       for d in "$base"/*/; do
         [[ -d "$d" ]] || continue
-        _idx_src["$(basename "$d")"]="${d%/}"
+        _idx_upsert "$(basename "$d")" "${d%/}"
       done
       shopt -u nullglob
     done
 
-    for name in "${!_idx_src[@]}"; do
-      d="${_idx_src[$name]}"
+    for ((i = 0; i < ${#_idx_names[@]}; i++)); do
+      name="${_idx_names[$i]}"
+      d="${_idx_dirs[$i]}"
       skill_file="$d/SKILL.md"
       [[ -f "$skill_file" ]] || continue
 

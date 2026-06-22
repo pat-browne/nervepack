@@ -43,7 +43,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-mapfile -t TESTS < <(
+# bash 3.2 (stock macOS) has no `mapfile` — read the discovered test paths into
+# the array with a loop instead.
+TESTS=()
+while IFS= read -r _t; do TESTS+=("$_t"); done < <(
   { find "$ROOT" -type f \( -name 'test_*.sh' -o -name 'test_*.py' \) \
       -not -path '*/_lib/*'; \
     if [[ -n "$CONTENT_ROOT" ]]; then
