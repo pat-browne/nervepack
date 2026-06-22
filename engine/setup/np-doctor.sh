@@ -48,6 +48,17 @@ core_check() {
       else
         echo PASS
       fi ;;
+    team)
+      tdir="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dir 2>/dev/null || true)"
+      torigin="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dir_origin 2>/dev/null)"
+      if [[ -z "$tdir" ]]; then
+        echo "PASS (no team layer configured)"
+      elif np_enabled team; then
+        echo "PASS (team layer: $tdir — origin $torigin)"
+      else
+        echo "PASS (team layer present at $tdir but the 'team' toggle is OFF — not merged)"
+      fi
+      ;;
     dashboard-data)
       # In a split layout, dashboard/data must be a symlink resolving to an existing
       # directory (the bridge created by 35-link-dashboard-data.sh). In a single-repo
