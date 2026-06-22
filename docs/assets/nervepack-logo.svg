@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 322" width="280" height="322" color="#16293a" role="img" aria-label="nervepack — a modpack for AI cognition">
+  <title>nervepack</title>
+  <!-- Structural parts + wordmark use currentColor (default dark #16293a here; the
+       -ondark variant sets it to light cream). Background is its own var so the
+       lockup sits on cream by default and on charcoal in the dark variant. -->
+  <defs>
+    <radialGradient id="m-node" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd56b"/><stop offset="55%" stop-color="#f2a91b"/><stop offset="100%" stop-color="#e09405"/>
+    </radialGradient>
+    <filter id="m-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="280" height="322" fill="#faf7f1"/>
+
+  <!-- emblem (native 200x200) centered at top -->
+  <g transform="translate(40,14)">
+    <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="100" cy="100" r="86" stroke-width="5"/>
+      <line x1="100" y1="14" x2="100" y2="186" stroke-width="4"/>
+      <!-- row1 -->
+      <line x1="72" y1="56" x2="62" y2="56"/>
+      <line x1="122" y1="56" x2="138" y2="56"/><line x1="138" y1="56" x2="150" y2="47"/><line x1="138" y1="56" x2="150" y2="65"/>
+      <!-- row2 -->
+      <line x1="72" y1="90" x2="62" y2="90"/>
+      <line x1="140" y1="90" x2="150" y2="81"/><line x1="140" y1="90" x2="150" y2="99"/>
+      <!-- row3 -->
+      <line x1="78" y1="124" x2="62" y2="124"/><line x1="62" y1="124" x2="50" y2="115"/><line x1="62" y1="124" x2="50" y2="133"/>
+      <line x1="122" y1="124" x2="138" y2="124"/><line x1="138" y1="124" x2="150" y2="115"/><line x1="138" y1="124" x2="150" y2="133"/>
+      <!-- row4 -->
+      <line x1="78" y1="158" x2="58" y2="158"/>
+    </g>
+    <g fill="currentColor">
+      <rect x="78" y="43" width="44" height="26" rx="9"/><rect x="78" y="77" width="44" height="26" rx="9"/>
+      <rect x="78" y="111" width="44" height="26" rx="9"/><rect x="78" y="145" width="44" height="26" rx="9"/>
+    </g>
+    <g filter="url(#m-glow)">
+      <circle cx="100" cy="56" r="5" fill="url(#m-node)"/><circle cx="100" cy="90" r="5" fill="url(#m-node)"/>
+      <circle cx="100" cy="124" r="5" fill="url(#m-node)"/><circle cx="100" cy="158" r="5" fill="url(#m-node)"/>
+      <circle cx="100" cy="14" r="5.5" fill="url(#m-node)" stroke="currentColor" stroke-width="2.5"/>
+      <circle cx="100" cy="186" r="5.5" fill="url(#m-node)" stroke="currentColor" stroke-width="2.5"/>
+      <g fill="url(#m-node)" stroke="currentColor" stroke-width="1.4">
+        <circle cx="57" cy="56" r="3.6"/><circle cx="151" cy="46" r="3.6"/><circle cx="151" cy="66" r="3.6"/>
+        <circle cx="57" cy="90" r="3.6"/><circle cx="151" cy="80" r="3.6"/><circle cx="151" cy="100" r="3.6"/>
+        <circle cx="48" cy="114" r="3.6"/><circle cx="48" cy="134" r="3.6"/><circle cx="151" cy="114" r="3.6"/><circle cx="151" cy="134" r="3.6"/>
+        <circle cx="53" cy="158" r="3.6"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- wordmark: lowercase, bold, rounded sans. Final asset should outline this to paths
+       once a rounded typeface is chosen (Baloo 2 / Quicksand / Nunito are candidates). -->
+  <text x="140" y="295" text-anchor="middle"
+        font-family="'Baloo 2','Quicksand','Nunito',system-ui,sans-serif"
+        font-weight="700" font-size="46" letter-spacing="0.5" fill="currentColor">nervepack</text>
+</svg>

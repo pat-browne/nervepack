@@ -1,9 +1,9 @@
 # Use nervepack from any MCP client
 
 nervepack ships an MCP server so any MCP-speaking host (Cursor, Codex, a local
-model's MCP client, …) gets the same skills, memory, and tools that Claude Code does
-— without wiring each script by hand. This is the distribution reference; for the
-broader self-wiring contract see [`ONBOARD.md`](ONBOARD.md), and for the conceptual
+model's MCP client, …) gets the same skills, memory, and tools that Claude Code does,
+without wiring each script by hand. This is the distribution reference. For the
+broader self-wiring contract see [`ONBOARD.md`](ONBOARD.md); for the conceptual
 overview see [`../../docs/FEATURES.md`](../../docs/FEATURES.md) (Part 4).
 
 ## What it is
@@ -13,7 +13,7 @@ A pure-stdlib **stdio** server (`engine/setup/np-mcp-server.py`, launched by
 session over stdin/stdout and it exits with the session. It reads your content
 overlay through `NP_CONTENT_DIR`, exactly like the rest of nervepack.
 
-## Install — the generic `mcpServers` block
+## Install: the generic `mcpServers` block
 
 Add this to your client's MCP config. Use an **absolute path** to the launcher:
 
@@ -30,17 +30,17 @@ Add this to your client's MCP config. Use an **absolute path** to the launcher:
 }
 ```
 
-`NP_CONTENT_DIR` is optional — omit it to fall back to the engine root (the legacy
+`NP_CONTENT_DIR` is optional. Omit it to fall back to the engine root (the legacy
 single-repo layout). Set it to your overlay to serve your personal skills/memory.
 
 ### Per-client notes
 
-- **Claude Code** — don't hand-edit. `engine/setup/58-install-mcp.sh` already
+- **Claude Code**: don't hand-edit. `engine/setup/58-install-mcp.sh` already
   registers the server (`claude mcp add nervepack -s user -- …/engine/bin/nervepack-mcp`)
   when the `mcp` toggle is on. Re-run that script after moving the repo.
-- **Cursor** — put the block above in `~/.cursor/mcp.json` (or the project
+- **Cursor**: put the block above in `~/.cursor/mcp.json` (or the project
   `.cursor/mcp.json`).
-- **Any other MCP client** — drop the same block into whatever file your client reads
+- **Any other MCP client**: drop the same block into whatever file your client reads
   its MCP server list from.
 
 ## What it exposes
@@ -66,8 +66,8 @@ index), `nervepack://dashboard/metrics` (the metrics time series), and every fil
 `nervepack://{skills,sources,wiki,playbooks,strategies,episodic,dashboard}/<name>` resolved from
 your overlay.
 
-**Prompts** (`prompts/list` / `prompts/get`): `nervepack-directive` — the
-"consult nervepack first" session directive, for hosts that inject a prompt at session
+**Prompts** (`prompts/list` / `prompts/get`): `nervepack-directive`, the
+"consult nervepack first" session directive for hosts that inject a prompt at session
 start.
 
 ## Write-gating & safety
@@ -78,13 +78,13 @@ The server is **safe-by-default**:
 - **Writes** are gated by the `mcp.writes` param (**default on**). Turn them off with
   `nervepack-toggle param mcp.writes off` to make the server strictly read-only.
 - **Durable git commits** (`nervepack_contribute`, and the `suggestions` implement
-  action) are gated separately by `mcp.contribute` (**default off**) — durable
+  action) are gated separately by `mcp.contribute` (**default off**). Durable
   auto-commit is opt-in because it bypasses the human-reviewed contribute gate.
-- It is **stdio-only** — no listening socket. Commits stay auditable: authored as you,
+- It is **stdio-only** (no listening socket). Commits stay auditable: authored as you,
   explicit-path staging, never force-push.
 
 ## See also
 
-- [`ONBOARD.md`](ONBOARD.md) — the full onboarding contract; MCP is one way to satisfy it.
-- [`capabilities.json`](capabilities.json) — the machine-readable capability list.
-- [`../../docs/FEATURES.md`](../../docs/FEATURES.md) — Part 4, the MCP layer's purpose and worked example.
+- [`ONBOARD.md`](ONBOARD.md): the full onboarding contract. MCP is one way to satisfy it.
+- [`capabilities.json`](capabilities.json): the machine-readable capability list.
+- [`../../docs/FEATURES.md`](../../docs/FEATURES.md): Part 4, the MCP layer's purpose and worked example.

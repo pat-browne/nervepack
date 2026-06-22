@@ -1,4 +1,4 @@
-# nervepack — scheduled agents
+# nervepack: scheduled agents
 
 Weekly agents keep the engine alive: one local cron for memory, plus
 default-on local crons for skill refine and compact. Their prompts live next to
@@ -19,7 +19,7 @@ accumulated state).
 
 ## Installing on a new machine
 
-### All scheduled jobs (cron — Linux / macOS fallback)
+### All scheduled jobs (cron: Linux / macOS fallback)
 
 ```bash
 ~/Code/nervepack/engine/setup/70-install-memory-cron.sh
@@ -33,7 +33,7 @@ comments. Verify:
 crontab -l | grep nervepack-
 ```
 
-### All scheduled jobs (launchd — macOS preferred)
+### All scheduled jobs (launchd: macOS preferred)
 
 ```bash
 ~/Code/nervepack/engine/setup/70-install-memory-launchd.sh
@@ -68,8 +68,8 @@ tail -50 ~/.cache/nervepack/compact.log
 ## Disabling / removing
 
 - **Local cron (memory-promote):** `crontab -l | grep -vF nervepack-memory-promote | crontab -`
-- **Local cron (refine):** `np-core-toggle maintain.refine off` — or remove with `crontab -l | grep -vF nervepack-refine | crontab -`
-- **Local cron (compact):** `np-core-toggle maintain.compact off` — or remove with `crontab -l | grep -vF nervepack-compact | crontab -`
+- **Local cron (refine):** `np-core-toggle maintain.refine off`, or remove with `crontab -l | grep -vF nervepack-refine | crontab -`
+- **Local cron (compact):** `np-core-toggle maintain.compact off`, or remove with `crontab -l | grep -vF nervepack-compact | crontab -`
 
 ## Authentication notes
 
@@ -82,13 +82,13 @@ tail -50 ~/.cache/nervepack/compact.log
 - On a non-Claude host, set `NP_LLM_BACKEND=local` + `NP_LLM_AGENT_CMD` before
   these crons run (see `engine/setup/np-llm.sh` for the backend contract).
 
-## Optional offload — cloud routines or OSS runners
+## Optional offload: cloud routines or OSS runners
 
 `nervepack-refine` and `nervepack-compact` run as local crons by default. If
 you prefer to offload them to a cloud routine (e.g. a claude.ai scheduled
 routine) or an OSS runner (e.g. GitHub Actions), the agent prompts in
 `np-flow-scheduled-refine.md` and `np-flow-weekly-compact.md` are already
-written to work in either context — they reference "this repo at your working
+written to work in either context. They reference "this repo at your working
 directory" and carry no account or provider hardcode.
 
 To set up a cloud routine:
@@ -104,4 +104,4 @@ To set up a cloud routine:
    `crontab -l | grep -vF nervepack-refine | grep -vF nervepack-compact | crontab -`
 
 A full provider-agnostic scheduler seam (`NP_SCHED_BACKEND`) is tracked as
-[issue #16](https://github.com/pat-browne/nervepack/issues/16) — that's Phase 2.
+[issue #16](https://github.com/pat-browne/nervepack/issues/16). That's Phase 2.
