@@ -60,4 +60,21 @@ set +e; outC="$(doctor "$tmp/unsup.json" 2>&1)"; rcC=$?; set -e
 [[ $rcC -eq 0 ]] || { echo "FAIL: unsupported SHOULDs must not fail the doctor; got $rcC"; echo "$outC"; exit 1; }
 echo "$outC" | grep -qi 'session-start.*UNSUPPORTED' || { echo "FAIL: should report UNSUPPORTED"; echo "$outC"; exit 1; }
 
+# Case D: a verify using the idiomatic `producer | grep -q PAT` form must PASS.
+# `grep -q` closes the pipe on first match, so the producer takes SIGPIPE (141);
+# the doctor must not let its `pipefail` turn that into a FAIL. `seq` overruns the
+# pipe buffer and matches on line 1, so this deterministically SIGPIPEs the
+# producer (regression guard for the launchctl/crontab scheduled-maint verifies).
+cat > "$tmp/pipe.json" <<'JSON'
+{ "host":"test", "capabilities": {
+  "knowledge":{"status":"wired","verify":"seq 100000 | grep -q 1"},
+  "session-start":{"status":"wired","verify":"true"},
+  "session-end-capture":{"status":"wired","verify":"true"},
+  "session-end-flush":{"status":"wired","verify":"true"},
+  "scheduled-maint":{"status":"wired","verify":"seq 100000 | grep -q 1"} } }
+JSON
+set +e; outD="$(doctor "$tmp/pipe.json" 2>&1)"; rcD=$?; set -e
+[[ $rcD -eq 0 ]] || { echo "FAIL: 'producer | grep -q' verify must not SIGPIPE-fail under pipefail; got $rcD"; echo "$outD"; exit 1; }
+echo "$outD" | grep -qi 'knowledge.*PASS' || { echo "FAIL: pipe-form verify should PASS"; echo "$outD"; exit 1; }
+
 echo "PASS test_doctor"

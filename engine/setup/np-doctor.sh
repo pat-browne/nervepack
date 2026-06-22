@@ -87,7 +87,16 @@ adapter_check() {
   verify="$(jq -r --arg id "$1" '.capabilities[$id].verify // ""'        "$ADAPTER" 2>/dev/null)"
   case "$status" in
     unsupported) echo UNSUPPORTED ;;
-    wired) if [[ -n "$verify" ]] && eval "$verify" >/dev/null 2>&1; then echo PASS; else echo FAIL; fi ;;
+    # Run the host-authored verify with pipefail DISABLED. These are boolean
+    # "is it wired" checks, and the idiomatic form is `producer | grep -q PAT`
+    # (e.g. `launchctl list | grep -q com.nervepack`, `crontab -l | grep -q …`).
+    # `grep -q` exits on first match and closes the pipe, so the producer takes
+    # SIGPIPE (141); under the script's `pipefail` that 141 would propagate and
+    # report a genuinely-wired capability as FAIL. Default pipe semantics (last
+    # command's status) are exactly what a boolean check wants.
+    wired)
+      if [[ -n "$verify" ]] && ( set +o pipefail; eval "$verify" ) >/dev/null 2>&1; then
+        echo PASS; else echo FAIL; fi ;;
     *) echo MISSING ;;
   esac
 }
