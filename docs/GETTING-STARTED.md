@@ -26,10 +26,10 @@ git clone https://github.com/pat-browne/nervepack ~/Code/nervepack
 ~/Code/nervepack/engine/setup/20-claude-plugins.sh # Claude Code plugins (Claude host only)
 ```
 
-**On macOS**, `00-apt-baseline.sh` is Linux-only — install the same tools with
-Homebrew instead (`brew install gh jq node python`), then continue from step 3.
-The setup scripts run on the system `/bin/bash` (3.2), so no newer bash is
-required; `gh auth login` (step 5) covers the GitHub credential the clone needs.
+**On macOS**, run `00-brew-baseline.sh` instead of `00-apt-baseline.sh` (the
+Homebrew sibling — same toolset: gh, jq, node, go, and Python via uv). It runs on
+the system `/bin/bash` (3.2), so no newer bash is required; `gh auth login` (step 5)
+covers the GitHub credential the clone needs.
 
 ## 3. Onboard your host
 
