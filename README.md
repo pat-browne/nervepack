@@ -170,8 +170,8 @@ and `docs/ARCHITECTURE.md` has the authoritative wiring. The short version:
 | `memory-promote` | Local cron | Triage the local memory store, promote durable entries into the right skill, drop the stale ones. |
 | `episodic-maintain` | Local cron | Drain the session inbox into themed episodic memory, compact oversized themes, regenerate the index. |
 | `skill-maintain` | Local cron | Keep skill bodies inside budget, splitting overflow into `references/`. |
-| `nervepack-refine` | Cloud | Lint frontmatter, audit cross-references. |
-| `nervepack-compact` | Cloud | Dedup near-identical skills, propose splits for the oversized ones. |
+| `nervepack-refine` | Cloud or local | Lint frontmatter, audit cross-references. |
+| `nervepack-compact` | Cloud or local | Dedup near-identical skills, propose splits for the oversized ones. |
 
 They run at staggered times so no two are pushing at once, and everything they write
 goes through the same conventions a human would follow. Retired skills move to
