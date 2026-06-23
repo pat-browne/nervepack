@@ -1,0 +1,6 @@
+# Code owners for nervepack.
+# These owners are requested for review on PRs that touch matching paths.
+# https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything in the repo.
+*       @pat-browne

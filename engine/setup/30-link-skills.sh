@@ -1,20 +1,39 @@
 #!/usr/bin/env bash
-# Symlink every skill from the engine repo's skills/ AND the overlay's skills/
-# into ~/.claude/skills so Claude Code picks them up as user-level skills in
-# every session.  Overlay-wins on a name clash (same dedup rule as npm workspaces).
+# Symlink every skill from the engine repo's skills/, the personal overlay's
+# skills/, AND (when the `team` toggle is on) the team layer's skills/ into
+# ~/.claude/skills so Claude Code picks them up as user-level skills in every
+# session.  Three-layer precedence: engine < personal < team (team wins on a
+# name clash — same dedup rule as npm workspaces applied per layer).
 #
 # Safe to re-run:
 #   - Existing symlinks to the correct target are left alone.
 #   - Any non-symlink at the target path is reported and skipped (no overwrite).
-#   - Dangling symlinks whose target is under either source base are pruned.
+#   - Dangling symlinks whose target is under any managed source base are pruned.
 #   - Symlinks pointing elsewhere are never touched.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-content-lib.sh"
+source "$HERE/np-toggle-lib.sh"
 ENGINE_SKILLS="$(cd "$HERE/../.." && pwd)/skills"
 OVERLAY_SKILLS="$(np_content_dir)/skills"
 DST="${NP_SKILLS_DST:-$HOME/.claude/skills}"
 mkdir -p "$DST"
+
+# Ordered base list: engine, personal, then team (highest precedence — appended last
+# so the parallel-array upsert's "later wins" makes team override personal/engine).
+# team is included only when configured AND the `team` toggle is on.
+_bases=("$ENGINE_SKILLS" "$OVERLAY_SKILLS")
+TEAM_SKILLS=""
+if np_enabled team && TEAM_DIR="$(np_team_dir 2>/dev/null)"; then
+  TEAM_SKILLS="$TEAM_DIR/skills"
+  _bases+=("$TEAM_SKILLS")
+fi
+
+_is_known_base() {   # $1=path ; true if under any source base we manage
+  local p="$1" b
+  for b in "${_bases[@]}"; do [[ "$p" == "$b"/* ]] && return 0; done
+  return 1
+}
 
 # Ordered source map: engine first, then overlay (overlay-wins on name clash).
 # When content==engine (default) the two are identical -> no dupes.
@@ -30,7 +49,7 @@ _skill_upsert() {   # $1=name $2=dir ; overrides an existing name in place
   done
   _skill_names+=("$1"); _skill_dirs+=("$2")
 }
-for base in "$ENGINE_SKILLS" "$OVERLAY_SKILLS"; do
+for base in "${_bases[@]}"; do
   [[ -d "$base" ]] || continue
   for sd in "$base"/*/; do
     [[ -d "$sd" ]] || continue
@@ -43,10 +62,9 @@ shopt -s nullglob
 for link in "$DST"/*; do
   [[ -L "$link" ]] || continue
   target="$(readlink "$link")"
-  case "$target" in
-    "$ENGINE_SKILLS"/*|"$OVERLAY_SKILLS"/*)
-      [[ -e "$link" ]] || { rm "$link"; echo "prune $(basename "$link") (target gone: $target)"; } ;;
-  esac
+  if _is_known_base "$target"; then
+    [[ -e "$link" ]] || { rm "$link"; echo "prune $(basename "$link") (target gone: $target)"; }
+  fi
 done
 shopt -u nullglob
 
@@ -59,10 +77,8 @@ for ((_i = 0; _i < ${#_skill_names[@]}; _i++)); do
   if [[ -L "$target" ]]; then
     cur="$(readlink "$target")"
     if [[ "$cur" == "$skill_dir" ]]; then echo "ok    $name (already linked)"; continue; fi
-    case "$cur" in
-      "$ENGINE_SKILLS"/*|"$OVERLAY_SKILLS"/*) rm "$target" ;;   # repoint (overlay-wins / path change)
-      *) echo "skip  $name (symlink to external target, not repointing: $cur)" >&2; continue ;;
-    esac
+    if _is_known_base "$cur"; then rm "$target"
+    else echo "skip  $name (symlink to external target, not repointing: $cur)" >&2; continue; fi
   elif [[ -e "$target" ]]; then
     echo "skip  $name (real file/dir already at $target)" >&2; continue
   fi
