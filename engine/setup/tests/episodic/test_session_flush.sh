@@ -37,4 +37,32 @@ set -e
 grep -q 'flush start' "$tmp/flush.log" || { echo "FAIL: no 'flush start' logged"; exit 1; }
 grep -q 'flush done'  "$tmp/flush.log" || { echo "FAIL: flush did not complete"; exit 1; }
 
+# 3. macOS DETACH path (no setsid): the flush must background its slow sub-steps and
+#    return instantly, NOT run them synchronously (which got the SessionEnd hook
+#    cancelled on macOS). Force the fallback with NP_FLUSH_NO_SETSID=1 so Linux CI
+#    exercises it too. Copy the flush beside stub sub-steps that sleep, so a
+#    synchronous run is observably slow and a detached run returns before they finish.
+det="$tmp/det"; mkdir -p "$det"
+cp "$FLUSH" "$det/np-session-flush.sh"
+for s in 73-aggregate-metrics.sh 72-run-episodic-maintain.sh; do
+  cat > "$det/$s" <<STUB
+#!/usr/bin/env bash
+sleep 3
+touch "$det/ran-\${0##*/}"
+STUB
+  chmod +x "$det/$s"
+done
+start=$(date +%s)
+set +e
+env SESSION_FLUSH_LOG="$det/flush.log" NP_FLUSH_NO_SETSID=1 bash "$det/np-session-flush.sh"; rc=$?
+set -e
+elapsed=$(( $(date +%s) - start ))
+[[ $rc -eq 0 ]] || { echo "FAIL: detached flush must exit 0, got $rc"; exit 1; }
+[[ $elapsed -lt 2 ]] || { echo "FAIL: flush blocked ${elapsed}s — did not detach (ran sub-steps synchronously)"; exit 1; }
+[[ ! -e "$det/ran-73-aggregate-metrics.sh" ]] || { echo "FAIL: sub-step already done on return — not backgrounded"; exit 1; }
+# the backgrounded child must still complete the work
+for _ in $(seq 1 20); do [[ -e "$det/ran-72-run-episodic-maintain.sh" ]] && break; sleep 0.5; done
+[[ -e "$det/ran-73-aggregate-metrics.sh" && -e "$det/ran-72-run-episodic-maintain.sh" ]] \
+  || { echo "FAIL: detached sub-steps never completed in background"; exit 1; }
+
 echo "PASS test_session_flush"
