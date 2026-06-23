@@ -40,7 +40,10 @@ mkdir -p skills/big/references
 printf -- "---\nname: big\ndescription: a big skill\n---\nRule. Detail: references/d.md\n[[np-core-sync]]\n" > skills/big/SKILL.md
 printf "long detail\n" > skills/big/references/d.md'
 test -f "$NP/skills/big/references/d.md" || { echo "FAIL: good split not applied"; exit 1; }
-( cd "$NP" && git log --oneline | grep -q 'skill(maintain)' ) || { echo "FAIL: good split not committed"; exit 1; }
+# Capture-then-grep: piping `git log` into `grep -q` is racy under `set -o pipefail` —
+# grep -q exits on the first match, git log then dies of SIGPIPE (141), and pipefail
+# propagates that as failure even though the match succeeded (reliably bites on macOS).
+grep -q 'skill(maintain)' <<<"$(git -C "$NP" log --oneline)" || { echo "FAIL: good split not committed"; exit 1; }
 
 # --- graduation surfacing: the proven strategy is flagged (advisory, not acted on) ---
 grep -q 'GRADUATE: strategy proven' "$tmp/log" || { echo "FAIL: graduation candidate not surfaced in log"; exit 1; }

@@ -42,12 +42,12 @@ chmod +x "$tmp/claude"
 export PATH="$tmp:$PATH"
 
 bash "$INSTALL" >/dev/null
-n="$(grep -cP '^nervepack\t' "$NP_MCP_REGISTRY" || true)"
+n="$(awk -F'\t' '$1=="nervepack"{c++} END{print c+0}' "$NP_MCP_REGISTRY")"
 [[ "$n" == "1" ]] || { echo "FAIL: after first run, nervepack entries=$n (want 1)"; cat "$NP_MCP_REGISTRY"; exit 1; }
-got="$(grep -P '^nervepack\t' "$NP_MCP_REGISTRY" | head -1 | cut -f2)"
+got="$(awk -F'\t' '$1=="nervepack"{print $2; exit}' "$NP_MCP_REGISTRY")"
 [[ "$got" == "$LAUNCHER" ]] || { echo "FAIL: launcher path=$got (want $LAUNCHER)"; exit 1; }
 
 bash "$INSTALL" >/dev/null   # idempotent: remove-then-add
-n2="$(grep -cP '^nervepack\t' "$NP_MCP_REGISTRY" || true)"
+n2="$(awk -F'\t' '$1=="nervepack"{c++} END{print c+0}' "$NP_MCP_REGISTRY")"
 [[ "$n2" == "1" ]] || { echo "FAIL: after second run, nervepack entries=$n2 (want 1, no dup)"; cat "$NP_MCP_REGISTRY"; exit 1; }
 echo "PASS test_install_mcp"
