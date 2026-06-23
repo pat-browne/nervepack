@@ -23,6 +23,9 @@ EXTENSIONS=(
   davidanson.vscode-markdownlint
   bierner.markdown-mermaid
 
+  # Diagrams: edit Excalidraw (.excalidraw) files; native Mermaid->Excalidraw import
+  pomdtr.excalidraw-editor
+
   # Code dependency graph (needs dependency-cruiser npm pkg in target project)
   juanallo.vscode-dependency-cruiser
 
