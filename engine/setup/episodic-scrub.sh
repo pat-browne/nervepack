@@ -3,6 +3,10 @@
 # of the summarizer's "no secrets" instruction. Conservative by design: catches
 # known token shapes, does not attempt to be exhaustive.
 set -euo pipefail
+# Byte-process (C locale): a redactor must never choke on binary / invalid-UTF-8
+# input. Without this, BSD sed (macOS) aborts with "RE error: illegal byte sequence"
+# on non-UTF-8 bytes, defeating the fail-open contract.
+export LC_ALL=C
 sed -E \
   -e 's/sk-[A-Za-z0-9]{16,}/[REDACTED-SECRET]/g' \
   -e 's/github_pat_[A-Za-z0-9_]{20,}/[REDACTED-SECRET]/g' \
