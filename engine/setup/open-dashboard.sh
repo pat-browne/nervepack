@@ -5,7 +5,8 @@
 # opens, no boot guard. A single manual xdg-open is not in the SessionStart path,
 # so it cannot start the reconnect/re-open loop the hook guards against.
 #
-# Usage: bash setup/open-dashboard.sh   (NP_DASH_OPENER overrides xdg-open for tests)
+# Usage: bash setup/open-dashboard.sh   (NP_DASH_OPENER overrides the opener for tests;
+# default is xdg-open on Linux, open on macOS — see np_resolve_opener)
 # Fail-open: never hard-errors.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +26,7 @@ WIKI_NAV="$(np_param evaluator.wiki_nav on 2>/dev/null || echo on)" \
 source "$HERE/np-dashboard-launch.sh"
 url="$(np_dashboard_url)"
 
-opener="${NP_DASH_OPENER:-xdg-open}"
-command -v "$opener" >/dev/null 2>&1 || { echo "no opener ($opener) found" >&2; exit 0; }
+opener="$(np_resolve_opener || true)"
+command -v "$opener" >/dev/null 2>&1 || { echo "no opener (${opener:-none}) found" >&2; exit 0; }
 "$opener" "$url" >/dev/null 2>&1 || true
 echo "opened $url"

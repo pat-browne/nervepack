@@ -40,13 +40,14 @@ printf '%s' "$boot_id" > "$marker" 2>/dev/null || true
 "${NP_DASH_AGGREGATE:-$HERE/73-aggregate-metrics.sh}" >/dev/null 2>&1 || true
 
 # 2. Open the nervepack metrics dashboard. NP_DASH_OPENER lets tests substitute
-#    a non-GUI opener; default xdg-open. (Serena opens its own dashboard once per
+#    a non-GUI opener; default xdg-open on Linux, open on macOS (np_resolve_opener).
+#    (Serena opens its own dashboard once per
 #    MCP-server start — we don't touch that.) URL is file:// by default, or
 #    http://127.0.0.1:<port>/ when evaluator.dashboard_serve is on (the helper
 #    starts the local backend if it isn't already running).
 # shellcheck source=/dev/null
 source "$HERE/np-dashboard-launch.sh"
 url="$(np_dashboard_url)"
-opener="${NP_DASH_OPENER:-xdg-open}"
+opener="$(np_resolve_opener || true)"
 command -v "$opener" >/dev/null 2>&1 || exit 0
 "$opener" "$url" >/dev/null 2>&1 || true

@@ -22,6 +22,17 @@ _npd_listening() {  # $1=port -> 0 if something is accepting on 127.0.0.1:port
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
 
+np_resolve_opener() {  # echo an available URL opener; non-zero/empty if none
+  # Explicit override (tests, headless boxes) wins, even if not yet on PATH.
+  if [[ -n "${NP_DASH_OPENER:-}" ]]; then printf '%s' "$NP_DASH_OPENER"; return 0; fi
+  # Else prefer xdg-open (Linux), fall back to open (macOS).
+  local o
+  for o in xdg-open open; do
+    command -v "$o" >/dev/null 2>&1 && { printf '%s' "$o"; return 0; }
+  done
+  return 1
+}
+
 np_dashboard_url() {
   local here np port top server
   here="$_npd_here"; np="$(cd "$here/../.." && pwd)"   # engine/setup -> repo root
