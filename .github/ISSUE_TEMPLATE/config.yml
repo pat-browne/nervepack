@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/pat-browne/nervepack/discussions
+    about: For usage questions, ideas, and open-ended discussion — not bug reports.
+  - name: Security or privacy report
+    url: https://github.com/pat-browne/nervepack/security/advisories/new
+    about: Report a vulnerability or a data-leak privately. Do not open a public issue.
