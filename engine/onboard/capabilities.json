@@ -59,6 +59,15 @@
       "hints": { "generic": "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to your content repo; default is the engine repo root." }
     },
     {
+      "id": "team",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the optional team content overlay is configured and the toggle is on",
+      "why": "A team overlay merges shared skills/rules on top of the personal content layer; optional — unconfigured installs skip it entirely.",
+      "accept": "np_team_dir resolves (or is unconfigured — both are PASS).",
+      "hints": { "generic": "set NP_TEAM_DIR or ~/.config/nervepack/team-dir to a shared content repo; enable the 'team' toggle to merge it." }
+    },
+    {
       "id": "dashboard-data",
       "tier": "SHOULD",
       "check": "core",
