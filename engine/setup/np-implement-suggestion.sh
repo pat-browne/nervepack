@@ -41,6 +41,15 @@ RESOLVE="$HERE/np-suggestion-resolve.sh"
 PROMPT_FILE="${IMPLEMENT_PROMPT:-$NP/agents/np-flow-implement-suggestion.md}"
 REPO="${IMPLEMENT_REPO:-$NP}"
 
+# Portable hard cap for the agentic pass: GNU coreutils ships `timeout`, macOS
+# (Homebrew coreutils) ships `gtimeout`, and a bare macOS has neither. Fall back to
+# `env` (a no-op wrapper) so the run still works unguarded rather than dying on a
+# missing `timeout` binary. Kept as an array so an empty case can't bite bash 3.2
+# under `set -u` (stock macOS bash).
+if command -v timeout >/dev/null 2>&1; then NP_TIMEOUT=(timeout 600)
+elif command -v gtimeout >/dev/null 2>&1; then NP_TIMEOUT=(gtimeout 600)
+else NP_TIMEOUT=(env); fi
+
 # Single-job lock (atomic mkdir) that SELF-HEALS: the lock dir records the owner
 # PID, so a lock left behind by a job that was killed (SIGKILL → no EXIT trap, e.g.
 # the spawning server restarted) doesn't wedge the feature forever — a new run
@@ -113,7 +122,7 @@ $safe_text
 # pipe open) cannot wedge this job forever — belt-and-suspenders alongside --bare in
 # np-llm.sh (see sdd/investigate-implement.md). timeout exits 124 on expiry; the ||
 # makes the substitution fail-open (out="" → no-commit detected below → status=failed).
-out="$( ( cd "$WT" && printf '%s' "$prompt" | timeout 600 "$LLM" agent --tools "Read Edit Write Bash Grep Glob" ) 2>&1 )" || true
+out="$( ( cd "$WT" && printf '%s' "$prompt" | "${NP_TIMEOUT[@]}" "$LLM" agent --tools "Read Edit Write Bash Grep Glob" ) 2>&1 )" || true
 
 cleanup_wt() { git -C "$REPO" worktree remove --force "$WT" 2>/dev/null; git -C "$REPO" worktree prune 2>/dev/null; rm -rf "$WTBASE" 2>/dev/null; }
 drop_branch() { git -C "$REPO" branch -D "$branch" 2>/dev/null || true; }

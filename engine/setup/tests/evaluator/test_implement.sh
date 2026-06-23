@@ -54,7 +54,7 @@ status_of() {  # $1=suggestion text -> prints the recorded state (or empty)
 # 1. pr mode (default): branch created with the agent's commit; suggestion resolved; main clean
 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "add a foo helper"
 has_branch "add-a-foo-helper" || { echo "FAIL: pr branch not created"; exit 1; }
-git -C "$repo" log --oneline "np-suggest/add-a-foo-helper" | grep -q "implemented suggestion" || { echo "FAIL: no agent commit on branch"; exit 1; }
+grep -q "implemented suggestion" <<<"$(git -C "$repo" log --oneline "np-suggest/add-a-foo-helper")" || { echo "FAIL: no agent commit on branch"; exit 1; }
 git -C "$repo" cat-file -e "$base:IMPL_MARKER.txt" 2>/dev/null && { echo "FAIL: change leaked onto $base"; exit 1; }
 resolved "add a foo helper" || { echo "FAIL: pr suggestion not resolved"; exit 1; }
 [[ "$(status_of "add a foo helper")" == "done" ]] || { echo "FAIL: pr status not 'done'"; exit 1; }
@@ -80,7 +80,7 @@ has_branch "consider-a-leaner-approach-next-time" && { echo "FAIL: left a branch
 : > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base"; echo "my wip" > "$repo/dirt.txt"
 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "implement despite dirty tree"
 has_branch "implement-despite-dirty-tree" || { echo "FAIL: dirty-tree implement produced no branch"; exit 1; }
-git -C "$repo" log --oneline "np-suggest/implement-despite-dirty-tree" | grep -q "implemented suggestion" || { echo "FAIL: no agent commit on dirty-tree run"; exit 1; }
+grep -q "implemented suggestion" <<<"$(git -C "$repo" log --oneline "np-suggest/implement-despite-dirty-tree")" || { echo "FAIL: no agent commit on dirty-tree run"; exit 1; }
 [[ "$(cat "$repo/dirt.txt" 2>/dev/null)" == "my wip" ]] || { echo "FAIL: user's uncommitted file was disturbed"; exit 1; }
 git -C "$repo" status --porcelain | grep -q 'dirt.txt' || { echo "FAIL: user's uncommitted change was swept away"; exit 1; }
 [[ "$(status_of "implement despite dirty tree")" == "done" ]] || { echo "FAIL: dirty-tree status not 'done'"; exit 1; }

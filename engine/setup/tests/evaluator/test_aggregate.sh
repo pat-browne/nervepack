@@ -16,10 +16,10 @@ mkdir -p "$tmp/inbox"; printf '{"session_id":"a","contribution_score":50}\n' > "
 printf '{"session_id":"b","contribution_score":80}\n' >> "$tmp/inbox/2026-06-03.jsonl"
 : > "$tmp/metrics.jsonl"
 bash "$AGG" >/dev/null
-[[ "$(wc -l < "$tmp/metrics.jsonl")" == "2" ]] || { echo "FAIL: metrics not appended"; exit 1; }
+[[ "$(wc -l < "$tmp/metrics.jsonl" | tr -d '[:space:]')" == "2" ]] || { echo "FAIL: metrics not appended"; exit 1; }
 [[ -z "$(ls "$tmp/inbox" 2>/dev/null)" ]] || { echo "FAIL: inbox not cleared"; exit 1; }
 # toggle off -> no-op (re-seed)
 echo "evaluator.aggregate=off" > "$tmp/local"; printf '{"session_id":"c"}\n' > "$tmp/inbox/x.jsonl"
 bash "$AGG" >/dev/null
-[[ "$(wc -l < "$tmp/metrics.jsonl")" == "2" ]] || { echo "FAIL: appended while off"; exit 1; }
+[[ "$(wc -l < "$tmp/metrics.jsonl" | tr -d '[:space:]')" == "2" ]] || { echo "FAIL: appended while off"; exit 1; }
 echo "PASS test_aggregate"

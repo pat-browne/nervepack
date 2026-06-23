@@ -24,7 +24,7 @@ LOG="$tmp/blocker/episodic-capture.log"   # parent is a file -> unwritable
 # earlier plain `exit 0` guard.
 transcript="$tmp/transcript.jsonl"
 printf '{"type":"user","message":{"role":"user","content":"hi"}}\n' > "$transcript"
-fp="$(stat -c %s "$transcript")"
+fp="$(wc -c < "$transcript" | tr -d '[:space:]')"   # match episodic-capture.sh's fingerprint (portable; BSD has no `stat -c`)
 seen_dir="$tmp/seen"; mkdir -p "$seen_dir"
 sid="sess1"
 printf '%s' "$fp" > "$seen_dir/$sid"
