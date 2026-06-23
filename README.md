@@ -57,8 +57,9 @@ playbooks). **Human-reviewed knowledge always beats auto-captured knowledge.**
 Two pipelines keep the auto layers fed. A **capture** pipeline summarizes each
 session into episodic memory and distills its failures/successes into
 playbooks/strategies. A **performance** pipeline scores how much nervepack actually
-helped and renders it on a dashboard. Everything is toggle-gated and fails open. No
-layer can break a session.
+helped and renders it on a dashboard
+([see a live example](https://nervepack.app/example/dashboard/), running on synthetic
+sample data). Everything is toggle-gated and fails open. No layer can break a session.
 
 The auto layers are a **staging pool**, not a dead end: when a playbook or strategy
 keeps proving itself (or outgrows what a skill is even allowed to be), the daily
