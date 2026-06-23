@@ -168,6 +168,11 @@ _PAGE_CSS = (
     "background:#f5f3ef;padding:1px 4px;border-radius:4px}"
     "pre{background:#f5f3ef;padding:12px;border-radius:9px;overflow:auto}"
     "pre code{background:none;padding:0}"
+    "pre.mermaid{background:none;padding:0;text-align:center;overflow-x:auto}"
+    "table{border-collapse:collapse;margin:14px 0;width:100%;font-size:.95em}"
+    "th,td{border:1px solid #e3e0da;padding:6px 10px;text-align:left;vertical-align:top}"
+    "th{background:#f5f3ef;font-weight:600}"
+    "tbody tr:nth-child(even){background:#faf9f6}"
     "blockquote{border-left:3px solid #e8e5df;margin:0;padding:2px 14px;color:#5e5b56}"
     ".np-head{color:#9b9892;font-size:12px;border-bottom:1px solid #e8e5df;"
     "padding-bottom:8px;margin-bottom:18px;display:flex;justify-content:space-between}"
@@ -181,17 +186,24 @@ def md_to_html(md, meta=None, link_map=None, here=""):
     header; link_map/here resolve [[wikilinks]]. Pure + deterministic + escaped."""
     meta = meta or {}
     out, i = [], 0
+    has_mermaid = False
     lines = md.split("\n")
     n = len(lines)
     while i < n:
         ln = lines[i]
         if ln.startswith("```"):
+            info = ln[3:].strip().lower()
             j = i + 1
             buf = []
             while j < n and not lines[j].startswith("```"):
                 buf.append(html.escape(lines[j]))
                 j += 1
-            out.append("<pre><code>" + "\n".join(buf) + "</code></pre>")
+            if info == "mermaid":
+                # Browser-rendered via vendored mermaid.js; textContent un-escapes.
+                has_mermaid = True
+                out.append('<pre class="mermaid">' + "\n".join(buf) + "</pre>")
+            else:
+                out.append("<pre><code>" + "\n".join(buf) + "</code></pre>")
             i = j + 1
             continue
         m = re.match(r'(#{1,6})\s+(.*)', ln)
@@ -221,11 +233,38 @@ def md_to_html(md, meta=None, link_map=None, here=""):
                 i += 1
             out.append("<ol>" + "".join(buf) + "</ol>")
             continue
+        # GFM table: a pipe row immediately followed by a |---|---| delimiter row.
+        if ("|" in ln and i + 1 < n
+                and re.match(r'^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$', lines[i + 1])):
+            def _cells(row):
+                row = row.strip()
+                if row.startswith("|"):
+                    row = row[1:]
+                if row.endswith("|"):
+                    row = row[:-1]
+                return [c.strip() for c in row.split("|")]
+            header = _cells(ln)
+            i += 2  # consume header + delimiter
+            body = []
+            while i < n and lines[i].strip() and "|" in lines[i]:
+                body.append(_cells(lines[i]))
+                i += 1
+            thead = "".join("<th>%s</th>" % _render_inline(c, link_map, here) for c in header)
+            rows = []
+            for r in body:
+                tds = "".join("<td>%s</td>" % _render_inline(r[k] if k < len(r) else "", link_map, here)
+                              for k in range(len(header)))
+                rows.append("<tr>" + tds + "</tr>")
+            out.append("<table><thead><tr>" + thead + "</tr></thead><tbody>"
+                       + "".join(rows) + "</tbody></table>")
+            continue
         if ln.strip() == "":
             i += 1
             continue
-        buf = []
-        while i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```")):
+        buf = [lines[i]]   # always consume the current line (avoids stalling on a stray '|')
+        i += 1
+        # stop before a line that opens a table (has '|') so the table branch can catch it
+        while i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```")) and "|" not in lines[i]:
             buf.append(lines[i])
             i += 1
         out.append("<p>" + _render_inline(" ".join(buf), link_map, here) + "</p>")
@@ -239,11 +278,21 @@ def md_to_html(md, meta=None, link_map=None, here=""):
             '<a href="%s">&#8617; dashboard</a></div>') % (
         name, (" &middot; " + kind + (" &middot; " + stamp if stamp else "")) if kind else "",
         back)
+    # Mermaid: load the vendored (local, not CDN) lib only on pages that have a
+    # diagram, keeping the no-external-fetch invariant. Gate: WIKI_MERMAID env
+    # (set from the evaluator.wiki_mermaid param, mirroring WIKI_NAV).
+    mermaid_js = ""
+    if has_mermaid and os.environ.get("WIKI_MERMAID", "on") != "off":
+        mermaid_js = (
+            '<script src="' + up + 'vendor/mermaid.min.js"></script>\n'
+            "<script>mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script>\n"
+        )
     return (
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         "<title>" + (name or "page") + "</title>\n<style>" + _PAGE_CSS + "</style>\n"
-        "</head>\n<body>\n<article>\n" + head + "\n" + "\n".join(out) + "\n</article>\n</body>\n</html>\n"
+        "</head>\n<body>\n<article>\n" + head + "\n" + "\n".join(out) + "\n</article>\n"
+        + mermaid_js + "</body>\n</html>\n"
     )
 
 
