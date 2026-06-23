@@ -1,0 +1,90 @@
+name: Bug report
+description: Something in the engine isn't working the way it should.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. A few rules first:
+
+        - **No personal data.** Don't paste names, emails, home paths, private
+          hostnames or IPs, credentials, or transcript content. Redact before
+          you post.
+        - This tracker is for the **engine** (the reusable machinery). Issues
+          with your own content overlay belong in your own repo.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+      placeholder: When the SessionStart hook runs, ... but it should ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that reliably triggers it.
+      placeholder: |
+        1. Run `...`
+        2. Start a session in `~/Code/nervepack`
+        3. Observe `...`
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: >
+        Logs, error text, or the contents of the relevant cache file (e.g.
+        `~/.cache/nervepack/...`). This is rendered as code, so no formatting
+        needed. Redact anything personal.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: The `VERSION` file contents or the commit SHA you're on.
+      placeholder: "e.g. 0.4.0 or fb79bdb"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host
+    attributes:
+      label: AI host
+      description: Which agentic host were you running?
+      options:
+        - Claude Code
+        - Cursor
+        - Codex
+        - Gemini CLI
+        - Other (note it in "What happened?")
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: Operating system and version.
+      placeholder: "e.g. macOS 15.5, Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true
+        - label: My report contains no personal data, secrets, or PII.
+          required: true
