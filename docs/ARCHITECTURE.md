@@ -183,6 +183,17 @@ Record shapes (keep these stable; readers depend on them):
     (`colspan`/`rowspan`, which nervepack content doesn't use). So: **author/store
     Markdown, render → HTML at build time for humans, never feed HTML to the model.**
     (Resolves the highest-priority "HTML vs Markdown efficiency" roadmap item.)
+15. **`main` branch protection keeps `enforce_admins: false`.** The auto-commit
+    crons (`np-flow-episodic-maintain`, `weekly-compact`, `scheduled-refine`, the
+    metrics aggregator, and `np-implement-suggestion.sh` direct mode) push
+    **directly to `main`** as the repo owner. Classic branch protection requires a
+    PR + the three blocking CI checks + linear history for *contributors*, but
+    admins — and therefore those crons — bypass it via `enforce_admins: false`.
+    Enabling admin enforcement, or requiring ≥1 approval, silently breaks every
+    auto-push cron. The required status-check contexts are the CI job `name:`s
+    verbatim (`Syntax sweep (stdlib-only)` / `Regression suite (zero-dep)` /
+    `Secret/PII guard (terminal gate)`); `dashboard-e2e` stays informational and
+    must never be a required check. (→ invariant 10; CLAUDE.md/AGENTS.md §concurrency)
 
 ## Change-impact map — touch X, then check Y
 
@@ -205,6 +216,7 @@ Record shapes (keep these stable; readers depend on them):
 | **maintenance-agent commit identity** (`agents/np-flow-*.md`) | uses the runner's git config, else `NP_GIT_AUTHOR_*`, else a neutral bot (never hardcode a person); `engine/setup/tests/publish/test_no_engine_pii.py`; the onboard env doc. `pat-browne`/the canonical repo URL are KEPT project identity (not PII). |
 | **`engine/setup/tests/run-all.sh`** / the test harness | `_lib/harness.sh` + `_lib/report.sh` (hermetic-env + report helpers); the `meta/test_run_all.sh` meta-test (tests the runner itself); the `regression` CI job in `.github/workflows/ci.yml` (blocking, gates `main`); and `engine/setup/tests/README.md`. Note: `e2e/` stays excluded from the default run; use `--with-e2e` explicitly. |
 | **`engine/setup/tests/e2e/`** (Playwright dashboard suite) | `requirements.txt` (pinned deps — update when Playwright version changes); `harness.py`'s server env contract (`NP_IMPLEMENT`, `NP_METRICS`, `NP_RESOLVED_SUGGESTIONS`, `NP_IMPLEMENT_STATUS_DIR`, `NP_DASH_PORT`); and the `dashboard-e2e` CI job (informational, `continue-on-error: true` — never a merge gate). This is the ONLY suite with a third-party dependency; keep it isolated in `e2e/` so the rest of the suite stays zero-dep. |
+| **`main` branch protection** (rules / required checks) | keep `enforce_admins: false` so the auto-commit crons (`7x`, `np-implement-suggestion` direct mode) keep pushing directly; the required status-check contexts must match the CI job `name:`s exactly (`Syntax sweep (stdlib-only)` / `Regression suite (zero-dep)` / `Secret/PII guard (terminal gate)`); `dashboard-e2e` stays informational and MUST NOT be required; invariant 15 |
 | **`toggles.conf`** (add/rename a feature or param) | every `np_enabled`/`np_param` caller, `nervepack-toggle*` menus, and the feature catalog above; note: adding a param with a default that prunes historic data (e.g. `evaluator.retain_days`) can cause existing test records to be pruned — tests with old timestamps must set `NP_TOGGLES_CONF` to control `retain_days` |
 | **`nervepack-session-directive.md`** | this injects into **every** session globally — high blast radius; keep it lean |
 | **a cron body (`7x`)** | its crontab line via `70-install-memory-cron.sh` (and `70-install-memory-launchd.sh`); remember its `claude -p` fires SessionEnd hooks (set the guard); 76/77 also need their `maintain.refine`/`maintain.compact` toggle rows in `toggles.conf` |
