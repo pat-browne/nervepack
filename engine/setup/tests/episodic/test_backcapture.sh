@@ -38,12 +38,19 @@ mktranscript() {  # $1=sid  -> writes a small valid transcript with an embedded 
 }
 lines() { cat "$1"/*.jsonl 2>/dev/null | grep -c . || true; }
 
+# portable replacement for `touch -d 'N minutes ago'` (BSD touch has no relative -d):
+# GNU touch accepts @epoch; BSD touch needs -t with an epoch formatted via BSD `date -r`.
+touch_ago() {  # $1=seconds-ago  $2=file
+  local e=$(( $(date +%s) - $1 ))
+  touch -d "@$e" "$2" 2>/dev/null || touch -t "$(date -r "$e" +%Y%m%d%H%M.%S)" "$2"
+}
+
 # --- fixtures ---
-f_old="$(mktranscript 11111111-old)";    touch -d '10 minutes ago' "$f_old"     # uncaptured, settled -> CAPTURE
-f_active="$(mktranscript 22222222-active)"                                       # just written -> SKIP (too new)
-f_done="$(mktranscript 33333333-done)";  touch -d '10 minutes ago' "$f_done"    # already has a metrics record -> SKIP
+f_old="$(mktranscript 11111111-old)";    touch_ago 600 "$f_old"     # uncaptured, settled -> CAPTURE
+f_active="$(mktranscript 22222222-active)"                          # just written -> SKIP (too new)
+f_done="$(mktranscript 33333333-done)";  touch_ago 600 "$f_done"    # already has a metrics record -> SKIP
 printf '{"session_id":"33333333-done","contribution_score":50}\n' > "$BACKCAPTURE_METRICS"
-f_agent="$(mktranscript agent-44444444)"; touch -d '10 minutes ago' "$f_agent"  # subagent transcript -> SKIP (not a real session)
+f_agent="$(mktranscript agent-44444444)"; touch_ago 600 "$f_agent"  # subagent transcript -> SKIP (not a real session)
 
 # --- run the sweep, passing a SessionStart-style payload (current sid = the active one) ---
 printf '{"session_id":"22222222-active","cwd":"/home/test/proj"}' | bash "$SWEEP"

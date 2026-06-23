@@ -22,6 +22,14 @@ exit 0
 STUB
 chmod +x "$tmp/bin/launchctl"
 
+# stub uname so the non-Darwin refusal path (case 6) can be exercised on a real Mac
+# (forced runs set NP_LAUNCHD_FORCE and ignore the OS check, so this is inert for them)
+cat > "$tmp/bin/uname" <<'STUB'
+#!/usr/bin/env bash
+echo Linux
+STUB
+chmod +x "$tmp/bin/uname"
+
 run() { NP_LAUNCHD_FORCE=1 NP_LAUNCHAGENTS_DIR="$la" NP_LAUNCHD_LOG_DIR="$logs" \
         NP_LAUNCHD_SETUP_DIR="$SETUP" PATH="$tmp/bin:$PATH" bash "$INSTALLER"; }
 
@@ -63,7 +71,7 @@ n2="$(find "$la" -name '*.plist' | wc -l | tr -d '[:space:]')"
 
 # 6. on a non-Darwin host WITHOUT the force, it refuses and writes nothing
 la2="$tmp/LA2"
-out="$(NP_LAUNCHAGENTS_DIR="$la2" NP_LAUNCHD_LOG_DIR="$tmp/logs2" NP_LAUNCHD_SETUP_DIR="$SETUP" \
+out="$(PATH="$tmp/bin:$PATH" NP_LAUNCHAGENTS_DIR="$la2" NP_LAUNCHD_LOG_DIR="$tmp/logs2" NP_LAUNCHD_SETUP_DIR="$SETUP" \
        bash "$INSTALLER" 2>&1)" && { echo "FAIL: installer should exit non-zero on non-Darwin"; exit 1; }
 [[ "$out" == *"macOS path"* ]] || { echo "FAIL: missing OS-mismatch message"; exit 1; }
 [[ -d "$la2" ]] && { echo "FAIL: wrote LaunchAgents dir on a non-Darwin host"; exit 1; }
