@@ -24,10 +24,21 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="${SESSION_FLUSH_LOG:-$HOME/.cache/nervepack/session-flush.log}"
 
-# 2. Detach: re-exec ourselves in a new session, return instantly. NP_FLUSH_NODETACH
-#    keeps it foreground for tests.
-if [[ -z "${NP_FLUSH_DETACHED:-}" && "${NP_FLUSH_NODETACH:-0}" != "1" ]] && command -v setsid >/dev/null 2>&1; then
-  NP_FLUSH_DETACHED=1 setsid "$0" "$@" >/dev/null 2>&1 </dev/null &
+# 2. Detach: re-exec ourselves backgrounded, return instantly, so a slow maintain
+#    step (claude -p, ~30-60s) never blocks session exit and Claude Code can't
+#    cancel us for overrunning the SessionEnd budget. NP_FLUSH_NODETACH keeps it
+#    foreground for tests.
+#    setsid (Linux) fully detaches into a new session; macOS has NO setsid, so fall
+#    back to nohup + disown (the same portable idiom as np-dashboard-launch.sh) —
+#    without this fallback the flush ran SYNCHRONOUSLY on macOS and got cancelled.
+#    NP_FLUSH_NO_SETSID forces the fallback so Linux CI can exercise the macOS path.
+if [[ -z "${NP_FLUSH_DETACHED:-}" && "${NP_FLUSH_NODETACH:-0}" != "1" ]]; then
+  if [[ "${NP_FLUSH_NO_SETSID:-0}" != "1" ]] && command -v setsid >/dev/null 2>&1; then
+    NP_FLUSH_DETACHED=1 setsid "$0" "$@" >/dev/null 2>&1 </dev/null &
+  else
+    NP_FLUSH_DETACHED=1 nohup "$0" "$@" >/dev/null 2>&1 </dev/null &
+    disown 2>/dev/null || true
+  fi
   exit 0
 fi
 
