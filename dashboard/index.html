@@ -672,7 +672,7 @@
     });
     (W.concepts || []).forEach(c => leaves.push({ ...c, group: "Concepts", topic: null }));
     leaves.forEach(l => {
-      l._hay = [l.name, l.kind, l.topic, l.excerpt, (l.sources || []).join(" ")]
+      l._hay = [l.name, l.kind, l.topic, l.dir, l.excerpt, (l.sources || []).join(" ")]
         .filter(Boolean).join(" ").toLowerCase();
     });
     const total = leaves.length;
@@ -695,16 +695,42 @@
     }
 
     function topicGroupHTML(items, topicsOpen) {
-      // group leaves by topic, render nested <details> per topic (synthesis first)
+      // group leaves by topic; within a topic, nest sources by their `dir` path
+      // (mirrors the content dir tree). Synthesis first, then the nested tree.
+      // A flat topic (every source dir === "") renders as a flat list — no
+      // sub-groups — so flat and nested layouts both work.
       const byTopic = {};
       items.forEach(l => { (byTopic[l.topic] = byTopic[l.topic] || []).push(l); });
       const topics = Object.keys(byTopic).sort();
       if (!topics.length) return "";
       const ot = topicsOpen ? " open" : "";
+      function tree(srcs) {
+        const root = { dirs: {}, leaves: [] };
+        srcs.forEach(s => {
+          let node = root;
+          (s.dir || "").split("/").filter(Boolean).forEach(seg => {
+            node.dirs[seg] = node.dirs[seg] || { dirs: {}, leaves: [] };
+            node = node.dirs[seg];
+          });
+          node.leaves.push(s);
+        });
+        return root;
+      }
+      function count(n) { let c = n.leaves.length; Object.keys(n.dirs).forEach(d => c += count(n.dirs[d])); return c; }
+      function renderNode(n) {
+        let h = n.leaves.map(leafHTML).join("");
+        Object.keys(n.dirs).sort().forEach(d => {
+          h += `<details class="wikitopic"${ot}><summary>${esc(d)}/ <span>${count(n.dirs[d])}</span></summary>
+            <div class="wikinest">${renderNode(n.dirs[d])}</div></details>`;
+        });
+        return h;
+      }
       const inner = topics.map(t => {
-        const ls = byTopic[t].slice().sort((a, b) => (b.isSynthesis ? 1 : 0) - (a.isSynthesis ? 1 : 0));
+        const ls = byTopic[t];
+        const synth = ls.filter(l => l.isSynthesis).map(leafHTML).join("");
+        const body = synth + renderNode(tree(ls.filter(l => !l.isSynthesis)));
         return `<details class="wikitopic"${ot}><summary>${esc(t)} <span>${ls.length}</span></summary>
-          <div class="wikinest">${ls.map(leafHTML).join("")}</div></details>`;
+          <div class="wikinest">${body}</div></details>`;
       }).join("");
       return `<details class="wikigroup" open><summary><span>Topics</span><span>${items.length}</span></summary>
         <div class="wikinest">${inner}</div></details>`;

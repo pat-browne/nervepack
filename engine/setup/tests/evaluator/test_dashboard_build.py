@@ -663,10 +663,42 @@ class TestWikiIndexLayers(unittest.TestCase):
         w = self._two_layers("team-only")
         self.assertEqual(sorted(t["topic"] for t in w["topics"]), ["rust", "zig"])  # team set only
 
-    def test_concatenate_both(self):
+    def test_concatenate_merges_same_named_topic(self):
+        # concatenate unions topics across layers, but a same-named topic is ONE
+        # node, not a duplicate ("effectively the same" — issue #44).
         w = self._two_layers("concatenate")
         names = [t["topic"] for t in w["topics"]]
-        self.assertEqual(names.count("rust"), 2)                      # both rusts
+        self.assertEqual(sorted(names), ["go", "rust", "zig"])        # union of topics
+        self.assertEqual(names.count("rust"), 1)                      # merged, not duplicated
+        rust = next(t for t in w["topics"] if t["topic"] == "rust")
+        self.assertIn("TEAM rust", rust["synthesis"]["excerpt"])      # higher layer's synthesis wins
+
+
+class TestWikiNesting(unittest.TestCase):
+    """A topic may nest reference pages in subdirectories (the content dir tree).
+    wiki_index carries each page's `dir` (nesting path) and a subdir-qualified
+    html path; a flat topic (no subdirs) still indexes as before (dir == '')."""
+
+    def test_flat_and_nested_indexing(self):
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic(cd, "plat", "plat",
+                         {"name": "plat", "kind": "topic",
+                          "last_updated": "2026-06-01", "sources": "[]"}, "hub")
+            _write_topic(cd, "plat", "flatpage",
+                         {"name": "flatpage", "kind": "reference"}, "flat ref")
+            sub = os.path.join(cd, "wiki", "topics", "plat", "sub")
+            os.makedirs(sub)
+            with open(os.path.join(sub, "nestedpage.md"), "w") as fh:
+                fh.write("---\nname: nestedpage\nkind: reference\n---\n\nnested ref")
+            w = _parse_wiki(run_build_wiki(cd))
+        plat = next(t for t in w["topics"] if t["topic"] == "plat")
+        srcs = {s["name"]: s for s in plat["sources"]}
+        # flat page: no subdir
+        self.assertEqual(srcs["flatpage"]["dir"], "")
+        self.assertEqual(srcs["flatpage"]["html"], "data/wiki/topics/plat/flatpage.html")
+        # nested page: dir carries the subdir, html path is subdir-qualified
+        self.assertEqual(srcs["nestedpage"]["dir"], "sub")
+        self.assertEqual(srcs["nestedpage"]["html"], "data/wiki/topics/plat/sub/nestedpage.html")
 
 
 if __name__ == "__main__":
