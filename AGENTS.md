@@ -170,10 +170,27 @@ skill directory, and reports what changed.
 
 ### When the user says "remember this in nervepack" / "save this to nervepack"
 Invoke [[np-core-contribute]]. It picks the right file, writes the update,
-shows a diff, then commits and pushes. **Pat's standing preference (set
-2026-06-02): update + push nervepack by default — no per-update confirmation.**
-(Still never force-push; on a non-fast-forward, pull --rebase --autostash and
-surface conflicts.)
+shows a diff, then commits and pushes. **Standing preference (set 2026-06-02):
+for the private content overlay (personal skills, wiki, sources) — update + push
+by default, no per-update confirmation.** (Still never force-push; on a
+non-fast-forward, pull --rebase --autostash and surface conflicts.) **Engine-repo
+changes follow the PR workflow below, not direct push.**
+
+### Engine change workflow (public repo: PR → merge on green)
+
+The engine repo is public, so substantive human/agent-authored engine changes —
+code under `dashboard/`, `engine/`, and the generic `np-core-*`/`np-kb-*`/`np-env-*`
+skills shipped here — go through a **pull request that merges only on green CI**,
+never direct-to-main. Flow: branch off latest `origin/main` → push → `gh pr create`
+→ wait for the required checks (Syntax sweep, Regression suite, Secret/PII guard;
+Dashboard e2e is informational) → if the branch is behind, `gh pr update-branch`
+and re-wait → `gh pr merge --squash --delete-branch` once green. Keep engine commit
+messages and PR bodies **company-neutral** (feature + tech only).
+
+**Exempt (still direct-push, bounded):** the auto-committing crons
+(episodic-maintain, metrics aggregator, memory-promote, skill-maintain) — they
+cannot open PRs; and the **private content overlay** (`nervepack-content`), which
+has no public CI gate.
 
 ## Knowledge layer (model + precedence)
 
