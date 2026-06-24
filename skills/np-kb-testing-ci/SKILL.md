@@ -100,3 +100,14 @@ The suite passed; it surfaced later as "the dashboard went blank."
   the suite must never leave them mutated).
 - Grep smell: a test invoking a real `setup/NN-*.sh` / `build.py` with **no explicit output
   path** — doubly dangerous when the repo's data dir is a symlink.
+
+## 7. The PII/secret gate false-positives on locally-rendered output
+
+`publish/test_no_engine_pii.py` (the `pii-guard` gate) scans the working tree, not just
+tracked files. After a local dashboard build, `dashboard/data/wiki/**.html` holds the
+**rendered content-overlay pages** — gitignored, but present on disk — and the scan flags
+personal/company handles baked into them (personal domains, names, etc.). **CI never sees this** (a
+clean checkout has no rendered `data/`), so it's a *local false positive*, not a real
+engine-PII leak. Before running the full suite locally, clear the render output:
+`rm -rf dashboard/data/wiki dashboard/data/metrics.js`. Triage rule: findings confined to
+`dashboard/data/` are build artifacts; a real leak is in **tracked source**.
