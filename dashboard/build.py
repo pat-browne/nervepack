@@ -13,6 +13,7 @@ import json
 import os
 import posixpath
 import re
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -119,6 +120,29 @@ def _content_dir():
             with open(cfg, encoding="utf-8") as fh:
                 d = fh.readline().strip()
     return d or os.path.join(HERE, "..")
+
+
+def _np_layer_lib():
+    return os.path.join(HERE, "..", "engine", "setup", "np-layer-lib.sh")
+
+def _np_layer_fn(fn):
+    """Run a np-layer-lib.sh function and return its stdout (empty string on any failure)."""
+    try:
+        r = subprocess.run(["bash", "-c", 'source "$1" 2>/dev/null; %s' % fn, "_", _np_layer_lib()],
+                           capture_output=True, text=True)
+        return r.stdout
+    except Exception:
+        return ""
+
+def _content_layers():
+    """Overlay roots to scan (team then personal) for the current merge mode, via
+    np_merge_roots. Fail-open to [_content_dir()] when the helper yields nothing."""
+    roots = [ln for ln in _np_layer_fn("np_merge_roots").splitlines() if ln.strip()]
+    return roots or [_content_dir()]
+
+def _merge_mode():
+    m = _np_layer_fn("np_merge_mode").strip()
+    return m if m in ("override", "concatenate", "team-only") else "override"
 
 
 # Allowed link targets: http(s)/mailto, root-relative (not protocol-relative //),
@@ -350,9 +374,9 @@ def wiki_index():
     empty = {"topics": [], "concepts": []}
     if os.environ.get("WIKI_NAV", "on").strip().lower() == "off":
         return empty
-    cd = _content_dir()
-    topics = {}        # topic -> {"topic","synthesis","sources":[]}
-    concepts = []
+
+    roots = _content_layers()
+    mode = _merge_mode()
 
     def _src_entry(p, topic, html):
         return {"name": p["name"], "topic": topic, "kind": p["kind"] or "reference",
@@ -362,50 +386,57 @@ def wiki_index():
         return {"name": p["name"], "kind": "topic", "excerpt": p["excerpt"],
                 "last_updated": p["last_updated"], "sources": p["sources"], "html": html}
 
-    # NEW layout: wiki/topics/<topic>/*
-    troot = os.path.join(cd, "wiki", "topics")
-    try:
-        tdirs = sorted(os.listdir(troot))
-    except OSError:
-        tdirs = []
-    for topic in tdirs:
-        td = os.path.join(troot, topic)
-        if not os.path.isdir(td):
-            continue
-        entry = {"topic": topic, "synthesis": None, "sources": []}
+    topics_list = []; seen_topic = set()
+    concepts = []; seen_concept = set()
+    for cd in roots:
+        troot = os.path.join(cd, "wiki", "topics")
         try:
-            td_files = sorted(os.listdir(td))
+            tdirs = sorted(os.listdir(troot))
         except OSError:
-            continue
-        for f in td_files:
+            tdirs = []
+        for topic in tdirs:
+            td = os.path.join(troot, topic)
+            if not os.path.isdir(td):
+                continue
+            if mode != "concatenate" and topic in seen_topic:
+                continue   # higher-precedence (team) layer already supplied this topic
+            entry = {"topic": topic, "synthesis": None, "sources": []}
+            try:
+                td_files = sorted(os.listdir(td))
+            except OSError:
+                continue
+            for f in td_files:
+                if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                    continue
+                p = _parse_wiki_page(os.path.join(td, f))
+                if not p:
+                    continue
+                html = "data/wiki/topics/%s/%s.html" % (topic, p["name"])
+                if p["kind"] == "topic":
+                    entry["synthesis"] = _synth_entry(p, html)
+                else:
+                    entry["sources"].append(_src_entry(p, topic, html))
+            seen_topic.add(topic); topics_list.append(entry)
+
+        cdir = os.path.join(cd, "wiki", "concepts")
+        try:
+            cfiles = sorted(os.listdir(cdir))
+        except OSError:
+            cfiles = []
+        for f in cfiles:
             if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
                 continue
-            p = _parse_wiki_page(os.path.join(td, f))
+            p = _parse_wiki_page(os.path.join(cdir, f))
             if not p:
                 continue
-            html = "data/wiki/topics/%s/%s.html" % (topic, p["name"])
-            if p["kind"] == "topic":
-                entry["synthesis"] = _synth_entry(p, html)
-            else:
-                entry["sources"].append(_src_entry(p, topic, html))
-        topics[topic] = entry
-
-    # concepts (layout unchanged)
-    cdir = os.path.join(cd, "wiki", "concepts")
-    try:
-        cfiles = sorted(os.listdir(cdir))
-    except OSError:
-        cfiles = []
-    for f in cfiles:
-        if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
-            continue
-        p = _parse_wiki_page(os.path.join(cdir, f))
-        if p:
+            if mode != "concatenate" and p["name"] in seen_concept:
+                continue
+            seen_concept.add(p["name"])
             concepts.append({"name": p["name"], "kind": p["kind"], "excerpt": p["excerpt"],
                              "last_updated": p["last_updated"], "sources": p["sources"],
                              "html": "data/wiki/concepts/%s.html" % p["name"]})
 
-    return {"topics": [topics[k] for k in sorted(topics)],
+    return {"topics": sorted(topics_list, key=lambda x: x["topic"]),
             "concepts": sorted(concepts, key=lambda x: x["name"])}
 
 

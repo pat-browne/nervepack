@@ -1,6 +1,6 @@
 ---
 name: np-core-contribute
-description: Capture a new durable learning (rule, preference, plugin choice, environment quirk, useful command) into ~/Code/nervepack in the correct file, then commit and push. Use when the user says "remember this in nervepack", "save to nervepack", "add this to my AI context", or whenever you notice a fact worth keeping across sessions.
+description: Capture a new durable learning (rule, preference, plugin choice, environment quirk, useful command) into ~/Code/nervepack in the correct file, then commit and push. Use when the user says "remember this in nervepack", "save to nervepack", "add this to my AI context", or whenever you notice a fact worth keeping across sessions, or "save this to the team layer".
 ---
 
 # np-core-contribute
@@ -24,6 +24,25 @@ across sessions and machines.
 - It's already documented in an existing skill (update instead of duplicate)
 - It's a secret or credential
 - It's project-specific — it belongs in that project's own `CLAUDE.md`
+
+## First: which layer?
+
+Most contributions go to your **personal** overlay (the default). Write to the
+**team** overlay instead when the learning is a shared team convention — triggered by
+"save to the team layer", "this is a team rule", "contribute to the team", or an explicit
+`--layer team`.
+
+- **personal** (default): the write/commit steps below target `~/Code/nervepack` (engine)
+  or your personal content overlay, exactly as today.
+- **team**: resolve the team overlay root with `TEAM="$(cd ~/Code/nervepack && source engine/setup/np-content-lib.sh && np_team_dir)"`.
+  If that errors (no team layer configured), STOP and tell the user the team layer isn't
+  set up (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`) — do not silently fall back to
+  personal. Otherwise run the same write + `git -C "$TEAM" add/commit/push` steps against
+  `$TEAM` instead of `~/Code/nervepack`. The team overlay has the same shape
+  (`skills/`, `wiki/`, …); skill relink/index regeneration is already team-aware.
+
+`team.merge` governs how a team entry combines with a personal one at *read* time; this
+gate only controls *where the write lands*.
 
 ## Decision tree: where does this go?
 

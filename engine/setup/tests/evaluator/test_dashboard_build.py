@@ -627,5 +627,47 @@ class TestWikiIndexNewLayout(unittest.TestCase):
         assert idx["topics"] == [] and idx["concepts"] == []
 
 
+class TestWikiIndexLayers(unittest.TestCase):
+    """wiki_index merges a team overlay over personal per team.merge."""
+
+    def _two_layers(self, mode):
+        import tempfile, os
+        self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
+        # same topic name 'rust' in both layers; a personal-only 'go'; a team-only 'zig'
+        _write_topic(self._p, "rust", "rust", {"name": "rust", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "PERSONAL rust")
+        _write_topic(self._t, "rust", "rust", {"name": "rust", "kind": "topic",
+                     "last_updated": "2026-06-02", "sources": "[]"}, "TEAM rust")
+        _write_topic(self._p, "go", "go", {"name": "go", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "PERSONAL go")
+        _write_topic(self._t, "zig", "zig", {"name": "zig", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "TEAM zig")
+        toggles_local = os.path.join(self._h, "local")
+        with open(toggles_local, "w") as fh:
+            fh.write("team.merge=%s\n" % mode)
+        # toggles.conf lives at engine/setup/toggles.conf; this test file is at
+        # engine/setup/tests/evaluator/ → two levels up.
+        conf = os.path.join(os.path.dirname(__file__), "..", "..", "toggles.conf")
+        return _parse_wiki(run_build_wiki(self._p, NP_TEAM_DIR=self._t,
+                                          NP_TOGGLES_CONF=conf, NP_TOGGLES_LOCAL=toggles_local))
+
+    def test_override_team_wins_union(self):
+        w = self._two_layers("override")
+        names = [t["topic"] for t in w["topics"]]
+        self.assertEqual(sorted(set(names)), ["go", "rust", "zig"])  # union
+        self.assertEqual(names.count("rust"), 1)                      # deduped
+        rust = next(t for t in w["topics"] if t["topic"] == "rust")
+        self.assertIn("TEAM rust", rust["synthesis"]["excerpt"])      # team won
+
+    def test_team_only(self):
+        w = self._two_layers("team-only")
+        self.assertEqual(sorted(t["topic"] for t in w["topics"]), ["rust", "zig"])  # team set only
+
+    def test_concatenate_both(self):
+        w = self._two_layers("concatenate")
+        names = [t["topic"] for t in w["topics"]]
+        self.assertEqual(names.count("rust"), 2)                      # both rusts
+
+
 if __name__ == "__main__":
     unittest.main()
