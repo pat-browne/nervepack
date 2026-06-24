@@ -8,9 +8,8 @@ MAX_PROMPTS="${EPISODIC_RECALL_MAX:-2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-layer-lib.sh" 2>/dev/null || true
 # Honor an explicit single-dir override (tests); else scan the merged layer roots.
-if [[ -n "${EPISODIC_PLAYBOOK_DIR:-}" ]]; then _pb_roots=("$EPISODIC_PLAYBOOK_DIR")
-else _pb_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _pb_roots+=("$_r/playbooks"); done < <(np_merge_roots); fi
-_pb_mode="$(np_merge_mode 2>/dev/null || echo override)"
+if [[ -n "${EPISODIC_PLAYBOOK_DIR:-}" ]]; then _pb_roots=("$EPISODIC_PLAYBOOK_DIR"); _pb_mode=override
+else _pb_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _pb_roots+=("$_r/playbooks"); done < <(np_merge_roots); _pb_mode="$(np_merge_mode 2>/dev/null || echo override)"; fi
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-playbook-recall}"
 
 command -v jq >/dev/null || exit 0
