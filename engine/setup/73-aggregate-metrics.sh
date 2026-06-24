@@ -112,6 +112,7 @@ if np_enabled evaluator.dashboard; then
   METRICS_JS="${CONTENT}/dashboard/data/metrics.js"
   DASHBOARD_SESSIONS="$(np_param evaluator.dashboard_sessions 5)" \
   WIKI_NAV="$(np_param evaluator.wiki_nav on)" \
+  WIKI_MERMAID="$(np_param evaluator.wiki_mermaid on)" \
   NP_CONTENT_DIR="$CONTENT" \
   NP_PLAYBOOKS_DIR="$CONTENT/playbooks" \
   NP_STRATEGIES_DIR="$CONTENT/strategies" \
