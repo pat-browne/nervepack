@@ -188,5 +188,28 @@ class TestRenderPagesVersionStamp(unittest.TestCase):
                       "version stamp '1.2.3' missing from rendered source page")
 
 
+class TestWikiStructureRenders(unittest.TestCase):
+    """A topic holding reference pages that carry Mermaid fences + GFM tables must
+    render end-to-end via render_pages: diagram containers, the vendored (local)
+    mermaid script, and HTML tables — no raw pipes left behind."""
+
+    def test_reference_page_with_mermaid_and_table_renders(self):
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic_synthesis(cd, "platform", "platform")
+            body = ("| Domain | Diagram |\n|---|---|\n| Camper | x |\n\n"
+                    "```mermaid\nerDiagram\n  A ||--o{ B : id\n```\n")
+            _write_topic_source(cd, "platform", "erd-camper", "", body)
+            out_dir, _ = _run_build_in_content(cd)
+        html_path = os.path.join(out_dir, "wiki", "topics", "platform", "erd-camper.html")
+        self.assertTrue(os.path.isfile(html_path),
+                        "rendered reference page not found at %s" % html_path)
+        with open(html_path, encoding="utf-8") as fh:
+            page = fh.read()
+        self.assertIn('<pre class="mermaid">', page)   # diagram container
+        self.assertIn("vendor/mermaid.min.js", page)   # vendored, local (not CDN)
+        self.assertIn("<table>", page)                 # GFM table rendered
+        self.assertNotIn("| Domain |", page)           # raw pipes gone
+
+
 if __name__ == "__main__":
     unittest.main()
