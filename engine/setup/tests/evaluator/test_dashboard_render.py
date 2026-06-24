@@ -82,6 +82,53 @@ class TestRenderer(unittest.TestCase):
         self.assertEqual(build._safe_href("//evil.com"), "")
         self.assertEqual(build._safe_href("/path/to/page"), "/path/to/page")
 
+    def test_gfm_table(self):
+        md = "| Field | Value |\n|---|---|\n| Source | AzureBlob |\n| Layer | landing |"
+        out = build.md_to_html(md)
+        self.assertIn("<table>", out)
+        self.assertIn("<th>Field</th>", out)
+        self.assertIn("<th>Value</th>", out)
+        self.assertIn("<td>Source</td>", out)
+        self.assertIn("<td>landing</td>", out)
+        self.assertNotIn("| Field |", out)        # raw pipes gone
+
+    def test_table_cells_render_inline(self):
+        md = "| A | B |\n|---|---|\n| `code` | **bold** |"
+        out = build.md_to_html(md)
+        self.assertIn("<td><code>code</code></td>", out)
+        self.assertIn("<strong>bold</strong>", out)
+
+    def test_stray_pipe_in_prose_does_not_stall(self):
+        # a lone '|' with no delimiter row must not be treated as a table or loop forever
+        out = build.md_to_html("use a | b pipe here\n\nnext para")
+        self.assertIn("<p>", out)
+        self.assertIn("next para", out)
+        self.assertNotIn("<table>", out)
+
+    def test_mermaid_fence_renders_container_not_code(self):
+        md = "```mermaid\nerDiagram\n  A ||--o{ B : x\n```"
+        out = build.md_to_html(md)
+        self.assertIn('<pre class="mermaid">', out)
+        self.assertIn("erDiagram", out)
+        self.assertNotIn("<code>erDiagram", out)   # not a plain code block
+
+    def test_mermaid_script_injected_only_when_present_and_enabled(self):
+        with_diagram = build.md_to_html("```mermaid\nerDiagram\n```", here="wiki/topics/x")
+        self.assertIn("vendor/mermaid.min.js", with_diagram)
+        self.assertIn("mermaid.initialize", with_diagram)
+        # plain page: no mermaid script
+        plain = build.md_to_html("# Title\n\ntext", here="wiki/topics/x")
+        self.assertNotIn("mermaid.min.js", plain)
+
+    def test_mermaid_gate_off(self):
+        os.environ["WIKI_MERMAID"] = "off"
+        try:
+            out = build.md_to_html("```mermaid\nerDiagram\n```", here="wiki/topics/x")
+            self.assertIn('<pre class="mermaid">', out)   # still emits the container
+            self.assertNotIn("mermaid.min.js", out)       # but no script when gated off
+        finally:
+            del os.environ["WIKI_MERMAID"]
+
 
 BUILD_PY = os.path.join(HERE, "..", "..", "..", "..", "dashboard", "build.py")
 

@@ -21,3 +21,12 @@ debugging, plan execution) are designed to compose with the "superpowers" Claude
 Code plugin when it is installed. nervepack does not vendor or depend on it; it is
 referenced as an optional companion process toolkit.
 Source: https://github.com/obra/superpowers
+
+------------------------------------------------------------------------------
+mermaid (vendored diagram renderer)
+------------------------------------------------------------------------------
+dashboard/vendor/mermaid.min.js is the mermaid diagramming library, MIT License,
+vendored verbatim so the dashboard renders Mermaid diagrams client-side without
+any external/CDN fetch (the dashboard's no-external-fetch invariant). Loaded only
+on wiki pages that contain a diagram; gated by the evaluator.wiki_mermaid param.
+Source: https://github.com/mermaid-js/mermaid

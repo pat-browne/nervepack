@@ -18,6 +18,7 @@ NP="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$HERE/np-toggle-lib.sh" 2>/dev/null || true
 WIKI_NAV="$(np_param evaluator.wiki_nav on 2>/dev/null || echo on)" \
+  WIKI_MERMAID="$(np_param evaluator.wiki_mermaid on 2>/dev/null || echo on)" \
   python3 "$NP/dashboard/build.py" >/dev/null 2>&1 || true
 
 # Resolve the URL (file:// by default; http:// with a local backend when
