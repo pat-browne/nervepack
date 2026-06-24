@@ -82,6 +82,53 @@ class TestRenderer(unittest.TestCase):
         self.assertEqual(build._safe_href("//evil.com"), "")
         self.assertEqual(build._safe_href("/path/to/page"), "/path/to/page")
 
+    def test_gfm_table(self):
+        md = "| Field | Value |\n|---|---|\n| Source | AzureBlob |\n| Layer | landing |"
+        out = build.md_to_html(md)
+        self.assertIn("<table>", out)
+        self.assertIn("<th>Field</th>", out)
+        self.assertIn("<th>Value</th>", out)
+        self.assertIn("<td>Source</td>", out)
+        self.assertIn("<td>landing</td>", out)
+        self.assertNotIn("| Field |", out)        # raw pipes gone
+
+    def test_table_cells_render_inline(self):
+        md = "| A | B |\n|---|---|\n| `code` | **bold** |"
+        out = build.md_to_html(md)
+        self.assertIn("<td><code>code</code></td>", out)
+        self.assertIn("<strong>bold</strong>", out)
+
+    def test_stray_pipe_in_prose_does_not_stall(self):
+        # a lone '|' with no delimiter row must not be treated as a table or loop forever
+        out = build.md_to_html("use a | b pipe here\n\nnext para")
+        self.assertIn("<p>", out)
+        self.assertIn("next para", out)
+        self.assertNotIn("<table>", out)
+
+    def test_mermaid_fence_renders_container_not_code(self):
+        md = "```mermaid\nerDiagram\n  A ||--o{ B : x\n```"
+        out = build.md_to_html(md)
+        self.assertIn('<pre class="mermaid">', out)
+        self.assertIn("erDiagram", out)
+        self.assertNotIn("<code>erDiagram", out)   # not a plain code block
+
+    def test_mermaid_script_injected_only_when_present_and_enabled(self):
+        with_diagram = build.md_to_html("```mermaid\nerDiagram\n```", here="wiki/topics/x")
+        self.assertIn("vendor/mermaid.min.js", with_diagram)
+        self.assertIn("mermaid.initialize", with_diagram)
+        # plain page: no mermaid script
+        plain = build.md_to_html("# Title\n\ntext", here="wiki/topics/x")
+        self.assertNotIn("mermaid.min.js", plain)
+
+    def test_mermaid_gate_off(self):
+        os.environ["WIKI_MERMAID"] = "off"
+        try:
+            out = build.md_to_html("```mermaid\nerDiagram\n```", here="wiki/topics/x")
+            self.assertIn('<pre class="mermaid">', out)   # still emits the container
+            self.assertNotIn("mermaid.min.js", out)       # but no script when gated off
+        finally:
+            del os.environ["WIKI_MERMAID"]
+
 
 BUILD_PY = os.path.join(HERE, "..", "..", "..", "..", "dashboard", "build.py")
 
@@ -139,6 +186,29 @@ class TestRenderPagesVersionStamp(unittest.TestCase):
             body = fh.read()
         self.assertIn("1.2.3", body,
                       "version stamp '1.2.3' missing from rendered source page")
+
+
+class TestWikiStructureRenders(unittest.TestCase):
+    """A topic holding reference pages that carry Mermaid fences + GFM tables must
+    render end-to-end via render_pages: diagram containers, the vendored (local)
+    mermaid script, and HTML tables — no raw pipes left behind."""
+
+    def test_reference_page_with_mermaid_and_table_renders(self):
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic_synthesis(cd, "platform", "platform")
+            body = ("| Domain | Diagram |\n|---|---|\n| Camper | x |\n\n"
+                    "```mermaid\nerDiagram\n  A ||--o{ B : id\n```\n")
+            _write_topic_source(cd, "platform", "erd-camper", "", body)
+            out_dir, _ = _run_build_in_content(cd)
+        html_path = os.path.join(out_dir, "wiki", "topics", "platform", "erd-camper.html")
+        self.assertTrue(os.path.isfile(html_path),
+                        "rendered reference page not found at %s" % html_path)
+        with open(html_path, encoding="utf-8") as fh:
+            page = fh.read()
+        self.assertIn('<pre class="mermaid">', page)   # diagram container
+        self.assertIn("vendor/mermaid.min.js", page)   # vendored, local (not CDN)
+        self.assertIn("<table>", page)                 # GFM table rendered
+        self.assertNotIn("| Domain |", page)           # raw pipes gone
 
 
 if __name__ == "__main__":
