@@ -378,15 +378,18 @@ def wiki_index():
     roots = _content_layers()
     mode = _merge_mode()
 
-    def _src_entry(p, topic, html):
+    def _src_entry(p, topic, subdir, html, root):
         return {"name": p["name"], "topic": topic, "kind": p["kind"] or "reference",
-                "excerpt": p["excerpt"], "version": p.get("version", ""), "html": html}
+                "dir": subdir, "excerpt": p["excerpt"], "version": p.get("version", ""),
+                "html": html, "root": root}
 
-    def _synth_entry(p, html):
+    def _synth_entry(p, html, root):
         return {"name": p["name"], "kind": "topic", "excerpt": p["excerpt"],
-                "last_updated": p["last_updated"], "sources": p["sources"], "html": html}
+                "last_updated": p["last_updated"], "sources": p["sources"],
+                "html": html, "root": root}
 
-    topics_list = []; seen_topic = set()
+    topics = {}             # topic -> entry (accumulated across layers)
+    taken = {}              # topic -> set of page names already claimed (dedup)
     concepts = []; seen_concept = set()
     for cd in roots:
         troot = os.path.join(cd, "wiki", "topics")
@@ -398,25 +401,35 @@ def wiki_index():
             td = os.path.join(troot, topic)
             if not os.path.isdir(td):
                 continue
-            if mode != "concatenate" and topic in seen_topic:
-                continue   # higher-precedence (team) layer already supplied this topic
-            entry = {"topic": topic, "synthesis": None, "sources": []}
-            try:
-                td_files = sorted(os.listdir(td))
-            except OSError:
-                continue
-            for f in td_files:
-                if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
-                    continue
-                p = _parse_wiki_page(os.path.join(td, f))
-                if not p:
-                    continue
-                html = "data/wiki/topics/%s/%s.html" % (topic, p["name"])
-                if p["kind"] == "topic":
-                    entry["synthesis"] = _synth_entry(p, html)
-                else:
-                    entry["sources"].append(_src_entry(p, topic, html))
-            seen_topic.add(topic); topics_list.append(entry)
+            if topic in topics and mode != "concatenate":
+                continue   # higher-precedence (team) layer already owns this topic
+            if topic not in topics:
+                topics[topic] = {"topic": topic, "synthesis": None, "sources": []}
+                taken[topic] = set()
+            entry, claimed = topics[topic], taken[topic]
+            # Walk the topic dir recursively: the relative subdir IS the nesting path.
+            for dirpath, dirnames, filenames in os.walk(td):
+                dirnames.sort()
+                sub = os.path.relpath(dirpath, td)
+                sub = "" if sub == "." else sub.replace(os.sep, "/")
+                for f in sorted(filenames):
+                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                        continue
+                    p = _parse_wiki_page(os.path.join(dirpath, f))
+                    if not p:
+                        continue
+                    rel = (sub + "/" + p["name"]) if sub else p["name"]
+                    html = "data/wiki/topics/%s/%s.html" % (topic, rel)
+                    # synthesis page: kind:topic at the topic root only
+                    if p["kind"] == "topic" and sub == "":
+                        if entry["synthesis"] is None:
+                            entry["synthesis"] = _synth_entry(p, html, cd)
+                            claimed.add(p["name"])
+                        continue
+                    if p["name"] in claimed:
+                        continue   # page-level dedup across layers + subdirs
+                    claimed.add(p["name"])
+                    entry["sources"].append(_src_entry(p, topic, sub, html, cd))
 
         cdir = os.path.join(cd, "wiki", "concepts")
         try:
@@ -429,14 +442,16 @@ def wiki_index():
             p = _parse_wiki_page(os.path.join(cdir, f))
             if not p:
                 continue
-            if mode != "concatenate" and p["name"] in seen_concept:
-                continue
+            if p["name"] in seen_concept:
+                continue   # dedup by name (higher-precedence layer wins)
             seen_concept.add(p["name"])
             concepts.append({"name": p["name"], "kind": p["kind"], "excerpt": p["excerpt"],
                              "last_updated": p["last_updated"], "sources": p["sources"],
-                             "html": "data/wiki/concepts/%s.html" % p["name"]})
+                             "html": "data/wiki/concepts/%s.html" % p["name"], "root": cd})
 
-    return {"topics": sorted(topics_list, key=lambda x: x["topic"]),
+    for entry in topics.values():
+        entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
+    return {"topics": [topics[k] for k in sorted(topics)],
             "concepts": sorted(concepts, key=lambda x: x["name"])}
 
 
@@ -445,23 +460,25 @@ def render_pages(index, out_dir):
     Two-pass: link_map (name -> data-relative path) lets [[wikilinks]] resolve.
     Source .md path is recovered from the html path. Fail-open per file."""
     link_map = {}
-    pages = []   # (name, html, kind, topic|None, last_updated, version)
+    pages = []   # (name, html, kind, topic|None, last_updated, version, root)
     for t in index.get("topics", []):
         s = t.get("synthesis")
         if s:
             link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), ""))
+            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("root")))
         for it in t.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", "")))
+            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("root")))
     for it in index.get("concepts", []):
         link_map[it["name"]] = it["html"][len("data/"):]
-        pages.append((it["name"], it["html"], it.get("kind", "concept"), None, it.get("last_updated", ""), ""))
+        pages.append((it["name"], it["html"], it.get("kind", "concept"), None, it.get("last_updated", ""), "", it.get("root")))
 
-    cd = _content_dir()
-    for name, html, kind, topic, last_updated, version in pages:
-        rel_html = html[len("data/"):]                       # e.g. wiki/topics/aws/aws.html
-        src_md = os.path.join(cd, rel_html[:-5] + ".md")     # mirror path, .html -> .md
+    default_cd = _content_dir()
+    for name, html, kind, topic, last_updated, version, root in pages:
+        rel_html = html[len("data/"):]                       # e.g. wiki/topics/aws/sub/aws.html
+        # read the source from the layer it came from (team vs personal); nested
+        # subdirs flow through unchanged since the md path mirrors the html path.
+        src_md = os.path.join(root or default_cd, rel_html[:-5] + ".md")
         try:
             with open(src_md, encoding="utf-8") as fh:
                 md = fh.read()
