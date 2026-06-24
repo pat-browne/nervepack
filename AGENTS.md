@@ -27,7 +27,7 @@ unset: the engine root, for the single-repo legacy layout). The content layers �
 project's **visual identity** (`brand/` — logos, social card, banner, favicon,
 brand guide, design language) — **do not live in the engine repo**; commit them
 to the overlay. The engine repo stays free of personal data (the `pii-guard` CI
-job + `np-publish-scan.py` enforce this). An optional **team** overlay may sit above the personal overlay (`team > personal > engine`); reads merge with team winning, writes still target personal. Configured via `NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, gated by the `team` toggle. Topic layers (playbooks/strategies/episodic/wiki) combine per the `team.merge` toggle param — `override` (default), `concatenate`, or `team-only`; skills stay override-only.
+job + `np-publish-scan.py` enforce this). An optional **team** overlay may sit above the personal overlay (`team > personal > engine`); reads merge with team winning, writes still target personal. Configured via `NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, gated by the `team` toggle. Topic layers (playbooks/strategies/episodic/wiki) combine per the `team.merge` toggle param — `override` (default), `concatenate`, or `team-only`; skills stay override-only. `contribute` can target the team overlay (`--layer team` / 'save to the team layer'), writing via `np_team_dir`; auto-capture still writes personal.
 
 **Brand/visual identity is content, not engine.** A specific brand is instance
 identity, not reusable machinery — the engine stays identity-neutral so a forker
