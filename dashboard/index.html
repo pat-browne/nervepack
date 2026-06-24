@@ -718,11 +718,13 @@
       }
       function count(n) { let c = n.leaves.length; Object.keys(n.dirs).forEach(d => c += count(n.dirs[d])); return c; }
       function renderNode(n) {
-        let h = n.leaves.map(leafHTML).join("");
+        // child groups (anything with children) float to the top; leaves below
+        let h = "";
         Object.keys(n.dirs).sort().forEach(d => {
           h += `<details class="wikitopic"${ot}><summary>${esc(d)}/ <span>${count(n.dirs[d])}</span></summary>
             <div class="wikinest">${renderNode(n.dirs[d])}</div></details>`;
         });
+        h += n.leaves.map(leafHTML).join("");
         return h;
       }
       const inner = topics.map(t => {
