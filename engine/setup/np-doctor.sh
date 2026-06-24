@@ -54,7 +54,8 @@ core_check() {
       if [[ -z "$tdir" ]]; then
         echo "PASS (no team layer configured)"
       elif np_enabled team; then
-        echo "PASS (team layer: $tdir — origin $torigin)"
+        tmode="$(source "$HERE/np-layer-lib.sh" 2>/dev/null; np_merge_mode 2>/dev/null || echo override)"
+        echo "PASS (team layer: $tdir — origin $torigin, merge $tmode)"
       else
         echo "PASS (team layer present at $tdir but the 'team' toggle is OFF — not merged)"
       fi
