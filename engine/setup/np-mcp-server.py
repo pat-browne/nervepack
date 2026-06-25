@@ -63,6 +63,9 @@ def np_param(key, default):
 
 
 _content_dir_cache = None
+_content_layers_cache = None
+_merge_mode_cache = None
+
 def content_dir():
     global _content_dir_cache
     if _content_dir_cache is None:
@@ -74,18 +77,25 @@ def content_dir():
 
 def _content_layers():
     """Overlay roots (team>personal) for merge-aware MCP reads, via np_merge_roots.
-    Fail-open to [content_dir()] when the helper yields nothing."""
-    lib = os.path.join(SETUP, "np-layer-lib.sh")
-    _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_roots', "_", lib])
-    roots = [ln for ln in out.splitlines() if ln.strip()]
-    return roots or [content_dir()]
+    Fail-open to [content_dir()] when the helper yields nothing. Cached per process."""
+    global _content_layers_cache
+    if _content_layers_cache is None:
+        lib = os.path.join(SETUP, "np-layer-lib.sh")
+        _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_roots', "_", lib])
+        roots = [ln for ln in out.splitlines() if ln.strip()]
+        _content_layers_cache = roots or [content_dir()]
+    return _content_layers_cache
 
 
 def _merge_mode():
-    lib = os.path.join(SETUP, "np-layer-lib.sh")
-    _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_mode', "_", lib])
-    m = out.strip()
-    return m if m in ("override", "concatenate", "team-only") else "override"
+    """Validated team.merge mode (override|concatenate|team-only). Cached per process."""
+    global _merge_mode_cache
+    if _merge_mode_cache is None:
+        lib = os.path.join(SETUP, "np-layer-lib.sh")
+        _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_mode', "_", lib])
+        m = out.strip()
+        _merge_mode_cache = m if m in ("override", "concatenate", "team-only") else "override"
+    return _merge_mode_cache
 
 
 class Disabled(Exception):
