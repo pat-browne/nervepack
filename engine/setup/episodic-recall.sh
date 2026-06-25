@@ -14,7 +14,7 @@ else _ep_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _ep_roots+=("$_r/
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-episodic-recall}"
 
 command -v jq >/dev/null || exit 0
-_ep_any=0; for _d in "${_ep_roots[@]}"; do [[ -f "$_d/INDEX.md" ]] && _ep_any=1; done
+_ep_any=0; for _d in ${_ep_roots[@]+"${_ep_roots[@]}"}; do [[ -f "$_d/INDEX.md" ]] && _ep_any=1; done
 [[ "$_ep_any" == 1 ]] || exit 0
 
 payload="$(cat)"
@@ -31,7 +31,7 @@ echo $((count + 1)) > "$counter"
 
 ctx="Episodic context (background — may be stale; durable skills/sources/wiki override). Consider whether each applies before acting. Matched themes from prior sessions:"
 _emitted=""; _hit_any=0
-for _d in "${_ep_roots[@]}"; do
+for _d in ${_ep_roots[@]+"${_ep_roots[@]}"}; do
   INDEX="$_d/INDEX.md"; [[ -f "$INDEX" ]] || continue
   while IFS= read -r t; do
     [[ -z "$t" ]] && continue
