@@ -505,13 +505,26 @@ def render_pages(index, out_dir):
 
 def learned_counts():
     """Accumulated memory the dashboard can show as a growth stat. strategy_names
-    lets the Wins & learnings panel chip the learned strategies, not just count them."""
-    cd = _content_dir()
-    pb = os.environ.get("NP_PLAYBOOKS_DIR", os.path.join(cd, "playbooks"))
-    st = os.environ.get("NP_STRATEGIES_DIR", os.path.join(cd, "strategies"))
-    names = _topic_names(st)
-    return {"playbooks": _count_topics(pb), "strategies": len(names),
-            "strategy_names": names}
+    lets the Wins & learnings panel chip the learned strategies, not just count them.
+    Layer-aware: with no explicit NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR override, unions
+    topic names across the team>personal overlays (a count can't double-count an
+    identity, so dedup applies in every mode; team-only is handled by _content_layers
+    -> np_merge_roots)."""
+    pb_env = os.environ.get("NP_PLAYBOOKS_DIR")
+    st_env = os.environ.get("NP_STRATEGIES_DIR")
+    if pb_env or st_env:
+        cd = _content_dir()
+        pb = pb_env or os.path.join(cd, "playbooks")
+        st = st_env or os.path.join(cd, "strategies")
+        names = _topic_names(st)
+        return {"playbooks": _count_topics(pb), "strategies": len(names),
+                "strategy_names": names}
+    pb_names, st_names = set(), set()
+    for cd in _content_layers():
+        pb_names.update(_topic_names(os.path.join(cd, "playbooks")))
+        st_names.update(_topic_names(os.path.join(cd, "strategies")))
+    names = sorted(st_names)
+    return {"playbooks": len(pb_names), "strategies": len(names), "strategy_names": names}
 
 
 def load_records(path):

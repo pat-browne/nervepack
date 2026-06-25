@@ -334,5 +334,38 @@ class TestProtocol(unittest.TestCase):
             self.assertIn("nervepack://skills/np-kb-demo", uris)
 
 
+class TestRecallLayers(unittest.TestCase):
+    """nervepack_recall merges team>personal per team.merge."""
+
+    def _stage(self, root, kind_dir, topic, triggers, body):
+        import os as _os
+        d = _os.path.join(root, kind_dir); _os.makedirs(d, exist_ok=True)
+        idx = _os.path.join(d, "INDEX.md")
+        # episodic-match.sh reads $4 as keywords (format: topic|last_updated|keywords|lines)
+        head = "" if _os.path.exists(idx) else "| topic | last_updated | keywords | lines |\n|---|---|---|---|\n"
+        with open(idx, "a") as fh:
+            fh.write("%s| %s | 2026-06-24 | %s | 3 |\n" % (head, topic, triggers))
+        with open(_os.path.join(d, topic + ".md"), "w") as fh:
+            fh.write("%s\n" % body)
+
+    def test_override_team_wins(self):
+        import tempfile, os as _os
+        team = tempfile.mkdtemp(); personal = tempfile.mkdtemp(); h = tempfile.mkdtemp()
+        self.addCleanup(lambda: [__import__("shutil").rmtree(x, ignore_errors=True) for x in (team, personal, h)])
+        self._stage(personal, "playbooks", "deploys", "deploy", "PERSONAL deploys playbook")
+        self._stage(team, "playbooks", "deploys", "deploy", "TEAM deploys playbook")
+        with open(_os.path.join(h, "local"), "w") as fh:
+            fh.write("team.merge=override\n")
+        conf = _os.path.join(_os.path.dirname(__file__), "..", "..", "toggles.conf")
+        c = MCPClient(extra_env={"NP_CONTENT_DIR": personal, "NP_TEAM_DIR": team,
+                                 "NP_TOGGLES_CONF": conf, "NP_TOGGLES_LOCAL": _os.path.join(h, "local")})
+        self.addCleanup(c.close); c.initialize()
+        r = c.call("tools/call", {"name": "nervepack_recall",
+                                  "arguments": {"query": "about to deploy", "kinds": ["playbook"]}})
+        text = r["result"]["content"][0]["text"]
+        self.assertIn("TEAM deploys playbook", text)
+        self.assertNotIn("PERSONAL deploys playbook", text)   # team won, deduped
+
+
 if __name__ == "__main__":
     unittest.main()
