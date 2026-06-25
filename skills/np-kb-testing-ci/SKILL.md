@@ -101,13 +101,21 @@ The suite passed; it surfaced later as "the dashboard went blank."
 - Grep smell: a test invoking a real `setup/NN-*.sh` / `build.py` with **no explicit output
   path** — doubly dangerous when the repo's data dir is a symlink.
 
-## 7. The PII/secret gate false-positives on locally-rendered output
+## 7. The PII/secret gate false-positives on untracked working-tree files
 
-`publish/test_no_engine_pii.py` (the `pii-guard` gate) scans the working tree, not just
-tracked files. After a local dashboard build, `dashboard/data/wiki/**.html` holds the
-**rendered content-overlay pages** — gitignored, but present on disk — and the scan flags
-personal/company handles baked into them (personal domains, names, etc.). **CI never sees this** (a
-clean checkout has no rendered `data/`), so it's a *local false positive*, not a real
-engine-PII leak. Before running the full suite locally, clear the render output:
-`rm -rf dashboard/data/wiki dashboard/data/metrics.js`. Triage rule: findings confined to
-`dashboard/data/` are build artifacts; a real leak is in **tracked source**.
+`publish/test_no_engine_pii.py` (the `pii-guard` gate) scans the **working tree**, not just
+tracked files — so any gitignored-but-on-disk file trips it locally even when the committed
+engine is clean. Two recurring sources:
+- **Rendered output:** after a local dashboard build, `dashboard/data/wiki/**.html` holds the
+  rendered content-overlay pages with personal/company handles baked in. Clear before the
+  suite: `rm -rf dashboard/data/wiki dashboard/data/metrics.js`.
+- **SDD scratch:** during subagent-driven development the `.superpowers/sdd/` ledger +
+  per-task briefs/reports carry home paths and quoted content; the local suite then shows
+  `test_no_engine_pii.py` as the lone "1 failed" on every phase.
+
+**CI never sees either** (a clean checkout has neither), so both are *local false positives*.
+The authoritative check is to scan the **committed tree**, not the working tree:
+`tmp=$(mktemp -d); git archive HEAD | tar -x -C "$tmp"; python3 publish/np-publish-scan.py "$tmp"`
+— `clean` there means the PR is fine regardless of the local suite count. Triage rule:
+findings confined to `dashboard/data/` or `.superpowers/` are local artifacts; a real leak
+is in **tracked source**.
