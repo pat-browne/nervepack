@@ -7,6 +7,7 @@ import re
 import json
 import subprocess
 import tempfile
+import shutil
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -630,8 +631,12 @@ class TestWikiIndexNewLayout(unittest.TestCase):
 class TestWikiIndexLayers(unittest.TestCase):
     """wiki_index merges a team overlay over personal per team.merge."""
 
+    def tearDown(self):
+        for d in (getattr(self, "_p", None), getattr(self, "_t", None), getattr(self, "_h", None)):
+            if d:
+                shutil.rmtree(d, ignore_errors=True)
+
     def _two_layers(self, mode):
-        import tempfile, os
         self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
         # same topic name 'rust' in both layers; a personal-only 'go'; a team-only 'zig'
         _write_topic(self._p, "rust", "rust", {"name": "rust", "kind": "topic",
