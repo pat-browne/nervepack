@@ -34,8 +34,10 @@ np_merge_mode() {
 
 # np_merge_roots -> the roots a reader should scan for the current mode.
 # team-only + a configured team -> just the team (first) root; otherwise all layers.
+# (team-only with NO team configured has only the personal root, so it falls through
+# to "all layers" = personal-only — intended fail-open.)
 np_merge_roots() {
-  local mode i=0
+  local mode i
   mode="$(np_merge_mode)"
   local roots=(); while IFS= read -r d; do [[ -n "$d" ]] && roots+=("$d"); done < <(np_content_layers)
   if [[ "$mode" == team-only && ${#roots[@]} -gt 1 ]]; then

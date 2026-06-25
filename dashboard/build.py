@@ -125,6 +125,7 @@ def _content_dir():
 def _np_layer_lib():
     return os.path.join(HERE, "..", "engine", "setup", "np-layer-lib.sh")
 
+
 def _np_layer_fn(fn):
     """Run a np-layer-lib.sh function and return its stdout (empty string on any failure)."""
     try:
@@ -134,11 +135,13 @@ def _np_layer_fn(fn):
     except Exception:
         return ""
 
+
 def _content_layers():
     """Overlay roots to scan (team then personal) for the current merge mode, via
     np_merge_roots. Fail-open to [_content_dir()] when the helper yields nothing."""
     roots = [ln for ln in _np_layer_fn("np_merge_roots").splitlines() if ln.strip()]
     return roots or [_content_dir()]
+
 
 def _merge_mode():
     m = _np_layer_fn("np_merge_mode").strip()

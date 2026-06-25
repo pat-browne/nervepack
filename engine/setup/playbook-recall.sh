@@ -13,7 +13,7 @@ else _pb_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _pb_roots+=("$_r/
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-playbook-recall}"
 
 command -v jq >/dev/null || exit 0
-_pb_any=0; for _d in "${_pb_roots[@]}"; do [[ -f "$_d/INDEX.md" ]] && _pb_any=1; done
+_pb_any=0; for _d in ${_pb_roots[@]+"${_pb_roots[@]}"}; do [[ -f "$_d/INDEX.md" ]] && _pb_any=1; done
 [[ "$_pb_any" == 1 ]] || exit 0
 payload="$(cat)"
 sid="$(printf '%s' "$payload" | jq -r '.session_id // "unknown"' 2>/dev/null)"
@@ -27,7 +27,7 @@ count="$(cat "$counter" 2>/dev/null || echo 0)"; [[ "$count" =~ ^[0-9]+$ ]] || c
 echo $((count+1)) > "$counter"
 
 ctx=""; _seen=""
-for _d in "${_pb_roots[@]}"; do
+for _d in ${_pb_roots[@]+"${_pb_roots[@]}"}; do
   INDEX="$_d/INDEX.md"; [[ -f "$INDEX" ]] || continue
   while IFS='|' read -r _ topic _tm _gate triggers _seencol; do
     topic="$(echo "$topic" | xargs)"
