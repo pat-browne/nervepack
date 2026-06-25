@@ -63,6 +63,9 @@ def np_param(key, default):
 
 
 _content_dir_cache = None
+_content_layers_cache = None
+_merge_mode_cache = None
+
 def content_dir():
     global _content_dir_cache
     if _content_dir_cache is None:
@@ -70,6 +73,29 @@ def content_dir():
         rc, out, _ = run(["bash", "-c", 'source "$1"; np_content_dir', "_", lib])
         _content_dir_cache = out.strip() or REPO
     return _content_dir_cache
+
+
+def _content_layers():
+    """Overlay roots (team>personal) for merge-aware MCP reads, via np_merge_roots.
+    Fail-open to [content_dir()] when the helper yields nothing. Cached per process."""
+    global _content_layers_cache
+    if _content_layers_cache is None:
+        lib = os.path.join(SETUP, "np-layer-lib.sh")
+        _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_roots', "_", lib])
+        roots = [ln for ln in out.splitlines() if ln.strip()]
+        _content_layers_cache = roots or [content_dir()]
+    return _content_layers_cache
+
+
+def _merge_mode():
+    """Validated team.merge mode (override|concatenate|team-only). Cached per process."""
+    global _merge_mode_cache
+    if _merge_mode_cache is None:
+        lib = os.path.join(SETUP, "np-layer-lib.sh")
+        _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_mode', "_", lib])
+        m = out.strip()
+        _merge_mode_cache = m if m in ("override", "concatenate", "team-only") else "override"
+    return _merge_mode_cache
 
 
 class Disabled(Exception):
@@ -128,24 +154,30 @@ def _tool_recall(args):
     query = args.get("query", "")
     kinds = args.get("kinds") or list(_RECALL_DIRS)
     top = int(args.get("top", 3))
-    cd = content_dir()
+    roots = _content_layers()
+    mode = _merge_mode()
     chunks = []
     for kind in kinds:
         d = _RECALL_DIRS.get(kind)
         if not d:
             continue
-        index = os.path.join(cd, d, "INDEX.md")
-        if not os.path.exists(index):
-            continue
-        rc, out, _ = run(["bash", os.path.join(SETUP, "episodic-match.sh"), index], stdin=query)
-        for topic in [t for t in out.splitlines() if t.strip()][:top]:
-            try:
-                path = _safe_path(os.path.join(d, topic + ".md"), base=cd)
-            except ValueError:
+        seen = set()
+        for cd in roots:
+            index = os.path.join(cd, d, "INDEX.md")
+            if not os.path.exists(index):
                 continue
-            if os.path.exists(path):
-                with open(path, encoding="utf-8") as fh:
-                    chunks.append(f"## {kind}: {topic}\n{fh.read()}")
+            rc, out, _ = run(["bash", os.path.join(SETUP, "episodic-match.sh"), index], stdin=query)
+            for topic in [t for t in out.splitlines() if t.strip()][:top]:
+                if mode != "concatenate" and topic in seen:
+                    continue   # higher-precedence (team) layer already supplied this topic
+                try:
+                    path = _safe_path(os.path.join(d, topic + ".md"), base=cd)
+                except ValueError:
+                    continue
+                if os.path.exists(path):
+                    seen.add(topic)
+                    with open(path, encoding="utf-8") as fh:
+                        chunks.append("## %s: %s\n%s" % (kind, topic, fh.read()))
     return "\n\n".join(chunks) if chunks else "(no matches)"
 
 
