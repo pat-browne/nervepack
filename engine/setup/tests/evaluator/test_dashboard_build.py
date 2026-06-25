@@ -706,5 +706,46 @@ class TestWikiNesting(unittest.TestCase):
         self.assertEqual(srcs["nestedpage"]["html"], "data/wiki/topics/plat/sub/nestedpage.html")
 
 
+class TestLearnedLayers(unittest.TestCase):
+    """learned_counts unions playbooks/strategies across team>personal (counts dedup)."""
+
+    def setUp(self):
+        self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
+
+    def tearDown(self):
+        for d in (self._p, self._t, self._h):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _mk(self, root, sub, names):
+        d = os.path.join(root, sub); os.makedirs(d, exist_ok=True)
+        for n in names:
+            with open(os.path.join(d, n + ".md"), "w") as fh:
+                fh.write("---\nname: %s\n---\nbody\n" % n)
+
+    def _run(self, mode):
+        with open(os.path.join(self._h, "local"), "w") as fh:
+            fh.write("team.merge=%s\n" % mode)
+        conf = os.path.join(os.path.dirname(__file__), "..", "..", "toggles.conf")
+        js = run_build("", NP_CONTENT_DIR=self._p, NP_TEAM_DIR=self._t,
+                       NP_PLAYBOOKS_DIR="", NP_STRATEGIES_DIR="",
+                       NP_TOGGLES_CONF=conf, NP_TOGGLES_LOCAL=os.path.join(self._h, "local"))
+        m = re.search(r"window\.LEARNED = (\{.*?\});", js, re.S)
+        self.assertTrue(m, "no window.LEARNED in: %r" % js)
+        return json.loads(m.group(1))
+
+    def test_override_unions_and_dedups(self):
+        self._mk(self._p, "strategies", ["a", "b"]); self._mk(self._t, "strategies", ["b", "c"])
+        self._mk(self._p, "playbooks", ["p1"]); self._mk(self._t, "playbooks", ["p1", "p2"])
+        learned = self._run("override")
+        self.assertEqual(learned["strategy_names"], ["a", "b", "c"])  # union, deduped
+        self.assertEqual(learned["strategies"], 3)
+        self.assertEqual(learned["playbooks"], 2)                     # p1 deduped
+
+    def test_team_only(self):
+        self._mk(self._p, "strategies", ["a", "b"]); self._mk(self._t, "strategies", ["c"])
+        learned = self._run("team-only")
+        self.assertEqual(learned["strategy_names"], ["c"])            # team set only
+
+
 if __name__ == "__main__":
     unittest.main()
