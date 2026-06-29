@@ -87,6 +87,7 @@
       "accept": "A new session triggers 40-sync and injects nervepack-session-directive.",
       "hints": {
         "claude-code": "SessionStart hooks in ~/.claude/settings.json (reference: 50/51). Also wire per-prompt recall hooks (UserPromptSubmit -> episodic-recall, playbook-recall, strategy-recall; reference: 52/53) so past notes/playbooks/strategies are injected on topic match.",
+        "claude-code-windows": "Same SessionStart/UserPromptSubmit hooks, but Claude Code on Windows runs hook commands via PowerShell by default — so the install scripts route each .sh command through Git-bash. np-hook-lib.sh does this automatically on a MINGW/MSYS kernel (or force with NP_HOOK_WRAP=1): the stored command becomes `bash -lc '<original>'`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "goose": "SessionStart + UserPromptSubmit hooks in ~/.agents/plugins/nervepack/hooks/hooks.json (Open Plugins spec); map the recall hooks to your prompt-submit event.",
         "generic": "wire your host's session-start event to run 40-sync-nervepack.sh + emit the directive, and its per-prompt event to run the *-recall.sh hooks."
       }
@@ -126,6 +127,7 @@
       "hints": {
         "claude-code": "user crontab (reference: 70-install-memory-cron.sh). 76 (refine, Sunday) and 77 (compact, Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
         "claude-code-macos": "launchd LaunchAgents, not crontab (reference: 70-install-memory-launchd.sh); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
+        "claude-code-windows": "Windows Task Scheduler, not crontab (reference: 70-install-memory-schtasks.sh; runs under Git-bash, shells to schtasks.exe); verify with `schtasks //Query //FO LIST | grep -i nervepack`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: 76/77 can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
       }
     }

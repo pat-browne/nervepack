@@ -1,0 +1,12 @@
+{
+  "host": "claude-code",
+  "os": "windows",
+  "comment": "Reference adapter for Claude Code on native Windows (requires Git for Windows, which supplies the bash that runs the .sh hooks/crons). Differs from claude-code.example.json in two places: scheduled-maint uses Windows Task Scheduler (setup/70-install-memory-schtasks.sh) instead of crontab, and the SessionStart/SessionEnd hook commands are wrapped through Git-bash by np-hook-lib.sh (NP_HOOK_WRAP) because Claude Code on Windows runs hook commands via PowerShell by default. The ~/.claude layout (skills/, settings.json) is the same as on Linux. Copy to ~/.config/nervepack/adapter.json (per-machine; not committed).",
+  "capabilities": {
+    "knowledge":           { "status": "wired", "verify": "test -e ~/.claude/skills/np-core-sync/SKILL.md" },
+    "session-start":       { "status": "wired", "verify": "grep -q nervepack-session-directive ~/.claude/settings.json" },
+    "session-end-capture": { "status": "wired", "verify": "grep -q episodic-capture ~/.claude/settings.json" },
+    "session-end-flush":   { "status": "wired", "verify": "grep -q np-session-flush ~/.claude/settings.json" },
+    "scheduled-maint":     { "status": "wired", "verify": "schtasks //Query //FO LIST 2>/dev/null | grep -qi nervepack" }
+  }
+}
