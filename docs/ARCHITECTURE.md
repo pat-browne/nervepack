@@ -194,6 +194,21 @@ Record shapes (keep these stable; readers depend on them):
     verbatim (`Syntax sweep (stdlib-only)` / `Regression suite (zero-dep)` /
     `Secret/PII guard (terminal gate)`); `dashboard-e2e` stays informational and
     must never be a required check. (→ invariant 10; CLAUDE.md/AGENTS.md §concurrency)
+16. **OS/host backends are portable-shell-shelling-to-the-native-tool, never a
+    native-shell script.** The three scheduler backends are all bash that shell to the
+    OS scheduler: cron (Linux), `launchctl` (macOS, `70-install-memory-launchd.sh`),
+    `schtasks.exe` (native Windows, `70-install-memory-schtasks.sh`, run under
+    Git-bash). A Windows-native `.ps1` was rejected: invariant 6 requires every script
+    to have a regression test in the **zero-dep Ubuntu CI suite**, and PowerShell isn't
+    on those runners — a `.ps1` ships untested. A bash installer is stub-testable on
+    Linux (`NP_*_FORCE` + a stub `schtasks`/`launchctl`/`uname` on PATH) exactly like
+    its siblings, and Layer-1 Windows already requires Git-bash for the `7x` job bodies,
+    so bash availability is a given. Same reasoning for the **hook shim**: rather than a
+    `.cmd`/PowerShell entrypoint, `np-hook-lib.sh` wraps the stored command
+    `bash -lc '<cmd>'` on a MINGW/MSYS kernel (`NP_HOOK_WRAP`) so PowerShell-dispatched
+    hooks resolve to Git-bash, leaving Linux/macOS byte-for-byte unchanged. (→ invariant
+    6; the bash-vs-Python language policy in AGENTS.md — native-shell scripts are the
+    one form that can't be CI-tested, so they're out for cross-platform glue.)
 
 ## Change-impact map — touch X, then check Y
 
