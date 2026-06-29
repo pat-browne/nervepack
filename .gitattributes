@@ -1,0 +1,17 @@
+# Normalize all text to LF on every platform. nervepack is a bash/Python/Markdown
+# repo that runs under Git-bash on Windows too; a CRLF checkout (Git for Windows
+# defaults to autocrlf=true) inflates byte-size budget checks, breaks exact-match
+# test assertions, and confuses line-by-line parsers. Pin LF so the Windows CI lane
+# and a Windows dev box see the same bytes as Linux/macOS.
+* text=auto eol=lf
+
+# Binaries must never be normalized.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary

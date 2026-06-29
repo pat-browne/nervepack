@@ -30,9 +30,16 @@ rm -f "$CLAUDE_SETTINGS"
 ( source "$LIB"; NP_HOOK_WRAP=0 np_register_hook SessionStart '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ) >/dev/null
 chk "unwrapped command stored verbatim" "[ \"\$(cmd_at)\" = '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ]"
 
-# --- default (no NP_HOOK_WRAP) on this Linux box auto-resolves to OFF ---
+# --- auto-detect (NP_HOOK_WRAP unset): wraps on a Git-bash kernel, verbatim elsewhere.
+# The runner's hermetic env pins NP_HOOK_WRAP=0, so unset it here to exercise the real
+# uname-based auto path, then assert the kernel-appropriate result.
 rm -f "$CLAUDE_SETTINGS"
-( source "$LIB"; np_register_hook SessionStart '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ) >/dev/null
-chk "auto-detect off on a non-Windows host (verbatim)" "[ \"\$(cmd_at)\" = '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ]"
+( source "$LIB"; unset NP_HOOK_WRAP; np_register_hook SessionStart '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ) >/dev/null
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    chk "auto-detect wraps on a Git-bash kernel" "[ \"\$(cmd_at)\" = \"bash -lc '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &'\" ]" ;;
+  *)
+    chk "auto-detect off on a non-Windows kernel (verbatim)" "[ \"\$(cmd_at)\" = '~/Code/nervepack/engine/setup/40-sync-nervepack.sh &' ]" ;;
+esac
 
 [ $fail -eq 0 ] && echo "PASS test_hook_lib_win_wrap" || { echo "FAIL test_hook_lib_win_wrap"; exit 1; }
