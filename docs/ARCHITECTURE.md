@@ -194,12 +194,27 @@ Record shapes (keep these stable; readers depend on them):
     verbatim (`Syntax sweep (stdlib-only)` / `Regression suite (zero-dep)` /
     `Secret/PII guard (terminal gate)`); `dashboard-e2e` stays informational and
     must never be a required check. (→ invariant 10; CLAUDE.md/AGENTS.md §concurrency)
+16. **OS/host backends are portable-shell-shelling-to-the-native-tool, never a
+    native-shell script.** The three scheduler backends are all bash that shell to the
+    OS scheduler: cron (Linux), `launchctl` (macOS, `70-install-memory-launchd.sh`),
+    `schtasks.exe` (native Windows, `70-install-memory-schtasks.sh`, run under
+    Git-bash). A Windows-native `.ps1` was rejected: invariant 6 requires every script
+    to have a regression test in the **zero-dep Ubuntu CI suite**, and PowerShell isn't
+    on those runners — a `.ps1` ships untested. A bash installer is stub-testable on
+    Linux (`NP_*_FORCE` + a stub `schtasks`/`launchctl`/`uname` on PATH) exactly like
+    its siblings, and Layer-1 Windows already requires Git-bash for the `7x` job bodies,
+    so bash availability is a given. Same reasoning for the **hook shim**: rather than a
+    `.cmd`/PowerShell entrypoint, `np-hook-lib.sh` wraps the stored command
+    `bash -lc '<cmd>'` on a MINGW/MSYS kernel (`NP_HOOK_WRAP`) so PowerShell-dispatched
+    hooks resolve to Git-bash, leaving Linux/macOS byte-for-byte unchanged. (→ invariant
+    6; the bash-vs-Python language policy in AGENTS.md — native-shell scripts are the
+    one form that can't be CI-tested, so they're out for cross-platform glue.)
 
 ## Change-impact map — touch X, then check Y
 
 | If you change… | Also check / update |
 |---|---|
-| any **lifecycle hook script** | its registration in `settings.json` (`5x-install-*.sh`), fail-open + `bail()`, the `NERVEPACK_AGENT` guard (all globally-registered hooks must carry it — not only those that call `claude -p`), and `engine/setup/tests/` |
+| any **lifecycle hook script** | its registration in `settings.json` (`5x-install-*.sh` → `np-hook-lib.sh np_register_hook`), fail-open + `bail()`, the `NERVEPACK_AGENT` guard (all globally-registered hooks must carry it — not only those that call `claude -p`), and `engine/setup/tests/`. On native Windows `np-hook-lib.sh` wraps the stored command as `bash -lc '<cmd>'` (`NP_HOOK_WRAP`, auto on a MINGW/MSYS kernel) so PowerShell-dispatched hooks resolve to Git-bash — keep hook commands single-quote-free |
 | **`episodic-capture.sh`** (or its prompt/schema) | `episodic-recall`, `episodic-match`, `episodic-scrub`, dedup fingerprint, `np-flow-episodic-maintain` (consumes the inbox shape, incl. `struggles[]`→playbooks and `strategies[]`→strategies), `np-transcript-extract.py` |
 | **strategy/playbook layers** (recall or distillation) | the capture schema (`struggles[]`/`strategies[]`), `np-flow-episodic-maintain` §5b/5c, `playbook-recall`/`strategy-recall` + their install (`53`), the `playbooks`/`strategies` toggles, the dashboard "learned" counts (`build.py`), and the **graduation detector** (`np-graduation-detect.py` reads their frontmatter `seen`/`status` + byte size — keep those stable; `skills.graduate_seen`/`graduate_kb` params; `75-skill-maintain.sh` wiring + `tests/skills/test_graduation_detect.py`) |
 | **`np-evaluator.sh`** / the **metrics record shape** | `np-eval-signals.py`, `73-aggregate-metrics.sh`, `dashboard/build.py`, the panels in `dashboard/index.html`, `sample-metrics.jsonl`, the dashboard test |
@@ -220,7 +235,7 @@ Record shapes (keep these stable; readers depend on them):
 | **`main` branch protection** (rules / required checks) | keep `enforce_admins: false` so the auto-commit crons (`7x`, `np-implement-suggestion` direct mode) keep pushing directly; the required status-check contexts must match the CI job `name:`s exactly (`Syntax sweep (stdlib-only)` / `Regression suite (zero-dep)` / `Secret/PII guard (terminal gate)`); `dashboard-e2e` stays informational and MUST NOT be required; invariant 15 |
 | **`toggles.conf`** (add/rename a feature or param) | every `np_enabled`/`np_param` caller, `nervepack-toggle*` menus, and the feature catalog above; note: adding a param with a default that prunes historic data (e.g. `evaluator.retain_days`) can cause existing test records to be pruned — tests with old timestamps must set `NP_TOGGLES_CONF` to control `retain_days` |
 | **`nervepack-session-directive.md`** | this injects into **every** session globally — high blast radius; keep it lean |
-| **a cron body (`7x`)** | its crontab line via `70-install-memory-cron.sh` (and `70-install-memory-launchd.sh`); remember its `claude -p` fires SessionEnd hooks (set the guard); 76/77 also need their `maintain.refine`/`maintain.compact` toggle rows in `toggles.conf` |
+| **a cron body (`7x`)** | its schedule entry in ALL THREE scheduler backends — `70-install-memory-cron.sh` (Linux crontab), `70-install-memory-launchd.sh` (macOS LaunchAgents), `70-install-memory-schtasks.sh` (native-Windows Task Scheduler, runs under Git-bash); remember its `claude -p` fires SessionEnd hooks (set the guard); 76/77 also need their `maintain.refine`/`maintain.compact` toggle rows in `toggles.conf` |
 | **`dashboard/` data shape or build** | `build.py`, `index.html`, the build test, and the committed `metrics.js` (rebuild from real `metrics.jsonl`). The build emits `window.METRICS`/`LEARNED`/`TOKENS_SAVED`/`WIKI` into one `metrics.js`; `window.WIKI = {topics[], concepts[]}` — the **wiki index** (`wiki_index()`, `evaluator.wiki_nav` / `WIKI_NAV` env, sourced from overlay `wiki/topics/` + `wiki/concepts/`) is **content data** — keep it out of the engine repo, and pass `WIKI_NAV` from `73-aggregate-metrics.sh` + `open-dashboard.sh`; new render step (`md_to_html`/`render_pages`) writes `data/wiki/{topics,concepts}/*.html` — keep escaping + href-sanitization (see render tests) |
 | **`engine/setup/35-link-dashboard-data.sh`** (dashboard data bridge) | the `dashboard-data` capability in `engine/onboard/capabilities.json`; the `np-doctor.sh` `dashboard-data` core check; `engine/setup/tests/setup/test_link_dashboard_data.sh`; and the **Dashboard** row of this feature catalog. The symlink `<engine>/dashboard/data -> <content>/dashboard/data` is the bridge `index.html` relies on; don't remove it. |
 | **the suggestions-review engine** (`np-suggestions-review.py`) | it imports `dashboard/build.py` (`_norm`/`load_resolved`/`load_records`) — keep those stable; the server (`np-dashboard-server.py`) and the `np-core-suggestions-review` skill both shell out to it; its test |

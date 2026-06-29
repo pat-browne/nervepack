@@ -107,6 +107,7 @@ nervepack is tool-neutral: it onboards onto any agentic host via the contract in
 |---|---|---|---|
 | Claude Code (Linux) | ✅ Proven | `CLAUDE.md`→`@AGENTS.md`; SessionStart hook; skills symlinked | reference implementation |
 | Claude Code (macOS) | ✅ Proven | same; launchd not cron | `claude-code-macos` adapter |
+| Claude Code (Windows) | 🟡 WIP | same; Task Scheduler not cron; hooks routed through Git-bash | needs Git for Windows; `claude-code-windows` adapter |
 | Cursor | 🟡 WIP | `AGENTS.md` native + `.cursor/rules/nervepack.mdc` | new; not yet validated end-to-end |
 | Codex CLI | 🟡 WIP | `AGENTS.md` native | contract-compatible; untested |
 | Goose | 🟡 WIP | `.goosehints`/recipe; local Ollama or hosted Claude | in progress |
