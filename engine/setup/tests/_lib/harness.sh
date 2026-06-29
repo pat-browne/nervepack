@@ -19,6 +19,13 @@ STUB
   chmod +x "$stub"
   export CLAUDE_BIN="$stub"
   export NP_LLM_BACKEND="${NP_LLM_BACKEND:-claude}"
+  # Pin the hook-command form so the suite asserts canonical (unwrapped) registration
+  # deterministically on EVERY host. np-hook-lib.sh otherwise auto-wraps as
+  # `bash -lc '<cmd>'` on a Git-bash (MINGW/MSYS) kernel — correct at runtime, but it
+  # would break the exact-form assertions in the install-hook tests when the suite runs
+  # on the Windows CI lane. The Windows wrap itself stays covered by the explicit
+  # NP_HOOK_WRAP=1 cases in tests/toggles/test_hook_lib_win_wrap.sh.
+  export NP_HOOK_WRAP="${NP_HOOK_WRAP:-0}"
 }
 
 np_hermetic_cleanup() { [[ -n "${NP_TEST_HOME:-}" ]] && rm -rf "$NP_TEST_HOME"; }

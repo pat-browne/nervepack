@@ -9,6 +9,12 @@
 # (bash/grep/printf) but deliberately NO crontab, and assert the documented guard
 # fires (not some incidental downstream failure).
 set -euo pipefail
+# cron is the Linux scheduler — on native Windows the backend is Task Scheduler
+# (70-install-memory-schtasks.sh). This test also strips PATH to a sandbox bin, which
+# breaks Git-bash's own DLL resolution. Not applicable on a Windows kernel; see #38.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) echo "PASS test_cron_install_failure (skipped on Windows — cron is the Linux path)"; exit 0;;
+esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL="$HERE/../../70-install-memory-cron.sh"
 

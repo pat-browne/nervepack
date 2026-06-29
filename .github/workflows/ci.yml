@@ -101,6 +101,52 @@ jobs:
           name: e2e-report
           path: e2e-report.txt
 
+  windows:
+    name: Windows suite (Git-bash, informational)
+    runs-on: windows-latest
+    continue-on-error: true        # informational — never blocks merge (testing-ci §5)
+    defaults:
+      run:
+        shell: bash                # the Git-for-Windows bash on the runner
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      # The runner discovers `.py` tests and invokes them as `python3`, which the
+      # Windows Python install exposes only as `python`. Shim it onto PATH so the
+      # same runner works unmodified. GITHUB_PATH persists the (absolute) dir across
+      # the suite even after each test reassigns $HOME for its hermetic sandbox.
+      - name: Shim python3 -> python
+        run: |
+          if ! command -v python3 >/dev/null 2>&1; then
+            mkdir -p "$HOME/bin"
+            printf '#!/usr/bin/env bash\nexec python "$@"\n' > "$HOME/bin/python3"
+            chmod +x "$HOME/bin/python3"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+          fi
+
+      # MSYS=winsymlinks:nativestrict makes Git-bash `ln -s` create real NTFS symlinks
+      # (the runner is elevated), so the skill-link tests' `test -L`/`readlink` behave
+      # as on Linux. jq is preinstalled on the windows-latest image.
+      - name: Run regression suite (informational)
+        env:
+          MSYS: winsymlinks:nativestrict
+        run: bash engine/setup/tests/run-all.sh --report regression-report-win.md
+
+      - name: Publish report to job summary
+        if: always()
+        run: cat regression-report-win.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-report-windows
+          path: regression-report-win.md
+
   pii-guard:
     name: Secret/PII guard (terminal gate)
     runs-on: ubuntu-latest
