@@ -46,3 +46,14 @@ np_merge_roots() {
     for ((i = 0; i < ${#roots[@]}; i++)); do printf '%s\n' "${roots[$i]}"; done
   fi
 }
+
+# np_layer_roots <layer> -> one line per merge root, each suffixed memory/<layer>.
+# The merge-aware sibling of np_layer_dir: recall hooks scan these for the active
+# team.merge mode. Keeps the memory/ subpath defined in exactly one conceptual place
+# (mirrors np_layer_dir; both append memory/<layer>).
+np_layer_roots() {
+  local layer="$1" r
+  while IFS= read -r r; do
+    [[ -n "$r" ]] && printf '%s/memory/%s\n' "$r" "$layer"
+  done < <(np_merge_roots)
+}

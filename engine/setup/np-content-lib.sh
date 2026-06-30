@@ -74,6 +74,16 @@ np_team_dir() {
   printf '%s\n' "$d"
 }
 
+# np_layer_dir <layer> -> the single-root path of an agent-owned memory layer,
+# now grouped under memory/ (episodic|playbooks|strategies). Single source of truth
+# for the layer subpath: future relocations change ONLY this function. Used by
+# single-root consumers (playbook-guard, 73, 75). Recall hooks use np_layer_roots
+# (np-layer-lib.sh) for the team/personal merge.
+np_layer_dir() {
+  local layer="$1"
+  printf '%s/memory/%s\n' "$(np_content_dir)" "$layer"
+}
+
 # np_team_dir_origin -> how np_team_dir resolved: env | config | none.
 np_team_dir_origin() {
   if [[ -n "${NP_TEAM_DIR:-}" ]]; then
