@@ -6,8 +6,11 @@ bail silently on a pure non-Claude host even though the local backend works. Thi
 drives each hook with NP_LLM_BACKEND=local, CLAUDE_BIN pointed at a nonexistent path,
 and a stub OpenAI-compatible server, asserting a note/record is still written.
 Stdlib unittest (no pytest), per CLAUDE.md. Run: `python3 -m unittest`."""
-import json, os, subprocess, tempfile, threading, unittest
+import json, os, subprocess, sys, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
+from nptest import sh  # bash-invoke the .sh hooks via the right (non-WSL) bash on Windows
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 SETUP = os.path.join(REPO, "engine", "setup")
@@ -66,10 +69,10 @@ class TestLocalBackendNoClaude(unittest.TestCase):
             "candidate_topics": ["forms"], "keywords": ["a", "b", "c", "d", "e"],
             "struggles": [], "strategies": []})
         inbox = os.path.join(self.tmp, "cap-inbox")
-        r = subprocess.run(["bash", CAPTURE, "session-end"], input=self._payload("nc-cap"),
-                           capture_output=True, text=True,
-                           env=self._env(EPISODIC_INBOX=inbox,
-                                         EPISODIC_SEEN_DIR=os.path.join(self.tmp, "seen")))
+        r = sh(CAPTURE, "session-end", input=self._payload("nc-cap"),
+               capture_output=True, text=True,
+               env=self._env(EPISODIC_INBOX=inbox,
+                             EPISODIC_SEEN_DIR=os.path.join(self.tmp, "seen")))
         self.assertEqual(r.returncode, 0, r.stderr)
         files = os.listdir(inbox) if os.path.isdir(inbox) else []
         self.assertTrue(files, f"no note written (inbox empty); stderr={r.stderr}")
@@ -81,9 +84,9 @@ class TestLocalBackendNoClaude(unittest.TestCase):
             "contribution_score": 55, "helped": ["x"], "shortfalls": [],
             "suggestions": [], "assets_used": []})
         inbox = os.path.join(self.tmp, "eval-inbox")
-        r = subprocess.run(["bash", EVAL], input=self._payload("nc-eval"),
-                           capture_output=True, text=True,
-                           env=self._env(EVAL_INBOX=inbox))
+        r = sh(EVAL, input=self._payload("nc-eval"),
+               capture_output=True, text=True,
+               env=self._env(EVAL_INBOX=inbox))
         self.assertEqual(r.returncode, 0, r.stderr)
         files = os.listdir(inbox) if os.path.isdir(inbox) else []
         self.assertTrue(files, f"no record written (inbox empty); stderr={r.stderr}")
