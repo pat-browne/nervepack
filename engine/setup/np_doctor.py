@@ -125,7 +125,10 @@ def report():
 
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(newline="\n")
+        # Force UTF-8 + LF: the report contains non-ASCII (✓, em-dash), and native
+        # Windows Python defaults stdout to cp1252 which can't encode ✓ — that would
+        # fail the whole write and emit nothing. bash np-doctor.sh already emits UTF-8.
+        sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     text, code = report()
     sys.stdout.write(text)
     sys.exit(code)
