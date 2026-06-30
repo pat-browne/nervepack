@@ -47,6 +47,7 @@ def error(mid, code, message):
 import np_bashlib  # noqa: E402
 import np_toggle    # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 import np_content   # noqa: E402  in-process content/team/merge resolver (bash-free)
+import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
 
 
 def run(cmd, stdin=None, env=None):
@@ -202,8 +203,13 @@ def _tool_recall(args):
             index = os.path.join(cd, d, "INDEX.md")
             if not os.path.exists(index):
                 continue
-            rc, out, _ = run(["bash", os.path.join(SETUP, "episodic-match.sh"), index], stdin=query)
-            for topic in [t for t in out.splitlines() if t.strip()][:top]:
+            # In-process matcher (bash-free, parity-locked to episodic-match.sh).
+            if USE_PY:
+                topic_list = np_episodic_match.match(index, query)
+            else:
+                _, out, _ = run(["bash", os.path.join(SETUP, "episodic-match.sh"), index], stdin=query)
+                topic_list = [t for t in out.splitlines() if t.strip()]
+            for topic in topic_list[:top]:
                 if mode != "concatenate" and topic in seen:
                     continue   # higher-precedence (team) layer already supplied this topic
                 try:
