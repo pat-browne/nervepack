@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 # Stable spawn command for the nervepack MCP server (stdio).
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Pin the bash the server shells out to. On Windows the server is native Python whose
+# bare `bash` would resolve to System32\bash.exe (WSL, no distro), not this Git-bash;
+# pass our own interpreter (Windows-form via cygpath). No-op effect on Linux/macOS.
+export NP_BASH="${NP_BASH:-$(cygpath -w "$(command -v bash)" 2>/dev/null || command -v bash)}"
 exec python3 "$HERE/../setup/np-mcp-server.py" "$@"

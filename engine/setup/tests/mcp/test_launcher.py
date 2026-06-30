@@ -11,6 +11,9 @@ though we sent a well-formed request (proves the gate, not a crash/hang).
 """
 import json, os, subprocess, sys, unittest
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
+from nptest import sh  # bash-invoke the launcher cross-platform (it's a bash script)
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 LAUNCHER = os.path.join(REPO, "engine", "bin", "nervepack-mcp")
 FIXTURES = os.path.join(REPO, "engine", "setup", "tests", "mcp", "fixtures")
@@ -20,9 +23,10 @@ def _run_launcher(stdin_text, extra_env=None, timeout=15):
     env = dict(os.environ)
     if extra_env:
         env.update(extra_env)
-    p = subprocess.run([LAUNCHER], input=stdin_text, capture_output=True,
-                       text=True, env=env, timeout=timeout)
-    return p
+    # The launcher is a bash script; exec'ing it directly raises WinError 193 on
+    # Windows, so run it through bash (nptest.sh). On Linux this is equivalent.
+    return sh(LAUNCHER, input=stdin_text, capture_output=True,
+              text=True, env=env, timeout=timeout)
 
 
 def _responses(stdout):
