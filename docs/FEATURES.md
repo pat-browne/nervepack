@@ -62,30 +62,32 @@ surfaces) you consult repeatedly and want to annotate. The defer-first layer:
 answer from a pinned source before reaching for model knowledge or live docs.
 
 **Workflow.** Ingested via the protocol in CLAUDE.md (with a soft cap of 100 / hard
-300 and a rotate-vs-add prompt). Each `sources/<topic>/<name>.md` has frontmatter
-pinning version + scope. Lives in the **content overlay**, not the engine.
+300 and a rotate-vs-add prompt). Each `wiki/topics/<topic>/<name>.md` has frontmatter
+pinning version + scope, co-located with its synthesis page. Lives in the **content
+overlay**, not the engine. (Sources are a conceptual layer that physically resides
+*inside* the wiki layer — there is no separate top-level `sources/` dir.)
 
-**Assets.** `sources/` (overlay), the ingest protocol (CLAUDE.md), `log.md`.
+**Assets.** `wiki/topics/<topic>/` + `wiki/concepts/<concept>/` (overlay), the ingest protocol (CLAUDE.md), `log.md`.
 
 **Situational example.** A question about a specific Rust borrow-checker rule recurs.
 Rather than re-deriving it or hitting live docs each time, you ingest the relevant
-chapter to `sources/rust/`, pin the edition, and every future answer cites it. A
-`wiki/` page can build on it too.
+chapter to `wiki/topics/rust/`, pin the edition, and every future answer cites it. The
+topic's synthesis page builds on it too.
 
 ## Wiki — LLM-owned synthesis ("connect what we know")
 
 **Purpose.** Entity/concept pages that cross-link skills and sources into a synthesis
 the raw layers don't provide. Karpathy's LLM-wiki pattern.
 
-**Workflow.** `wiki/{entities,concepts}/<name>.md` regenerate when a cross-linked
-source or skill changes materially, or when the lint pass flags staleness. Overlay-
-resident, LLM-maintained.
+**Workflow.** `wiki/topics/<topic>/<topic>.md` and `wiki/concepts/<concept>/<concept>.md`
+synthesis pages regenerate when a cross-linked source or skill changes materially, or
+when the lint pass flags staleness. Overlay-resident, LLM-maintained.
 
 **Assets.** `wiki/` (overlay), the lint operation (CLAUDE.md).
 
-**Situational example.** You have a `sources/aws/` doc and an `np-env-secrets-refresh`
-skill. A `wiki/entities/aws.md` page ties them together so "how do I get AWS creds
-here" lands one synthesis page that points at both.
+**Situational example.** You have a `wiki/topics/aws/` source doc and an
+`np-env-secrets-refresh` skill. The `wiki/topics/aws/aws.md` synthesis page ties them
+together so "how do I get AWS creds here" lands one page that points at both.
 
 ## Episodic memory — auto working memory ("what we did / where we left off")
 
@@ -95,12 +97,12 @@ rules).
 
 **Workflow.** *Capture* (best-effort `SessionEnd`/`PreCompact` Haiku summary →
 local inbox) and the **back-capture sweep** (the reliable `SessionStart` trigger)
-write notes; the daily `episodic-maintain` cron drains them into `episodic/<topic>.md`
+write notes; the daily `episodic-maintain` cron drains them into `memory/episodic/<topic>.md`
 and auto-commits (the one subtree exempt from the human-review gate). *Recall*
 injects matching themes on a session's first prompts.
 
 **Assets.** `episodic-capture.sh`, `episodic-recall.sh`, `episodic-match.sh`,
-`np-backcapture-sweep.sh`, `agents/np-flow-episodic-maintain.md`, `episodic/` (overlay).
+`np-backcapture-sweep.sh`, `agents/np-flow-episodic-maintain.md`, `memory/episodic/` (overlay).
 Toggle: `memory`.
 
 **Situational example.** You spend a session migrating a box's network to a new
@@ -115,13 +117,13 @@ Above episodic, below skills. Unique trait: **enforced at the tool call**, not j
 advisory. This is the niche a passive skill structurally cannot fill.
 
 **Workflow.** Capture emits `struggles[]` on sessions with real failures →
-`episodic-maintain` clusters them into `playbooks/<topic>.md` with an `enforce`
+`episodic-maintain` clusters them into `memory/playbooks/<topic>.md` with an `enforce`
 block → `playbook-guard.sh` (`PreToolUse`) gates `ask` playbooks / injects `warn`
 ones at the tool call, and `playbook-recall.sh` (`UserPromptSubmit`) injects topic-
 matched ones with imperative framing.
 
 **Assets.** `playbook-recall.sh`, `playbook-guard.sh`, `agents/np-flow-episodic-maintain.md`,
-`playbooks/` (overlay). Toggle: `playbooks`.
+`memory/playbooks/` (overlay). Toggle: `playbooks`.
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into the `safe-git-grep` playbook; now
@@ -135,11 +137,11 @@ second-class status, but **advisory** (injected, never enforced at the tool call
 Their distinct value over a skill is auto-capture + topic-triggered surfacing.
 
 **Workflow.** Capture emits `strategies[]` → `episodic-maintain` distills into
-`strategies/<topic>.md` → `strategy-recall.sh` (`UserPromptSubmit`) injects matching
+`memory/strategies/<topic>.md` → `strategy-recall.sh` (`UserPromptSubmit`) injects matching
 ones as "approaches that worked before."
 
 **Assets.** `strategy-recall.sh`, `agents/np-flow-episodic-maintain.md`,
-`strategies/` (overlay). Toggle: `strategies`.
+`memory/strategies/` (overlay). Toggle: `strategies`.
 
 **Situational example.** Across several sessions you find that searching GitHub issues
 surfaces tool limitations faster than official docs. That becomes the
@@ -155,7 +157,7 @@ skill. Without a trigger, entries accrete forever. That is exactly how the
 `security-review` strategy grew to 8 KB.
 
 **Workflow.** The daily `75-skill-maintain.sh` runs `np-graduation-detect.py`
-(deterministic, no LLM) over the overlay's `strategies/` and `playbooks/`. Any entry
+(deterministic, no LLM) over the overlay's `memory/strategies/` and `memory/playbooks/`. Any entry
 with `seen ≥ graduate_seen` (default 10) or `bytes > graduate_kb` (default 6 KB) that
 isn't already `graduated`/`promoted`/`archived` is **surfaced** to the maintain log
 and a `graduation-candidates` marker, never auto-promoted (skills keep the
@@ -232,8 +234,8 @@ read on trends, wins, and struggles.
 SessionStart hook opens it once per boot (guarded against the reconnect loop).
 
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
-into `metrics.js` (a grouped, searchable index of the overlay's `wiki/{entities,concepts}/*.md`
-pages and `sources/` by topic, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
+into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
+and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
 `index.html` renders it as a grouped/collapsible left sidebar (entities / concepts /
 sources-by-topic) with a client-side search filter; clicking an entry opens the
 build-rendered HTML page in a new tab; Markdown stays the source (invariant 14).
@@ -424,7 +426,7 @@ capture/evaluator crons run on the local model with no Claude binary present.
 private, and one resolver points every consumer at the right tree.
 
 **Workflow.** The engine repo holds machinery + generic skills; the overlay
-(`NP_CONTENT_DIR`) holds sources/wiki/episodic/playbooks/strategies/metrics + personal
+(`NP_CONTENT_DIR`) holds wiki (with co-located sources) / memory (episodic+playbooks+strategies) / metrics + personal
 skills. `np-content-lib.sh` (`np_content_dir`) resolves the overlay for every consumer;
 unset falls back to the engine root (legacy single-repo).
 
