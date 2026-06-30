@@ -23,6 +23,12 @@ import subprocess
 
 _WIN = os.name == "nt"
 
+# The bash interpreter to drive. run-all.sh exports NPTEST_BASH as the exact bash
+# running the suite, because a bare "bash" resolves to System32\bash.exe (WSL) on
+# Windows, not Git-bash. Fall back to "bash" when run standalone (e.g. a single test
+# invoked directly on Linux/macOS).
+_BASH = os.environ.get("NPTEST_BASH") or "bash"
+
 
 def u(path):
     """Native path -> the form bash expects. No-op off Windows.
@@ -44,10 +50,10 @@ def sh(script, *args, **kwargs):
     kwargs are forwarded to subprocess.run (caller sets capture_output/text/env/
     input). Replaces `subprocess.run([script_path], ...)`, which raises WinError
     193 on Windows."""
-    return subprocess.run(["bash", u(script), *args], **kwargs)
+    return subprocess.run([_BASH, u(script), *args], **kwargs)
 
 
 def bash_eval(snippet, **kwargs):
     """Run `bash -c <snippet>`. The caller must u()-convert any paths embedded in
     the snippet (this helper can't know which substrings are paths)."""
-    return subprocess.run(["bash", "-c", snippet], **kwargs)
+    return subprocess.run([_BASH, "-c", snippet], **kwargs)
