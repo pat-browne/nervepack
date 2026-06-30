@@ -1,5 +1,8 @@
-import json, os, subprocess, threading, unittest
+import json, os, subprocess, sys, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
+from nptest import sh, u  # bash-invoke np-llm.sh + convert paths embedded in bash cmds
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 NPLLM = os.path.join(REPO, "engine", "setup", "np-llm.sh")
@@ -38,8 +41,8 @@ class TestLocalBackend(unittest.TestCase):
                     "NP_LLM_MODEL_CHEAP": "m"})
         if extra:
             env.update(extra)
-        return subprocess.run(["bash", NPLLM] + args, input=prompt,
-                              capture_output=True, text=True, env=env)
+        return sh(NPLLM, *args, input=prompt,
+                  capture_output=True, text=True, env=env)
 
     def test_complete_returns_content(self):
         r = self._run(["complete"])
@@ -65,7 +68,7 @@ class TestLocalBackend(unittest.TestCase):
         import tempfile
         out = os.path.join(tempfile.mkdtemp(), "agent_in")
         r = self._run(["agent", "--tools", "Bash Read"],
-                      extra={"NP_LLM_AGENT_CMD": f"cat > {out}"})
+                      extra={"NP_LLM_AGENT_CMD": f"cat > {u(out)}"})  # u(): bash can't write a backslash path
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out) as fh:
             self.assertEqual(fh.read(), "hi")
@@ -74,7 +77,7 @@ class TestLocalBackend(unittest.TestCase):
         import tempfile
         out = os.path.join(tempfile.mkdtemp(), "tools")
         r = self._run(["agent", "--tools", "Bash Read"],
-                      extra={"NP_LLM_AGENT_CMD": f'printf "%s" "$NP_LLM_TOOLS" > {out}'})
+                      extra={"NP_LLM_AGENT_CMD": f'printf "%s" "$NP_LLM_TOOLS" > {u(out)}'})
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out) as fh:
             self.assertEqual(fh.read(), "Bash Read")
@@ -83,8 +86,8 @@ class TestLocalBackend(unittest.TestCase):
         env = dict(os.environ)
         env.update({"NP_LLM_BACKEND": "local", "NP_LLM_BASE_URL": "x", "NP_LLM_MODEL_CHEAP": "m"})
         env.pop("NP_LLM_AGENT_CMD", None)
-        r = subprocess.run(["bash", NPLLM, "agent", "--tools", "Bash"], input="t",
-                           capture_output=True, text=True, env=env)
+        r = sh(NPLLM, "agent", "--tools", "Bash", input="t",
+               capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 2)
         self.assertIn("NP_LLM_AGENT_CMD", r.stderr)
 

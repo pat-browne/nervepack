@@ -83,7 +83,10 @@ if [[ "$(printf '%s' "$report" | jq -r '.catalog_over')" == "true" ]]; then
 fi
 
 cands=()   # bash 3.2 (stock macOS) has no `mapfile` — read into the array with a loop
-while IFS= read -r _c; do cands+=("$_c"); done < <(printf '%s' "$report" | jq -r '.split_candidates[].skill' 2>/dev/null)
+# Strip a trailing CR: on Windows (Task Scheduler / Git-bash) python3's CRLF stdout and
+# jq can leave \r on each value, which would corrupt the "$NP/skills/$skill" path below
+# (silent `continue`). No-op on Linux/macOS.
+while IFS= read -r _c; do _c="${_c%$'\r'}"; [[ -n "$_c" ]] && cands+=("$_c"); done < <(printf '%s' "$report" | jq -r '.split_candidates[].skill' 2>/dev/null)
 if [[ ${#cands[@]} -eq 0 ]]; then
   echo "$(date -u +%FT%TZ) no skills over split threshold (${SKILL_SPLIT_KB}KB)" >>"$LOG"; exit 0
 fi

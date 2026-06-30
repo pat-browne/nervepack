@@ -68,7 +68,9 @@ def scan(root, allow):
             if os.path.splitext(fn)[1].lower() in SKIP_EXT:
                 continue
             full = os.path.join(dirpath, fn)
-            rel = os.path.relpath(full, root)
+            # Normalize to forward slashes so SKIP_FILES and the allowlist (both keyed
+            # with POSIX relpaths) match on Windows, where relpath uses backslashes.
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
             if rel in SKIP_FILES:
                 continue
             try:
