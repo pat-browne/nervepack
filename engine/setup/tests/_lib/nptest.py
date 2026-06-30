@@ -23,11 +23,11 @@ import subprocess
 
 _WIN = os.name == "nt"
 
-# The bash interpreter to drive. run-all.sh exports NPTEST_BASH as the exact bash
-# running the suite, because a bare "bash" resolves to System32\bash.exe (WSL) on
-# Windows, not Git-bash. Fall back to "bash" when run standalone (e.g. a single test
-# invoked directly on Linux/macOS).
-_BASH = os.environ.get("NPTEST_BASH") or "bash"
+# The bash interpreter to drive. run-all.sh exports NP_BASH as the exact bash running
+# the suite, because a bare "bash" resolves to System32\bash.exe (WSL) on Windows, not
+# Git-bash. Fall back to "bash" when run standalone (e.g. a single test invoked directly
+# on Linux/macOS).
+_BASH = os.environ.get("NP_BASH") or "bash"
 
 
 def u(path):
