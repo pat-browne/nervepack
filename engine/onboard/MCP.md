@@ -13,9 +13,25 @@ A pure-stdlib **stdio** server (`engine/setup/np-mcp-server.py`, launched by
 session over stdin/stdout and it exits with the session. It reads your content
 overlay through `NP_CONTENT_DIR`, exactly like the rest of nervepack.
 
-## Install: the generic `mcpServers` block
+## Install: one guided command (recommended)
 
-Add this to your client's MCP config. Use an **absolute path** to the launcher:
+From a cloned repo, run the guided installer:
+
+```bash
+~/Code/nervepack/engine/bin/nervepack-install
+```
+
+It walks you through it: enter your **content directory** (where your personal
+skills/memory live — blank uses the engine root), optionally a **team content
+directory**, then it registers the MCP server with your host (Claude Code via
+`58-install-mcp.sh`; any other client gets the `mcpServers` block printed for you),
+and finally runs **`np-doctor.sh`** to verify the wiring. Re-runnable and idempotent;
+on a non-interactive shell (CI) every prompt takes its default and it never blocks.
+
+## Install: the generic `mcpServers` block (manual)
+
+Prefer to wire it by hand? Add this to your client's MCP config. Use an **absolute
+path** to the launcher:
 
 ```json
 {
