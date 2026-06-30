@@ -125,6 +125,10 @@ if __name__ == "__main__":
     # CLI mirror used by the A/B parity harness (and handy for debugging).
     #   np_toggle.py enabled <feature>      -> prints on/off, exits 0/1
     #   np_toggle.py param   <key> <default>-> prints value (no newline)
+    # Emit LF, not CRLF: native-Windows Python translates \n -> \r\n in text mode,
+    # which would make every line differ from bash's LF output under Git-bash.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "enabled":
         ok = enabled(sys.argv[2])

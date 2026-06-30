@@ -19,6 +19,12 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP test_content_parity: no pytho
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 fails=0
 
+# Use a path form that BOTH Git-bash and the native-Windows Python resolve to the
+# SAME location, so fixtures are byte-identical across runtimes (no MSYS POSIX vs
+# Windows dialect split, no config-file path the native Python can't stat). On
+# Windows that's the mixed form (C:/Users/...); off Windows it's a no-op.
+if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
+
 # Isolate HOME so ~/.config/nervepack/{content-dir,team-dir,toggles.local} are ours,
 # and keep toggle resolution hermetic (empty conf -> default-on, controlled local).
 export HOME="$tmp/home"; mkdir -p "$HOME/.config/nervepack"

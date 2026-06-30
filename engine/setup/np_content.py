@@ -119,6 +119,10 @@ def merge_roots():
 if __name__ == "__main__":
     # CLI mirror used by the A/B parity harness. Each mirrors the matching bash
     # function's stdout (trailing newline where bash uses printf '\n') and exit.
+    # Emit LF, not CRLF: native-Windows Python translates \n -> \r\n in text mode,
+    # which would make every line differ from bash's LF output under Git-bash.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "content_dir":
         d = content_dir()
