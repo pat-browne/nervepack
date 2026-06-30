@@ -22,6 +22,14 @@ source "$HERE/_lib/report.sh"
 
 ROOT="${NP_TESTS_ROOT:-$HERE}"   # NP_TESTS_ROOT lets the meta-test point at fixtures
 
+# Hand child Python tests the EXACT bash running this suite. On Windows, a native
+# `subprocess.run(["bash", ...])` resolves to C:\Windows\System32\bash.exe (the WSL
+# launcher, which has no distro) instead of Git-bash — System32 wins the Windows PATH.
+# Exporting the running bash (Windows-form via cygpath on Git-bash; plain path on
+# Linux/macOS) lets _lib/nptest.py invoke the right interpreter. (cygpath is absent
+# off-Windows, so the fallback yields the normal POSIX bash path.)
+export NPTEST_BASH="$(cygpath -w "$(command -v bash)" 2>/dev/null || command -v bash)"
+
 # Content-overlay test discovery: if NP_CONTENT_DIR is set and contains an
 # engine/setup/tests/ tree, include those tests in the default run. This keeps
 # personal content-layer tests in the CI gate on machines with the overlay
