@@ -146,6 +146,37 @@ jobs:
           name: regression-report-windows
           path: regression-report-win.md
 
+  windows-bashfree:
+    name: Bash-free MCP suite (no Git-bash)
+    runs-on: windows-latest
+    # Informational until the milestone completes (git-for-windows-free MCP, #38);
+    # promoted to a required check at milestone close (slice 6). Proves the PORTED
+    # MCP surface (protocol + resources + prompts + toggle gating, resolved in-process
+    # by np_toggle/np_content) works with Git for Windows absent. Not-yet-ported tools
+    # that still shell out to bash are out of scope here — see tests/mcp/test_bashfree.py.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Run the bash-free MCP test with Git-bash removed from PATH
+        shell: pwsh
+        env:
+          NP_MCP_PURE_PYTHON: "1"
+        run: |
+          # Drop the Git for Windows install (its bash/sh/usr-bin) from PATH for this
+          # step — the real-world "no Git for Windows" condition. Python stays. The
+          # test additionally pins a bogus NP_BASH so any accidental shell-out fails
+          # loudly rather than silently finding some other bash.
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Git\\' }) -join ';'
+          $bash = (Get-Command bash -ErrorAction SilentlyContinue).Source
+          Write-Host "Git-bash removed from PATH; 'bash' now resolves to: $bash"
+          python --version
+          python engine/setup/tests/mcp/test_bashfree.py -v
+
   pii-guard:
     name: Secret/PII guard (terminal gate)
     runs-on: ubuntu-latest
