@@ -165,14 +165,14 @@ class TestBuild(unittest.TestCase):
 
     def test_learned_counts_resolve_content_dir_when_no_explicit_dirs(self):
         """After the engine/content-overlay split, playbooks/strategies live in
-        the content overlay, not the engine repo. With no explicit
+        the content overlay under memory/, not the engine repo. With no explicit
         NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR, learned_counts must resolve them under
-        the content dir (NP_CONTENT_DIR, mirroring np_content_dir) — otherwise a
+        <content>/memory/ (NP_CONTENT_DIR, mirroring np_content_dir) — otherwise a
         bare `build.py` (manual open-dashboard, MCP summary) reports 0/0 and the
         Wins & learnings panel looks empty. Explicit dirs still override."""
         with tempfile.TemporaryDirectory() as content:
-            pb = os.path.join(content, "playbooks"); os.makedirs(pb)
-            st = os.path.join(content, "strategies"); os.makedirs(st)
+            pb = os.path.join(content, "memory", "playbooks"); os.makedirs(pb)
+            st = os.path.join(content, "memory", "strategies"); os.makedirs(st)
             for f in ("INDEX.md", "README.md", "p1.md", "p2.md"):
                 with open(os.path.join(pb, f), "w"):
                     pass
@@ -352,8 +352,9 @@ def _write_topic(content_dir, topic, name, frontmatter, body):
 
 
 def _write_concept(content_dir, name, frontmatter, body):
-    """Write a fixture wiki page under <content>/wiki/concepts/<name>.md."""
-    d = os.path.join(content_dir, "wiki", "concepts")
+    """Write a fixture concept synthesis page under
+    <content>/wiki/concepts/<name>/<name>.md (concepts are folders, like topics)."""
+    d = os.path.join(content_dir, "wiki", "concepts", name)
     os.makedirs(d, exist_ok=True)
     fm = "".join("%s: %s\n" % (k, v) for k, v in frontmatter.items())
     with open(os.path.join(d, name + ".md"), "w") as fh:
@@ -485,21 +486,21 @@ class TestRenderPages(unittest.TestCase):
         self.assertIn("<h1>Rust</h1>", body)
 
     def test_rendered_html_escapes_content(self):
-        """Concepts render to wiki/concepts/<name>.html."""
+        """Concepts render to wiki/concepts/<concept>/<name>.html (concepts are folders)."""
         with tempfile.TemporaryDirectory() as cd:
             _write_concept(cd, "x",
                            {"name": "x", "kind": "concept",
                             "last_updated": "2026-06-01", "sources": "[]"},
                            "# X\n\n<script>alert(1)</script>")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "concepts", "x.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "concepts", "x", "x.html")) as fh:
             body = fh.read()
         self.assertNotIn("<script>alert(1)</script>", body)
         self.assertIn("&lt;script&gt;", body)
 
     def test_cross_link_resolves_between_pages(self):
-        """New-layout: topic at wiki/topics/rust/, concept at wiki/concepts/.
-        Link from topic to concept is ../../concepts/<name>.html."""
+        """New-layout: topic at wiki/topics/rust/, concept at wiki/concepts/<concept>/.
+        Link from topic to concept is ../../concepts/<concept>/<name>.html."""
         with tempfile.TemporaryDirectory() as cd:
             _write_topic(cd, "rust", "rust",
                          {"name": "rust", "kind": "topic",
@@ -512,7 +513,7 @@ class TestRenderPages(unittest.TestCase):
             out_dir, _ = self._run(cd)
         with open(os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")) as fh:
             body = fh.read()
-        self.assertIn('href="../../concepts/borrow-checker.html"', body)
+        self.assertIn('href="../../concepts/borrow-checker/borrow-checker.html"', body)
 
     def test_dangling_cross_link_is_plain_text(self):
         with tempfile.TemporaryDirectory() as cd:
@@ -605,7 +606,7 @@ class TestWikiIndexNewLayout(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cd:
             _mk(cd, "wiki/topics/aws/aws.md", "topic", "aws", sources=["creds"])
             _mk(cd, "wiki/topics/aws/creds.md", "reference", "creds")
-            _mk(cd, "wiki/concepts/prompt-caching.md", "concept", "prompt-caching", sources=[])
+            _mk(cd, "wiki/concepts/prompt-caching/prompt-caching.md", "concept", "prompt-caching", sources=[])
             os.environ["NP_CONTENT_DIR"] = cd
             idx = bp.wiki_index()
             os.environ.pop("NP_CONTENT_DIR", None)
@@ -707,7 +708,8 @@ class TestWikiNesting(unittest.TestCase):
 
 
 class TestLearnedLayers(unittest.TestCase):
-    """learned_counts unions playbooks/strategies across team>personal (counts dedup)."""
+    """learned_counts unions memory/playbooks + memory/strategies across
+    team>personal (counts dedup)."""
 
     def setUp(self):
         self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
@@ -717,7 +719,7 @@ class TestLearnedLayers(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
     def _mk(self, root, sub, names):
-        d = os.path.join(root, sub); os.makedirs(d, exist_ok=True)
+        d = os.path.join(root, "memory", sub); os.makedirs(d, exist_ok=True)
         for n in names:
             with open(os.path.join(d, n + ".md"), "w") as fh:
                 fh.write("---\nname: %s\n---\nbody\n" % n)
@@ -745,6 +747,39 @@ class TestLearnedLayers(unittest.TestCase):
         self._mk(self._p, "strategies", ["a", "b"]); self._mk(self._t, "strategies", ["c"])
         learned = self._run("team-only")
         self.assertEqual(learned["strategy_names"], ["c"])            # team set only
+
+
+class TestConceptFolders(unittest.TestCase):
+    """Concepts are folders (wiki/concepts/<concept>/) like topics: a kind:concept
+    synthesis page + co-located kind:reference sources. learned_counts reads memory/."""
+
+    def test_concept_folder_synthesis_sources_and_memory_counts(self):
+        bp = _load_build_direct()
+        with tempfile.TemporaryDirectory() as cd:
+            _mk(cd, "wiki/concepts/widgets/widgets.md", "concept", "widgets", sources=[])
+            _mk(cd, "wiki/concepts/widgets/spec.md", "reference", "spec")
+            _mk(cd, "memory/playbooks/foo.md", "playbook", "foo")
+            _mk(cd, "memory/strategies/bar.md", "strategy", "bar")
+            saved = {k: os.environ.get(k)
+                     for k in ("NP_CONTENT_DIR", "NP_PLAYBOOKS_DIR", "NP_STRATEGIES_DIR")}
+            os.environ["NP_CONTENT_DIR"] = cd
+            os.environ.pop("NP_PLAYBOOKS_DIR", None)
+            os.environ.pop("NP_STRATEGIES_DIR", None)
+            try:
+                idx = bp.wiki_index()
+                lc = bp.learned_counts()
+            finally:
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+        c = {x["name"]: x for x in idx["concepts"]}["widgets"]
+        self.assertIsNotNone(c["synthesis"], "concept synthesis page not indexed")
+        self.assertTrue(any(s["name"] == "spec" for s in c["sources"]),
+                        "co-located concept source not indexed")
+        self.assertEqual(lc["playbooks"], 1, "learned counts not reading memory/playbooks")
+        self.assertEqual(lc["strategies"], 1, "learned counts not reading memory/strategies")
 
 
 if __name__ == "__main__":
