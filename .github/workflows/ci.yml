@@ -167,13 +167,16 @@ jobs:
         env:
           NP_MCP_PURE_PYTHON: "1"
         run: |
-          # Drop the Git for Windows install (its bash/sh/usr-bin) from PATH for this
-          # step — the real-world "no Git for Windows" condition. Python stays. The
-          # test additionally pins a bogus NP_BASH so any accidental shell-out fails
-          # loudly rather than silently finding some other bash.
-          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Git\\' }) -join ';'
+          # Remove the Git-bash dirs (Git\bin, Git\usr\bin — both ship bash.exe/sh)
+          # from PATH for this step, the real-world "no Git-bash" condition — but KEEP
+          # git.exe (Git\cmd, Git\mingw64\bin) and Python, since the spec's bash-free
+          # host still has native git. The test also pins a bogus NP_BASH so any
+          # accidental shell-out fails loudly rather than finding some other bash.
+          $env:PATH = ($env:PATH -split ';' |
+            Where-Object { $_ -notmatch '\\Git\\bin' -and $_ -notmatch '\\Git\\usr' }) -join ';'
           $bash = (Get-Command bash -ErrorAction SilentlyContinue).Source
           Write-Host "Git-bash removed from PATH; 'bash' now resolves to: $bash"
+          git --version          # native git must survive (doctor's git-sync check)
           python --version
           python engine/setup/tests/mcp/test_bashfree.py -v
 

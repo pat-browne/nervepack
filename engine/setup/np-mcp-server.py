@@ -48,6 +48,8 @@ import np_bashlib  # noqa: E402
 import np_toggle    # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 import np_content   # noqa: E402  in-process content/team/merge resolver (bash-free)
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
+import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no bash)
+import shutil    # noqa: E402
 
 
 def run(cmd, stdin=None, env=None):
@@ -151,7 +153,18 @@ def require_contribute():
 
 
 # --- tool registry ----------------------------------------------------------
+def _bash_available():
+    b = np_bashlib.bash()
+    return os.path.exists(b) if os.path.isabs(b) else shutil.which(b) is not None
+
+
 def _tool_doctor(args):
+    # Full bash doctor whenever bash exists (no fidelity loss — covers llm-cli +
+    # adapter checks); the bash-free Python doctor (core checks only) is the
+    # fallback on a host with no bash so the tool works at all there.
+    if USE_PY and not _bash_available():
+        text, _ = np_doctor.report()
+        return text.strip()
     rc, out, err = run(["bash", os.path.join(SETUP, "np-doctor.sh")])
     return (out + err).strip() or f"(doctor produced no output, exit {rc})"
 

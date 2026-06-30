@@ -87,6 +87,19 @@ class BashFreeReadSurface(unittest.TestCase):
         r = c.tool("nervepack_dashboard", {"view": "metrics"})
         self.assertFalse(r["result"]["isError"], r["result"])
 
+    def test_doctor_is_bashfree(self):
+        # With bash unreachable, nervepack_doctor falls back to the Python core-check
+        # doctor (np_doctor) instead of shelling np-doctor.sh. It must return a report
+        # (not a tool error), with the deterministic core checks resolved in Python.
+        c = self.client()
+        c.initialize()
+        r = c.tool("nervepack_doctor", {})
+        self.assertFalse(r["result"]["isError"], r["result"])
+        text = r["result"]["content"][0]["text"]
+        self.assertIn("toggles", text)
+        self.assertRegex(text, r"toggles\s+PASS")   # toggles check needs no bash/git
+        self.assertIn("doctor:", text)
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.

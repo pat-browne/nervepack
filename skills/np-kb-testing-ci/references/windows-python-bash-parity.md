@@ -32,6 +32,13 @@ emits no newline) but the *content* half fails on every row.
 Now `\n` stays `\n` on every platform, matching bash. (Alternative: strip `\r`
 in the test — worse, it masks the difference instead of making the CLI faithful.)
 
+**Sibling trap — stdout encoding.** If the CLI emits any non-ASCII (e.g. `✓`,
+`✗`, em-dash `—`), native-Windows Python defaults stdout to **cp1252**, which
+can't encode `✓` — and the failing `sys.stdout.write` drops the **whole** output,
+so the parity test sees *zero* Python lines vs N bash lines (bash/Git-bash is
+UTF-8). Same fix call, add the encoding: `sys.stdout.reconfigure(encoding="utf-8",
+newline="\n")`. Seen in `np_doctor.py` (the report has `✓`/`—`).
+
 ## 2. Path dialect — bash speaks POSIX, MSYS-converted Python speaks Windows
 
 Under Git-bash, when bash launches the **native-Windows** Python child, MSYS
