@@ -364,7 +364,7 @@ def _write_concept(content_dir, name, frontmatter, body):
 class TestWikiIndex(unittest.TestCase):
     """window.WIKI is {topics:[{topic,synthesis,sources[]}], concepts:[]}.
     New layout only: wiki/topics/<topic>/ (synthesis + co-located sources) and
-    wiki/concepts/<name>.md. Legacy wiki/entities/ and top-level sources/ are ignored."""
+    wiki/concepts/<name>/. Legacy wiki/entities/ and top-level sources/ are ignored."""
 
     def test_groups_topics_concepts_and_sources(self):
         """New-layout topic + concept + co-located source are gathered into new shape."""
