@@ -10,7 +10,7 @@ TOP="${EPISODIC_RECALL_TOP:-3}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-layer-lib.sh" 2>/dev/null || true
 if [[ -n "${EPISODIC_DIR:-}" ]]; then _ep_roots=("$EPISODIC_DIR"); _ep_mode=override
-else _ep_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _ep_roots+=("$_r/episodic"); done < <(np_merge_roots); _ep_mode="$(np_merge_mode 2>/dev/null || echo override)"; fi
+else _ep_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _ep_roots+=("$_r"); done < <(np_layer_roots episodic); _ep_mode="$(np_merge_mode 2>/dev/null || echo override)"; fi
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-episodic-recall}"
 
 command -v jq >/dev/null || exit 0
