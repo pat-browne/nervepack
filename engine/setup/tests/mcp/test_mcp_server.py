@@ -352,8 +352,8 @@ class TestRecallLayers(unittest.TestCase):
         import tempfile, os as _os
         team = tempfile.mkdtemp(); personal = tempfile.mkdtemp(); h = tempfile.mkdtemp()
         self.addCleanup(lambda: [__import__("shutil").rmtree(x, ignore_errors=True) for x in (team, personal, h)])
-        self._stage(personal, "playbooks", "deploys", "deploy", "PERSONAL deploys playbook")
-        self._stage(team, "playbooks", "deploys", "deploy", "TEAM deploys playbook")
+        self._stage(personal, "memory/playbooks", "deploys", "deploy", "PERSONAL deploys playbook")
+        self._stage(team, "memory/playbooks", "deploys", "deploy", "TEAM deploys playbook")
         with open(_os.path.join(h, "local"), "w") as fh:
             fh.write("team.merge=override\n")
         conf = _os.path.join(_os.path.dirname(__file__), "..", "..", "toggles.conf")

@@ -208,7 +208,7 @@ def _tool_toggle(args):
     raise ValueError(f"unknown toggle action: {action}")
 
 
-_RECALL_DIRS = {"episodic": "episodic", "playbook": "playbooks", "strategy": "strategies"}
+_RECALL_DIRS = {"episodic": "memory/episodic", "playbook": "memory/playbooks", "strategy": "memory/strategies"}
 
 
 def _tool_recall(args):
