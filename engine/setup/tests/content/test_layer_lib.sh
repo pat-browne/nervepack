@@ -33,4 +33,19 @@ printf 'team.merge=bogus\n' > "$tmp/local"
 printf 'team=off\n' > "$tmp/local"
 [[ "$(bash -c "source '$LIB'; np_content_layers")" == "$tmp/personal" ]] || fail "toggle-off drops team"
 
+# Aliases used by the layer-path assertions below (not defined above, so set them here).
+LLIB="$S/np-layer-lib.sh"
+CLIB="$S/np-content-lib.sh"
+ov="$tmp/layer-ov"; mkdir -p "$ov"
+
+# --- np_layer_roots maps each merge root to memory/<layer> ------------------
+out="$(NP_CONTENT_DIR="$ov" bash -c 'source "'"$LLIB"'"; np_layer_roots playbooks')"
+[ "$out" = "$ov/memory/playbooks" ] \
+  || { echo "FAIL np_layer_roots: got [$out] want [$ov/memory/playbooks]"; exit 1; }
+# --- np_layer_dir is the single-root form ----------------------------------
+out="$(NP_CONTENT_DIR="$ov" bash -c 'source "'"$CLIB"'"; np_layer_dir strategies')"
+[ "$out" = "$ov/memory/strategies" ] \
+  || { echo "FAIL np_layer_dir: got [$out] want [$ov/memory/strategies]"; exit 1; }
+echo "OK np_layer_dir/np_layer_roots"
+
 echo "PASS test_layer_lib"
