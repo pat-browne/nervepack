@@ -27,24 +27,39 @@ export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$HOME/.config/nerve
 : > "$NP_TOGGLES_LOCAL"
 mkdir -p "$tmp/personal" "$tmp/team"
 
-# Compare a content-lib function against a python subcommand (stdout bytes + exit).
-cmp_c() {  # $1=content-lib fn  $2=py subcommand
-  ( source "$CLIB"; "$1" ) > "$tmp/b.out" 2>/dev/null; local bx=$?
+# Canonicalize path lines for a cross-dialect compare. Under Git-bash the bash
+# resolver emits POSIX paths (/tmp/x, /d/a/...) while the native-Windows Python
+# child receives MSYS-converted env/argv and emits Windows paths (C:/Users/...,
+# with 8.3 short names like RUNNER~1) — the SAME directory in two dialects. Fold
+# both to a canonical long Windows form (lowercased, since Windows paths are
+# case-insensitive) so equality means "same target dir", not "same bytes". No-op
+# off Windows (no cygpath) — there byte-identity holds and is asserted exactly.
+_canon() {
+  command -v cygpath >/dev/null 2>&1 || { cat; return; }
+  local ln c
+  while IFS= read -r ln || [[ -n "$ln" ]]; do
+    c="$(cygpath -wl "$ln" 2>/dev/null)"; [[ -n "$c" ]] || c="$ln"
+    printf '%s\n' "$c" | tr 'A-Z' 'a-z'
+  done
+}
+
+# $1=fn  $2=py subcommand  $3=source-lib (content|layer)  [$4=path -> canonicalize]
+_cmp() {
+  local lib="$CLIB"; [[ "$3" == layer ]] && lib="$LLIB"
+  ( source "$lib"; "$1" ) > "$tmp/b.out" 2>/dev/null; local bx=$?
   python3 "$PYC" "$2" > "$tmp/p.out" 2>/dev/null; local px=$?
-  if ! cmp -s "$tmp/b.out" "$tmp/p.out" || [[ "$bx" != "$px" ]]; then
+  if [[ "${4:-}" == path ]]; then
+    _canon < "$tmp/b.out" > "$tmp/b.cmp"; _canon < "$tmp/p.out" > "$tmp/p.cmp"
+  else
+    cp "$tmp/b.out" "$tmp/b.cmp"; cp "$tmp/p.out" "$tmp/p.cmp"
+  fi
+  if ! cmp -s "$tmp/b.cmp" "$tmp/p.cmp" || [[ "$bx" != "$px" ]]; then
     echo "FAIL $1/$2: bash=[$(cat "$tmp/b.out")](exit $bx) python=[$(cat "$tmp/p.out")](exit $px)"
     fails=$((fails+1))
   fi
 }
-# Compare a layer-lib function (sources toggle+content) against a python subcommand.
-cmp_l() {  # $1=layer-lib fn  $2=py subcommand
-  ( source "$LLIB"; "$1" ) > "$tmp/b.out" 2>/dev/null; local bx=$?
-  python3 "$PYC" "$2" > "$tmp/p.out" 2>/dev/null; local px=$?
-  if ! cmp -s "$tmp/b.out" "$tmp/p.out" || [[ "$bx" != "$px" ]]; then
-    echo "FAIL $1/$2: bash=[$(cat "$tmp/b.out")](exit $bx) python=[$(cat "$tmp/p.out")](exit $px)"
-    fails=$((fails+1))
-  fi
-}
+cmp_c() { _cmp "$1" "$2" content "${3:-}"; }   # content-lib fn vs py subcommand
+cmp_l() { _cmp "$1" "$2" layer   "${3:-}"; }   # layer-lib fn (sources toggle+content) vs py subcommand
 
 # --- Case A: NP_CONTENT_DIR env, existing ----------------------------------
 export NP_CONTENT_DIR="$tmp/personal"; unset NP_TEAM_DIR
