@@ -1,7 +1,14 @@
-import os, subprocess, tempfile, unittest
+import os, subprocess, sys, tempfile, unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
+from nptest import u, sh, bash_eval  # cross-platform: bash-invoke + Windows path form
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 LIB = os.path.join(REPO, "engine", "setup", "np-content-lib.sh")
+
+
+def _setup_script(name):
+    return os.path.join(REPO, "engine", "setup", name)
 
 
 def resolve(env=None, home=None):
@@ -9,11 +16,11 @@ def resolve(env=None, home=None):
     e = dict(os.environ)
     e.pop("NP_CONTENT_DIR", None)
     if home is not None:
-        e["HOME"] = home
+        e["HOME"] = u(home)
     if env:
         e.update(env)
-    return subprocess.run(["bash", "-c", f'source "{LIB}"; np_content_dir'],
-                          capture_output=True, text=True, env=e)
+    return bash_eval(f'source "{u(LIB)}"; np_content_dir',
+                     capture_output=True, text=True, env=e)
 
 
 def origin(env=None, home=None):
@@ -21,11 +28,11 @@ def origin(env=None, home=None):
     e = dict(os.environ)
     e.pop("NP_CONTENT_DIR", None)
     if home is not None:
-        e["HOME"] = home
+        e["HOME"] = u(home)
     if env:
         e.update(env)
-    return subprocess.run(["bash", "-c", f'source "{LIB}"; np_content_dir_origin'],
-                          capture_output=True, text=True, env=e)
+    return bash_eval(f'source "{u(LIB)}"; np_content_dir_origin',
+                     capture_output=True, text=True, env=e)
 
 
 def is_explicit(env=None, home=None):
@@ -33,41 +40,41 @@ def is_explicit(env=None, home=None):
     e = dict(os.environ)
     e.pop("NP_CONTENT_DIR", None)
     if home is not None:
-        e["HOME"] = home
+        e["HOME"] = u(home)
     if env:
         e.update(env)
-    return subprocess.run(["bash", "-c", f'source "{LIB}"; np_content_is_explicit; echo "rc=$?"'],
-                          capture_output=True, text=True, env=e)
+    return bash_eval(f'source "{u(LIB)}"; np_content_is_explicit; echo "rc=$?"',
+                     capture_output=True, text=True, env=e)
 
 
 class TestContentDir(unittest.TestCase):
     def test_default_is_repo_root(self):
         r = resolve(home=tempfile.gettempdir())  # no env, no config file
         self.assertEqual(r.returncode, 0)
-        self.assertEqual(r.stdout.strip(), REPO)
+        self.assertEqual(r.stdout.strip(), u(REPO))
 
     def test_env_overrides(self):
         with tempfile.TemporaryDirectory() as d:
-            r = resolve(env={"NP_CONTENT_DIR": d})
-            self.assertEqual(r.stdout.strip(), d)
+            r = resolve(env={"NP_CONTENT_DIR": u(d)})
+            self.assertEqual(r.stdout.strip(), u(d))
 
     def test_config_file_used_when_env_unset(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as content:
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(content + "\n")
+                fh.write(u(content) + "\n")
             r = resolve(home=home)
-            self.assertEqual(r.stdout.strip(), content)
+            self.assertEqual(r.stdout.strip(), u(content))
 
     def test_env_beats_config(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as c1, tempfile.TemporaryDirectory() as c2:
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(c1 + "\n")
-            r = resolve(env={"NP_CONTENT_DIR": c2}, home=home)
-            self.assertEqual(r.stdout.strip(), c2)
+                fh.write(u(c1) + "\n")
+            r = resolve(env={"NP_CONTENT_DIR": u(c2)}, home=home)
+            self.assertEqual(r.stdout.strip(), u(c2))
 
     def test_bad_explicit_path_errors(self):
         r = resolve(env={"NP_CONTENT_DIR": "/no/such/dir/xyz"})
@@ -82,9 +89,9 @@ class TestContentDir(unittest.TestCase):
 
     def test_origin_env_is_explicit(self):
         with tempfile.TemporaryDirectory() as d:
-            r = origin(env={"NP_CONTENT_DIR": d})
+            r = origin(env={"NP_CONTENT_DIR": u(d)})
             self.assertEqual(r.stdout.strip(), "env")
-            self.assertEqual(is_explicit(env={"NP_CONTENT_DIR": d}).stdout.strip(), "rc=0")
+            self.assertEqual(is_explicit(env={"NP_CONTENT_DIR": u(d)}).stdout.strip(), "rc=0")
 
     def test_origin_config_is_explicit_even_at_engine_root(self):
         # A single-repo user opts in DELIBERATELY by writing the config file pointing at
@@ -93,7 +100,7 @@ class TestContentDir(unittest.TestCase):
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(REPO + "\n")   # config == engine root, set on purpose
+                fh.write(u(REPO) + "\n")   # config == engine root, set on purpose
             r = origin(home=home)
             self.assertEqual(r.stdout.strip(), "config")
             self.assertEqual(is_explicit(home=home).stdout.strip(), "rc=0")
@@ -108,7 +115,7 @@ class TestContentDir(unittest.TestCase):
     def test_origin_does_not_change_resolved_path(self):
         # Backward-compat: adding origin detection must not move the resolved path.
         r = resolve(home=tempfile.gettempdir())
-        self.assertEqual(r.stdout.strip(), REPO)
+        self.assertEqual(r.stdout.strip(), u(REPO))
 
     def test_link_skills_merges_engine_and_overlay(self):
         # engine has its real skills; overlay adds np-kb-demo. Linker must link the overlay
@@ -123,12 +130,11 @@ class TestContentDir(unittest.TestCase):
             with open(os.path.join(osk, "SKILL.md"), "w") as fh:
                 fh.write("---\nname: np-kb-demo\ndescription: d\n---\n# demo\n")
             e = dict(os.environ); e.update({
-                "NP_CONTENT_DIR": overlay,
-                "NP_SKILLS_DST": dst,
-                "NERVEPACK": fake_np,   # redirect INDEX.md write away from the repo
+                "NP_CONTENT_DIR": u(overlay),
+                "NP_SKILLS_DST": u(dst),
+                "NERVEPACK": u(fake_np),   # redirect INDEX.md write away from the repo
             })
-            subprocess.run([os.path.join(REPO, "engine", "setup", "30-link-skills.sh")],
-                           capture_output=True, text=True, env=e)
+            sh(_setup_script("30-link-skills.sh"), capture_output=True, text=True, env=e)
             links = set(os.listdir(dst))
             self.assertIn("np-kb-demo", links)      # overlay skill linked
             self.assertIn("np-core-sync", links)     # engine skill still linked
@@ -147,12 +153,11 @@ class TestContentDir(unittest.TestCase):
             # overlay is a valid content dir (it exists) but has no skills/ child.
             self.assertFalse(os.path.exists(os.path.join(overlay, "skills")))
             e = dict(os.environ); e.update({
-                "NP_CONTENT_DIR": overlay,
-                "NP_SKILLS_DST": dst,
-                "NERVEPACK": fake_np,   # redirect INDEX.md write away from the repo
+                "NP_CONTENT_DIR": u(overlay),
+                "NP_SKILLS_DST": u(dst),
+                "NERVEPACK": u(fake_np),   # redirect INDEX.md write away from the repo
             })
-            subprocess.run([os.path.join(REPO, "engine", "setup", "30-link-skills.sh")],
-                           capture_output=True, text=True, env=e)
+            sh(_setup_script("30-link-skills.sh"), capture_output=True, text=True, env=e)
             # The link pass must not blow up on the absent overlay skills/ dir
             # (`[[ -d "$base" ]] || continue` guards each source base). Its real
             # side effect: the ENGINE skills are still linked into dst. (The
@@ -178,11 +183,11 @@ class TestContentDir(unittest.TestCase):
                 fh.write("| topic | last_updated | keywords |\n|---|---|---|\n| widget | 2026-01-01 | frobnicate |\n")
             with open(os.path.join(ep, "widget.md"), "w") as fh:
                 fh.write("# widget notes\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
-                                            "EPISODIC_STATE_DIR": os.path.join(content, "_state")})
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
+                                            "EPISODIC_STATE_DIR": u(os.path.join(content, "_state"))})
             payload = '{"session_id":"t","prompt":"please frobnicate the widget"}'
-            r = subprocess.run([os.path.join(REPO, "engine", "setup", "episodic-recall.sh")],
-                               input=payload, capture_output=True, text=True, env=e)
+            r = sh(_setup_script("episodic-recall.sh"),
+                   input=payload, capture_output=True, text=True, env=e)
             self.assertIn("widget", r.stdout)
 
 
@@ -202,13 +207,13 @@ class TestContentDir(unittest.TestCase):
             conf = os.path.join(conf_dir, "toggles.conf")
             with open(conf, "w") as fh:
                 fh.write("evaluator|shared|runtime|on|retain_days=0\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
-                                            "EVAL_INBOX": inbox,
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
+                                            "EVAL_INBOX": u(inbox),
                                             "NP_AGG_NO_COMMIT": "1",
-                                            "NP_TOGGLES_CONF": conf,
+                                            "NP_TOGGLES_CONF": u(conf),
                                             "NP_TOGGLES_LOCAL": "/dev/null"})
-            subprocess.run([os.path.join(REPO, "engine", "setup", "73-aggregate-metrics.sh")],
-                           capture_output=True, text=True, env=e)
+            sh(_setup_script("73-aggregate-metrics.sh"),
+               capture_output=True, text=True, env=e)
             out = os.path.join(ddir, "metrics.jsonl")
             self.assertTrue(os.path.exists(out))
             with open(out) as fh:
@@ -218,8 +223,8 @@ class TestContentDir(unittest.TestCase):
     def test_doctor_passes_content_capability_with_default(self):
         # With no overlay configured, the default (repo root) has the content dirs, so the
         # content capability must PASS. Run the doctor and assert the content line isn't FAIL.
-        r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
-                           capture_output=True, text=True, env={**os.environ})
+        r = sh(_setup_script("np-doctor.sh"),
+               capture_output=True, text=True, env={**os.environ})
         line = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
         self.assertTrue(line, "doctor produced no 'content' capability line")
         self.assertFalse(any("FAIL" in l for l in line), f"content check failed: {line}")
@@ -231,9 +236,9 @@ class TestContentDir(unittest.TestCase):
         # told to configure it. HOME is redirected to a dir with no content-dir config.
         with tempfile.TemporaryDirectory() as home:
             e = {k: v for k, v in os.environ.items() if k != "NP_CONTENT_DIR"}
-            e["HOME"] = home
-            r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
-                               capture_output=True, text=True, env=e)
+            e["HOME"] = u(home)
+            r = sh(_setup_script("np-doctor.sh"),
+                   capture_output=True, text=True, env=e)
             cline = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
             self.assertTrue(cline, "doctor produced no 'content' capability line")
             self.assertFalse(any("FAIL" in l for l in cline), f"content check failed: {cline}")
@@ -245,9 +250,9 @@ class TestContentDir(unittest.TestCase):
         # The mirror: when an overlay is explicitly configured, the doctor must NOT emit
         # the implicit-fallback warning (only the accidental case warns).
         with tempfile.TemporaryDirectory() as content:
-            e = dict(os.environ); e["NP_CONTENT_DIR"] = content
-            r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
-                               capture_output=True, text=True, env=e)
+            e = dict(os.environ); e["NP_CONTENT_DIR"] = u(content)
+            r = sh(_setup_script("np-doctor.sh"),
+                   capture_output=True, text=True, env=e)
             cline = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
             joined = "\n".join(cline).lower()
             self.assertNotIn("implicit", joined,
@@ -260,8 +265,8 @@ class TestContentDir(unittest.TestCase):
         # the doctor must report PASS (not WARN/FAIL) for the dashboard-data capability.
         # We use the live engine which already has the symlink in place.
         e = dict(os.environ)
-        r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
-                           capture_output=True, text=True, env=e)
+        r = sh(_setup_script("np-doctor.sh"),
+               capture_output=True, text=True, env=e)
         ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
         self.assertTrue(ddlines, f"doctor produced no dashboard-data line; full output:\n{r.stdout}{r.stderr}")
         # Should be PASS when the symlink resolves correctly.
@@ -293,9 +298,9 @@ class TestContentDir(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as content:
                 # content overlay exists but has no dashboard/data subdir yet (fresh clone).
-                e = dict(os.environ); e["NP_CONTENT_DIR"] = content
-                r = subprocess.run([os.path.join(REPO, "engine", "setup", "np-doctor.sh")],
-                                   capture_output=True, text=True, env=e)
+                e = dict(os.environ); e["NP_CONTENT_DIR"] = u(content)
+                r = sh(_setup_script("np-doctor.sh"),
+                       capture_output=True, text=True, env=e)
             ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
             self.assertTrue(ddlines, f"doctor produced no dashboard-data line; output:\n{r.stdout}{r.stderr}")
             joined = "\n".join(ddlines).lower()
