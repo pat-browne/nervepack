@@ -120,13 +120,12 @@ The authoritative check is to scan the **committed tree**, not the working tree:
 findings confined to `dashboard/data/` or `.superpowers/` are local artifacts; a real leak
 is in **tracked source**.
 
-## 8. Driving bash from a Windows CI lane
+## 8. Windows CI: bash ↔ native-Python interop
 
-`.sh`-driving tests break on `windows-latest` even under `shell: bash`; fix =
-`engine/setup/tests/_lib/nptest.py` (`u`/`sh`/`bash_eval`):
-- direct `.sh` exec → `WinError 193` (no shebang loader) — run `["bash", script]`, not `[script]`.
-- bare `bash` finds `System32\bash.exe` (WSL, no distro), not Git-bash — invoke the suite's
-  own bash (`cygpath -w "$(command -v bash)"`).
-- `os.path` backslash/drive paths break `source`/`[[ -d ]]` and don't match `pwd` — convert to
-  MSYS `/c/x` (no-op off Windows). (CRLF checkout also bites — pin LF via `.gitattributes`.)
-Keep the lane **informational** until green (§5).
+Two `windows-latest`-only traps (harness artifacts, not the code) — fixes in
+`references/windows-python-bash-parity.md`: **driving bash from a lane** (`WinError
+193`; bare `bash` = `System32` WSL not Git-bash, pin `NP_BASH`; MSYS path forms; CRLF)
+and **parity-testing native-Windows Python against bash** (text-mode `\n`→`\r\n` — set
+the CLI to `newline="\n"`; POSIX-vs-Windows path dialect — compare paths by resolved
+identity, not bytes). A bash-free lane proves *independence*, parity *equivalence*;
+keep new lanes **informational** until green (§5).
