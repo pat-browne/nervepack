@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Guided nervepack MCP install — one command, end to end:
+#   1. configure the content overlay        (~/.config/nervepack/content-dir)
+#   2. optionally configure a team overlay   (~/.config/nervepack/team-dir + `team` toggle)
+#   3. register the MCP server with your host (Claude Code via 58-install-mcp.sh;
+#      otherwise print the generic mcpServers block for your client)
+#   4. run the doctor to verify the install
+#
+# Interactive, but falls back to safe defaults when stdin has no input (CI/headless),
+# so it never blocks: a closed/empty stdin == "accept the default" for every prompt.
+# Idempotent and re-runnable. Reads answers line-by-line from stdin.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NP="$(cd "$HERE/../.." && pwd)"
+# np-content-lib resolves config from $HOME/.config/nervepack (not XDG) — match it.
+CFG="$HOME/.config/nervepack"
+
+# ask <prompt> <default>: read one line from stdin; EOF/blank -> default. The prompt
+# goes to stderr so it shows even when stdout is captured, and never to the answer.
+ask() {
+  local ans=""
+  printf '%s [%s]: ' "$1" "${2:-blank}" >&2
+  read -r ans || true
+  printf '%s' "${ans:-$2}"
+}
+expand() { printf '%s' "${1/#\~/$HOME}"; }   # expand a leading ~
+
+echo "── nervepack MCP install ──"
+echo "Engine repo: $NP"
+mkdir -p "$CFG"
+
+# 1. Content overlay -------------------------------------------------------------
+echo
+echo "Content overlay: where your personal skills / memory / wiki live."
+echo "Leave blank to use the engine root (single-repo layout)."
+content="$(expand "$(ask 'Content directory' '')")"
+if [[ -n "$content" ]]; then
+  if [[ -d "$content" ]]; then
+    printf '%s\n' "$content" > "$CFG/content-dir"
+    echo "  ✓ wrote $CFG/content-dir -> $content"
+  else
+    echo "  ! '$content' does not exist — skipping (engine root will be used)" >&2
+    content=""
+  fi
+else
+  rm -f "$CFG/content-dir" 2>/dev/null || true
+  echo "  ✓ using the engine root (no content overlay configured)"
+fi
+
+# 2. Team overlay (optional) -----------------------------------------------------
+echo
+echo "Team overlay (optional): a shared content layer above your personal one."
+echo "Leave blank for none."
+team="$(expand "$(ask 'Team content directory' '')")"
+if [[ -n "$team" ]]; then
+  if [[ -d "$team" ]]; then
+    printf '%s\n' "$team" > "$CFG/team-dir"
+    # The `team` feature is on by default (shared toggle) — configuring the dir is what
+    # activates the overlay. We never flip the shared toggle here: that would commit to
+    # the engine repo. If you've disabled it, re-enable with: nervepack-toggle team on.
+    echo "  ✓ wrote $CFG/team-dir (the 'team' overlay is active by default)"
+  else
+    echo "  ! '$team' does not exist — skipping team overlay" >&2
+  fi
+fi
+
+# 3. Register the MCP server with the host ---------------------------------------
+echo
+if command -v claude >/dev/null 2>&1; then
+  echo "Registering the MCP server with Claude Code (user scope)…"
+  bash "$HERE/58-install-mcp.sh"
+else
+  echo "Claude CLI not found — add this to your MCP client's config (absolute path):"
+  printf '  {\n    "mcpServers": {\n      "nervepack": {\n        "command": "%s/engine/bin/nervepack-mcp"' "$NP"
+  [[ -n "$content" ]] && printf ',\n        "env": { "NP_CONTENT_DIR": "%s" }' "$content"
+  printf '\n      }\n    }\n  }\n'
+fi
+
+# 4. Verify ----------------------------------------------------------------------
+echo
+echo "Running the doctor to verify the install…"
+echo
+bash "$HERE/np-doctor.sh" || true
+
+echo
+echo "Done. Re-run any time:  bash $HERE/np-mcp-install.sh"
