@@ -20,6 +20,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_IN = os.path.join(HERE, "data", "metrics.jsonl")
 DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 
+# np_bashlib makes the bash shell-out below work under Git-bash on Windows (a bare
+# `bash` resolves to System32 WSL there). It lives in engine/setup/ — no-op off Windows.
+sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
+import np_bashlib  # noqa: E402
+
 
 def default_resolved():
     """Default path for resolved-suggestions.txt: resolved through _content_dir() so a
@@ -129,7 +134,7 @@ def _np_layer_lib():
 def _np_layer_fn(fn):
     """Run a np-layer-lib.sh function and return its stdout (empty string on any failure)."""
     try:
-        r = subprocess.run(["bash", "-c", 'source "$1" 2>/dev/null; %s' % fn, "_", _np_layer_lib()],
+        r = subprocess.run(np_bashlib.argv(["bash", "-c", 'source "$1" 2>/dev/null; %s' % fn, "_", _np_layer_lib()]),
                            capture_output=True, text=True)
         return r.stdout
     except Exception:

@@ -22,6 +22,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, "np-toggle-lib.sh")
+sys.path.insert(0, HERE)
+import np_bashlib  # noqa: E402  — bash shell-out works under Git-bash on Windows (no-op off it)
 
 
 def cmd_fingerprint(cmd):
@@ -188,7 +190,7 @@ def directive_present():
     """Mirror `np_enabled directive` (fail-open: on/True if the check errors)."""
     try:
         rc = subprocess.run(
-            ["bash", "-c", 'source "$1"; np_enabled directive', "_", LIB],
+            np_bashlib.argv(["bash", "-c", 'source "$1"; np_enabled directive', "_", LIB]),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ).returncode

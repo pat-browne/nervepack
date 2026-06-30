@@ -40,58 +40,18 @@ def error(mid, code, message):
     _write({"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}})
 
 
-# --- bash + path portability (Windows) --------------------------------------
-# On Windows a bare `bash` resolves to C:\Windows\System32\bash.exe (the WSL stub,
-# no distro installed), not Git-bash, and os.path paths are backslash/drive form
-# which break `source`/script args under bash. NP_BASH (exported by the test runner
-# and the launcher) pins the right interpreter; _u() converts a native path to MSYS
-# form. Both are no-ops off Windows. Mirrors engine/setup/tests/_lib/nptest.py for
-# the runtime side.
-def _bash():
-    b = os.environ.get("NP_BASH")
-    if b:
-        return b
-    if os.name == "nt":
-        for cand in (r"%ProgramFiles%\Git\bin\bash.exe",
-                     r"%ProgramFiles(x86)%\Git\bin\bash.exe",
-                     r"%LOCALAPPDATA%\Programs\Git\bin\bash.exe"):
-            cand = os.path.expandvars(cand)
-            if os.path.exists(cand):
-                return cand
-    return "bash"
-
-
-BASH = _bash()
-
-
-def _u(path):
-    r"""Native path -> bash (MSYS) form: C:\x -> /c/x. No-op off Windows."""
-    if os.name != "nt" or not path:
-        return path
-    p = path.replace("\\", "/")
-    if len(p) >= 2 and p[1] == ":":
-        p = "/" + p[0].lower() + p[2:]
-    return p
-
-
-def _bashify(cmd):
-    """Rewrite a `["bash", ...]` argv for Windows: use the resolved bash, and convert
-    path-shaped args (script paths ending in .sh, or any arg with a backslash) to MSYS
-    form so bash can open them. Bash code snippets and bare tokens pass through."""
-    if not cmd or cmd[0] != "bash":
-        return cmd
-    out = [BASH]
-    for a in cmd[1:]:
-        out.append(_u(a) if isinstance(a, str) and (a.endswith(".sh") or "\\" in a) else a)
-    return out
-
-
 # --- subprocess helper ------------------------------------------------------
+# np_bashlib.argv() makes the bash shell-outs work under Git-bash on Windows (a bare
+# `bash` would resolve to System32 WSL, and .sh/backslash paths break). No-op off
+# Windows. HERE is on sys.path (this runs as a script), so a plain import resolves it.
+import np_bashlib  # noqa: E402
+
+
 def run(cmd, stdin=None, env=None):
     e = dict(os.environ)
     if env:
         e.update(env)
-    r = subprocess.run(_bashify(cmd), input=stdin, capture_output=True, text=True, env=e)
+    r = subprocess.run(np_bashlib.argv(cmd), input=stdin, capture_output=True, text=True, env=e)
     return r.returncode, r.stdout, r.stderr
 
 
@@ -342,7 +302,7 @@ def _tool_suggestions(args):
         require_contribute()
         # async, detached — mirrors the dashboard server's /api/implement route.
         # mode is governed by the evaluator.implement_mode param (set via nervepack_toggle).
-        subprocess.Popen(_bashify(["bash", os.path.join(SETUP, "np-implement-suggestion.sh"), args["text"]]),
+        subprocess.Popen(np_bashlib.argv(["bash", os.path.join(SETUP, "np-implement-suggestion.sh"), args["text"]]),
                          cwd=REPO, start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return "implement job started (async; mode from evaluator.implement_mode)"
