@@ -34,6 +34,11 @@ from urllib.parse import urlparse, parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NP = os.path.dirname(os.path.dirname(HERE))
+
+# Make the bash/.sh shell-outs below run under Git-bash on Windows (a bare `bash`
+# resolves to System32 WSL; .sh can't be exec'd directly). No-op off Windows.
+sys.path.insert(0, HERE)
+import np_bashlib  # noqa: E402
 # Static root + data source are env-overridable so the server is isolatable in tests
 # (NP_DASH_ROOT / NP_METRICS / NP_RESOLVED_SUGGESTIONS), same pattern as build.py.
 DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dashboard"))
@@ -59,7 +64,7 @@ _NO_BUILD = os.environ.get("NP_RESOLVE_NO_BUILD") == "1"
 
 def _review_args(*extra):
     """Build the np-suggestions-review.py argv, threading through any test overrides."""
-    args = ["python3", REVIEW]
+    args = [sys.executable, REVIEW]
     if _METRICS:
         args += ["--metrics", _METRICS]
     if _RESOLVED:
@@ -100,7 +105,7 @@ def current_mode():
     """Resolve evaluator.implement_mode via np_param (single source of truth). Default pr."""
     try:
         r = subprocess.run(
-            ["bash", "-c", 'source "$0"; np_param evaluator.implement_mode pr', TOGGLES_LIB],
+            np_bashlib.argv(["bash", "-c", 'source "$0"; np_param evaluator.implement_mode pr', TOGGLES_LIB]),
             capture_output=True, text=True, timeout=5)
         m = (r.stdout or "").strip()
         return m if m in ("pr", "direct") else "pr"
@@ -140,7 +145,7 @@ def review_rows():
         "of objects {\"i\": <index>, \"decision\": \"implement\"|\"skip\", "
         "\"reason\": \"<=12 words\"}. No prose, no code fence.\n\n" + listing)
     try:
-        p = subprocess.run([NPLLM, "complete"], input=prompt,
+        p = subprocess.run(np_bashlib.argv([NPLLM, "complete"]), input=prompt,
                            capture_output=True, text=True, timeout=120)
         verdicts = json.loads(_strip_fence(p.stdout))
         by_i = {int(v["i"]): v for v in verdicts if "i" in v}
@@ -243,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = (self._body().get("text") or "").strip()
                 if not text:
                     return self._json({"error": "missing text"}, 400)
-                subprocess.run([RESOLVE, text], capture_output=True, text=True, timeout=30)
+                subprocess.run(np_bashlib.argv([RESOLVE, text]), capture_output=True, text=True, timeout=30)
                 return self._json({"ok": True})
             if route == "/api/implement":
                 text = (self._body().get("text") or "").strip()
@@ -252,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
-                subprocess.Popen([IMPLEMENT, text], cwd=NP, start_new_session=True,
+                subprocess.Popen(np_bashlib.argv([IMPLEMENT, text]), cwd=NP, start_new_session=True,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
                 return self._json({"ok": True, "started": True})
