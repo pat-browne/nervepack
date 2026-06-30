@@ -377,7 +377,8 @@ def _parse_wiki_page(path):
 def wiki_index():
     """Grouped wiki index for the dashboard left-nav, from the CONTENT overlay.
     NEW layout: wiki/topics/<topic>/ holds one kind:topic synthesis page + N
-    kind:reference sources; wiki/concepts/<name>.md holds concepts.
+    kind:reference sources; wiki/concepts/<concept>/ is symmetric — one kind:concept
+    synthesis page + N kind:reference sources.
     Gated by WIKI_NAV (default on, fail-open)."""
     empty = {"topics": [], "concepts": []}
     if os.environ.get("WIKI_NAV", "on").strip().lower() == "off":
@@ -398,7 +399,7 @@ def wiki_index():
 
     topics = {}             # topic -> entry (accumulated across layers)
     taken = {}              # topic -> set of page names already claimed (dedup)
-    concepts = []; seen_concept = set()
+    cmap = {}; ctaken = {}; seen_concept = set()
     for cd in roots:
         troot = os.path.join(cd, "wiki", "topics")
         try:
@@ -439,28 +440,52 @@ def wiki_index():
                     claimed.add(p["name"])
                     entry["sources"].append(_src_entry(p, topic, sub, html, cd))
 
-        cdir = os.path.join(cd, "wiki", "concepts")
+        croot = os.path.join(cd, "wiki", "concepts")
         try:
-            cfiles = sorted(os.listdir(cdir))
+            cdirs = sorted(os.listdir(croot))
         except OSError:
-            cfiles = []
-        for f in cfiles:
-            if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+            cdirs = []
+        for concept in cdirs:
+            ccd = os.path.join(croot, concept)
+            if not os.path.isdir(ccd):
                 continue
-            p = _parse_wiki_page(os.path.join(cdir, f))
-            if not p:
+            if concept in seen_concept and mode != "concatenate":
                 continue
-            if p["name"] in seen_concept:
-                continue   # dedup by name (higher-precedence layer wins)
-            seen_concept.add(p["name"])
-            concepts.append({"name": p["name"], "kind": p["kind"], "excerpt": p["excerpt"],
-                             "last_updated": p["last_updated"], "sources": p["sources"],
-                             "html": "data/wiki/concepts/%s.html" % p["name"], "root": cd})
+            if concept not in cmap:
+                cmap[concept] = {"name": concept, "synthesis": None, "sources": []}
+                ctaken[concept] = set()
+            centry, cclaimed = cmap[concept], ctaken[concept]
+            for dirpath, dirnames, filenames in os.walk(ccd):
+                dirnames.sort()
+                sub = os.path.relpath(dirpath, ccd)
+                sub = "" if sub == "." else sub.replace(os.sep, "/")
+                for f in sorted(filenames):
+                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                        continue
+                    p = _parse_wiki_page(os.path.join(dirpath, f))
+                    if not p:
+                        continue
+                    rel = (sub + "/" + p["name"]) if sub else p["name"]
+                    html = "data/wiki/concepts/%s/%s.html" % (concept, rel)
+                    if p["kind"] == "concept" and sub == "":
+                        if centry["synthesis"] is None:
+                            centry["synthesis"] = {"name": p["name"], "kind": "concept",
+                                "excerpt": p["excerpt"], "last_updated": p["last_updated"],
+                                "sources": p["sources"], "html": html, "root": cd}
+                            cclaimed.add(p["name"])
+                        continue
+                    if p["name"] in cclaimed:
+                        continue
+                    cclaimed.add(p["name"])
+                    centry["sources"].append(_src_entry(p, concept, sub, html, cd))
+            seen_concept.add(concept)
 
     for entry in topics.values():
         entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
+    for entry in cmap.values():
+        entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
     return {"topics": [topics[k] for k in sorted(topics)],
-            "concepts": sorted(concepts, key=lambda x: x["name"])}
+            "concepts": [cmap[k] for k in sorted(cmap)]}
 
 
 def render_pages(index, out_dir):
@@ -477,9 +502,14 @@ def render_pages(index, out_dir):
         for it in t.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
             pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("root")))
-    for it in index.get("concepts", []):
-        link_map[it["name"]] = it["html"][len("data/"):]
-        pages.append((it["name"], it["html"], it.get("kind", "concept"), None, it.get("last_updated", ""), "", it.get("root")))
+    for c in index.get("concepts", []):
+        s = c.get("synthesis")
+        if s:
+            link_map[s["name"]] = s["html"][len("data/"):]
+            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("root")))
+        for it in c.get("sources", []):
+            link_map[it["name"]] = it["html"][len("data/"):]
+            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("root")))
 
     default_cd = _content_dir()
     for name, html, kind, topic, last_updated, version, root in pages:
@@ -519,15 +549,15 @@ def learned_counts():
     st_env = os.environ.get("NP_STRATEGIES_DIR")
     if pb_env or st_env:
         cd = _content_dir()
-        pb = pb_env or os.path.join(cd, "playbooks")
-        st = st_env or os.path.join(cd, "strategies")
+        pb = pb_env or os.path.join(cd, "memory", "playbooks")
+        st = st_env or os.path.join(cd, "memory", "strategies")
         names = _topic_names(st)
         return {"playbooks": _count_topics(pb), "strategies": len(names),
                 "strategy_names": names}
     pb_names, st_names = set(), set()
     for cd in _content_layers():
-        pb_names.update(_topic_names(os.path.join(cd, "playbooks")))
-        st_names.update(_topic_names(os.path.join(cd, "strategies")))
+        pb_names.update(_topic_names(os.path.join(cd, "memory", "playbooks")))
+        st_names.update(_topic_names(os.path.join(cd, "memory", "strategies")))
     names = sorted(st_names)
     return {"playbooks": len(pb_names), "strategies": len(names), "strategy_names": names}
 
