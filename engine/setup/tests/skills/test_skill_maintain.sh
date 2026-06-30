@@ -31,7 +31,7 @@ STUB
   chmod +x "$tmp/claude"
   ( cd "$NP" && CLAUDE_BIN="$tmp/claude" SKILL_MAINTAIN_NO_PUSH=1 \
       SKILL_MAINTAIN_LOG="$tmp/log" GRADUATION_MARKER="$tmp/grad" NP_CONTENT_DIR="$NP" \
-      bash engine/setup/75-skill-maintain.sh >/dev/null 2>&1 )
+      bash engine/setup/75-skill-maintain.sh >/dev/null 2>"$tmp/err" )
 }
 
 # --- GOOD split: shrink body, add references/, keep frontmatter + link ---
@@ -44,6 +44,7 @@ test -f "$NP/skills/big/references/d.md" || {
   echo "--- maintain log ($tmp/log) ---"; cat "$tmp/log" 2>/dev/null || echo "(no log)"
   echo "--- budget report ---"; SKILL_SPLIT_KB=8 python3 "$SETUP/np-skill-budget.py" "$NP/skills" 2>&1 || true
   echo "--- claude stub -x? ---"; [[ -x "$tmp/claude" ]] && echo "executable" || echo "NOT executable"
+  echo "--- 75 stderr ($tmp/err) ---"; cat "$tmp/err" 2>/dev/null | cat -v || echo "(no stderr)"
   exit 1
 }
 # Capture-then-grep: piping `git log` into `grep -q` is racy under `set -o pipefail` —

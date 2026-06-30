@@ -2,7 +2,7 @@ import json, os, subprocess, sys, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
-from nptest import sh  # bash-invoke np-llm.sh via the right (non-WSL) bash on Windows
+from nptest import sh, u  # bash-invoke np-llm.sh + convert paths embedded in bash cmds
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 NPLLM = os.path.join(REPO, "engine", "setup", "np-llm.sh")
@@ -68,7 +68,7 @@ class TestLocalBackend(unittest.TestCase):
         import tempfile
         out = os.path.join(tempfile.mkdtemp(), "agent_in")
         r = self._run(["agent", "--tools", "Bash Read"],
-                      extra={"NP_LLM_AGENT_CMD": f"cat > {out}"})
+                      extra={"NP_LLM_AGENT_CMD": f"cat > {u(out)}"})  # u(): bash can't write a backslash path
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out) as fh:
             self.assertEqual(fh.read(), "hi")
@@ -77,7 +77,7 @@ class TestLocalBackend(unittest.TestCase):
         import tempfile
         out = os.path.join(tempfile.mkdtemp(), "tools")
         r = self._run(["agent", "--tools", "Bash Read"],
-                      extra={"NP_LLM_AGENT_CMD": f'printf "%s" "$NP_LLM_TOOLS" > {out}'})
+                      extra={"NP_LLM_AGENT_CMD": f'printf "%s" "$NP_LLM_TOOLS" > {u(out)}'})
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out) as fh:
             self.assertEqual(fh.read(), "Bash Read")
