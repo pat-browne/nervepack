@@ -8,7 +8,7 @@ _npl="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/np-toggle-lib.sh"; [[ -r "$_
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-content-lib.sh" 2>/dev/null || true
-PB_DIR="${EPISODIC_PLAYBOOK_DIR:-$(np_content_dir)/playbooks}"
+PB_DIR="${EPISODIC_PLAYBOOK_DIR:-$(np_layer_dir playbooks)}"
 INDEX="$PB_DIR/INDEX.md"
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-playbook-recall}"
 
