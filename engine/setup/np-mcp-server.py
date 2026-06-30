@@ -182,18 +182,26 @@ TOOLS = [
 def _tool_toggle(args):
     action = args.get("action", "get")
     if action in ("get", "list"):
+        if USE_PY:
+            return "\n".join(np_toggle.status_lines())   # in-process status table (bash-free)
         rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh"), "status"])
         return (out + err).strip()
     require_writes()
     if action == "set":
         feat = args["feature"]
-        if "." in feat:  # param, e.g. sync.interval
-            rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh"),
-                                "param", feat, args["state"]])
-        else:
-            rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh"),
-                                feat, args["state"]])
-        return (out + err).strip() or f"set {feat}={args.get('state')}"
+        state = args["state"]
+        # Local-file writes happen in-process (bash-free). Shared-feature writes
+        # (toggles.conf + git commit/push) and managed-permission scripts still need
+        # bash — route them to nervepack-toggle.sh, or refuse if no bash is present.
+        if USE_PY and np_toggle.is_local_set(feat):
+            np_toggle.set_local(feat, state)
+            return f"{feat} = {state}" if "." in feat else f"{feat} -> {state}"
+        if USE_PY and not _bash_available():
+            raise Disabled("setting '%s' needs bash/git (shared or managed scope) — "
+                           "not supported on a bash-free host yet" % feat)
+        sub = ["param", feat, state] if "." in feat else [feat, state]
+        rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh")] + sub)
+        return (out + err).strip() or f"set {feat}={state}"
     raise ValueError(f"unknown toggle action: {action}")
 
 

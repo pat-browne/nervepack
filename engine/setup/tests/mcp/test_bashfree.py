@@ -100,6 +100,26 @@ class BashFreeReadSurface(unittest.TestCase):
         self.assertRegex(text, r"toggles\s+PASS")   # toggles check needs no bash/git
         self.assertIn("doctor:", text)
 
+    def test_toggle_get_and_local_set_bashfree(self):
+        # Status table (read) + a local-scoped feature write — both in-process via
+        # np_toggle, with bash unreachable. (Shared writes still need bash and aren't
+        # exercised here.)
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        conf, local = os.path.join(d, "toggles.conf"), os.path.join(d, "toggles.local")
+        with open(conf, "w", encoding="utf-8") as f:
+            f.write("memory|shared|runtime|on|\nmylocal|local|runtime|on|\n")
+        open(local, "w", encoding="utf-8").close()
+        c = self.client({"NP_TOGGLES_CONF": conf, "NP_TOGGLES_LOCAL": local})
+        c.initialize()
+        g = c.tool("nervepack_toggle", {"action": "get"})
+        self.assertFalse(g["result"]["isError"], g["result"])
+        self.assertIn("FEATURE", g["result"]["content"][0]["text"])
+        s = c.tool("nervepack_toggle", {"action": "set", "feature": "mylocal", "state": "off"})
+        self.assertFalse(s["result"]["isError"], s["result"])
+        with open(local, encoding="utf-8") as f:
+            self.assertIn("mylocal=off", f.read())   # the write actually landed, bash-free
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.
