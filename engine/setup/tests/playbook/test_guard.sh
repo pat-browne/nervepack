@@ -63,4 +63,27 @@ echo "$out5" | jq -e '.hookSpecificOutput.permissionDecision == "ask"' >/dev/nul
 out6="$(printf '%s' "$(jq -nc '{tool_name:"Read",session_id:"s1",tool_input:{file_path:"/other/file.py"}}')" | EPISODIC_PLAYBOOK_DIR="$tmp/playbooks" EPISODIC_STATE_DIR="$st" bash "$GUARD")"
 [[ -z "$out6" ]] || { echo "FAIL: unarmed Read gate emitted output: $out6"; exit 1; }
 
+# Default-path case: NP_CONTENT_DIR set, EPISODIC_PLAYBOOK_DIR NOT set.
+# Guard must read from memory/playbooks/ (via np_layer_dir).
+tmp2="$(mktemp -d)"; trap 'rm -rf "$tmp" "$st" "$tmp2"' EXIT
+mkdir -p "$tmp2/memory/playbooks"
+cat > "$tmp2/memory/playbooks/INDEX.md" <<'IDX'
+| topic | tool_match | gate | topic_triggers | seen |
+|---|---|---|---|---:|
+| force-push | git push.*--force | ask | force, push | 1 |
+IDX
+cat > "$tmp2/memory/playbooks/force-push.md" <<'PB'
+---
+name: force-push
+kind: playbook
+---
+**Avoid:** force-pushing without checking the remote first.
+PB
+out7="$(printf '%s' "$(jq -nc '{tool_name:"Bash",tool_input:{command:"git push --force origin main"}}')" \
+  | NP_CONTENT_DIR="$tmp2" EPISODIC_STATE_DIR="$st" bash "$GUARD")"
+echo "$out7" | jq -e '.hookSpecificOutput.permissionDecision == "ask"' >/dev/null \
+  || { echo "FAIL: default memory/playbooks not read (guard did not fire): $out7"; exit 1; }
+echo "$out7" | jq -e '.hookSpecificOutput.permissionDecisionReason | test("force-pushing")' >/dev/null \
+  || { echo "FAIL: default memory/playbooks ask missing reason: $out7"; exit 1; }
+
 echo "PASS test_guard"
