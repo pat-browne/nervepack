@@ -121,6 +121,78 @@ def param(key, default):
     return v
 
 
+# --- write + status surface (ported from nervepack-toggle.sh) ---------------
+# Only the LOCAL-file write (_set_local) and the status table are ported here.
+# Shared-feature writes (toggles.conf + git commit/push) and managed-permission
+# scripts stay bash — the MCP server routes those to nervepack-toggle.sh when bash
+# is available. See is_local_set() and np-mcp-server.py _tool_toggle.
+def scope(family):
+    """The conf 'scope' column ($2) for a family, or '' if absent. Mirrors _scope."""
+    path = _conf_path()
+    if not os.path.isfile(path):
+        return ""
+    with open(path, "r", newline="") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if re.match(r'^[' + _WS + r']*#', line):
+                continue
+            fields = line.split("|")
+            if fields and fields[0] == family:
+                return fields[1].strip(" ") if len(fields) > 1 else ""
+    return ""
+
+
+def features():
+    """Declared feature names (conf rows with >=4 columns). Mirrors _features."""
+    path = _conf_path()
+    out = []
+    if not os.path.isfile(path):
+        return out
+    with open(path, "r", newline="") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if re.match(r'^[' + _WS + r']*#', line):
+                continue
+            fields = line.split("|")
+            if len(fields) >= 4:
+                out.append(fields[0].strip(" "))
+    return out
+
+
+def set_local(key, value):
+    """Write key=value to toggles.local, dropping any prior line for key. Mirrors
+    _set_local byte-for-byte: kept lines verbatim, then the new line appended last."""
+    path = _local_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    pat = re.compile(r'^[' + _WS + r']*(?:' + key + r')[' + _WS + r']*=')
+    kept = []
+    if os.path.isfile(path):
+        with open(path, "r", newline="") as f:
+            for line in f:
+                if not pat.match(line.rstrip("\n")):
+                    kept.append(line)
+    with open(path, "w", newline="") as f:
+        f.writelines(kept)
+        f.write(key + "=" + value + "\n")
+
+
+def is_local_set(feat):
+    """True when setting `feat` is a pure local-file write (portable, bash-free).
+    A param (dotted) is local unless its family is shared; a bare feature is local
+    only when its family scope is 'local' (shared -> conf+commit, managed -> scripts)."""
+    fam = feat.split(".", 1)[0]
+    sc = scope(fam)
+    return sc != "shared" if "." in feat else sc == "local"
+
+
+def status_lines():
+    """The `status` table, byte-identical to nervepack-toggle.sh's printf layout."""
+    lines = ["%-14s %-7s %s" % ("FEATURE", "STATE", "SCOPE")]
+    for feat in features():
+        lines.append("%-14s %-7s %s" % (feat, "on" if enabled(feat) else "off", scope(feat)))
+    return lines
+
+
 if __name__ == "__main__":
     # CLI mirror used by the A/B parity harness (and handy for debugging).
     #   np_toggle.py enabled <feature>      -> prints on/off, exits 0/1
@@ -136,6 +208,13 @@ if __name__ == "__main__":
         sys.exit(0 if ok else 1)
     elif cmd == "param":
         sys.stdout.write(param(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""))
+    elif cmd == "status":
+        sys.stdout.write("\n".join(status_lines()) + "\n")
+    elif cmd == "set-local":
+        set_local(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "")
+    elif cmd == "scope":
+        sys.stdout.write(scope(sys.argv[2]) + "\n")
     else:
-        sys.stderr.write("usage: np_toggle.py enabled <feature> | param <key> <default>\n")
+        sys.stderr.write("usage: np_toggle.py enabled <feature> | param <key> <default> "
+                         "| status | set-local <key> <value> | scope <family>\n")
         sys.exit(2)
