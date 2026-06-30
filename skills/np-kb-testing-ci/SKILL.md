@@ -119,3 +119,14 @@ The authoritative check is to scan the **committed tree**, not the working tree:
 — `clean` there means the PR is fine regardless of the local suite count. Triage rule:
 findings confined to `dashboard/data/` or `.superpowers/` are local artifacts; a real leak
 is in **tracked source**.
+
+## 8. Driving bash from a Windows CI lane
+
+`.sh`-driving tests break on `windows-latest` even under `shell: bash`; fix =
+`engine/setup/tests/_lib/nptest.py` (`u`/`sh`/`bash_eval`):
+- direct `.sh` exec → `WinError 193` (no shebang loader) — run `["bash", script]`, not `[script]`.
+- bare `bash` finds `System32\bash.exe` (WSL, no distro), not Git-bash — invoke the suite's
+  own bash (`cygpath -w "$(command -v bash)"`).
+- `os.path` backslash/drive paths break `source`/`[[ -d ]]` and don't match `pwd` — convert to
+  MSYS `/c/x` (no-op off Windows). (CRLF checkout also bites — pin LF via `.gitattributes`.)
+Keep the lane **informational** until green (§5).
