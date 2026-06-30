@@ -102,9 +102,8 @@ jobs:
           path: e2e-report.txt
 
   windows:
-    name: Windows suite (Git-bash, informational)
-    runs-on: windows-latest
-    continue-on-error: true        # informational — never blocks merge (testing-ci §5)
+    name: Windows suite (Git-bash)
+    runs-on: windows-latest        # required gate — the suite is green end-to-end under Git-bash
     defaults:
       run:
         shell: bash                # the Git-for-Windows bash on the runner
@@ -131,7 +130,7 @@ jobs:
       # MSYS=winsymlinks:nativestrict makes Git-bash `ln -s` create real NTFS symlinks
       # (the runner is elevated), so the skill-link tests' `test -L`/`readlink` behave
       # as on Linux. jq is preinstalled on the windows-latest image.
-      - name: Run regression suite (informational)
+      - name: Run regression suite
         env:
           MSYS: winsymlinks:nativestrict
         run: bash engine/setup/tests/run-all.sh --report regression-report-win.md
