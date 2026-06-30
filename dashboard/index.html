@@ -691,7 +691,7 @@
         <div class="wd">${meta}</div></a>`;
     }
 
-    function topicGroupHTML(items, topicsOpen, title) {
+    function topicGroupHTML(items, topicsOpen, title, groupOpen = true) {
       // group leaves by topic; within a topic, nest sources by their `dir` path
       // (mirrors the content dir tree). Synthesis first, then the nested tree.
       // A flat topic (every source dir === "") renders as a flat list — no
@@ -731,7 +731,7 @@
         return `<details class="wikitopic"${ot}><summary>${esc(t)} <span>${ls.length}</span></summary>
           <div class="wikinest">${body}</div></details>`;
       }).join("");
-      return `<details class="wikigroup" open><summary><span>${esc(title)}</span><span>${items.length}</span></summary>
+      return `<details class="wikigroup"${groupOpen ? " open" : ""}><summary><span>${esc(title)}</span><span>${items.length}</span></summary>
         <div class="wikinest">${inner}</div></details>`;
     }
 
@@ -743,8 +743,8 @@
       const tops = items.filter(l => l.group === "Topics");
       const cons = items.filter(l => l.group === "Concepts");
       elList.innerHTML =
-        topicGroupHTML(tops, expandAll, "Topics") +
-        topicGroupHTML(cons, expandAll, "Concepts");
+        topicGroupHTML(tops, expandAll, "Topics", true) +
+        topicGroupHTML(cons, expandAll, "Concepts", expandAll);
     }
 
     function filter() {
