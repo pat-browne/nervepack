@@ -1,5 +1,8 @@
-import json, os, subprocess, threading, unittest
+import json, os, subprocess, sys, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
+from nptest import sh  # bash-invoke np-llm.sh via the right (non-WSL) bash on Windows
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 NPLLM = os.path.join(REPO, "engine", "setup", "np-llm.sh")
@@ -38,8 +41,8 @@ class TestLocalBackend(unittest.TestCase):
                     "NP_LLM_MODEL_CHEAP": "m"})
         if extra:
             env.update(extra)
-        return subprocess.run(["bash", NPLLM] + args, input=prompt,
-                              capture_output=True, text=True, env=env)
+        return sh(NPLLM, *args, input=prompt,
+                  capture_output=True, text=True, env=env)
 
     def test_complete_returns_content(self):
         r = self._run(["complete"])
@@ -83,8 +86,8 @@ class TestLocalBackend(unittest.TestCase):
         env = dict(os.environ)
         env.update({"NP_LLM_BACKEND": "local", "NP_LLM_BASE_URL": "x", "NP_LLM_MODEL_CHEAP": "m"})
         env.pop("NP_LLM_AGENT_CMD", None)
-        r = subprocess.run(["bash", NPLLM, "agent", "--tools", "Bash"], input="t",
-                           capture_output=True, text=True, env=env)
+        r = sh(NPLLM, "agent", "--tools", "Bash", input="t",
+               capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 2)
         self.assertIn("NP_LLM_AGENT_CMD", r.stderr)
 
