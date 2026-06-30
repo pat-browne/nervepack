@@ -11,7 +11,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-layer-lib.sh" 2>/dev/null || true
 # Honor an explicit single-dir override (tests); else scan the merged layer roots.
 if [[ -n "${EPISODIC_STRATEGY_DIR:-}" ]]; then _st_roots=("$EPISODIC_STRATEGY_DIR"); _st_mode=override
-else _st_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _st_roots+=("$_r/strategies"); done < <(np_merge_roots); _st_mode="$(np_merge_mode 2>/dev/null || echo override)"; fi
+else _st_roots=(); while IFS= read -r _r; do [[ -n "$_r" ]] && _st_roots+=("$_r"); done < <(np_layer_roots strategies); _st_mode="$(np_merge_mode 2>/dev/null || echo override)"; fi
 STATE_DIR="${EPISODIC_STATE_DIR:-/tmp/nervepack-strategy-recall}"
 
 command -v jq >/dev/null || exit 0

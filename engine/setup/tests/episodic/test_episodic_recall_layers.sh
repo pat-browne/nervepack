@@ -6,9 +6,9 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp"
 export NP_TOGGLES_CONF="$S/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local" NP_CONTENT_DIR="$tmp/personal" NP_TEAM_DIR="$tmp/team"
 export EPISODIC_STATE_DIR="$tmp/state"
-mk(){ mkdir -p "$tmp/$1/episodic"
-  printf '| topic | last_updated | keywords | lines |\n|---|---|---|---|\n| onboarding | 2026-06-01 | onboarding | 5 |\n' > "$tmp/$1/episodic/INDEX.md"
-  printf -- '---\nname: onboarding\n---\n%s theme body\n' "$2" > "$tmp/$1/episodic/onboarding.md"; }
+mk(){ mkdir -p "$tmp/$1/memory/episodic"
+  printf '| topic | last_updated | keywords | lines |\n|---|---|---|---|\n| onboarding | 2026-06-01 | onboarding | 5 |\n' > "$tmp/$1/memory/episodic/INDEX.md"
+  printf -- '---\nname: onboarding\n---\n%s theme body\n' "$2" > "$tmp/$1/memory/episodic/onboarding.md"; }
 mk personal "PERSONAL"; mk team "TEAM"
 run(){ printf '%s' "$(jq -nc '{session_id:"s1",prompt:"about onboarding"}')" | bash "$S/episodic-recall.sh"; }
 
