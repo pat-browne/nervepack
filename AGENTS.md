@@ -21,7 +21,9 @@ the reusable machinery plus the generic, publishable `np-core-*`/`np-kb-*`/`np-e
 skills. Your **personal content** lives in a **separate overlay repo** (e.g.
 `~/Code/nervepack-content`), resolved at runtime by `NP_CONTENT_DIR` (default, when
 unset: the engine root, for the single-repo legacy layout). The content layers —
-`sources/`, `wiki/`, `episodic/`, `playbooks/`, `strategies/`, `archive/`,
+`wiki/` (curated synthesis pages **with their sources co-located inside**, not a
+separate `sources/` dir), `memory/` (the agent-owned `episodic/`, `playbooks/`,
+`strategies/` layers grouped under one dir), `archive/`,
 `compact-proposals/`, `log.md`, `dashboard/data/`, your **personal**
 `np-kb-*`/`np-env-*` skills (your sites, secrets, machine setup), and your
 project's **visual identity** (`brand/` — logos, social card, banner, favicon,
@@ -70,10 +72,11 @@ These are your personal knowledge layers — **commit them to the overlay, never
 | `log.md` | Chronological audit (ingest/wiki/skill/setup/lint). **Append-only.** Entry format `## [YYYY-MM-DD] <type> \| <summary>` so `grep "^## \[" log.md` parses it | Append only — never edit past entries |
 | `wiki/topics/<topic>/<name>.md` | Curated technical reference sources co-located with their topic synthesis page (durable, version-pinned). Frontmatter required (see § "Source frontmatter") | **Yes — via ingest protocol (§ "Wiki layer")** |
 | `wiki/topics/<topic>/<topic>.md` | Topic synthesis page (frontmatter `kind: topic`). If the folder exists but this file is absent, lint flags a synthesis gap. | **Yes — LLM-maintained** |
-| `wiki/concepts/<name>.md` | Concept synthesis page (frontmatter `kind: concept`; no co-located sources) | **Yes — LLM-maintained** |
-| `episodic/<topic>.md` | LLM-owned episodic working memory ("what we did / decided / where we left off"), themed by topic. **Lowest-authority layer.** Auto-written by the daily `episodic-maintain` agent — the one subtree where the human-review gate is waived. | **No — agent-owned; don't hand-edit** |
-| `playbooks/<topic>.md` | Auto-distilled procedural interventions ("in situation X, do/avoid Y"), enforced at the tool call + prompt. Second-class (waived gate, like `episodic/`); above episodic, below skills. | **No — agent-owned; don't hand-edit** |
-| `strategies/<topic>.md` | Auto-distilled reusable success patterns ("when X, the approach that worked is Z") — the success mirror of `playbooks/`. **Advisory** (injected via `strategy-recall`, not enforced). Same second-class status. | **No — agent-owned; don't hand-edit** |
+| `wiki/concepts/<concept>/<concept>.md` | Concept synthesis page (frontmatter `kind: concept`). Concepts are folders, mirroring topics. | **Yes — LLM-maintained** |
+| `wiki/concepts/<concept>/<name>.md` | Curated source co-located with a concept synthesis page (same form as topic sources). | **Yes — via ingest protocol (§ "Wiki layer")** |
+| `memory/episodic/<topic>.md` | LLM-owned episodic working memory ("what we did / decided / where we left off"), themed by topic. **Lowest-authority layer.** Auto-written by the daily `episodic-maintain` agent — the one subtree where the human-review gate is waived. | **No — agent-owned; don't hand-edit** |
+| `memory/playbooks/<topic>.md` | Auto-distilled procedural interventions ("in situation X, do/avoid Y"), enforced at the tool call + prompt. Second-class (waived gate, like `memory/episodic/`); above episodic, below skills. | **No — agent-owned; don't hand-edit** |
+| `memory/strategies/<topic>.md` | Auto-distilled reusable success patterns ("when X, the approach that worked is Z") — the success mirror of `memory/playbooks/`. **Advisory** (injected via `strategy-recall`, not enforced). Same second-class status. | **No — agent-owned; don't hand-edit** |
 | `dashboard/data/metrics.jsonl` | Committed per-session performance time series (evaluator output; rendered by the dashboard). Append-only, agent-written. Content-relative (the dashboard loads `data/metrics.js` as a sibling of `index.html`). | **No — agent-owned** |
 | `compact-proposals/<date>.md` | Compaction proposals from `weekly-compact` awaiting human review | Read & act on; the file is the agent's queue |
 | `archive/<name>/`, `archive/MANIFEST.md` | Retired skills | **No — immutable history** |
@@ -195,10 +198,14 @@ has no public CI gate.
 ## Knowledge layer (model + precedence)
 
 Nervepack's layers in descending authority: `skills > sources > wiki > playbooks > episodic`.
+(Sources are **part of the wiki layer** — source files co-located inside
+`wiki/topics/<topic>/` and `wiki/concepts/<concept>/`, not a separate directory. The
+`memory/` grouping is a directory convenience and does **not** change the relative
+authority of episodic/playbooks/strategies.)
 
 - **Skills** — behavioral guidance ("how to act"); human-reviewed gate before write.
-- **Sources** — durable, versioned technical reference; ingested via the protocol below.
-- **Wiki** — LLM-owned synthesis pages linking skills + sources.
+- **Sources** — durable, versioned technical reference co-located within the wiki layer; ingested via the protocol below.
+- **Wiki** — LLM-owned synthesis pages linking skills + their co-located sources.
 - **Playbooks** — auto-distilled procedural interventions from past failure→recovery; enforced at runtime.
 - **Episodic** — lowest-authority working narrative; auto-captured, prunable.
 - **Feature toggles** — every feature has an on/off switch; see § "Feature toggles".
@@ -356,7 +363,7 @@ When answering a question:
 
 Triggered when: the user provides a URL/excerpt to ingest; a query hits a
 knowledge gap and the LLM proposes filling it; or [[np-core-contribute]]
-routes a learning to `sources/`.
+routes a learning to a wiki source (`wiki/topics/<topic>/<name>.md`).
 
 **Limits.** Soft cap: 100 total sources. Hard cap: 300 total sources.
 Override with explicit user permission only.
