@@ -314,11 +314,12 @@ class TestProtocol(unittest.TestCase):
             # Engine skills still surface (they live under REPO, not the overlay):
             self.assertTrue(any(u.startswith("nervepack://skills/") for u in uris),
                             f"engine skills missing from list: {uris}")
-            # But the empty overlay contributed no sources/wiki/playbooks/etc URIs.
+            # But the empty overlay contributed no wiki/memory/etc URIs.
             overlay_only = [u for u in uris
-                            if u.startswith(("nervepack://sources/", "nervepack://wiki/",
-                                             "nervepack://playbooks/", "nervepack://strategies/",
-                                             "nervepack://episodic/"))]
+                            if u.startswith(("nervepack://wiki/",
+                                             "nervepack://memory/episodic/",
+                                             "nervepack://memory/playbooks/",
+                                             "nervepack://memory/strategies/"))]
             self.assertEqual(overlay_only, [], f"empty overlay leaked content URIs: {overlay_only}")
 
     def test_resources_reflect_content_overlay(self):
@@ -332,6 +333,66 @@ class TestProtocol(unittest.TestCase):
             c.initialize()
             uris = [r["uri"] for r in c.call("resources/list")["result"]["resources"]]
             self.assertIn("nervepack://skills/np-kb-demo", uris)
+
+
+class TestResourcesNewLayout(unittest.TestCase):
+    """list_resources / read_resource work against the post-reorg content layout.
+
+    Covers:
+    - memory/playbooks/<topic>.md  → nervepack://memory/playbooks/<topic>
+    - wiki/topics/<t>/<f>.md       → nervepack://wiki/topics/<t>/<f>
+    Both must be listed AND readable via read_resource.
+    """
+
+    def _make_fixture(self, overlay):
+        import os as _os
+        # memory layer: flat file under memory/playbooks/
+        pb = _os.path.join(overlay, "memory", "playbooks")
+        _os.makedirs(pb, exist_ok=True)
+        with open(_os.path.join(pb, "demo.md"), "w") as fh:
+            fh.write("# Demo playbook\nContent here.\n")
+        # wiki: nested folder wiki/topics/<topic>/<file>.md
+        wt = _os.path.join(overlay, "wiki", "topics", "foo")
+        _os.makedirs(wt, exist_ok=True)
+        with open(_os.path.join(wt, "bar.md"), "w") as fh:
+            fh.write("# Bar wiki entry\nSome synthesis text.\n")
+
+    def test_list_resources_includes_memory_and_nested_wiki(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as overlay:
+            self._make_fixture(overlay)
+            c = MCPClient(extra_env={"NP_CONTENT_DIR": overlay})
+            self.addCleanup(c.close)
+            c.initialize()
+            uris = [r["uri"] for r in c.call("resources/list")["result"]["resources"]]
+            self.assertIn("nervepack://memory/playbooks/demo", uris,
+                          f"memory/playbooks URI missing from list: {uris}")
+            self.assertIn("nervepack://wiki/topics/foo/bar", uris,
+                          f"nested wiki URI missing from list: {uris}")
+
+    def test_read_resource_memory_playbooks(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as overlay:
+            self._make_fixture(overlay)
+            c = MCPClient(extra_env={"NP_CONTENT_DIR": overlay})
+            self.addCleanup(c.close)
+            c.initialize()
+            r = c.call("resources/read", {"uri": "nervepack://memory/playbooks/demo"})
+            self.assertNotIn("error", r, r)
+            text = r["result"]["contents"][0]["text"]
+            self.assertIn("Demo playbook", text)
+
+    def test_read_resource_nested_wiki(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as overlay:
+            self._make_fixture(overlay)
+            c = MCPClient(extra_env={"NP_CONTENT_DIR": overlay})
+            self.addCleanup(c.close)
+            c.initialize()
+            r = c.call("resources/read", {"uri": "nervepack://wiki/topics/foo/bar"})
+            self.assertNotIn("error", r, r)
+            text = r["result"]["contents"][0]["text"]
+            self.assertIn("Bar wiki entry", text)
 
 
 class TestRecallLayers(unittest.TestCase):

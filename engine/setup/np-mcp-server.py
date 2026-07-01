@@ -476,11 +476,12 @@ def handle_tool_call(mid, params):
 # (uri-suffix dir, file-glob) — static singletons first, then dir collections.
 RESOURCE_DIRS = [
     ("skills", "skills", "*/SKILL.md"),
-    ("sources", "sources", "*/*.md"),
-    ("wiki", "wiki", "*/*.md"),
-    ("playbooks", "playbooks", "*.md"),
-    ("strategies", "strategies", "*.md"),
-    ("episodic", "episodic", "*.md"),
+    # wiki entries are nested folders now (wiki/topics/<t>/<f>.md, wiki/concepts/<c>/<f>.md,
+    # with co-located sources) — recurse. There is no separate top-level sources/ dir.
+    ("wiki", "wiki", "**/*.md"),
+    ("memory/episodic", "memory/episodic", "*.md"),
+    ("memory/playbooks", "memory/playbooks", "*.md"),
+    ("memory/strategies", "memory/strategies", "*.md"),
 ]
 STATIC_RESOURCES = {
     "nervepack://index": "INDEX.md",
@@ -507,7 +508,7 @@ def _uri_to_relpath(uri):
         raise ValueError("path traversal rejected")
     if rest.startswith("skills/"):
         return os.path.join("skills", rest[len("skills/"):], "SKILL.md")
-    return rest  # sources/<topic>/<name>, wiki/<kind>/<name>, playbooks/<topic>, ...
+    return rest  # wiki/topics/<t>/<name>, wiki/concepts/<c>/<name>, memory/playbooks/<topic>, ...
 
 
 def list_resources():
@@ -527,14 +528,14 @@ def list_resources():
         else:
             # Content dirs: resolve under content_dir()
             base = os.path.join(cd, d)
-            for path in sorted(glob.glob(os.path.join(base, pat))):
+            for path in sorted(glob.glob(os.path.join(base, pat), recursive=True)):
                 rel = os.path.relpath(path, base)
                 uri = f"nervepack://{prefix}/{rel[:-3] if rel.endswith('.md') else rel}"
                 items.append({"uri": uri, "name": uri, "mimeType": "text/markdown"})
     return items
 
 
-_CONTENT_PREFIXES = ("skills/", "sources/", "wiki/", "playbooks/", "strategies/", "episodic/", "dashboard/")
+_CONTENT_PREFIXES = ("skills/", "wiki/", "memory/episodic/", "memory/playbooks/", "memory/strategies/", "dashboard/")
 
 
 def read_resource(uri):
