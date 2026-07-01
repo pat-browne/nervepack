@@ -149,12 +149,11 @@ jobs:
   windows-bashfree:
     name: Bash-free MCP suite (no Git-bash)
     runs-on: windows-latest
-    # Informational until the milestone completes (git-for-windows-free MCP, #38);
-    # promoted to a required check at milestone close (slice 6). Proves the PORTED
-    # MCP surface (protocol + resources + prompts + toggle gating, resolved in-process
-    # by np_toggle/np_content) works with Git for Windows absent. Not-yet-ported tools
-    # that still shell out to bash are out of scope here — see tests/mcp/test_bashfree.py.
-    continue-on-error: true
+    # Required gate (git-for-windows-free MCP milestone, #38, complete). Proves the
+    # ported MCP surface — protocol + resources + prompts, gating, content resolution,
+    # recall, doctor(core), toggle(status+local), sync, capture, evaluate — works with
+    # Git for Windows absent. The two tools that still need bash (flush/maintain) are
+    # out of scope and refuse cleanly; see tests/mcp/test_bashfree.py.
     steps:
       - uses: actions/checkout@v7
 
