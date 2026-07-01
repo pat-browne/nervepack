@@ -59,6 +59,16 @@ for **path-valued** outputs (it still holds for non-path outputs once CRLF is fi
   (accepts both POSIX and backslash-Windows input) and lowercase, then `cmp`. Apply
   this only to path-returning calls; keep non-path outputs byte-compared. No-op off
   Windows (no `cygpath`), where byte-identity holds and must be asserted exactly.
+- **URIs/keys built from `os.path.relpath` — normalize to `/` at construction.** A
+  resource URI, cache key, or any identifier that concatenates a relpath is a path-dialect
+  bug in disguise: `os.path.relpath` yields backslashes on Windows, so
+  `f"nervepack://wiki/{rel}"` emits `nervepack://wiki/topics\foo\bar` on the Git-bash lane
+  while passing on Linux (`os.sep == "/"`). Fix at the point of construction —
+  `rel.replace(os.sep, "/")` — so the identifier is forward-slash on every OS. This is the
+  *emit-a-stable-string* sibling of the resolved-identity compare above: the value itself
+  must be normalized, not merely compared loosely. Real miss: `np-mcp-server.py`
+  `list_resources()` (the recursive `wiki/**/*.md` glob) — green on Linux, red on the
+  **required** Windows suite until normalized.
 
 ## 3. The bash-free lane proves *independence*, parity proves *equivalence*
 
