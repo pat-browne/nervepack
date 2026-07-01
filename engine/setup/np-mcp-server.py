@@ -49,6 +49,7 @@ import np_toggle    # noqa: E402  in-process toggle resolver (bash-free, parity-
 import np_content   # noqa: E402  in-process content/team/merge resolver (bash-free)
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
 import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no bash)
+import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
 import shutil    # noqa: E402
 
 
@@ -291,6 +292,10 @@ TOOLS += [
 ]
 def _tool_sync(args):
     require_writes()
+    # Full bash sync when bash exists (also does the team-layer ff + skill relink);
+    # the bash-free Python engine-sync is the fallback on a host with no bash.
+    if USE_PY and not _bash_available():
+        return np_sync.sync()
     rc, out, err = run(["bash", os.path.join(SETUP, "40-sync-nervepack.sh")])
     return (out + err).strip() or f"sync exit {rc}"
 

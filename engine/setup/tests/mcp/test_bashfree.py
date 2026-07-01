@@ -120,6 +120,17 @@ class BashFreeReadSurface(unittest.TestCase):
         with open(local, encoding="utf-8") as f:
             self.assertIn("mylocal=off", f.read())   # the write actually landed, bash-free
 
+    def test_sync_dryrun_is_bashfree(self):
+        # With bash unreachable, nervepack_sync falls back to np_sync (native git).
+        # Dry-run so no real repo is touched; an isolated stamp avoids the real one.
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        c = self.client({"NP_SYNC_DRYRUN": "1", "NP_SYNC_STAMP": os.path.join(d, "stamp")})
+        c.initialize()
+        r = c.tool("nervepack_sync", {})
+        self.assertFalse(r["result"]["isError"], r["result"])
+        self.assertIn("would sync now", r["result"]["content"][0]["text"])
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.

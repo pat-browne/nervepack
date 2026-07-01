@@ -37,8 +37,8 @@ fi
 VERBOSE=0
 [[ "${1-}" == "--verbose" ]] && VERBOSE=1
 
-NERVEPACK="$HOME/Code/nervepack"
-STATUS="$HOME/.cache/np-core-sync-status"
+NERVEPACK="${NP_SYNC_TARGET:-$HOME/Code/nervepack}"   # override aids the parity port + tests
+STATUS="${NP_SYNC_STATUS:-$HOME/.cache/np-core-sync-status}"
 mkdir -p "$(dirname "$STATUS")"
 
 # Optional team layer: keep a shared team checkout current (strict-safe: ff-only).
