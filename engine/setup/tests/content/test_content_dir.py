@@ -177,7 +177,7 @@ class TestContentDir(unittest.TestCase):
     def test_episodic_recall_reads_from_content_dir(self):
         # Point NP_CONTENT_DIR at a temp overlay with one episodic topic; recall must find it.
         with tempfile.TemporaryDirectory() as content:
-            ep = os.path.join(content, "episodic")
+            ep = os.path.join(content, "memory", "episodic")
             os.makedirs(ep)
             with open(os.path.join(ep, "INDEX.md"), "w") as fh:
                 fh.write("| topic | last_updated | keywords |\n|---|---|---|\n| widget | 2026-01-01 | frobnicate |\n")

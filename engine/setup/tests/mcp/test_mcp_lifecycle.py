@@ -300,7 +300,7 @@ class TestLifecycle(unittest.TestCase):
         # prints nothing -> _tool_recall still returns "(no matches)" cleanly.
         content = tempfile.mkdtemp()
         self._homes.append(content)
-        ep_dir = os.path.join(content, "episodic")
+        ep_dir = os.path.join(content, "memory", "episodic")
         os.makedirs(ep_dir)
         with open(os.path.join(ep_dir, "INDEX.md"), "w") as fh:
             fh.write("| topic | last_updated | sessions | keywords |\n")
