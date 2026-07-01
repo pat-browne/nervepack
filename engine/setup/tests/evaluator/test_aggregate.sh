@@ -22,4 +22,20 @@ bash "$AGG" >/dev/null
 echo "evaluator.aggregate=off" > "$tmp/local"; printf '{"session_id":"c"}\n' > "$tmp/inbox/x.jsonl"
 bash "$AGG" >/dev/null
 [[ "$(wc -l < "$tmp/metrics.jsonl" | tr -d '[:space:]')" == "2" ]] || { echo "FAIL: appended while off"; exit 1; }
+
+# NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR must point at memory/{playbooks,strategies}.
+# Seed files under memory/ and verify LEARNED counts > 0 in metrics.js.
+mkdir -p "$tmp/memory/playbooks" "$tmp/memory/strategies"
+printf 'x\n' > "$tmp/memory/playbooks/pb1.md"
+printf 'x\n' > "$tmp/memory/strategies/st1.md"
+: > "$tmp/local"  # re-enable toggles (clear local overrides)
+printf '{"session_id":"d","contribution_score":10}\n' > "$tmp/inbox/re-enable.jsonl"
+bash "$AGG" >/dev/null
+LEARNED_JS="$tmp/dashboard/data/metrics.js"
+if [[ ! -f "$LEARNED_JS" ]]; then
+  echo "FAIL: metrics.js not written by dashboard build"; exit 1
+fi
+grep -qE '"playbooks":\s*1' "$LEARNED_JS" || { echo "FAIL: NP_PLAYBOOKS_DIR not resolved to memory/playbooks"; exit 1; }
+grep -qE '"strategies":\s*1' "$LEARNED_JS" || { echo "FAIL: NP_STRATEGIES_DIR not resolved to memory/strategies"; exit 1; }
+
 echo "PASS test_aggregate"
