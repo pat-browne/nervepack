@@ -50,6 +50,7 @@ import np_content   # noqa: E402  in-process content/team/merge resolver (bash-f
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
 import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no bash)
 import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
+import np_capture  # noqa: E402  bash-free capture pipeline (fallback when no bash)
 import shutil    # noqa: E402
 
 
@@ -305,6 +306,8 @@ def _tool_capture(args):
     payload = {"transcript_path": args.get("transcript_path", ""),
                "cwd": args.get("cwd", REPO),
                "session_id": args.get("session_id", "mcp")}
+    if USE_PY and not _bash_available():
+        return np_capture.capture(payload)     # bash-free pipeline fallback
     rc, out, err = run(["bash", os.path.join(SETUP, "episodic-capture.sh"), "session-end"],
                        stdin=json.dumps(payload))
     return (out + err).strip() or "captured"

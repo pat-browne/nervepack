@@ -131,6 +131,29 @@ class BashFreeReadSurface(unittest.TestCase):
         self.assertFalse(r["result"]["isError"], r["result"])
         self.assertIn("would sync now", r["result"]["content"][0]["text"])
 
+    def test_capture_is_bashfree(self):
+        # The capture pipeline (gate -> transcript extract -> model -> scrub -> inbox)
+        # must run with no bash. Use the local backend with no endpoint so the model
+        # call fails: the pipeline still runs bash-free through extract + the model
+        # seam and fail-opens with a logged bail — a real side effect (non-tautological).
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        tpath = os.path.join(d, "transcript.jsonl")
+        with open(tpath, "w", encoding="utf-8") as f:
+            f.write('{"type":"user","message":{"role":"user","content":"hi"}}\n')
+        log = os.path.join(d, "capture.log")
+        c = self.client({
+            "NP_LLM_BACKEND": "local",          # skips the claude-binary check; reaches the model seam
+            "EPISODIC_CAPTURE_LOG": log,
+            "EPISODIC_INBOX": os.path.join(d, "inbox"),
+            "EPISODIC_SEEN_DIR": os.path.join(d, "seen"),
+        })
+        c.initialize()
+        r = c.tool("nervepack_capture", {"transcript_path": tpath, "cwd": "/p", "session_id": "s1"})
+        self.assertFalse(r["result"]["isError"], r["result"])
+        with open(log, encoding="utf-8") as f:
+            self.assertIn("summarizer invocation failed", f.read())  # ran bash-free, bailed at the model
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.
