@@ -49,6 +49,31 @@ path** to the launcher:
 `NP_CONTENT_DIR` is optional. Omit it to fall back to the engine root (the legacy
 single-repo layout). Set it to your overlay to serve your personal skills/memory.
 
+## Windows without Git for Windows
+
+The server is native Python and **no longer needs Git-bash** for its read tools or
+for `toggle`/`sync`/`capture`/`evaluate` — those run in-process (verified by a
+`windows-latest` CI lane with Git-bash stripped from `PATH`). On a Windows host with
+**no Git for Windows**, point the `command` at the bash-free `.cmd` launcher instead:
+
+```json
+{
+  "mcpServers": {
+    "nervepack": {
+      "command": "C:\\Users\\<you>\\Code\\nervepack\\engine\\bin\\nervepack-mcp.cmd",
+      "env": { "NP_CONTENT_DIR": "C:\\Users\\<you>\\Code\\nervepack-content" }
+    }
+  }
+}
+```
+
+It spawns the server with native `python` (which must be on `PATH`) — no bash
+anywhere. The two maintenance tools that still shell out to the agent-mode crons
+(`nervepack_flush`, `nervepack_maintain`) **refuse cleanly** on a bash-free host
+("needs bash — not supported bash-free yet"); everything else works. If Git for
+Windows *is* installed, use the POSIX `nervepack-mcp` launcher (it also pins
+`NP_BASH` so those two tools can shell out).
+
 ### Per-client notes
 
 - **Claude Code**: don't hand-edit. `engine/setup/58-install-mcp.sh` already
