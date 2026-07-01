@@ -325,8 +325,19 @@ def _tool_evaluate(args):
     return (out + err).strip() or "evaluated"
 
 
+def _require_bash(tool):
+    # flush/maintain drive the agent-mode maintenance crons (claude -p with tools /
+    # bypass-permissions) — out of scope for the git-for-windows-free milestone. On a
+    # bash-free host, refuse cleanly (like the toggle shared-write path) instead of
+    # emitting a raw subprocess error.
+    if USE_PY and not _bash_available():
+        raise Disabled("%s needs bash — not supported on a bash-free host yet "
+                       "(it runs the agent-mode maintenance crons)" % tool)
+
+
 def _tool_flush(args):
     require_writes()
+    _require_bash("nervepack_flush")
     rc, out, err = run(["bash", os.path.join(SETUP, "np-session-flush.sh")])
     return (out + err).strip() or "flushed"
 
@@ -417,6 +428,7 @@ def _tool_contribute(args):
 
 def _tool_maintain(args):
     require_writes()
+    _require_bash("nervepack_maintain")
     job = args.get("job", "aggregate")
     script = {"promote": "71-run-memory-promote.sh", "maintain": "72-run-episodic-maintain.sh",
               "aggregate": "73-aggregate-metrics.sh", "skills": "75-skill-maintain.sh"}[job]

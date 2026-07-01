@@ -176,6 +176,16 @@ class BashFreeReadSurface(unittest.TestCase):
         with open(log, encoding="utf-8") as f:
             self.assertIn("judge invocation failed", f.read())
 
+    def test_flush_maintain_refuse_cleanly_bashfree(self):
+        # flush/maintain drive agent-mode crons (out of scope) — on a bash-free host
+        # they must refuse cleanly, not emit a raw subprocess error.
+        c = self.client()
+        c.initialize()
+        for tool, arg in (("nervepack_flush", {}), ("nervepack_maintain", {"job": "aggregate"})):
+            r = c.tool(tool, arg)
+            self.assertTrue(r["result"]["isError"], (tool, r["result"]))
+            self.assertIn("needs bash", r["result"]["content"][0]["text"], (tool, r["result"]))
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.
