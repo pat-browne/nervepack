@@ -54,6 +54,15 @@ work it already did. Instead:
    (docs, a missing test), verify (suite + freshness), and integrate. Salvage beats restart.
 3. Re-dispatch only if the worktree is empty or the work is unsound.
 
+**A subagent's claim about a *review* is not a verdict.** An implementer can come to rest
+narrating "the review passed" — it can't see the reviewer you dispatched separately. Act
+only on the reviewer's actual report or your own controller-side diff review. A
+**read-only** reviewer orphaned by a session exit wrote nothing — safe to abandon; just
+confirm its target work landed another way. When another agent also runs subagent-driven
+work here, the shared `.git/sdd/` state files (`progress.md`, `task-N-brief.md`) collide —
+use uniquely-named ledger/brief files, never mass-write the shared ones. See
+[[np-flow-merge-gate]].
+
 ## Isolate with a worktree when the tree is shared
 
 Dispatch repo-editing agents with **`isolation: "worktree"`** whenever an auto-committing
