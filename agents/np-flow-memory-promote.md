@@ -27,7 +27,7 @@ into nervepack. Steps in order:
 
 **Two repos (post content-cutover).** Personal skills + memory layers live in the
 **content repo** (your cwd — `np_content_dir`, e.g. `~/Code/nervepack-content`): the
-`np-kb-*`/`np-env-*` personal skills, `sources/`, `wiki/`, `episodic/`. A promotion to a
+`np-kb-*`/`np-env-*` personal skills, `wiki/`, `memory/episodic/`. A promotion to a
 **general engine skill** (a `np-core-*`/`np-flow-*` or a general `np-kb-*` that ships with
 the engine) is committed in the **engine repo** (`$NERVEPACK` = `~/Code/nervepack`) instead
 — flag in your report if you're unsure which a given entry belongs in.
@@ -120,11 +120,11 @@ ident "$CONTENT"
 # Stage AND commit ONLY the paths you changed — CLAUDE.md forbids `git add -A`/`.`/`-am`
 # AND a pathspec-less `commit` (a bare commit re-commits the whole index, sweeping a
 # concurrent session's staged work — issue #11). Path-limit BOTH `add` and `commit`.
-git -C "$CONTENT" add skills sources wiki   # + only the layer dirs you actually wrote
+git -C "$CONTENT" add skills wiki   # + only the layer dirs you actually wrote
 git -C "$CONTENT" commit -m "promote: weekly memory→content ($(date -u +%F))" \
   -m "Promoted <N> entries:
 - <name> → <target-file>" \
-  -- skills sources wiki   # same explicit paths — never a bare commit
+  -- skills wiki   # same explicit paths — never a bare commit
 git -C "$CONTENT" push
 ```
 
