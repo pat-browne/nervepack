@@ -529,7 +529,7 @@ def list_resources():
             # Content dirs: resolve under content_dir()
             base = os.path.join(cd, d)
             for path in sorted(glob.glob(os.path.join(base, pat), recursive=True)):
-                rel = os.path.relpath(path, base)
+                rel = os.path.relpath(path, base).replace(os.sep, "/")  # URIs use "/" on every OS (Windows relpath yields "\")
                 uri = f"nervepack://{prefix}/{rel[:-3] if rel.endswith('.md') else rel}"
                 items.append({"uri": uri, "name": uri, "mimeType": "text/markdown"})
     return items
