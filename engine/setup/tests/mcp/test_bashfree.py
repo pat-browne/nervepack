@@ -154,6 +154,28 @@ class BashFreeReadSurface(unittest.TestCase):
         with open(log, encoding="utf-8") as f:
             self.assertIn("summarizer invocation failed", f.read())  # ran bash-free, bailed at the model
 
+    def test_evaluate_is_bashfree(self):
+        # The evaluator pipeline (gate -> signals -> transcript extract -> model ->
+        # scrub -> inbox) must run with no bash. Local backend, no endpoint -> the
+        # model call fails after the pipeline ran bash-free; fail-opens with a logged
+        # bail (a real side effect — non-tautological).
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        tpath = os.path.join(d, "transcript.jsonl")
+        with open(tpath, "w", encoding="utf-8") as f:
+            f.write('{"type":"user","message":{"role":"user","content":"hi"}}\n')
+        log = os.path.join(d, "eval.log")
+        c = self.client({
+            "NP_LLM_BACKEND": "local",
+            "EVAL_JUDGE_LOG": log,
+            "EVAL_INBOX": os.path.join(d, "inbox"),
+        })
+        c.initialize()
+        r = c.tool("nervepack_evaluate", {"transcript_path": tpath, "cwd": "/p", "session_id": "s1"})
+        self.assertFalse(r["result"]["isError"], r["result"])
+        with open(log, encoding="utf-8") as f:
+            self.assertIn("judge invocation failed", f.read())
+
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —
         # against an isolated content overlay, with bash unreachable.
