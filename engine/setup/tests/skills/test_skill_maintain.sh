@@ -13,10 +13,10 @@ cp "$SETUP/75-skill-maintain.sh" "$SETUP/np-skill-budget.py" \
 printf 'skills|shared|runtime|on|split_kb=8,soft_kb=6,catalog_tok=4000,max_per_run=2,graduate_seen=10,graduate_kb=6\n' \
    > "$NP/engine/setup/toggles.conf"
 { echo "## Prompt"; echo "split it"; } > "$NP/agents/np-flow-skill-maintain.md"
-# A proven strategy (content dir defaults to the repo root) that should graduate.
-mkdir -p "$NP/strategies"
+# A proven strategy under memory/strategies/ (content dir defaults to the repo root).
+mkdir -p "$NP/memory/strategies"
 printf -- '---\nname: proven\nkind: strategy\nstatus: candidate\nseen: 20\n---\nbody\n' \
-   > "$NP/strategies/proven.md"
+   > "$NP/memory/strategies/proven.md"
 # An over-budget skill (>8KB) with a cross-link.
 { printf -- '---\nname: big\ndescription: a big skill\n---\n[[np-core-sync]]\n';
   head -c 9000 /dev/zero | tr '\0' 'x'; } > "$NP/skills/big/SKILL.md"
