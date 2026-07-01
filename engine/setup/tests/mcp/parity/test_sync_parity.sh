@@ -24,7 +24,10 @@ export NP_TOGGLES_CONF="$tmp/conf" NP_TOGGLES_LOCAL="$HOME/.config/nervepack/tog
 : > "$NP_TOGGLES_LOCAL"
 GI="-c user.email=t@t -c user.name=t -c commit.gpgsign=false"
 
-norm() { sed -E "s/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z/<TS>/g; s#$tmp/t[bp]#<TARGET>#g; s/age [0-9]+s/age <AGE>s/g"; }
+# Normalize the timestamp, the (per-copy) target path — dialect-agnostic, since the
+# native-Windows Python echoes the MSYS-converted Windows form (C:/Users/.../tp)
+# while bash echoes POSIX (/tmp/.../tb) — and the throttle age.
+norm() { sed -E "s/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z/<TS>/g; s#[^ ]*[/\\]t[bp]#<TARGET>#g; s/age [0-9]+s/age <AGE>s/g"; }
 
 # Build $tmp/target as a clone of a bare remote with one commit on main.
 init_repo() {
