@@ -191,11 +191,11 @@ class BashFreeReadSurface(unittest.TestCase):
         # against an isolated content overlay, with bash unreachable.
         cd = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, cd, ignore_errors=True)
-        os.makedirs(os.path.join(cd, "episodic"))
-        with open(os.path.join(cd, "episodic", "INDEX.md"), "w", encoding="utf-8") as f:
+        os.makedirs(os.path.join(cd, "memory", "episodic"))
+        with open(os.path.join(cd, "memory", "episodic", "INDEX.md"), "w", encoding="utf-8") as f:
             f.write("| topic | last_updated | keywords |\n|---|---|---|\n"
                     "| widgets | 2026-01-01 | sprocket, gizmo |\n")
-        with open(os.path.join(cd, "episodic", "widgets.md"), "w", encoding="utf-8") as f:
+        with open(os.path.join(cd, "memory", "episodic", "widgets.md"), "w", encoding="utf-8") as f:
             f.write("# widgets\nThe sprocket notes.\n")
         c = self.client({"NP_CONTENT_DIR": cd})
         c.initialize()
