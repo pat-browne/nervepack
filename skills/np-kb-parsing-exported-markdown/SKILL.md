@@ -57,6 +57,22 @@ Markdown escaping); never touch `\n`, `\t`, or a legit `\word`.
   against the doc before blaming the parser — and don't backfill from a lossy
   source; get columns from the authoritative system (e.g. live DB introspection).
 
+## Retrieving multi-tab Google Sheets via the Drive MCP
+
+Before you can parse it you have to fetch it, and the Google Drive MCP has a trap:
+`read_file_content` and `download_file_content` (CSV export) return only the
+**first (leftmost) sheet tab** — regardless of which tab is "active" in the
+browser. Making a tab active in the UI does **not** change what the API returns.
+
+- To read a different tab: have the owner drag it to be the **leftmost** tab,
+  then re-read (or ask them to paste it).
+- `read_file_content` also **samples/truncates** large sheets (you get a partial
+  table). `download_file_content` (CSV) is complete but returns **base64** — do
+  **not** hand-transcribe that base64 into a file to decode it; retyping kilobytes
+  of base64 silently corrupts the decode (Cyrillic look-alikes, dropped chars).
+  Prefer reordering tabs + `read_file_content`, or decode only if you can pipe the
+  exact bytes (never re-type them).
+
 ## Discipline
 
 Parser failures here are silent (Rule 8, [[np-kb-coding-rules]] — treat silent
