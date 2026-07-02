@@ -18,8 +18,8 @@ run() {
 payload() { jq -nc --arg sid "$1" '{session_id:$sid,prompt:"test"}'; }
 
 # --- session s1: 2 guard fires, should escalate on 4th prompt ---
-printf 'playbook-guard warn bash-nested-substitution :: abc123\n' >> "$tmp/signals/s1.log"
-printf 'playbook-guard warn bash-nested-substitution :: def456\n' >> "$tmp/signals/s1.log"
+printf 'lesson-guard warn bash-nested-substitution :: abc123\n' >> "$tmp/signals/s1.log"
+printf 'lesson-guard warn bash-nested-substitution :: def456\n' >> "$tmp/signals/s1.log"
 
 # First 3 prompts: too early, no escalation
 for i in 1 2 3; do
@@ -40,7 +40,7 @@ out="$(run "$(payload s1)")"
 [[ -z "$out" ]] || { echo "FAIL: escalated twice for session s1: $out"; exit 1; }
 
 # --- session s2: only 1 guard fire → never escalates ---
-printf 'playbook-guard warn something :: aaa111\n' >> "$tmp/signals/s2.log"
+printf 'lesson-guard warn something :: aaa111\n' >> "$tmp/signals/s2.log"
 for i in 1 2 3 4 5; do
     out="$(run "$(payload s2)")"
     [[ -z "$out" ]] || { echo "FAIL: escalated with only 1 guard fire (prompt $i): $out"; exit 1; }
