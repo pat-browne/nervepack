@@ -19,7 +19,7 @@ by `engine/setup/np-eval-signals.py` — no LLM, no guessing — plus LLM-derive
 - **Status**: LIVE ✓
 
 ### `playbook_fires` (int)
-- **Source**: `count_markers()` — counts `playbook-guard` prefixed lines in `~/.cache/nervepack/session-signals/<sid>.log`, written by `engine/setup/playbook-guard.sh` when a Bash command matches a playbook's `tool_match` pattern.
+- **Source**: `count_markers()` — counts `lesson-guard` prefixed lines in `~/.cache/nervepack/session-signals/<sid>.log`, written by `engine/setup/lesson-guard.sh` when a Bash command matches a lesson's enforce `tool_match` pattern.
 - **Populated when**: An imminent Bash command matches an entry in `playbooks/INDEX.md`.
 - **Zero bias**: **Genuinely sparse today.** Only two playbooks currently exist (`bash-nested-substitution`, `mv3-screenshot-capture`). As the catalog grows, this rises naturally. Not a dead signal.
 - **Status**: LIVE ✓ — sparseness reflects catalog size, not a wiring gap.

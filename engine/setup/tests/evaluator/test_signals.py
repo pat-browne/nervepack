@@ -22,7 +22,7 @@ class TestSignals(unittest.TestCase):
             sig_dir = os.path.join(tmp, "sig")
             os.makedirs(sig_dir)
             with open(os.path.join(sig_dir, "s1.log"), "w") as fh:
-                fh.write("playbook-guard ask nuke\nplaybook-recall\n"
+                fh.write("lesson-guard ask nuke\nplaybook-recall\n"
                          "episodic-recall\nstrategy-recall\n")
             transcript = os.path.join(tmp, "t.jsonl")
             with open(transcript, "w") as fh:
@@ -131,8 +131,8 @@ class TestSignals(unittest.TestCase):
             sig_dir = os.path.join(tmp, "sig")
             os.makedirs(sig_dir)
             with open(os.path.join(sig_dir, "s1.log"), "w") as fh:
-                fh.write(f"playbook-guard warn nuke :: {fp(cmd_ran)}\n")
-                fh.write(f"playbook-guard ask nuke :: {fp(cmd_avoided)}\n")
+                fh.write(f"lesson-guard warn nuke :: {fp(cmd_ran)}\n")
+                fh.write(f"lesson-guard ask nuke :: {fp(cmd_avoided)}\n")
             transcript = os.path.join(tmp, "t.jsonl")
             with open(transcript, "w") as fh:
                 fh.write(json.dumps({"type": "assistant", "message": {"id": "m1", "content": [

@@ -83,7 +83,7 @@ invariant 12.
   had real failures/corrections.
 - **Distill:** `agents/np-flow-episodic-maintain.md` clusters struggles into
   `playbooks/<topic>.md` with an `enforce` block and regenerates `playbooks/INDEX.md`.
-- **Enforce:** `engine/setup/playbook-guard.sh` (`PreToolUse` matcher `Bash`, installed by
+- **Enforce:** `engine/setup/lesson-guard.sh` (`PreToolUse` matcher `Bash`, installed by
   `engine/setup/53-install-playbook-hooks.sh`) gates `ask` playbooks and injects `warn`
   ones at the tool call; `engine/setup/playbook-recall.sh` (`UserPromptSubmit`) injects
   topic-matched playbooks with imperative framing.

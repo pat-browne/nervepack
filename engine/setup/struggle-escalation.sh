@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook: after MIN_PROMPTS have passed, if playbook-guard fires
+# UserPromptSubmit hook: after MIN_PROMPTS have passed, if lesson-guard fires
 # >= MIN_STRUGGLES in this session, inject a one-time reminder to check skill-
 # applicability or np-core-suggestions-review. Fires at most once per session.
 # Fail-open: any error → exit 0 silently.
@@ -30,12 +30,12 @@ pcount="$(cat "$pcnt_file" 2>/dev/null || echo 0)"
 echo $((pcount + 1)) > "$pcnt_file"
 [[ "$pcount" -ge "$MIN_PROMPTS" ]] || exit 0
 
-# Count playbook-guard fires in this session's signal log (struggle proxy:
+# Count lesson-guard fires in this session's signal log (struggle proxy:
 # each fire = a Bash tool call that matched a known failure pattern)
 log_file="${NP_SIGNAL_DIR:-$HOME/.cache/nervepack/session-signals}/${sid//\//_}.log"
 pg_count=0
 if [[ -f "$log_file" ]]; then
-    pg_count=$(grep -c '^playbook-guard' "$log_file" 2>/dev/null || echo 0)
+    pg_count=$(grep -c '^lesson-guard' "$log_file" 2>/dev/null || echo 0)
 fi
 [[ "$pg_count" =~ ^[0-9]+$ ]] || pg_count=0
 [[ "$pg_count" -ge "$MIN_STRUGGLES" ]] || exit 0

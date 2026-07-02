@@ -28,7 +28,7 @@ import np_bashlib  # noqa: E402  — bash shell-out works under Git-bash on Wind
 
 def cmd_fingerprint(cmd):
     """Stable fingerprint of a shell command: whitespace-collapsed, sha256[:16].
-    MUST match playbook-guard.sh's fingerprint so a gated command and the same
+    MUST match lesson-guard.sh's fingerprint so a gated command and the same
     command executed in the transcript hash identically."""
     return hashlib.sha256(" ".join(str(cmd).split()).encode("utf-8")).hexdigest()[:16]
 
@@ -42,12 +42,12 @@ def signal_log_path(sid):
 
 def count_markers(log_path):
     """Count fire markers by prefix. Missing file -> all zero (fail-open).
-    Returns (playbook_guard, playbook_recall, episodic_recall, strategy_recall)."""
+    Returns (lesson_guard, playbook_recall, episodic_recall, strategy_recall)."""
     pg = pr = er = sr = 0
     try:
         with open(log_path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
-                if line.startswith("playbook-guard"):
+                if line.startswith("lesson-guard"):
                     pg += 1
                 elif line.startswith("playbook-recall"):
                     pr += 1
@@ -61,14 +61,14 @@ def count_markers(log_path):
 
 
 def gated_fingerprints(log_path):
-    """Fingerprints of commands a playbook guard fired on, parsed from the
-    `playbook-guard <gate> <topic> :: <fp>` markers. Old markers without `:: fp`
+    """Fingerprints of commands a lesson guard fired on, parsed from the
+    `lesson-guard <gate> <topic> :: <fp>` markers. Old markers without `:: fp`
     contribute nothing (backward-compatible). Missing file -> empty (fail-open)."""
     fps = set()
     try:
         with open(log_path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
-                if not line.startswith("playbook-guard"):
+                if not line.startswith("lesson-guard"):
                     continue
                 _, sep, rest = line.partition(" :: ")
                 if sep:
