@@ -27,16 +27,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "..", "..", "np-migrate-lessons.py")
 
 PLAYBOOK_GIT = """---
-name: git
+name: Grep combined short flags get silently dropped
 kind: playbook
-status: candidate
-seen: 4
+status: confirmed
+seen: 7
 last_updated: 2026-06-20
 enforce:
   tool_match: "grep -[a-z]*l[a-z]*i"
   gate: ask
   topic_triggers: [git]
-wiki: []
+wiki: [https://example.com/grep-flags]
 ---
 **Symptom:** `grep -li` flags get silently reordered/dropped by a wrapping tool.
 **Why:** Some shells alias grep in ways that eat combined short flags.
@@ -45,13 +45,13 @@ wiki: []
 """
 
 STRATEGY_GIT = """---
-name: git
+name: Prefer long-form grep flags in wrapped contexts
 kind: strategy
-status: candidate
-seen: 2
+status: verified
+seen: 3
 last_updated: 2026-06-21
 topic_triggers: [git]
-wiki: []
+wiki: [https://example.com/grep-flags, https://example.com/posix-flags]
 ---
 **Title:** Prefer long-form grep flags in scripted/wrapped contexts.
 **When:** A grep invocation runs inside another tool or shell wrapper.
@@ -77,6 +77,40 @@ does not. A script written for one breaks silently or errors on the other.
 **Do:** Pass an explicit empty suffix compatibly, or use the Edit tool instead of
 shelling out to sed for portable edits.
 **Avoid:** Bare `sed -i 's/x/y/' file` in cross-platform scripts.
+"""
+
+PLAYBOOK_INCOMPLETE_ENFORCE = """---
+name: incomplete
+kind: playbook
+status: candidate
+seen: 1
+last_updated: 2026-06-22
+enforce:
+  tool_match: "foo.*"
+  topic_triggers: [incomplete]
+wiki: []
+---
+**Symptom:** placeholder.
+**Why:** placeholder.
+**Do:** placeholder.
+"""
+
+PLAYBOOK_EXTRA_KEY = """---
+name: extra
+kind: playbook
+status: candidate
+seen: 1
+last_updated: 2026-06-22
+custom_field: hello
+enforce:
+  tool_match: "bar.*"
+  gate: block
+  topic_triggers: [extra]
+wiki: []
+---
+**Symptom:** placeholder.
+**Why:** placeholder.
+**Do:** placeholder.
 """
 
 
@@ -121,6 +155,24 @@ class TestMigrateLessons(unittest.TestCase):
             # Failure entry: enforce block intact, tool_match byte-identical.
             self.assertIn('tool_match: "grep -[a-z]*l[a-z]*i"', git_text)
             self.assertIn("gate: ask", git_text)
+
+            # name/status/seen/wiki survive verbatim for BOTH entries, with
+            # non-trivial (distinct, non-placeholder) values -- proves these
+            # fields aren't silently coerced/defaulted during migration.
+            self.assertIn(
+                "name: Grep combined short flags get silently dropped", git_text)
+            self.assertIn("status: confirmed", git_text)
+            self.assertIn("seen: 7", git_text)
+            self.assertIn("wiki: [https://example.com/grep-flags]", git_text)
+
+            self.assertIn(
+                "name: Prefer long-form grep flags in wrapped contexts", git_text)
+            self.assertIn("status: verified", git_text)
+            self.assertIn("seen: 3", git_text)
+            self.assertIn(
+                "wiki: [https://example.com/grep-flags, https://example.com/posix-flags]",
+                git_text,
+            )
 
             # topic_triggers hoisted to TOP LEVEL (no leading whitespace) for both
             # entries -- and no longer nested inside enforce:.
@@ -220,6 +272,44 @@ class TestMigrateLessons(unittest.TestCase):
             os.makedirs(os.path.join(root, "memory"), exist_ok=True)
             proc = run_migration(root)
             self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+
+    def test_fail_safe_on_incomplete_enforce_block(self):
+        """A present enforce: block missing 'gate' (or tool_match) must abort
+        the whole migration rather than fabricate a default -- fabricating a
+        default would silently change what the entry's enforcement does once
+        wired to the live guard."""
+        with tempfile.TemporaryDirectory() as root:
+            write(os.path.join(root, "memory", "playbooks", "git.md"), PLAYBOOK_GIT)
+            write(
+                os.path.join(root, "memory", "playbooks", "incomplete.md"),
+                PLAYBOOK_INCOMPLETE_ENFORCE,
+            )
+
+            proc = run_migration(root)
+
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertFalse(os.path.isdir(os.path.join(root, "memory", "lessons")))
+            # source dirs must be untouched -- fail-safe means write NOTHING.
+            self.assertTrue(os.path.isdir(os.path.join(root, "memory", "playbooks")))
+            self.assertTrue(
+                os.path.isfile(os.path.join(root, "memory", "playbooks", "git.md")))
+
+    def test_unrecognized_top_level_key_survives(self):
+        """An unrecognized top-level frontmatter key (outside the known
+        schema) must carry through to the migrated lesson verbatim -- the
+        migration's binding constraint is losslessness, so unanticipated
+        data must not be dropped."""
+        with tempfile.TemporaryDirectory() as root:
+            write(
+                os.path.join(root, "memory", "playbooks", "extra.md"),
+                PLAYBOOK_EXTRA_KEY,
+            )
+
+            proc = run_migration(root)
+
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            text = read(os.path.join(root, "memory", "lessons", "extra.md"))
+            self.assertIn("custom_field: hello", text)
 
 
 if __name__ == "__main__":
