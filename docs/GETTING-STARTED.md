@@ -66,6 +66,18 @@ No overlay yet? Fork [`nervepack-content-example`](https://github.com/pat-browne
 rename it to something private, and point at that. Skip this and the engine falls back
 to its own root, which works, but gives you nowhere personal to grow.
 
+**On a team?** You can point at a *second*, shared overlay that sits above your
+personal one:
+
+```bash
+echo "$HOME/Code/team-nervepack-content" > ~/.config/nervepack/team-dir
+```
+
+The stack becomes `team > personal > engine`. Reads merge with the team winning
+(a team skill or playbook shadows your personal one of the same name), and writes
+still land in your personal overlay unless you explicitly "save to the team layer."
+This is optional, and dormant until a team dir resolves.
+
 ## 5. Authenticate GitHub
 
 ```bash
@@ -90,12 +102,45 @@ Re-run the doctor. A green report means every MUST capability is wired.
 ~/Code/nervepack/engine/setup/np-doctor.sh
 ```
 
+Then confirm the paths your docs and skills point at actually resolve on this machine.
+The engine and content overlay live in separate repos, so a script named in one skill
+sometimes moves under the other. This check catches a stale or renamed path before you
+chase a dead command for a given feature:
+
+```bash
+python3 ~/Code/nervepack/engine/setup/np-path-check.py                        # engine only
+# add your overlay to check its skills and docs too:
+python3 ~/Code/nervepack/engine/setup/np-path-check.py ~/Code/nervepack ~/Code/nervepack-content
+```
+
+A clean run prints `all setup/onboard path references resolve ✓`. Any hit names the
+file, the line, and the path to fix. The same check runs in CI, so the engine's own docs
+stay honest.
+
 From here, every session loads `skills/*`, a SessionStart directive tells the session to
 consult nervepack first, and `/np-core-sync` / `/np-core-contribute` are available as
 slash commands.
 
-## Prefer to connect over MCP?
+## What about the MCP server?
 
-If your host speaks MCP (Cursor, Codex, a local-model client), you can skip per-script
-wiring and point your MCP client at the nervepack server instead. See
-[`../engine/onboard/MCP.md`](../engine/onboard/MCP.md).
+The MCP server is a *surface*, not a bootstrapper. It can't install nervepack from
+nothing, because the server itself lives in the engine repo you just cloned. What it
+does is expose nervepack's tools, resources, and prompts to any MCP-speaking client.
+
+- **On Claude Code** you don't need to do anything extra. A full onboard installs the
+  `5x` hooks, and one of them (`58-install-mcp.sh`) registers the MCP server for you
+  when the `mcp` toggle is on. Your skills, the session directive, and lifecycle
+  capture come from the onboard itself, not from MCP.
+- **On any other MCP client** (Cursor, Codex, a local-model client) point it at the
+  server instead of wiring each script by hand.
+
+Either way, the shortcut is one guided command:
+
+```bash
+~/Code/nervepack/engine/bin/nervepack-install
+```
+
+It configures your content (and optional team) overlay, registers the server, and runs
+the doctor. It re-runs safely and takes defaults on a non-interactive shell. See
+[`../engine/onboard/MCP.md`](../engine/onboard/MCP.md) for the full tool and resource
+list and the write-gating story.
