@@ -27,7 +27,7 @@ import sys
 # Directories whose Markdown is historical, auto-generated, or an intentional
 # test fixture. Their path strings describe the past (or plant bad paths on
 # purpose), so they must never be flagged.
-SKIP_SEGMENTS = {".git", "node_modules", "tests", "archive"}
+SKIP_SEGMENTS = {".git", ".superpowers", "node_modules", "tests", "archive"}
 SKIP_SUBPATHS = (
     os.path.join("docs", "superpowers", "plans"),
     os.path.join("docs", "superpowers", "specs"),
