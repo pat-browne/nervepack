@@ -7,28 +7,28 @@ description: Install/onboard nervepack onto this machine for whatever agentic ho
 
 nervepack is tool-neutral: **you** create the host-specific wiring by satisfying a
 contract, then prove it with a deterministic doctor. No host is privileged — Claude
-Code onboards the same way. Full instructions live in `~/Code/nervepack/onboard/ONBOARD.md`;
+Code onboards the same way. Full instructions live in `~/Code/nervepack/engine/onboard/ONBOARD.md`;
 this skill is the entry point.
 
 ## The loop (run it, don't ask the user to)
 
-1. **Read the contract:** `onboard/ONBOARD.md` + `onboard/capabilities.json`. Identify
+1. **Read the contract:** `engine/onboard/ONBOARD.md` + `engine/onboard/capabilities.json`. Identify
    your host and how it (a) surfaces standing context to the model, (b) fires session
    start/end events, (c) runs a headless model call. Each capability has per-host `hints`.
-2. **Check current state first:** `bash ~/Code/nervepack/setup/np-doctor.sh`. It shows
+2. **Check current state first:** `bash ~/Code/nervepack/engine/setup/np-doctor.sh`. It shows
    what's already wired vs MISSING — only do work the doctor flags.
 3. **Satisfy each capability** for your host (MUST: `knowledge`, `llm-cli`, `git-sync`,
    `toggles`; SHOULD: the session-start/end + scheduled-maint ones — wire what your host
    supports, mark the rest `unsupported`). For Claude Code the worked example is
-   `setup/30-link-skills.sh` (knowledge) + `setup/5x-install-*.sh` (hooks); reproduce the
+   `engine/setup/30-link-skills.sh` (knowledge) + `engine/setup/5x-install-*.sh` (hooks); reproduce the
    equivalent for your host.
 4. **Configure the model:** set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`/`_AGENT`) so
-   `printf hi | setup/np-llm.sh complete` returns text. Claude is the default backend; a
+   `printf hi | engine/setup/np-llm.sh complete` returns text. Claude is the default backend; a
    local Ollama box uses the goose/ollama backend.
 5. **Record what you did** in `~/.config/nervepack/adapter.json` (per-machine): for each
    `check:adapter` capability, `{status: wired|unsupported, verify: "<cmd, exit 0 = ok>"}`.
-   Start from `onboard/adapters/<host>.example.json` if one exists.
-6. **Run the doctor until green:** `setup/np-doctor.sh` (exits non-zero on a MUST
+   Start from `engine/onboard/adapters/<host>.example.json` if one exists.
+6. **Run the doctor until green:** `engine/setup/np-doctor.sh` (exits non-zero on a MUST
    shortfall). Fix → re-run. That generate→verify→fix loop is what makes self-wiring safe.
 7. **Report** the doctor's per-capability table to the user and offer toggle choices
    (`np-core-toggle`).

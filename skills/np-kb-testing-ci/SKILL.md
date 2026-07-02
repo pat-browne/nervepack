@@ -98,7 +98,7 @@ The suite passed; it surfaced later as "the dashboard went blank."
 - A **fixed** default-out can't be isolated that way — so the **runner** snapshots the live
   data files before the suite and restores them in its `EXIT` trap (a test may write them;
   the suite must never leave them mutated).
-- Grep smell: a test invoking a real `setup/NN-*.sh` / `build.py` with **no explicit output
+- Grep smell: a test invoking a real `engine/setup/NN-*.sh` / `build.py` with **no explicit output
   path** — doubly dangerous when the repo's data dir is a symlink.
 
 ## 7. The PII/secret gate false-positives on untracked working-tree files

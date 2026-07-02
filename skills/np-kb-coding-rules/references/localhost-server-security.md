@@ -13,4 +13,4 @@ preflight — which you refuse; return `403` on any mutating request lacking the
 Use `realpath` to resolve the requested path and verify it falls under the served root.
 Block `../` traversal.
 
-Worked example + stdlib mechanics: `setup/np-dashboard-server.py` and [[python-http-server]] (`sources/python/`).
+Worked example + stdlib mechanics: `engine/setup/np-dashboard-server.py` and [[python-http-server]] (`sources/python/`).

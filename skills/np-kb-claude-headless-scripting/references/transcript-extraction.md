@@ -25,7 +25,7 @@ Skipping `image`/attachment blocks is the point — never let base64 reach stdin
 One real session was 2 MB raw but only 70 KB of readable text; byte-tailing the
 raw JSONL lands inside a base64 blob and feeds ~200 KB of garbage to the model.
 
-The centralized implementation lives in `setup/np-transcript-extract.py` (Python
+The centralized implementation lives in `engine/setup/np-transcript-extract.py` (Python
 for parsing correctness; off the hot path per CLAUDE.md language policy), called
 by both episodic-capture and np-evaluator hooks instead of duplicating this inline.
 
@@ -47,7 +47,7 @@ and put the extraction instruction last.
 
 ## Regression tests
 
-- `setup/tests/episodic/test_transcript_extract.sh` — extractor: text/tool_use
+- `engine/setup/tests/episodic/test_transcript_extract.sh` — extractor: text/tool_use
   kept, image + inline base64 dropped, cap keeps the tail.
 - `test_capture_extracts_text.sh` and `test_capture_logs_bail.sh`.
 - Hooks that dedup or write per-session state must isolate it in tests

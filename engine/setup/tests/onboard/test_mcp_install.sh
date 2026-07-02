@@ -40,6 +40,7 @@ chk "team-dir written with the given path"    "[ \"\$(cat '$cfg/team-dir' 2>/dev
 chk "installer did not write a local team toggle" "[ ! -f '$cfg/toggles.local' ] || ! grep -q 'team' '$cfg/toggles.local'"
 chk "MCP server registered (claude mcp add)"  "grep -q 'mcp add nervepack' '$tmp/claude-calls' 2>/dev/null"
 chk "doctor ran (capability output present)"  "printf '%s' \"\$out\" | grep -qiE 'doctor|knowledge|llm-cli|capabilit'"
+chk "path check ran and the tree is clean"    "printf '%s' \"\$out\" | grep -q 'path references resolve'"
 
 # --- non-interactive path: empty stdin -> engine-root default, no team, no crash ---
 rm -rf "$home"; mkdir -p "$home"; : > "$tmp/claude-calls"

@@ -9,7 +9,7 @@ local inbox, so this has to stay local.
 **Cadence:** Sunday 08:30 local — 30 min after `memory-promote` (08:00), same
 spacing pattern the other nervepack agents use so no two push at once.
 
-**Invoked by:** `setup/72-run-episodic-maintain.sh` (wraps `claude -p`, logs to
+**Invoked by:** `engine/setup/72-run-episodic-maintain.sh` (wraps `claude -p`, logs to
 `~/.cache/nervepack/episodic-maintain.log`).
 
 **Standing mandate:** pre-authorized to commit + push to the `memory/episodic/`
@@ -126,7 +126,7 @@ The success mirror of 5b. Process the `strategies[]` arrays across the inbox
    `memory/strategies/<topic>.md` using the format in `memory/strategies/README.md` — synthesize
    **Title / When / Do** from the `{title, description, content}` items.
 2. Set `topic_triggers` from the strategies' topic_triggers (drives
-   `setup/strategy-recall.sh` injection). Strategies are **advisory** — no
+   `engine/setup/strategy-recall.sh` injection). Strategies are **advisory** — no
    `tool_match`/`gate` (that's playbooks only).
 3. Increment `seen` when a cluster matches an existing strategy.
 4. Regenerate `memory/strategies/INDEX.md` (columns `topic | topic_triggers | seen`),

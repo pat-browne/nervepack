@@ -6,7 +6,7 @@ description: Pull episodic working-memory themes ("what we did / decided / where
 # recall
 
 The on-demand counterpart to the automatic `UserPromptSubmit` injection
-(`setup/episodic-recall.sh`). Auto-injection only fires on a session's first
+(`engine/setup/episodic-recall.sh`). Auto-injection only fires on a session's first
 couple of prompts and only on keyword hits; `/recall` lets you pull any theme,
 any time.
 

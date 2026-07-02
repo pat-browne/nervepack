@@ -33,7 +33,7 @@ Move slow per-session capture to a **backgrounded SessionStart hook** (SessionSt
   `agent-*` transcripts — those are subagent runs, not real sessions. Skip the
   current/active session (filename `session_id`, and a min-age guard since an
   active transcript is still being written). Implemented in
-  `setup/np-backcapture-sweep.sh`.
+  `engine/setup/np-backcapture-sweep.sh`.
 - Keep the SessionEnd hooks as **best-effort** (they help on the paths that do
   complete) but never *depend* on them. Promotion to the committed layer rides the
   on-exit flush **and** the daily/weekly crons — the awaited triggers, not SessionEnd.

@@ -7,7 +7,7 @@ description: Sync ~/Code/nervepack with origin/main using strict-safe semantics 
 
 ## Behavior contract
 
-The underlying script (`~/Code/nervepack/setup/40-sync-nervepack.sh`) is intentionally
+The underlying script (`~/Code/nervepack/engine/setup/40-sync-nervepack.sh`) is intentionally
 *defensive*: it never modifies a dirty working tree, never autostashes, and
 never rebases. Every run produces one of five outcomes, written to
 `~/.cache/np-core-sync-status`:
@@ -40,7 +40,7 @@ state and act on it.
 
 2. **Run the sync** (idempotent, writes a fresh status):
    ```bash
-   ~/Code/nervepack/setup/40-sync-nervepack.sh --verbose
+   ~/Code/nervepack/engine/setup/40-sync-nervepack.sh --verbose
    ```
 
 3. **Branch on the outcome.**
@@ -85,7 +85,7 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 - Does not silently rebase, autostash, or merge-with-strategy. The whole
   point is predictability.
 - Does not push. Push happens via [[np-core-contribute]] or explicit user ask.
-- Does not re-run `setup/*.sh` scripts. If a setup script changed (e.g.
+- Does not re-run `engine/setup/*.sh` scripts. If a setup script changed (e.g.
   `00-apt-baseline.sh` added a new package), surface that to the user.
 - Does not edit `~/.claude/settings.json`. If
   `50-install-session-hook.sh` changed, surface it.

@@ -6,7 +6,7 @@ description: Gotchas for driving the `claude` CLI headlessly (`-p`/`--print`) fr
 # Driving `claude -p` from scripts, hooks, and crons
 
 Patterns for invoking the `claude` CLI non-interactively (`-p` / `--print`)
-from Bash. nervepack's own machinery relies on this — `setup/episodic-capture.sh`,
+from Bash. nervepack's own machinery relies on this — `engine/setup/episodic-capture.sh`,
 `72-run-episodic-maintain.sh`, `np-evaluator.sh`, `episodic-recall.sh` — so these
 gotchas bite our own hooks.
 
@@ -61,7 +61,7 @@ LOG="${SOMETHING_LOG:-$HOME/.cache/.../x.log}"
 A stub that merely `printf`s JSON and **ignores argv** will NOT catch the §1
 bug. A regression test's stub must model the variadic parsing: read stdin, treat
 `--allowedTools` as consuming following args, and error like the real CLI if no
-prompt arrived. See `setup/tests/episodic/test_{capture,maintain}_invocation.sh`.
+prompt arrived. See `engine/setup/tests/episodic/test_{capture,maintain}_invocation.sh`.
 
 ## 4. SessionStart hooks fire repeatedly — never trigger a GUI/side-effect unguarded
 
@@ -80,7 +80,7 @@ m="$HOME/.cache/nervepack/open-boot"
 mkdir -p "$(dirname "$m")"; printf '%s' "$boot_id" > "$m"
 ```
 
-**Diagnose** a loop: `ls -lt ~/.claude/projects/*/*.jsonl` — many files seconds apart. (`setup/74-open-dashboard.sh`.)
+**Diagnose** a loop: `ls -lt ~/.claude/projects/*/*.jsonl` — many files seconds apart. (`engine/setup/74-open-dashboard.sh`.)
 
 ## 5. Other flags worth setting in headless runs
 
@@ -102,7 +102,7 @@ Two silent traps (both hit the §2 bail path; symptom: empty output):
   extraction function. `BEGIN/END` delimiters alone are insufficient (verified:
   model continued 2/3 runs without the system-prompt reframe).
 - **Cap input**: ~48 KB (capture) / ~32 KB (evaluator). Extractor + capping lives
-  in `setup/np-transcript-extract.py`, called by both hooks.
+  in `engine/setup/np-transcript-extract.py`, called by both hooks.
 
 Full jq extractor, system-prompt template, and regression test notes:
 references/transcript-extraction.md.
@@ -141,7 +141,7 @@ trace never appears.
 **Fix:** move slow per-session work to a **backgrounded SessionStart hook** —
 SessionStart is awaited; the work survives. Keep SessionEnd hooks as
 best-effort only; never depend on them. Implemented in
-`setup/np-backcapture-sweep.sh`.
+`engine/setup/np-backcapture-sweep.sh`.
 
 GH issues, incident narrative, and implementation details:
 references/sessionend-unreliable.md.
