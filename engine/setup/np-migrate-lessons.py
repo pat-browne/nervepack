@@ -87,11 +87,21 @@ def _parse_frontmatter(fm_block, path):
     return top, enforce
 
 
+KNOWN_TOP_KEYS = {
+    "name", "status", "seen", "last_updated", "wiki", "kind", "enforce",
+    "topic_triggers",
+}
+KNOWN_ENFORCE_KEYS = {"tool_match", "gate", "tool_name_match", "topic_triggers"}
+
+
 def _build_lesson(top, enforce, kind, path):
     for req in ("name", "status", "seen", "last_updated"):
         if req not in top:
             raise ParseError("%s: missing required field %r" % (path, req))
     wiki = top.get("wiki", "[]")
+    # Lossless: any top-level key outside the known schema rides along
+    # verbatim rather than being silently dropped.
+    extra_top = [(k, v) for k, v in top.items() if k not in KNOWN_TOP_KEYS]
 
     if kind == "playbook":
         provenance = "failure"
@@ -100,13 +110,26 @@ def _build_lesson(top, enforce, kind, path):
         if "topic_triggers" not in enforce:
             raise ParseError(
                 "%s: playbook enforce: block missing topic_triggers" % path)
+        # Fail closed: a present enforce: block missing tool_match or gate
+        # must abort the migration rather than fabricate a default -- a
+        # fabricated default would silently change what the entry's
+        # enforcement does once wired to the live guard.
+        if "tool_match" not in enforce or "gate" not in enforce:
+            raise ParseError(
+                "%s: playbook enforce: block missing tool_match and/or gate"
+                % path)
         topic_triggers = enforce["topic_triggers"]
         new_enforce = {
-            "tool_match": enforce.get("tool_match", '""'),
-            "gate": enforce.get("gate", "warn"),
+            "tool_match": enforce["tool_match"],
+            "gate": enforce["gate"],
         }
         if "tool_name_match" in enforce:
             new_enforce["tool_name_match"] = enforce["tool_name_match"]
+        # Lossless: any enforce sub-key outside the known schema rides along
+        # verbatim too.
+        new_enforce["_extra"] = [
+            (k, v) for k, v in enforce.items() if k not in KNOWN_ENFORCE_KEYS
+        ]
     elif kind == "strategy":
         provenance = "success"
         if "topic_triggers" not in top:
@@ -124,6 +147,7 @@ def _build_lesson(top, enforce, kind, path):
         "last_updated": top["last_updated"],
         "topic_triggers": topic_triggers,
         "enforce": new_enforce,
+        "extra_top": extra_top,
         "wiki": wiki,
     }
 
@@ -174,6 +198,10 @@ def _render_entry(lesson):
         lines.append("  gate: %s" % lesson["enforce"]["gate"])
         if "tool_name_match" in lesson["enforce"]:
             lines.append("  tool_name_match: %s" % lesson["enforce"]["tool_name_match"])
+        for key, val in lesson["enforce"].get("_extra", []):
+            lines.append("  %s: %s" % (key, val))
+    for key, val in lesson["extra_top"]:
+        lines.append("%s: %s" % (key, val))
     lines.append("wiki: %s" % lesson["wiki"])
     lines.append("---")
     return "\n".join(lines) + "\n" + lesson["body"]
