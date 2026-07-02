@@ -16,9 +16,9 @@ your own.
 > directory contract, the sync and contribute protocols, and what's off-limits all
 > live there.
 
-## The two halves
+## The two halves (and an optional third)
 
-nervepack has two layers, in two repos.
+nervepack splits into an engine and your content, in two repos.
 
 - **The engine** (this repo) is the reusable machinery. Hooks, crons, the toggle
   system, onboarding, the MCP server, and the generic `np-core-*` / `np-kb-*` /
@@ -32,6 +32,17 @@ stays yours. Want to see what an overlay looks like before you build one? The
 [`nervepack-content-example`](https://github.com/pat-browne/nervepack-content-example)
 repo is a filled-in example with one real file in every layer. Fork it, point the
 engine at it, and you're running.
+
+**Working on a team? Add a third overlay.** A team can share a baseline that sits
+*above* your personal content. Point at it with `NP_TEAM_DIR` (or write the path into
+`~/.config/nervepack/team-dir`) and the stack becomes `team > personal > engine`.
+Reads merge with the team winning, so a team skill or playbook shadows your personal
+one of the same name. Writes still land in your personal overlay, so nothing you
+capture bleeds into the team by accident. When you *do* want to publish to the team,
+say "save this to the team layer" and contribute targets it explicitly. It stays
+dormant until you configure a team dir, and one setting decides how the topic layers
+(playbooks, strategies, episodic, wiki) combine. `team.merge` takes `override`
+(default), `concatenate`, or `team-only`.
 
 ## How the layers work
 
@@ -94,9 +105,10 @@ publish/           # The secret/PII guard that keeps personal data out of the en
 .claude-plugin/    # Plugin manifest for `claude plugin install`.
 ```
 
-Your content layers (`sources/`, `wiki/`, `episodic/`, `playbooks/`, `strategies/`,
+Your content layers (`wiki/` with its co-located sources, `memory/{episodic,playbooks,strategies}/`,
 `dashboard/data/`, your personal skills, design specs) do not live here. They live in
-your overlay. See `AGENTS.md` for the full directory contract.
+your overlay, and optionally a team overlay above it. See `AGENTS.md` for the full
+directory contract and the team-merge rules.
 
 ## Host compatibility
 

@@ -436,6 +436,41 @@ unset falls back to the engine root (legacy single-repo).
 asks `np_content_dir`, gets your overlay path, and scans there. A public clone
 with no overlay simply finds nothing and no-ops.
 
+## Team overlay — a shared layer above your personal content
+
+**Purpose.** Let a team share a curated baseline (skills, playbooks, strategies,
+wiki) without giving up private, per-person memory. The engine stays public, your
+personal overlay stays yours, and a third overlay carries what the team holds in
+common.
+
+**Workflow.** Configure a team root with `NP_TEAM_DIR` (or write the path into
+`~/.config/nervepack/team-dir`) and the overlay stack becomes `team > personal >
+engine`. `np-layer-lib.sh` builds that stack and every reader scans it highest-first.
+Skills are **override-only**, so a team `np-kb-branding` shadows your personal one of
+the same name. The topic layers (playbooks, strategies, episodic, wiki) combine per the
+`team.merge` param, `override` (default, team wins on a name clash), `concatenate`
+(both sets surface), or `team-only` (ignore personal for that read). **Reads merge,
+writes stay personal.** Auto-capture always writes your personal overlay, so nothing
+you do bleeds into the shared layer by accident. Publishing to the team is the one
+explicit path, `np-core-contribute --layer team` (or "save this to the team layer").
+**Metrics stay personal-only by design.** The dashboard merges *learned* counts
+(playbooks/strategies) across both overlays, but your session scores are never shared.
+Gated by the `team` toggle, which is dormant until a team dir resolves. Complete
+through Phase 3 (recall hooks, wiki index, dashboard learned-counts, and MCP recall
+all merge across layers).
+
+**Assets.** `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`/
+`np_layer_roots`), `np_team_dir` in `np-content-lib.sh`, the three recall hooks,
+`dashboard/build.py` (`wiki_index`, `learned_counts`), `np-mcp-server.py`
+(`_tool_recall`), `np-core-contribute`. Toggle: `team` (`team.merge`).
+
+**Situational example.** Your data team keeps a shared `np-kb-data-team-mcp` skill and
+a `safe-migrations` playbook in a team overlay. A new teammate points `team-dir` at it
+and inherits both on their first session, while their own half-finished migration notes
+stay in their personal episodic memory where only they see them. When they harden a
+new rule worth sharing, they run `contribute --layer team` and it lands in the shared
+overlay for everyone.
+
 ## CI PII guard + publish snapshot
 
 **Purpose.** Make it structurally impossible for personal data to land in the (public-
