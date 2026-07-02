@@ -56,7 +56,7 @@ gate only controls *where the write lands*.
 | Reusable how-to / capability the user will hit again (e.g. "how to build a persona agent") | New behavioral skill: `skills/<kebab-name>/SKILL.md` |
 | Curated synthesis of a topic backed by sources | `wiki/topics/<topic>/<topic>.md` (`kind: topic`) |
 | Source-free synthesis of one entity/concept (a specific build, a cross-cutting idea) | `wiki/concepts/<name>.md` (`kind: concept`) |
-| Bootstrap step (re-runnable) | New script: `setup/NN-name.sh` |
+| Bootstrap step (re-runnable) | New script: `engine/setup/NN-name.sh` |
 | Repo workflow / protocol | `CLAUDE.md` (this is the AI manual) |
 | Recurring AI-agent prompt | `agents/<name>.md` |
 | Roadmap / deferred-work item — for nervepack itself | `docs/ROADMAP.md` |
@@ -122,7 +122,7 @@ linked from everywhere else, never copied (see `docs/ARCHITECTURE.md`).
    enough that step 2 will work for the next contributor.
 5. **Update `.claude-plugin/plugin.json`** if you added a new skill —
    append `./skills/<name>` to the `skills` array.
-6. **Relink + regenerate INDEX:** `~/Code/nervepack/setup/30-link-skills.sh`
+6. **Relink + regenerate INDEX:** `~/Code/nervepack/engine/setup/30-link-skills.sh`
    (handles new skills, prunes dangling symlinks, and re-runs
    `60-generate-index.sh`).
 7. **Diff:** `git -C ~/Code/nervepack diff` — show the user.
@@ -153,7 +153,7 @@ If the push is rejected as non-fast-forward:
 
 ## Size budget — keep skills lean
 
-Soft cap: **~6 KB per `SKILL.md`**. Hard limit: 8 KB (enforced daily by `setup/75-skill-maintain.sh`).
+Soft cap: **~6 KB per `SKILL.md`**. Hard limit: 8 KB (enforced daily by `engine/setup/75-skill-maintain.sh`).
 Body carries the *decision*; `references/*.md` carries the detail (read on demand).
 Full guidance: references/size-budget.md
 

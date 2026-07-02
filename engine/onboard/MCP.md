@@ -25,8 +25,10 @@ It walks you through it: enter your **content directory** (where your personal
 skills/memory live — blank uses the engine root), optionally a **team content
 directory**, then it registers the MCP server with your host (Claude Code via
 `58-install-mcp.sh`; any other client gets the `mcpServers` block printed for you),
-and finally runs **`np-doctor.sh`** to verify the wiring. Re-runnable and idempotent;
-on a non-interactive shell (CI) every prompt takes its default and it never blocks.
+and finally verifies the wiring with **`np-doctor.sh`** plus a check that the paths
+your docs and skills reference actually resolve (`np-path-check.py`). Re-runnable and
+idempotent; on a non-interactive shell (CI) every prompt takes its default and it
+never blocks.
 
 ## Install: the generic `mcpServers` block (manual)
 
@@ -104,8 +106,10 @@ Windows *is* installed, use the POSIX `nervepack-mcp` launcher (it also pins
 
 **Resources** (`resources/list` / `resources/read`): `nervepack://index` (the skill
 index), `nervepack://dashboard/metrics` (the metrics time series), and every file under
-`nervepack://{skills,sources,wiki,playbooks,strategies,episodic,dashboard}/<name>` resolved from
-your overlay.
+`nervepack://{skills,wiki,memory/episodic,memory/playbooks,memory/strategies,dashboard}/<name>`
+resolved from your overlay. Sources aren't a separate prefix, they live inside the wiki
+(`nervepack://wiki/topics/<topic>/<name>`), and concepts under
+`nervepack://wiki/concepts/<concept>/<name>`.
 
 **Prompts** (`prompts/list` / `prompts/get`): `nervepack-directive`, the
 "consult nervepack first" session directive for hosts that inject a prompt at session

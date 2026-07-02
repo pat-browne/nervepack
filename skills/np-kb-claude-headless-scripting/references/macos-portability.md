@@ -19,6 +19,6 @@ Linux/apt-only by design.
 
 ## Enforcement
 
-`setup/tests/meta/test_macos_portability.sh` scans every non-bootstrap runtime
+`engine/setup/tests/meta/test_macos_portability.sh` scans every non-bootstrap runtime
 script for these patterns (exempting comments and the deliberate `stat -c … || stat -f`
 fallback). Add new runtime scripts to the same standard.

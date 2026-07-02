@@ -4,7 +4,7 @@
 #   2. optionally configure a team overlay   (~/.config/nervepack/team-dir + `team` toggle)
 #   3. register the MCP server with your host (Claude Code via 58-install-mcp.sh;
 #      otherwise print the generic mcpServers block for your client)
-#   4. run the doctor to verify the install
+#   4. verify the install (doctor + a check that documented feature paths resolve)
 #
 # Interactive, but falls back to safe defaults when stdin has no input (CI/headless),
 # so it never blocks: a closed/empty stdin == "accept the default" for every prompt.
@@ -81,6 +81,20 @@ echo
 echo "Running the doctor to verify the install…"
 echo
 bash "$HERE/np-doctor.sh" || true
+
+# Confirm the paths the docs + skills point at actually resolve on this machine —
+# across the engine and whatever overlay(s) we just configured. Advisory (fail-open):
+# a stale reference is worth surfacing but must never block the install.
+echo
+echo "Checking that documented feature paths resolve…"
+if command -v python3 >/dev/null 2>&1; then
+  pc_roots=("$NP")
+  [[ -n "${content:-}" && -d "$content" ]] && pc_roots+=("$content")
+  [[ -n "${team:-}"    && -d "$team"    ]] && pc_roots+=("$team")
+  python3 "$HERE/np-path-check.py" "${pc_roots[@]}" || true
+else
+  echo "  (skipped — python3 not found)"
+fi
 
 echo
 echo "Done. Re-run any time:  bash $HERE/np-mcp-install.sh"

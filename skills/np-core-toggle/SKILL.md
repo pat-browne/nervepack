@@ -5,14 +5,14 @@ description: Turn Nervepack features on/off and adjust their settings. Use when 
 
 # np-core-toggle
 
-Nervepack features each have an on/off toggle declared in `setup/toggles.conf`.
+Nervepack features each have an on/off toggle declared in `engine/setup/toggles.conf`.
 Use the CLI:
 
-- **List state:** `~/Code/nervepack/setup/nervepack-toggle.sh status`
-- **Flip:** `~/Code/nervepack/setup/nervepack-toggle.sh <feature> on|off`
-- **Set a param:** `~/Code/nervepack/setup/nervepack-toggle.sh param sync.interval 3600`
-- **Interactive picker:** `~/Code/nervepack/setup/nervepack-toggle.sh` (no args)
-- **Audit:** `~/Code/nervepack/setup/nervepack-toggle.sh audit`
+- **List state:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh status`
+- **Flip:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh <feature> on|off`
+- **Set a param:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh param sync.interval 3600`
+- **Interactive picker:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh` (no args)
+- **Audit:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh audit`
 
 Families: `memory` (capture/recall/maintain/promote), `playbooks` (guard/recall),
 `directive`, `sync` (with `sync.interval`, default 86400s/1 day), `allowlist`

@@ -12,7 +12,7 @@ once-per-boot guard — knowing which is which answers "why didn't it open?".
 ## Open it now (manual, always works)
 
 ```bash
-bash ~/Code/nervepack/setup/open-dashboard.sh
+bash ~/Code/nervepack/engine/setup/open-dashboard.sh
 ```
 
 This rebuilds `metrics.js` from the latest metrics, resolves the URL, and opens it.
@@ -22,7 +22,7 @@ SessionStart hook guards against — see below), so it opens every time you run 
 
 ## Why it doesn't auto-open every session
 
-The SessionStart hook `setup/74-open-dashboard.sh` opens the dashboard **at most once
+The SessionStart hook `engine/setup/74-open-dashboard.sh` opens the dashboard **at most once
 per OS boot**, not once per session. It records the boot id in
 `~/.cache/nervepack/dashboard-open-boot`; every later session start this boot sees a
 matching marker and exits before opening. This is load-bearing: under remote-desktop,
@@ -46,7 +46,7 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
 
 ## Served (http) vs static (file://) modes
 
-`setup/np-dashboard-launch.sh` (`np_dashboard_url`) picks the URL from the
+`engine/setup/np-dashboard-launch.sh` (`np_dashboard_url`) picks the URL from the
 `evaluator.dashboard_serve` param:
 
 - **`on` (default)** — starts the localhost-only backend `np-dashboard-server.py` on
@@ -59,7 +59,7 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
   but the action buttons are inert (no backend). Fail-open: if the server can't start,
   the launcher falls back to `file://` automatically.
 
-## Toggles (params on the `evaluator` family, declared in `setup/toggles.conf`)
+## Toggles (params on the `evaluator` family, declared in `engine/setup/toggles.conf`)
 
 | Param | Default | Effect | Flip |
 |---|---|---|---|

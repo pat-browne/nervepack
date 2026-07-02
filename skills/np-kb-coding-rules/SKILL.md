@@ -107,7 +107,7 @@ guard** on every mutating route; **path-sanitize** anything mapped to the FS; a
 **fixed route allowlist**; argv-list subprocess args (never a shell string); bind
 loopback; default **off**; and a test that a header-less mutating request is `403`.
 Implementation details: `references/localhost-server-security.md`. Worked example +
-stdlib mechanics: `setup/np-dashboard-server.py` and [[python-http-server]] (`sources/python/`).
+stdlib mechanics: `engine/setup/np-dashboard-server.py` and [[python-http-server]] (`sources/python/`).
 
 ## 11. On security/review/audit tasks, invoke the relevant skill before reading files
 Before opening any file or running any grep on a security, review, audit, or
@@ -131,7 +131,11 @@ becomes a symlink) rarely breaks at the move — it breaks at a reader left on t
 old location. Grep for *every* consumer; fix each with a regression test (Rules
 5/8). Three recurring blind spots (cross-language hardcoded defaults, `realpath`
 guards rejecting a now-legit symlink, leaking a personal view into a guarded
-public surface) + examples → `references/long-form-guidelines.md`.
+public surface) + examples → `references/long-form-guidelines.md`. Docs and skills
+are consumers too. A script named in a skill is a path reference that can go stale,
+so nervepack guards them with `engine/setup/np-path-check.py` (CI-gated via
+`tests/docs/test_critical_paths.sh`), which fails on a bare `setup/x` that should be
+`engine/setup/x`, or an `engine/…` path to a missing file.
 
 ## Environment expectations
 

@@ -13,13 +13,13 @@ wipe it" into a repeatable loop. The deterministic ranking/clearing is a script;
 
 ## The engine (deterministic, no model)
 
-`setup/np-suggestions-review.py` — reuses the dashboard's own normalization so its
+`engine/setup/np-suggestions-review.py` — reuses the dashboard's own normalization so its
 view of "open" matches what the dashboard shows.
 
 - **List** the open, deduped, confidence-ranked suggestions:
   ```bash
-  python3 ~/Code/nervepack/setup/np-suggestions-review.py list --top 10
-  python3 ~/Code/nervepack/setup/np-suggestions-review.py list --json   # for machine use
+  python3 ~/Code/nervepack/engine/setup/np-suggestions-review.py list --top 10
+  python3 ~/Code/nervepack/engine/setup/np-suggestions-review.py list --json   # for machine use
   ```
   "Open" = present in metrics.jsonl AND not already in
   `dashboard/data/resolved-suggestions.txt`. Dedup is by normalized text, keeping the
@@ -27,7 +27,7 @@ view of "open" matches what the dashboard shows.
 - **Clear** — resolve every open suggestion (default ALL) so the panel resets and new
   ones accumulate; rebuilds `metrics.js` so the dashboard reflects it immediately:
   ```bash
-  python3 ~/Code/nervepack/setup/np-suggestions-review.py clear
+  python3 ~/Code/nervepack/engine/setup/np-suggestions-review.py clear
   ```
   Clearing is non-destructive: it appends the texts to the resolved ledger (the
   metrics records are untouched), so the audit trail survives.
@@ -53,7 +53,7 @@ view of "open" matches what the dashboard shows.
 
 When `evaluator.dashboard_serve` is **on** (a param, default on — flip off with
 `nervepack-toggle evaluator.dashboard_serve off`), the dashboard is served from a
-local backend (`setup/np-dashboard-server.py`) and its Suggestions panel gains
+local backend (`engine/setup/np-dashboard-server.py`) and its Suggestions panel gains
 buttons: **Resolve** (one item → `np-suggestion-resolve.sh`), **Review** (a single
 Haiku verdict pass over the top-N, via `np-llm.sh`), and **Review & clear** (resolve
 all open). Same engine underneath — the buttons just call `/api/resolve|review|clear`.

@@ -19,7 +19,7 @@ SessionEnd → capture+evaluator → more `claude -p`. Renaming the prompt delim
 ## Regression test
 
 Offline (stubbed CLI): with `NERVEPACK_AGENT=1` set, the hook exits 0 without invoking
-claude and writes nothing — `setup/tests/episodic/test_capture_reentry_guard.sh`.
+claude and writes nothing — `engine/setup/tests/episodic/test_capture_reentry_guard.sh`.
 
 ## Third-party plugin hooks: the `NERVEPACK_AGENT` marker is not enough — use `--bare`
 

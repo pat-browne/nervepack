@@ -14,8 +14,8 @@ onboards through these same docs.
 
 1. **Identify your host** and how it does three things: surfaces standing context to
    the model, fires lifecycle events (session start/end), and runs a headless model
-   call. Check `onboard/capabilities.json` `hints` for a recipe for your host.
-2. **Satisfy each capability** in `onboard/capabilities.json` (the contract). Tiers:
+   call. Check `engine/onboard/capabilities.json` `hints` for a recipe for your host.
+2. **Satisfy each capability** in `engine/onboard/capabilities.json` (the contract). Tiers:
    - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`. Onboarding fails without these.
    - **SHOULD**: `session-start`, `session-end-capture`, `session-end-flush`,
      `scheduled-maint`. Wire what your host supports; mark the rest `unsupported`
@@ -37,9 +37,9 @@ onboards through these same docs.
    deterministic command that exits 0 when the capability is genuinely in place
    (e.g. Claude: `test -L ~/.claude/skills/np-core-sync`; `grep -q episodic-capture ~/.claude/settings.json`).
 4. **Configure `np-llm.sh`** for your model: set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`
-   / `NP_LLM_MODEL_AGENT`) so `printf 'hi' | setup/np-llm.sh complete` returns text.
+   / `NP_LLM_MODEL_AGENT`) so `printf 'hi' | engine/setup/np-llm.sh complete` returns text.
    Claude Code is the default backend; for a local box use the goose/ollama backend.
-5. **Run the doctor until green:** `setup/np-doctor.sh`. It reports each capability
+5. **Run the doctor until green:** `engine/setup/np-doctor.sh`. It reports each capability
    per tier (PASS / MISSING / UNSUPPORTED) and exits non-zero on any MUST failure.
    Fix and re-run. That generate → verify → fix loop is what makes self-wiring safe.
 
@@ -49,8 +49,8 @@ If your host loads standing context from an instruction file (AGENTS.md / a Curs
 but cannot fire a session-start hook, satisfy `knowledge` for the directive by appending a
 managed block instead:
 
-    setup/np-instruction-block.sh install <your instruction file>   # additive + idempotent
-    setup/np-instruction-block.sh remove  <your instruction file>   # clean uninstall
+    engine/setup/np-instruction-block.sh install <your instruction file>   # additive + idempotent
+    engine/setup/np-instruction-block.sh remove  <your instruction file>   # clean uninstall
 
 It only ever touches its own `nervepack:begin`/`end` fence. Record the verify in your
 adapter: `"verify": "grep -q nervepack:begin <file>"`. Do NOT use this on a host that
@@ -58,10 +58,10 @@ already injects the directive via a session-start hook (double-injection).
 
 ## Reference output
 
-The Claude Code adapter is reproduced by `setup/30-link-skills.sh` (knowledge) and
-`setup/5x-install-*.sh` (the hooks). Read them as a worked example of what your
+The Claude Code adapter is reproduced by `engine/setup/30-link-skills.sh` (knowledge) and
+`engine/setup/5x-install-*.sh` (the hooks). Read them as a worked example of what your
 adapter should achieve, then express the equivalent for your host. An example
-manifest lives at `onboard/adapters/<host>.example.json`.
+manifest lives at `engine/onboard/adapters/<host>.example.json`.
 
 ## Satisfying capabilities via MCP
 
@@ -92,7 +92,7 @@ export NP_LLM_BASE_URL=http://localhost:11434/v1   # full base incl. version pat
 export NP_LLM_API_KEY=...                            # optional (Open WebUI / hosted)
 export NP_LLM_MODEL_CHEAP=qwen2.5                    # model for summaries/verdicts
 # smoke test:
-echo ping | setup/np-llm.sh complete
+echo ping | engine/setup/np-llm.sh complete
 ```
 
 `complete` mode (capture + evaluator) works directly. `agent` mode (the weekly maintenance
@@ -105,13 +105,13 @@ crons report that an agentic host is required.
 ```bash
 printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
   NP_LLM_BASE_URL=<your-endpoint>/v1 NP_LLM_API_KEY=<key-if-any> \
-  NP_LLM_MODEL_CHEAP=<model> setup/np-llm.sh complete
+  NP_LLM_MODEL_CHEAP=<model> engine/setup/np-llm.sh complete
 # expect the model's text on stdout, exit 0
 ```
 
 ## Don't
 
-- Don't edit `onboard/capabilities.json` to make the doctor pass. Fix the wiring.
+- Don't edit `engine/onboard/capabilities.json` to make the doctor pass. Fix the wiring.
 - Don't skip `git-sync` auth. The maintenance steps push to origin.
 - Don't drop the `NERVEPACK_AGENT` guard: any hook that triggers `np-llm.sh agent`
   (the maintenance/flush path) must bail when `NERVEPACK_AGENT` is set, or the

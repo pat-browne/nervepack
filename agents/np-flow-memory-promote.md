@@ -9,7 +9,7 @@ stay local.
 fires at 09:00 — order matters because anything promoted here might be
 something `nervepack-refine` lints next).
 
-**Invoked by:** `setup/71-run-memory-promote.sh` (wraps `claude -p` and
+**Invoked by:** `engine/setup/71-run-memory-promote.sh` (wraps `claude -p` and
 appends to `~/.cache/nervepack/memory-promote.log`).
 
 **Standing mandate:** pre-authorized to commit + push for the scope below.
@@ -80,7 +80,7 @@ Use the [[np-core-contribute]] decision tree to pick the right target file:
 | Environment / toolchain | `skills/np-env-ubuntu-claude-dev-setup/SKILL.md` |
 | Claude plugin choice | `skills/np-env-claude-plugin-stack/SKILL.md` |
 | New cross-cutting topic | Check `INDEX.md` first — extend an existing skill if any overlap |
-| Setup step | New `setup/NN-name.sh` |
+| Setup step | New `engine/setup/NN-name.sh` |
 
 **Check `INDEX.md` before creating any new skill.** Extend over create.
 

@@ -5,10 +5,10 @@ description: Reference for every deterministic field in the nervepack evaluator 
 
 # Evaluator signals — field catalog and zero-bias audit
 
-The performance evaluator (`setup/np-evaluator.sh`) writes one JSON record per session
+The performance evaluator (`engine/setup/np-evaluator.sh`) writes one JSON record per session
 into `~/.cache/nervepack/evaluator-inbox/`, which `73-aggregate-metrics.sh` drains into
 `dashboard/data/metrics.jsonl`. Every record has a `signals` object produced **deterministically**
-by `setup/np-eval-signals.py` — no LLM, no guessing — plus LLM-derived fields from Haiku.
+by `engine/setup/np-eval-signals.py` — no LLM, no guessing — plus LLM-derived fields from Haiku.
 
 ## Deterministic signals (`signals{}`)
 
@@ -19,7 +19,7 @@ by `setup/np-eval-signals.py` — no LLM, no guessing — plus LLM-derived field
 - **Status**: LIVE ✓
 
 ### `playbook_fires` (int)
-- **Source**: `count_markers()` — counts `playbook-guard` prefixed lines in `~/.cache/nervepack/session-signals/<sid>.log`, written by `setup/playbook-guard.sh` when a Bash command matches a playbook's `tool_match` pattern.
+- **Source**: `count_markers()` — counts `playbook-guard` prefixed lines in `~/.cache/nervepack/session-signals/<sid>.log`, written by `engine/setup/playbook-guard.sh` when a Bash command matches a playbook's `tool_match` pattern.
 - **Populated when**: An imminent Bash command matches an entry in `playbooks/INDEX.md`.
 - **Zero bias**: **Genuinely sparse today.** Only two playbooks currently exist (`bash-nested-substitution`, `mv3-screenshot-capture`). As the catalog grows, this rises naturally. Not a dead signal.
 - **Status**: LIVE ✓ — sparseness reflects catalog size, not a wiring gap.
