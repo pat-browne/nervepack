@@ -208,7 +208,7 @@ def _tool_toggle(args):
     raise ValueError(f"unknown toggle action: {action}")
 
 
-_RECALL_DIRS = {"episodic": "memory/episodic", "playbook": "memory/playbooks", "strategy": "memory/strategies"}
+_RECALL_DIRS = {"episodic": "memory/episodic", "lesson": "memory/lessons"}
 
 
 def _tool_recall(args):
@@ -278,7 +278,7 @@ TOOLS += [
          "additionalProperties": False},
      "handler": _tool_toggle},
     {"name": "nervepack_recall",
-     "description": "Recall topic-matched episodic notes / playbooks / strategies for a query.",
+     "description": "Recall topic-matched episodic notes / lessons for a query.",
      "inputSchema": {"type": "object", "properties": {
          "query": {"type": "string"},
          "kinds": {"type": "array", "items": {"type": "string"}},
@@ -480,8 +480,7 @@ RESOURCE_DIRS = [
     # with co-located sources) — recurse. There is no separate top-level sources/ dir.
     ("wiki", "wiki", "**/*.md"),
     ("memory/episodic", "memory/episodic", "*.md"),
-    ("memory/playbooks", "memory/playbooks", "*.md"),
-    ("memory/strategies", "memory/strategies", "*.md"),
+    ("memory/lessons", "memory/lessons", "*.md"),
 ]
 STATIC_RESOURCES = {
     "nervepack://index": "INDEX.md",
@@ -508,7 +507,7 @@ def _uri_to_relpath(uri):
         raise ValueError("path traversal rejected")
     if rest.startswith("skills/"):
         return os.path.join("skills", rest[len("skills/"):], "SKILL.md")
-    return rest  # wiki/topics/<t>/<name>, wiki/concepts/<c>/<name>, memory/playbooks/<topic>, ...
+    return rest  # wiki/topics/<t>/<name>, wiki/concepts/<c>/<name>, memory/lessons/<topic>, ...
 
 
 def list_resources():
@@ -535,7 +534,7 @@ def list_resources():
     return items
 
 
-_CONTENT_PREFIXES = ("skills/", "wiki/", "memory/episodic/", "memory/playbooks/", "memory/strategies/", "dashboard/")
+_CONTENT_PREFIXES = ("skills/", "wiki/", "memory/episodic/", "memory/lessons/", "dashboard/")
 
 
 def read_resource(uri):

@@ -318,8 +318,7 @@ class TestProtocol(unittest.TestCase):
             overlay_only = [u for u in uris
                             if u.startswith(("nervepack://wiki/",
                                              "nervepack://memory/episodic/",
-                                             "nervepack://memory/playbooks/",
-                                             "nervepack://memory/strategies/"))]
+                                             "nervepack://memory/lessons/"))]
             self.assertEqual(overlay_only, [], f"empty overlay leaked content URIs: {overlay_only}")
 
     def test_resources_reflect_content_overlay(self):
@@ -339,18 +338,18 @@ class TestResourcesNewLayout(unittest.TestCase):
     """list_resources / read_resource work against the post-reorg content layout.
 
     Covers:
-    - memory/playbooks/<topic>.md  → nervepack://memory/playbooks/<topic>
+    - memory/lessons/<topic>.md   → nervepack://memory/lessons/<topic>
     - wiki/topics/<t>/<f>.md       → nervepack://wiki/topics/<t>/<f>
     Both must be listed AND readable via read_resource.
     """
 
     def _make_fixture(self, overlay):
         import os as _os
-        # memory layer: flat file under memory/playbooks/
-        pb = _os.path.join(overlay, "memory", "playbooks")
+        # memory layer: flat file under memory/lessons/
+        pb = _os.path.join(overlay, "memory", "lessons")
         _os.makedirs(pb, exist_ok=True)
         with open(_os.path.join(pb, "demo.md"), "w") as fh:
-            fh.write("# Demo playbook\nContent here.\n")
+            fh.write("# Demo lesson\nContent here.\n")
         # wiki: nested folder wiki/topics/<topic>/<file>.md
         wt = _os.path.join(overlay, "wiki", "topics", "foo")
         _os.makedirs(wt, exist_ok=True)
@@ -365,22 +364,22 @@ class TestResourcesNewLayout(unittest.TestCase):
             self.addCleanup(c.close)
             c.initialize()
             uris = [r["uri"] for r in c.call("resources/list")["result"]["resources"]]
-            self.assertIn("nervepack://memory/playbooks/demo", uris,
-                          f"memory/playbooks URI missing from list: {uris}")
+            self.assertIn("nervepack://memory/lessons/demo", uris,
+                          f"memory/lessons URI missing from list: {uris}")
             self.assertIn("nervepack://wiki/topics/foo/bar", uris,
                           f"nested wiki URI missing from list: {uris}")
 
-    def test_read_resource_memory_playbooks(self):
+    def test_read_resource_memory_lessons(self):
         import tempfile
         with tempfile.TemporaryDirectory() as overlay:
             self._make_fixture(overlay)
             c = MCPClient(extra_env={"NP_CONTENT_DIR": overlay})
             self.addCleanup(c.close)
             c.initialize()
-            r = c.call("resources/read", {"uri": "nervepack://memory/playbooks/demo"})
+            r = c.call("resources/read", {"uri": "nervepack://memory/lessons/demo"})
             self.assertNotIn("error", r, r)
             text = r["result"]["contents"][0]["text"]
-            self.assertIn("Demo playbook", text)
+            self.assertIn("Demo lesson", text)
 
     def test_read_resource_nested_wiki(self):
         import tempfile
@@ -413,8 +412,8 @@ class TestRecallLayers(unittest.TestCase):
         import tempfile, os as _os
         team = tempfile.mkdtemp(); personal = tempfile.mkdtemp(); h = tempfile.mkdtemp()
         self.addCleanup(lambda: [__import__("shutil").rmtree(x, ignore_errors=True) for x in (team, personal, h)])
-        self._stage(personal, "memory/playbooks", "deploys", "deploy", "PERSONAL deploys playbook")
-        self._stage(team, "memory/playbooks", "deploys", "deploy", "TEAM deploys playbook")
+        self._stage(personal, "memory/lessons", "deploys", "deploy", "PERSONAL deploys lesson")
+        self._stage(team, "memory/lessons", "deploys", "deploy", "TEAM deploys lesson")
         with open(_os.path.join(h, "local"), "w") as fh:
             fh.write("team.merge=override\n")
         conf = _os.path.join(_os.path.dirname(__file__), "..", "..", "toggles.conf")
@@ -422,10 +421,10 @@ class TestRecallLayers(unittest.TestCase):
                                  "NP_TOGGLES_CONF": conf, "NP_TOGGLES_LOCAL": _os.path.join(h, "local")})
         self.addCleanup(c.close); c.initialize()
         r = c.call("tools/call", {"name": "nervepack_recall",
-                                  "arguments": {"query": "about to deploy", "kinds": ["playbook"]}})
+                                  "arguments": {"query": "about to deploy", "kinds": ["lesson"]}})
         text = r["result"]["content"][0]["text"]
-        self.assertIn("TEAM deploys playbook", text)
-        self.assertNotIn("PERSONAL deploys playbook", text)   # team won, deduped
+        self.assertIn("TEAM deploys lesson", text)
+        self.assertNotIn("PERSONAL deploys lesson", text)   # team won, deduped
 
 
 if __name__ == "__main__":

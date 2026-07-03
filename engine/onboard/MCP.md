@@ -93,7 +93,7 @@ Windows *is* installed, use the POSIX `nervepack-mcp` launcher (it also pins
 | Tool | Does | Gate |
 |---|---|---|
 | `nervepack_doctor` | Verify this install against the onboard contract | — (read) |
-| `nervepack_recall` | Recall topic-matched episodic notes / playbooks / strategies | — (read) |
+| `nervepack_recall` | Recall topic-matched episodic notes / lessons | — (read) |
 | `nervepack_dashboard` | Read dashboard data (`summary` counts or raw `metrics`) | — (read) |
 | `nervepack_toggle` | Get/list/set feature toggles | `mcp.writes` |
 | `nervepack_sync` | Fast-forward sync the repo with origin | `mcp.writes` |
@@ -106,7 +106,7 @@ Windows *is* installed, use the POSIX `nervepack-mcp` launcher (it also pins
 
 **Resources** (`resources/list` / `resources/read`): `nervepack://index` (the skill
 index), `nervepack://dashboard/metrics` (the metrics time series), and every file under
-`nervepack://{skills,wiki,memory/episodic,memory/playbooks,memory/strategies,dashboard}/<name>`
+`nervepack://{skills,wiki,memory/episodic,memory/lessons,dashboard}/<name>`
 resolved from your overlay. Sources aren't a separate prefix, they live inside the wiki
 (`nervepack://wiki/topics/<topic>/<name>`), and concepts under
 `nervepack://wiki/concepts/<concept>/<name>`.
