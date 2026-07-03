@@ -96,21 +96,6 @@ def drop_resolved(records, resolved):
     return records
 
 
-def _topic_names(path):
-    """Sorted <topic> names (filename minus .md) in a memory dir, excluding
-    INDEX.md / README.md. Missing dir -> [] (fail-open)."""
-    try:
-        return sorted(f[:-3] for f in os.listdir(path)
-                      if f.endswith(".md") and f not in ("INDEX.md", "README.md"))
-    except OSError:
-        return []
-
-
-def _count_topics(path):
-    """Count <topic>.md files in a memory dir, excluding INDEX.md / README.md."""
-    return len(_topic_names(path))
-
-
 def _content_dir():
     """Resolve the content-overlay root, mirroring np-content-lib.sh's precedence:
     $NP_CONTENT_DIR -> ~/.config/nervepack/content-dir (first line) -> engine root.

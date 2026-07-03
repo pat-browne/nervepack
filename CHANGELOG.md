@@ -53,6 +53,21 @@ It does not track any individual user's personal content overlay.
   `toggles.conf` (default on).
 
 ### Changed
+- **Merged the `playbooks` + `strategies` memory layers into one `lessons` layer.**
+  Each lesson carries a `provenance: failure|success` tag and an *optional* `enforce`
+  block, decoupling "enforced vs advisory" from "failure vs success" (a proven success
+  can enforce; a minor failure can stay advisory). `playbook-guard.sh` → `lesson-guard.sh`
+  (gated on the `lessons` toggle + the `lessons.enforce` param); `playbook-recall.sh` +
+  `strategy-recall.sh` collapse into one provenance-framed `lesson-recall.sh`; the
+  `playbooks`/`strategies` toggles become one `lessons` toggle. Every consumer — the
+  layer resolver, hook installer, graduation detector, dashboard learned-counts (split by
+  provenance), MCP recall/resources, and the maintain-agent write path — is repointed to
+  `memory/lessons`. **Rollout — existing overlays need a one-time migration:** run
+  `python3 engine/setup/np-migrate-lessons.py <your-content-overlay>` once to convert
+  `memory/{playbooks,strategies}` → `memory/lessons` (lossless: `enforce` blocks and
+  bodies are byte-preserved; idempotent; fail-closed on a malformed entry). Until an
+  overlay is migrated, `lesson-guard`/`lesson-recall` read an absent `memory/lessons` and
+  stay dormant.
 - **Canonical content layout.** The three agent-owned layers moved under one
   `memory/` root (`memory/{episodic,playbooks,strategies}/`), and sources now live
   co-located inside their topic folder (`wiki/topics/<topic>/`) instead of a
