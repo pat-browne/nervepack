@@ -77,17 +77,22 @@ Promotion to the committed layers still rides the on-exit flush + daily/weekly c
 (the awaited triggers). See [[np-kb-claude-headless-scripting]] §8, ARCHITECTURE
 invariant 12.
 
-### Playbook layer (wiring)
+### Lessons layer (wiring)
 
-- **Capture:** `engine/setup/episodic-capture.sh` emits `struggles[]` on sessions that
-  had real failures/corrections.
-- **Distill:** `agents/np-flow-episodic-maintain.md` clusters struggles into
-  `playbooks/<topic>.md` with an `enforce` block and regenerates `playbooks/INDEX.md`.
-- **Enforce:** `engine/setup/lesson-guard.sh` (`PreToolUse` matcher `Bash`, installed by
-  `engine/setup/53-install-lesson-hooks.sh`) gates `ask` playbooks and injects `warn`
-  ones at the tool call; `engine/setup/lesson-recall.sh` (`UserPromptSubmit`, merged with
-  the former `strategy-recall.sh`) injects topic-matched playbooks with imperative framing.
-- **Graduate:** a proven playbook is promoted to a `skills/np-kb-*` rule via the
+- **Capture:** `engine/setup/episodic-capture.sh` emits `struggles[]` (failures) and
+  `strategies[]` (wins) on sessions with real signal.
+- **Distill:** `agents/np-flow-episodic-maintain.md` clusters both into
+  `memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or
+  `provenance: success`, adding an `enforce` block only when a tool-call gate is
+  warranted (independent of provenance), and regenerates `memory/lessons/INDEX.md`.
+- **Enforce:** `engine/setup/lesson-guard.sh` (`PreToolUse`, matchers `Bash`/`Read`,
+  installed by `engine/setup/53-install-lesson-hooks.sh`) gates `ask` entries and
+  injects `warn` ones at the tool call for any lesson carrying a non-empty
+  `enforce.tool_match`, skipping advisory-only entries; `engine/setup/lesson-recall.sh`
+  (`UserPromptSubmit`, the merge of the former `playbook-recall.sh` +
+  `strategy-recall.sh`) injects topic-matched lessons, framing by provenance —
+  imperative wording for `failure`, "the approach that worked" wording for `success`.
+- **Graduate:** a proven lesson is promoted to a `skills/np-kb-*` rule via the
   human-reviewed `np-core-contribute` gate, then marked `promoted`/archived.
 
 ### Feature toggles (wiring)
