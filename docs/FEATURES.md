@@ -19,19 +19,20 @@
 nervepack is a versioned hub of skills, rules, memory, and dev-env setup that
 follows you across machines, **delivered into each AI session as user skills** and
 **wired into the session lifecycle by hooks + crons**. Knowledge lives in layers
-in strict authority order. **`skills > sources > wiki > playbooks > episodic`**
-(strategies sit beside playbooks as the advisory, success-driven mirror). Human-
-reviewed, curated knowledge (skills) always wins; auto-distilled, review-waived
-layers (playbooks, strategies, episodic) are lower-authority and reversible. Two
+in strict authority order. **`skills > sources > wiki > lessons > episodic`**.
+Human-reviewed, curated knowledge (skills) always wins; auto-distilled,
+review-waived layers (lessons, episodic) are lower-authority and reversible. A
+lesson's `provenance` (`failure` or `success`) and its optional `enforce` block
+are independent — either provenance may or may not carry enforcement. Two
 data pipelines feed the auto layers: a **capture** pipeline (what we did → episodic,
-playbooks, strategies) and a **performance** pipeline (how much nervepack helped →
+lessons) and a **performance** pipeline (how much nervepack helped →
 metrics → dashboard). Everything is toggle-gated and fails open.
 
 ---
 
 # Part 1 — The knowledge layers
 
-The six places knowledge lives, in authority order, plus the lifecycle that moves a
+The five places knowledge lives, in authority order, plus the lifecycle that moves a
 proven pattern *up* the stack into a skill.
 
 ## Skills — curated behavioral guidance ("how to act")
@@ -110,59 +111,58 @@ subnet but don't finish. Next week you ask "where did we leave the eero migratio
 recall surfaces the episodic theme with the new IPs and the resume point, instead of
 you reconstructing it from scratch.
 
-## Playbooks — failure-driven, enforced ("in situation X, do/avoid Y")
+## Lessons — auto-distilled, provenance-tagged, optionally enforced ("in situation X, do/avoid Y — or the approach that worked is Z")
 
-**Purpose.** Auto-distilled procedural interventions from past failure→recovery.
-Above episodic, below skills. Unique trait: **enforced at the tool call**, not just
-advisory. This is the niche a passive skill structurally cannot fill.
+**Purpose.** Auto-distilled patterns from past sessions, both failure→recovery and
+proven successes. Above episodic, below skills. Each entry carries a `provenance`
+tag (`failure` or `success`) that shapes how it's framed on recall, and *independently*
+may carry an optional `enforce` block. Enforcement — gating or injecting right at the
+tool call — is the one capability a passive skill structurally cannot fill; it isn't
+tied to provenance, so a failure lesson can be advisory-only and a proven success can
+be worth enforcing.
 
-**Workflow.** Capture emits `struggles[]` on sessions with real failures →
-`episodic-maintain` clusters them into `memory/playbooks/<topic>.md` with an `enforce`
-block → `playbook-guard.sh` (`PreToolUse`) gates `ask` playbooks / injects `warn`
-ones at the tool call, and `playbook-recall.sh` (`UserPromptSubmit`) injects topic-
-matched ones with imperative framing.
+**Workflow.** Capture emits two signals: `struggles[]` on sessions with real failures
+and `strategies[]` on sessions with wins. `episodic-maintain` distills both into
+`memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or
+`provenance: success` and adding an `enforce` block only when a tool-call gate is
+warranted. `lesson-guard.sh` (`PreToolUse`) gates `ask` entries / injects `warn` ones
+at the tool call for any entry that carries a non-empty `enforce.tool_match` —
+skipping advisory entries regardless of provenance. `lesson-recall.sh`
+(`UserPromptSubmit`, the merge of the former `playbook-recall.sh` +
+`strategy-recall.sh`) injects topic-matched entries on a session's first prompts,
+framing by provenance: imperative "avoid X" wording for `failure`, advisory "the
+approach that worked is Y" wording for `success`.
 
-**Assets.** `playbook-recall.sh`, `playbook-guard.sh`, `agents/np-flow-episodic-maintain.md`,
-`memory/playbooks/` (overlay). Toggle: `playbooks`.
+**Assets.** `lesson-recall.sh`, `lesson-guard.sh`, `agents/np-flow-episodic-maintain.md`,
+`memory/lessons/` (overlay). Toggle: `lessons` (param `lessons.enforce`, default on,
+disables the guard while advisory recall stays on).
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
-silently wrong results. That failure distilled into the `safe-git-grep` playbook; now
-when a prompt mentions git-grep, the recall hook injects "use long-form flags" *before*
-you make the same mistake again, no skill invocation required.
-
-## Strategies — success-driven, advisory ("when X, the approach that worked is Z")
-
-**Purpose.** The success mirror of playbooks: reusable patterns that worked. Same
-second-class status, but **advisory** (injected, never enforced at the tool call).
-Their distinct value over a skill is auto-capture + topic-triggered surfacing.
-
-**Workflow.** Capture emits `strategies[]` → `episodic-maintain` distills into
-`memory/strategies/<topic>.md` → `strategy-recall.sh` (`UserPromptSubmit`) injects matching
-ones as "approaches that worked before."
-
-**Assets.** `strategy-recall.sh`, `agents/np-flow-episodic-maintain.md`,
-`memory/strategies/` (overlay). Toggle: `strategies`.
-
-**Situational example.** Across several sessions you find that searching GitHub issues
-surfaces tool limitations faster than official docs. That becomes the
-`github-issue-research` strategy; next time a tool misbehaves, the recall hook reminds
-you to search issues first.
+silently wrong results. That failure distilled into a `provenance: failure`
+`safe-git-grep` lesson with an `enforce` block; now when a prompt mentions git-grep,
+the recall hook injects "use long-form flags" *before* you make the same mistake
+again, no skill invocation required. Separately, across several sessions you find
+that searching GitHub issues surfaces tool limitations faster than official docs —
+that becomes a `provenance: success` `github-issue-research` lesson with no `enforce`
+block; next time a tool misbehaves, the recall hook reminds you (advisory-only) to
+search issues first.
 
 ## Graduation — the lifecycle that promotes patterns into skills
 
-**Purpose.** Playbooks and strategies are a **staging pool**, not a permanent home.
-A pattern that keeps proving itself (high `seen`) or outgrows what a skill body may
-even be (bytes over the skill budget) is overdue to become a curated, human-reviewed
-skill. Without a trigger, entries accrete forever. That is exactly how the
-`security-review` strategy grew to 8 KB.
+**Purpose.** Lessons are a **staging pool**, not a permanent home. A pattern that
+keeps proving itself (high `seen`) or outgrows what a skill body may even be (bytes
+over the skill budget) is overdue to become a curated, human-reviewed skill. Without
+a trigger, entries accrete forever. That is exactly how the `security-review` lesson
+grew to 8 KB.
 
 **Workflow.** The daily `75-skill-maintain.sh` runs `np-graduation-detect.py`
-(deterministic, no LLM) over the overlay's `memory/strategies/` and `memory/playbooks/`. Any entry
-with `seen ≥ graduate_seen` (default 10) or `bytes > graduate_kb` (default 6 KB) that
-isn't already `graduated`/`promoted`/`archived` is **surfaced** to the maintain log
-and a `graduation-candidates` marker, never auto-promoted (skills keep the
-human-review gate). You then graduate it by hand via `np-core-contribute`: distill the
-method into a `skills/np-*` skill and flip the source's `status: graduated`.
+(deterministic, no LLM) over the overlay's `memory/lessons/` (its candidate `kind` is
+the lesson's `provenance`). Any entry with `seen ≥ graduate_seen` (default 10) or
+`bytes > graduate_kb` (default 6 KB) that isn't already `graduated`/`promoted`/`archived`
+is **surfaced** to the maintain log and a `graduation-candidates` marker, never
+auto-promoted (skills keep the human-review gate). You then graduate it by hand via
+`np-core-contribute`: distill the method into a `skills/np-*` skill and flip the
+source's `status: graduated`.
 
 **Assets.** `np-graduation-detect.py`, `75-skill-maintain.sh`,
 `tests/skills/test_graduation_detect.py`. Toggle params: `skills.graduate_seen`,
@@ -174,7 +174,7 @@ emits `window.GRADUATION` and `index.html` renders a Graduation-candidates panel
 **Situational example.** `security-review` reaches `seen: 30` and 8 KB. The daily
 routine flags it in the marker file **and the dashboard's Graduation panel**. You run
 the graduation: a lean `np-kb-security-review` skill is born (method in the body, depth
-in `references/`), the strategy is marked `graduated`, and the detector stops flagging
+in `references/`), the lesson is marked `graduated`, and the detector stops flagging
 it, while `subagent-development` (seen 12) surfaces as the next candidate.
 
 ---
@@ -211,7 +211,8 @@ completed transcript, summarizes it, and scores it, so the work still reaches ep
 be measured and improved instead of assumed-useful.
 
 **Workflow.** At `SessionEnd` (and via the sweep), `np-eval-signals.py` extracts
-deterministic signals (skills invoked, playbook fires/heeded, recall injections,
+deterministic signals (skills invoked, `playbook_fires`/`playbook_heeded` — the
+enforced-lesson field names, kept as-is across the layer merge — recall injections,
 directive present, struggles, tokens) from fire-time markers the hooks dropped, then
 a Haiku verdict adds score + helped/shortfalls/suggestions. Records land in a local
 inbox.
@@ -219,9 +220,10 @@ inbox.
 **Assets.** `np-evaluator.sh`, `np-eval-signals.py`, `np-kb-evaluator-signals` (the
 field reference). Toggle: `evaluator`.
 
-**Situational example.** A session where you invoked three skills and heeded a playbook
-scores higher on "nervepack helped" than one where the directive was present but no
-skill fired. The low-help session generates a suggestion you can act on later.
+**Situational example.** A session where you invoked three skills and heeded an
+enforced lesson scores higher on "nervepack helped" than one where the directive was
+present but no skill fired. The low-help session generates a suggestion you can act
+on later.
 
 ## Metrics aggregation + dashboard
 
@@ -345,9 +347,9 @@ not a sub-toggle (sub-toggles wrongly inherit an "on" parent).
 
 **Assets.** `toggles.conf`, `np-toggle-lib.sh`, `nervepack-toggle.sh`, `np-core-toggle`.
 
-**Situational example.** Playbook enforcement is too aggressive on a given machine. You
-run `np-core-toggle` → disable `playbooks` locally; the guard hook no-ops there while
-staying on everywhere else.
+**Situational example.** Lesson enforcement is too aggressive on a given machine. You
+run `np-core-toggle` → set `lessons.enforce` off locally; the guard hook no-ops there
+while advisory recall and the rest of the fleet keep working.
 
 ## Memory-store promotion
 
@@ -371,14 +373,14 @@ into `np-env-secrets-refresh`, so every machine inherits it.
 nudge it mid-flight, not just at the next session.
 
 **Workflow.** `struggle-escalation.sh` (`UserPromptSubmit`, once/session) fires when
-the playbook guard has tripped enough times after enough prompts, injecting a skill-
+the lesson guard has tripped enough times after enough prompts, injecting a skill-
 applicability reminder. `skill-trigger-recall.sh` matches skill-authoring prompt
 patterns and reminds you to invoke `superpowers:writing-skills` first.
 
 **Assets.** `struggle-escalation.sh`, `skill-trigger-recall.sh`, their installers.
 Toggles: `evaluator.escalation`, `skills.trigger_recall`.
 
-**Situational example.** Three tool calls into a task you keep tripping the playbook
+**Situational example.** Three tool calls into a task you keep tripping the lesson
 guard. Escalation fires once ("you've struggled twice, is there a skill for this?")
 and you stop to invoke the one you'd been bypassing.
 
@@ -426,46 +428,46 @@ capture/evaluator crons run on the local model with no Claude binary present.
 private, and one resolver points every consumer at the right tree.
 
 **Workflow.** The engine repo holds machinery + generic skills; the overlay
-(`NP_CONTENT_DIR`) holds wiki (with co-located sources) / memory (episodic+playbooks+strategies) / metrics + personal
+(`NP_CONTENT_DIR`) holds wiki (with co-located sources) / memory (episodic+lessons) / metrics + personal
 skills. `np-content-lib.sh` (`np_content_dir`) resolves the overlay for every consumer;
 unset falls back to the engine root (legacy single-repo).
 
 **Assets.** `np-content-lib.sh`, `NP_CONTENT_DIR`, the `nervepack-content-example` repo.
 
-**Situational example.** The graduation detector needs to scan *your* strategies. It
+**Situational example.** The graduation detector needs to scan *your* lessons. It
 asks `np_content_dir`, gets your overlay path, and scans there. A public clone
 with no overlay simply finds nothing and no-ops.
 
 ## Team overlay — a shared layer above your personal content
 
-**Purpose.** Let a team share a curated baseline (skills, playbooks, strategies,
-wiki) without giving up private, per-person memory. The engine stays public, your
-personal overlay stays yours, and a third overlay carries what the team holds in
-common.
+**Purpose.** Let a team share a curated baseline (skills, lessons, wiki) without
+giving up private, per-person memory. The engine stays public, your personal
+overlay stays yours, and a third overlay carries what the team holds in common.
 
 **Workflow.** Configure a team root with `NP_TEAM_DIR` (or write the path into
 `~/.config/nervepack/team-dir`) and the overlay stack becomes `team > personal >
 engine`. `np-layer-lib.sh` builds that stack and every reader scans it highest-first.
 Skills are **override-only**, so a team `np-kb-branding` shadows your personal one of
-the same name. The topic layers (playbooks, strategies, episodic, wiki) combine per the
+the same name. The topic layers (lessons, episodic, wiki) combine per the
 `team.merge` param, `override` (default, team wins on a name clash), `concatenate`
 (both sets surface), or `team-only` (ignore personal for that read). **Reads merge,
 writes stay personal.** Auto-capture always writes your personal overlay, so nothing
 you do bleeds into the shared layer by accident. Publishing to the team is the one
 explicit path, `np-core-contribute --layer team` (or "save this to the team layer").
 **Metrics stay personal-only by design.** The dashboard merges *learned* counts
-(playbooks/strategies) across both overlays, but your session scores are never shared.
-Gated by the `team` toggle, which is dormant until a team dir resolves. Complete
-through Phase 3 (recall hooks, wiki index, dashboard learned-counts, and MCP recall
-all merge across layers).
+(the lessons layer, split by provenance) across both overlays, but your session
+scores are never shared. Gated by the `team` toggle, which is dormant until a team
+dir resolves. Complete through Phase 3 (recall hooks, wiki index, dashboard
+learned-counts, and MCP recall all merge across layers).
 
 **Assets.** `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`/
-`np_layer_roots`), `np_team_dir` in `np-content-lib.sh`, the three recall hooks,
-`dashboard/build.py` (`wiki_index`, `learned_counts`), `np-mcp-server.py`
-(`_tool_recall`), `np-core-contribute`. Toggle: `team` (`team.merge`).
+`np_layer_roots`), `np_team_dir` in `np-content-lib.sh`, the two recall hooks
+(`episodic-recall.sh`, `lesson-recall.sh`), `dashboard/build.py` (`wiki_index`,
+`learned_counts`), `np-mcp-server.py` (`_tool_recall`), `np-core-contribute`.
+Toggle: `team` (`team.merge`).
 
 **Situational example.** Your data team keeps a shared `np-kb-data-team-mcp` skill and
-a `safe-migrations` playbook in a team overlay. A new teammate points `team-dir` at it
+a `safe-migrations` lesson in a team overlay. A new teammate points `team-dir` at it
 and inherits both on their first session, while their own half-finished migration notes
 stay in their personal episodic memory where only they see them. When they harden a
 new rule worth sharing, they run `contribute --layer team` and it lands in the shared
@@ -484,7 +486,7 @@ refuses if dirty. It never pushes (public release stays human-gated).
 **Assets.** `np-publish-scan.py`, `scan-allowlist.txt`, `np-publish-snapshot.sh`,
 `PUBLISH.md`, the `pii-guard` CI job.
 
-**Situational example.** You graduate a strategy into an engine skill but leave a real
+**Situational example.** You graduate a lesson into an engine skill but leave a real
 hostname in an example. The PII guard fails CI on the push, naming the file and line,
 before it can become part of the public engine.
 
