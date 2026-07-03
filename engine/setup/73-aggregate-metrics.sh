@@ -114,8 +114,7 @@ if np_enabled evaluator.dashboard; then
   WIKI_NAV="$(np_param evaluator.wiki_nav on)" \
   WIKI_MERMAID="$(np_param evaluator.wiki_mermaid on)" \
   NP_CONTENT_DIR="$CONTENT" \
-  NP_PLAYBOOKS_DIR="$CONTENT/memory/playbooks" \
-  NP_STRATEGIES_DIR="$CONTENT/memory/strategies" \
+  NP_LESSONS_DIR="$CONTENT/memory/lessons" \
   NP_RESOLVED_SUGGESTIONS="$RESOLVED" \
     python3 "$NP/dashboard/build.py" "$METRICS" "$METRICS_JS" >/dev/null 2>&1 || true
 fi

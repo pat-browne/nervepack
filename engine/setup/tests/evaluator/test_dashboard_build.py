@@ -29,6 +29,13 @@ def run_build(jsonl_text, **env):
             return fh.read()
 
 
+def _lesson(d, topic, provenance):
+    """Write a minimal memory/lessons/<topic>.md carrying a provenance tag."""
+    with open(os.path.join(d, topic + ".md"), "w") as fh:
+        fh.write("---\nname: %s\nkind: lesson\nprovenance: %s\n---\nbody\n"
+                 % (topic, provenance))
+
+
 def _seven():
     """7 records, ts ascending s1..s7."""
     return "".join(
@@ -131,18 +138,17 @@ class TestBuild(unittest.TestCase):
         self.assertEqual([s["text"] for s in recs[0]["suggestions"]], ["Keep me"])
 
     def test_learned_counts_playbooks_and_strategies(self):
-        """build.py emits window.LEARNED = {playbooks, strategies} counting topic
-        files (INDEX.md/README.md excluded) so the dashboard shows memory growth."""
+        """build.py emits window.LEARNED = {playbooks, strategies} splitting the
+        memory/lessons topics by provenance (failure -> playbooks, success ->
+        strategies), INDEX.md/README.md excluded, so the dashboard shows growth."""
         with tempfile.TemporaryDirectory() as d:
-            pb = os.path.join(d, "playbooks"); st = os.path.join(d, "strategies")
-            os.makedirs(pb); os.makedirs(st)
-            for f in ("INDEX.md", "README.md", "a.md", "b.md"):
-                with open(os.path.join(pb, f), "w"):
+            le = os.path.join(d, "lessons"); os.makedirs(le)
+            _lesson(le, "a", "failure"); _lesson(le, "b", "failure")
+            _lesson(le, "x", "success")
+            for f in ("INDEX.md", "README.md"):
+                with open(os.path.join(le, f), "w"):
                     pass
-            for f in ("INDEX.md", "README.md", "x.md"):
-                with open(os.path.join(st, f), "w"):
-                    pass
-            js = run_build("", NP_PLAYBOOKS_DIR=pb, NP_STRATEGIES_DIR=st)
+            js = run_build("", NP_LESSONS_DIR=le)
         m = re.search(r"window\.LEARNED = (\{.*?\});", js, re.S)
         self.assertTrue(m, f"no window.LEARNED in output: {js!r}")
         learned = json.loads(m.group(1))
@@ -150,38 +156,39 @@ class TestBuild(unittest.TestCase):
                                    "strategy_names": ["x"]})
 
     def test_learned_strategy_names_sorted_excluding_index_readme(self):
-        """strategy_names lists <topic> (filename minus .md), sorted, with
+        """strategy_names lists success-provenance <topic> names, sorted, with
         INDEX.md / README.md and non-.md files excluded."""
         with tempfile.TemporaryDirectory() as d:
-            st = os.path.join(d, "strategies"); os.makedirs(st)
-            for f in ("INDEX.md", "README.md", "b.md", "a.md", "notmd.txt"):
-                with open(os.path.join(st, f), "w"):
+            le = os.path.join(d, "lessons"); os.makedirs(le)
+            _lesson(le, "b", "success"); _lesson(le, "a", "success")
+            for f in ("INDEX.md", "README.md"):
+                with open(os.path.join(le, f), "w"):
                     pass
-            js = run_build("", NP_STRATEGIES_DIR=st)
+            with open(os.path.join(le, "notmd.txt"), "w"):
+                pass
+            js = run_build("", NP_LESSONS_DIR=le)
         m = re.search(r"window\.LEARNED = (\{.*?\});", js, re.S)
         learned = json.loads(m.group(1))
         self.assertEqual(learned["strategy_names"], ["a", "b"])
         self.assertEqual(learned["strategies"], 2)
 
     def test_learned_counts_resolve_content_dir_when_no_explicit_dirs(self):
-        """After the engine/content-overlay split, playbooks/strategies live in
-        the content overlay under memory/, not the engine repo. With no explicit
-        NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR, learned_counts must resolve them under
-        <content>/memory/ (NP_CONTENT_DIR, mirroring np_content_dir) — otherwise a
-        bare `build.py` (manual open-dashboard, MCP summary) reports 0/0 and the
-        Wins & learnings panel looks empty. Explicit dirs still override."""
+        """After the engine/content-overlay split, lessons live in the content
+        overlay under memory/lessons, not the engine repo. With no explicit
+        NP_LESSONS_DIR, learned_counts must resolve it under <content>/memory/lessons
+        (NP_CONTENT_DIR, mirroring np_content_dir) — otherwise a bare `build.py`
+        (manual open-dashboard, MCP summary) reports 0/0 and the Wins & learnings
+        panel looks empty. Explicit dir still overrides."""
         with tempfile.TemporaryDirectory() as content:
-            pb = os.path.join(content, "memory", "playbooks"); os.makedirs(pb)
-            st = os.path.join(content, "memory", "strategies"); os.makedirs(st)
-            for f in ("INDEX.md", "README.md", "p1.md", "p2.md"):
-                with open(os.path.join(pb, f), "w"):
+            le = os.path.join(content, "memory", "lessons"); os.makedirs(le)
+            _lesson(le, "p1", "failure"); _lesson(le, "p2", "failure")
+            _lesson(le, "s1", "success")
+            for f in ("INDEX.md", "README.md"):
+                with open(os.path.join(le, f), "w"):
                     pass
-            for f in ("INDEX.md", "s1.md"):
-                with open(os.path.join(st, f), "w"):
-                    pass
-            # NP_CONTENT_DIR set, but NOT NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR.
+            # NP_CONTENT_DIR set, but NOT NP_LESSONS_DIR.
             e = dict(os.environ)
-            e.pop("NP_PLAYBOOKS_DIR", None); e.pop("NP_STRATEGIES_DIR", None)
+            e.pop("NP_LESSONS_DIR", None)
             with tempfile.TemporaryDirectory() as tmp:
                 inp = os.path.join(tmp, "metrics.jsonl")
                 with open(inp, "w"):
@@ -708,8 +715,8 @@ class TestWikiNesting(unittest.TestCase):
 
 
 class TestLearnedLayers(unittest.TestCase):
-    """learned_counts unions memory/playbooks + memory/strategies across
-    team>personal (counts dedup)."""
+    """learned_counts unions memory/lessons across team>personal, split by
+    provenance (counts dedup)."""
 
     def setUp(self):
         self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
@@ -718,33 +725,33 @@ class TestLearnedLayers(unittest.TestCase):
         for d in (self._p, self._t, self._h):
             shutil.rmtree(d, ignore_errors=True)
 
-    def _mk(self, root, sub, names):
-        d = os.path.join(root, "memory", sub); os.makedirs(d, exist_ok=True)
+    def _mk(self, root, provenance, names):
+        d = os.path.join(root, "memory", "lessons"); os.makedirs(d, exist_ok=True)
         for n in names:
             with open(os.path.join(d, n + ".md"), "w") as fh:
-                fh.write("---\nname: %s\n---\nbody\n" % n)
+                fh.write("---\nname: %s\nprovenance: %s\n---\nbody\n" % (n, provenance))
 
     def _run(self, mode):
         with open(os.path.join(self._h, "local"), "w") as fh:
             fh.write("team.merge=%s\n" % mode)
         conf = os.path.join(os.path.dirname(__file__), "..", "..", "toggles.conf")
         js = run_build("", NP_CONTENT_DIR=self._p, NP_TEAM_DIR=self._t,
-                       NP_PLAYBOOKS_DIR="", NP_STRATEGIES_DIR="",
+                       NP_LESSONS_DIR="",
                        NP_TOGGLES_CONF=conf, NP_TOGGLES_LOCAL=os.path.join(self._h, "local"))
         m = re.search(r"window\.LEARNED = (\{.*?\});", js, re.S)
         self.assertTrue(m, "no window.LEARNED in: %r" % js)
         return json.loads(m.group(1))
 
     def test_override_unions_and_dedups(self):
-        self._mk(self._p, "strategies", ["a", "b"]); self._mk(self._t, "strategies", ["b", "c"])
-        self._mk(self._p, "playbooks", ["p1"]); self._mk(self._t, "playbooks", ["p1", "p2"])
+        self._mk(self._p, "success", ["a", "b"]); self._mk(self._t, "success", ["b", "c"])
+        self._mk(self._p, "failure", ["p1"]); self._mk(self._t, "failure", ["p1", "p2"])
         learned = self._run("override")
         self.assertEqual(learned["strategy_names"], ["a", "b", "c"])  # union, deduped
         self.assertEqual(learned["strategies"], 3)
         self.assertEqual(learned["playbooks"], 2)                     # p1 deduped
 
     def test_team_only(self):
-        self._mk(self._p, "strategies", ["a", "b"]); self._mk(self._t, "strategies", ["c"])
+        self._mk(self._p, "success", ["a", "b"]); self._mk(self._t, "success", ["c"])
         learned = self._run("team-only")
         self.assertEqual(learned["strategy_names"], ["c"])            # team set only
 
@@ -758,13 +765,15 @@ class TestConceptFolders(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cd:
             _mk(cd, "wiki/concepts/widgets/widgets.md", "concept", "widgets", sources=[])
             _mk(cd, "wiki/concepts/widgets/spec.md", "reference", "spec")
-            _mk(cd, "memory/playbooks/foo.md", "playbook", "foo")
-            _mk(cd, "memory/strategies/bar.md", "strategy", "bar")
+            os.makedirs(os.path.join(cd, "memory", "lessons"), exist_ok=True)
+            with open(os.path.join(cd, "memory", "lessons", "foo.md"), "w") as fh:
+                fh.write("---\nname: foo\nprovenance: failure\n---\nbody\n")
+            with open(os.path.join(cd, "memory", "lessons", "bar.md"), "w") as fh:
+                fh.write("---\nname: bar\nprovenance: success\n---\nbody\n")
             saved = {k: os.environ.get(k)
-                     for k in ("NP_CONTENT_DIR", "NP_PLAYBOOKS_DIR", "NP_STRATEGIES_DIR")}
+                     for k in ("NP_CONTENT_DIR", "NP_LESSONS_DIR")}
             os.environ["NP_CONTENT_DIR"] = cd
-            os.environ.pop("NP_PLAYBOOKS_DIR", None)
-            os.environ.pop("NP_STRATEGIES_DIR", None)
+            os.environ.pop("NP_LESSONS_DIR", None)
             try:
                 idx = bp.wiki_index()
                 lc = bp.learned_counts()
