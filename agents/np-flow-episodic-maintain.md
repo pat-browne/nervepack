@@ -126,8 +126,9 @@ The success mirror of 5b. Process the `strategies[]` arrays across the inbox
    `memory/strategies/<topic>.md` using the format in `memory/strategies/README.md` — synthesize
    **Title / When / Do** from the `{title, description, content}` items.
 2. Set `topic_triggers` from the strategies' topic_triggers (drives
-   `engine/setup/strategy-recall.sh` injection). Strategies are **advisory** — no
-   `tool_match`/`gate` (that's playbooks only).
+   `engine/setup/lesson-recall.sh` injection, merged with the former
+   `playbook-recall.sh`). Strategies are **advisory** — no `tool_match`/`gate`
+   (that's playbooks only).
 3. Increment `seen` when a cluster matches an existing strategy.
 4. Regenerate `memory/strategies/INDEX.md` (columns `topic | topic_triggers | seen`),
    one row per strategy.
