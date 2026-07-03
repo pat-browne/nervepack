@@ -22,8 +22,11 @@ class TestSignals(unittest.TestCase):
             sig_dir = os.path.join(tmp, "sig")
             os.makedirs(sig_dir)
             with open(os.path.join(sig_dir, "s1.log"), "w") as fh:
-                fh.write("lesson-guard ask nuke\nplaybook-recall\n"
-                         "episodic-recall\nstrategy-recall\n")
+                # lesson-recall is the merged hook (replaces playbook-recall +
+                # strategy-recall, which no longer exist) — two firings here
+                # prove count_markers actually counts the lesson-recall prefix.
+                fh.write("lesson-guard ask nuke\nlesson-recall\n"
+                         "episodic-recall\nlesson-recall\n")
             transcript = os.path.join(tmp, "t.jsonl")
             with open(transcript, "w") as fh:
                 fh.write('{"type":"tool_use","name":"Bash"}\n')
@@ -42,7 +45,8 @@ class TestSignals(unittest.TestCase):
             sig = json.loads(out)
 
             self.assertEqual(sig["playbook_fires"], 1)
-            self.assertEqual(sig["recall_injections"], 3)  # playbook + episodic + strategy
+            # 2 lesson-recall firings + 1 episodic-recall firing.
+            self.assertEqual(sig["recall_injections"], 3)
             self.assertEqual(sig["tool_calls"], 2)
             self.assertTrue(sig["directive_present"])
             self.assertGreater(sig["directive_tokens"], 0)  # fixed injection overhead measured
