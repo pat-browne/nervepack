@@ -36,8 +36,7 @@ If the result is anything other than `up to date` or `fast-forwarded`, **stop**
 — log "nervepack not in clean state — skipping episodic maintenance" and exit.
 
 **Where the layers live (post content-cutover):** `memory/episodic/`,
-`memory/playbooks/`, `memory/strategies/` (and `wiki/`) live in the **content repo**,
-which is your **cwd**.
+`memory/lessons/` (and `wiki/`) live in the **content repo**, which is your **cwd**.
 
 ### 2. Read the inbox
 
@@ -94,47 +93,42 @@ Rewrite it from the current `memory/episodic/*.md` files, preserving the header 
 
 Derive each row's keywords from the union of that theme's notes' `keywords`.
 
-### 5b. Distill playbooks from struggles
+### 5b. Distill lessons from struggles and successes
 
-After theming episodic notes, process the `struggles[]` arrays across the inbox:
+After theming episodic notes, process the `struggles[]` and `strategies[]` arrays
+across the inbox into ONE `memory/lessons/` layer. Each lesson carries a `provenance`
+tag and, *independently*, an optional `enforce` block (provenance frames recall;
+enforcement gates the tool call — the two are decoupled).
 
-1. Cluster recurring struggles by their failure pattern. For each cluster,
-   create or refresh `memory/playbooks/<topic>.md` using the format in
-   `memory/playbooks/README.md` — synthesize **Symptom / Why / Do / Avoid** from the
-   struggle items.
-2. Set the `enforce` block: `tool_match` only when the failure has a detectable
-   Bash-command signature (an ERE that matches the offending command, e.g.
-   `sed -i .*s[#/]` or `git reset --hard`); `gate: ask` if any clustered struggle
-   was `destructive`, else `warn`; `topic_triggers` from the struggles'
-   topic_triggers. **`tool_match` must not contain a literal `|`** (the INDEX
-   column delimiter) — use character classes or separate playbooks. If a
-   `tool_match` would be dangerously broad (matches common safe commands), leave
-   it empty and rely on `topic_triggers` injection instead.
-3. Increment `seen` when a cluster matches an existing playbook.
-4. Regenerate `memory/playbooks/INDEX.md` (columns `topic | tool_match | gate |
-   topic_triggers | seen`), one row per playbook.
-5. In your final report, FLAG playbooks with high `seen` (≥3) as **promotion
-   candidates** for a human to graduate into a `skills/np-kb-*` rule via
-   `np-core-contribute`. Prune stale/disproven playbooks to `archive/playbooks/`.
-
-### 5c. Distill strategies from successes
-
-The success mirror of 5b. Process the `strategies[]` arrays across the inbox
-(reusable approaches that worked, ReasoningBank-shaped):
-
-1. Cluster recurring strategies by approach. For each cluster, create or refresh
-   `memory/strategies/<topic>.md` using the format in `memory/strategies/README.md` — synthesize
-   **Title / When / Do** from the `{title, description, content}` items.
-2. Set `topic_triggers` from the strategies' topic_triggers (drives
-   `engine/setup/lesson-recall.sh` injection, merged with the former
-   `playbook-recall.sh`). Strategies are **advisory** — no `tool_match`/`gate`
-   (that's playbooks only).
-3. Increment `seen` when a cluster matches an existing strategy.
-4. Regenerate `memory/strategies/INDEX.md` (columns `topic | topic_triggers | seen`),
-   one row per strategy.
-5. In your final report, FLAG strategies with high `seen` (≥3) as **promotion
-   candidates** to graduate into a `skills/np-kb-*` rule via `np-core-contribute`.
-   Prune stale/disproven strategies to `archive/strategies/`.
+1. **Failures → `provenance: failure`.** Cluster recurring `struggles[]` by failure
+   pattern. For each cluster, create or refresh `memory/lessons/<topic>.md` with
+   `kind: lesson`, `provenance: failure`, and a **Symptom / Why / Do / Avoid** body
+   synthesized from the struggle items.
+2. **Successes → `provenance: success`.** Cluster recurring `strategies[]` by approach
+   (reusable approaches that worked, ReasoningBank-shaped). For each cluster, create or
+   refresh `memory/lessons/<topic>.md` with `kind: lesson`, `provenance: success`, and a
+   **Title / When / Do** body from the `{title, description, content}` items. If a topic
+   already holds a failure entry, add the success entry to the *same* file separated by a
+   `---` line (one file per topic, entries stacked).
+3. **`enforce` block (optional, any provenance).** Add one only when a pattern warrants
+   gating at the tool call — almost always a failure with a detectable Bash signature:
+   `tool_match` = an ERE matching the offending command (e.g. `sed -i .*s[#/]` or
+   `git reset --hard`); `gate: ask` if any clustered item was `destructive`, else `warn`.
+   **`tool_match` must not contain a literal `|`** (the INDEX column delimiter) — use
+   character classes or separate lessons. If a `tool_match` would be dangerously broad
+   (matches common safe commands), leave it empty and rely on `topic_triggers` injection.
+   Entries with no `enforce` (or an empty `tool_match`) are advisory-only.
+4. Set top-level `topic_triggers` from the items' topic_triggers (drives
+   `engine/setup/lesson-recall.sh` injection; for enforced entries it also drives
+   `engine/setup/lesson-guard.sh`). Increment `seen` when a cluster matches an existing
+   lesson.
+5. Regenerate `memory/lessons/INDEX.md` — a Markdown table whose data rows are
+   `| <topic> | <tool_match> | <gate> | <topic_triggers> |` (empty `tool_match`/`gate`
+   cells for advisory entries), so `engine/setup/lesson-guard.sh`'s parser reads it
+   unchanged.
+6. In your final report, FLAG lessons with high `seen` (≥3) as **promotion candidates**
+   for a human to graduate into a `skills/np-kb-*` rule via `np-core-contribute`. Prune
+   stale/disproven lessons to `archive/lessons/`.
 
 ### 6. Commit, push, clear inbox
 
@@ -152,7 +146,7 @@ git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
-_paths="memory/episodic archive/episodic memory/playbooks archive/playbooks memory/strategies archive/strategies"
+_paths="memory/episodic archive/episodic memory/lessons archive/lessons"
 git add $_paths
 git commit -m "episodic(maintain): weekly drain ($(date -u +%F))" \
   -m "Themes touched: <list>. Notes merged: <N>. Compacted: <list or none>." \

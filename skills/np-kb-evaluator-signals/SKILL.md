@@ -20,18 +20,18 @@ by `engine/setup/np-eval-signals.py` — no LLM, no guessing — plus LLM-derive
 
 ### `playbook_fires` (int)
 - **Source**: `count_markers()` — counts `lesson-guard` prefixed lines in `~/.cache/nervepack/session-signals/<sid>.log`, written by `engine/setup/lesson-guard.sh` when a Bash command matches a lesson's enforce `tool_match` pattern.
-- **Populated when**: An imminent Bash command matches an entry in `playbooks/INDEX.md`.
-- **Zero bias**: **Genuinely sparse today.** Only two playbooks currently exist (`bash-nested-substitution`, `mv3-screenshot-capture`). As the catalog grows, this rises naturally. Not a dead signal.
+- **Populated when**: An imminent Bash command matches an enforcing entry in `memory/lessons/INDEX.md`.
+- **Zero bias**: **Genuinely sparse today.** Only lessons that carry an enforcing `tool_match` fire it (a small subset of the catalog). As more enforcing lessons accrue, this rises naturally. Not a dead signal.
 - **Status**: LIVE ✓ — sparseness reflects catalog size, not a wiring gap.
 
 ### `playbook_heeded` (int)
 - **Source**: `gated_fingerprints(log_path) - exec_fps` — fingerprints of gated commands from the signal log that never appeared as executed Bash tool calls in the transcript.
-- **Populated when**: A playbook guard fired AND the session did not subsequently run that exact command. A heeded count of 1 means the intervention worked.
+- **Populated when**: The lesson guard fired AND the session did not subsequently run that exact command. A heeded count of 1 means the intervention worked.
 - **Zero bias**: Inherits `playbook_fires` sparseness. Also 0 if all gated commands were run anyway (guard noted but ignored).
 - **Status**: LIVE ✓
 
 ### `recall_injections` (int)
-- **Source**: `count_markers()` — sum of `playbook-recall`, `episodic-recall`, and `strategy-recall` prefixed lines in the session-signals log (each recall hook writes one marker via `np_signal`).
+- **Source**: `count_markers()` — sum of `lesson-recall` and `episodic-recall` prefixed lines in the session-signals log (each recall hook writes one marker via `np_signal`).
 - **Populated when**: A recall hook matched the prompt and injected context in the first N prompts of a **live** session.
 - **Zero bias**: **Structural zero for back-captured sessions.** The signal log lives in `~/.cache/nervepack/session-signals/` and is written by live hooks at runtime; the back-capture sweep re-runs the evaluator against the old transcript, but the ephemeral signal log for that old session no longer exists. So `recall_injections` is always 0 in back-captured records, even when recall hooks did fire during that original session.
 - **Status**: LIVE for live sessions; structural 0 for back-captures. Not fixable without logging recall events to a durable transcript artifact.
