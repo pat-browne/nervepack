@@ -22,14 +22,14 @@ skills. Your **personal content** lives in a **separate overlay repo** (e.g.
 `~/Code/nervepack-content`), resolved at runtime by `NP_CONTENT_DIR` (default, when
 unset: the engine root, for the single-repo legacy layout). The content layers —
 `wiki/` (curated synthesis pages **with their sources co-located inside**, not a
-separate `sources/` dir), `memory/` (the agent-owned `episodic/`, `playbooks/`,
-`strategies/` layers grouped under one dir), `archive/`,
+separate `sources/` dir), `memory/` (the agent-owned `episodic/`, `lessons/`
+layers grouped under one dir), `archive/`,
 `compact-proposals/`, `log.md`, `dashboard/data/`, your **personal**
 `np-kb-*`/`np-env-*` skills (your sites, secrets, machine setup), and your
 project's **visual identity** (`brand/` — logos, social card, banner, favicon,
 brand guide, design language) — **do not live in the engine repo**; commit them
 to the overlay. The engine repo stays free of personal data (the `pii-guard` CI
-job + `np-publish-scan.py` enforce this). An optional **team** overlay may sit above the personal overlay (`team > personal > engine`); reads merge with team winning, writes still target personal. Configured via `NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, gated by the `team` toggle. Topic layers (playbooks/strategies/episodic/wiki) combine per the `team.merge` toggle param — `override` (default), `concatenate`, or `team-only`; skills stay override-only. `contribute` can target the team overlay (`--layer team` / 'save to the team layer'), writing via `np_team_dir`; auto-capture still writes personal.
+job + `np-publish-scan.py` enforce this). An optional **team** overlay may sit above the personal overlay (`team > personal > engine`); reads merge with team winning, writes still target personal. Configured via `NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, gated by the `team` toggle. Topic layers (lessons/episodic/wiki) combine per the `team.merge` toggle param — `override` (default), `concatenate`, or `team-only`; skills stay override-only. `contribute` can target the team overlay (`--layer team` / 'save to the team layer'), writing via `np_team_dir`; auto-capture still writes personal.
 
 **Brand/visual identity is content, not engine.** A specific brand is instance
 identity, not reusable machinery — the engine stays identity-neutral so a forker
@@ -75,8 +75,7 @@ These are your personal knowledge layers — **commit them to the overlay, never
 | `wiki/concepts/<concept>/<concept>.md` | Concept synthesis page (frontmatter `kind: concept`). Concepts are folders, mirroring topics. | **Yes — LLM-maintained** |
 | `wiki/concepts/<concept>/<name>.md` | Curated source co-located with a concept synthesis page (same form as topic sources). | **Yes — via ingest protocol (§ "Wiki layer")** |
 | `memory/episodic/<topic>.md` | LLM-owned episodic working memory ("what we did / decided / where we left off"), themed by topic. **Lowest-authority layer.** Auto-written by the daily `episodic-maintain` agent — the one subtree where the human-review gate is waived. | **No — agent-owned; don't hand-edit** |
-| `memory/playbooks/<topic>.md` | Auto-distilled procedural interventions ("in situation X, do/avoid Y"), enforced at the tool call + prompt. Second-class (waived gate, like `memory/episodic/`); above episodic, below skills. | **No — agent-owned; don't hand-edit** |
-| `memory/strategies/<topic>.md` | Auto-distilled reusable success patterns ("when X, the approach that worked is Z") — the success mirror of `memory/playbooks/`. **Advisory** (injected via `strategy-recall`, not enforced). Same second-class status. | **No — agent-owned; don't hand-edit** |
+| `memory/lessons/<topic>.md` | Auto-distilled patterns from past sessions ("in situation X, do/avoid Y" or "the approach that worked is Z"), tagged `provenance: failure\|success`. Second-class (waived gate, like `memory/episodic/`); above episodic, below skills. Provenance and enforcement are independent — an entry may optionally carry an `enforce` block (tool-call gate) regardless of provenance; most carry none and stay advisory-only. | **No — agent-owned; don't hand-edit** |
 | `dashboard/data/metrics.jsonl` | Committed per-session performance time series (evaluator output; rendered by the dashboard). Append-only, agent-written. Content-relative (the dashboard loads `data/metrics.js` as a sibling of `index.html`). | **No — agent-owned** |
 | `compact-proposals/<date>.md` | Compaction proposals from `weekly-compact` awaiting human review | Read & act on; the file is the agent's queue |
 | `archive/<name>/`, `archive/MANIFEST.md` | Retired skills | **No — immutable history** |
@@ -107,8 +106,8 @@ The harness is deliberately **bilingual**, split on one question: *is there real
 logic here, or is this just glue?*
 
 - **Bash** — for latency-critical, low-logic glue: hooks that run on the hot path
-  (`playbook-guard` fires before *every* Bash tool call; `episodic-recall` /
-  `playbook-recall` fire on *every* prompt; `nervepack-session-directive` at session
+  (`lesson-guard` fires before *every* Bash tool call; `episodic-recall` /
+  `lesson-recall` fire on *every* prompt; `nervepack-session-directive` at session
   start), and any script that's mostly sequencing other CLIs (git, jq, `np-llm.sh`,
   crontab). Bash's ~5–10ms cold start matters on these; Python's ~30–80ms does not.
 - **Python (stdlib-only)** — for parsing and data-structure assembly that runs
@@ -197,16 +196,16 @@ has no public CI gate.
 
 ## Knowledge layer (model + precedence)
 
-Nervepack's layers in descending authority: `skills > sources > wiki > playbooks > episodic`.
+Nervepack's layers in descending authority: `skills > sources > wiki > lessons > episodic`.
 (Sources are **part of the wiki layer** — source files co-located inside
 `wiki/topics/<topic>/` and `wiki/concepts/<concept>/`, not a separate directory. The
 `memory/` grouping is a directory convenience and does **not** change the relative
-authority of episodic/playbooks/strategies.)
+authority of episodic/lessons.)
 
 - **Skills** — behavioral guidance ("how to act"); human-reviewed gate before write.
 - **Sources** — durable, versioned technical reference co-located within the wiki layer; ingested via the protocol below.
 - **Wiki** — LLM-owned synthesis pages linking skills + their co-located sources.
-- **Playbooks** — auto-distilled procedural interventions from past failure→recovery; enforced at runtime.
+- **Lessons** — auto-distilled patterns from past failure→recovery *and* past successes, tagged `provenance: failure|success`; may optionally be enforced at runtime (independent of provenance).
 - **Episodic** — lowest-authority working narrative; auto-captured, prunable.
 - **Feature toggles** — every feature has an on/off switch; see § "Feature toggles".
 - **Evaluator** — per-session scoring; feeds the dashboard and suggestion pipeline.
@@ -225,15 +224,18 @@ Durable rules must NOT live here — if an episodic entry is really a rule or
 preference, promote it to a skill via [[np-core-contribute]]. The maintenance
 agent flags such entries in its report but does not write to `skills/` itself.
 
-### Playbook layer (what it is)
+### Lessons layer (what it is)
 
-Auto-distilled procedural interventions from past failure→recovery. Precedence:
-`skills > sources > wiki > playbooks > episodic`. Unlike episodic narrative,
-playbooks are **enforced at runtime**: `warn` playbooks are injected at the tool
-call; `ask` playbooks gate execution. A proven playbook is promoted to a
-`skills/np-kb-*` rule via the human-reviewed `np-core-contribute` gate, then
-marked `promoted`/archived. This is the validation gate; candidate playbooks stay
-low-authority and reversible.
+Auto-distilled patterns from past sessions — both failure→recovery and proven
+successes. Precedence: `skills > sources > wiki > lessons > episodic`. Each entry
+carries a `provenance` tag (`failure` or `success`) that shapes its recall framing,
+and *independently* may carry an optional `enforce` block: unlike episodic
+narrative, an entry with `enforce` is **enforced at runtime** (`warn` injects at the
+tool call; `ask` gates execution), regardless of which provenance it carries. Most
+entries carry no `enforce` block and stay advisory-only. A proven lesson is
+promoted to a `skills/np-kb-*` rule via the human-reviewed `np-core-contribute`
+gate, then marked `promoted`/archived. This is the validation gate; candidate
+lessons stay low-authority and reversible.
 
 ### Feature toggles (what they are)
 
@@ -242,7 +244,7 @@ the manifest; `engine/setup/np-toggle-lib.sh` resolves `~/.config/nervepack/togg
 → toggles.conf → default-on`. Flip via `engine/setup/nervepack-toggle.sh <feature> on|off`
 (or no args for an interactive picker), or the [[np-core-toggle]] skill.
 
-- **shared** features (memory, playbooks, directive, sync) store state in the repo
+- **shared** features (memory, lessons, directive, sync) store state in the repo
   and propagate on the next sync; **local** ones (allowlist) and sub-overrides
   write to the local file. Sub-toggles (`memory.recall`) inherit their family.
 - **A flag that needs its own explicit default — or just needs to be discoverable
