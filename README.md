@@ -36,19 +36,19 @@ engine at it, and you're running.
 **Working on a team? Add a third overlay.** A team can share a baseline that sits
 *above* your personal content. Point at it with `NP_TEAM_DIR` (or write the path into
 `~/.config/nervepack/team-dir`) and the stack becomes `team > personal > engine`.
-Reads merge with the team winning, so a team skill or playbook shadows your personal
+Reads merge with the team winning, so a team skill or lesson shadows your personal
 one of the same name. Writes still land in your personal overlay, so nothing you
 capture bleeds into the team by accident. When you *do* want to publish to the team,
 say "save this to the team layer" and contribute targets it explicitly. It stays
 dormant until you configure a team dir, and one setting decides how the topic layers
-(playbooks, strategies, episodic, wiki) combine. `team.merge` takes `override`
+(lessons, episodic, wiki) combine. `team.merge` takes `override`
 (default), `concatenate`, or `team-only`.
 
 ## How the layers work
 
 Knowledge lives in layers with a strict pecking order:
-**`skills > sources > wiki > playbooks > episodic`** (with strategies sitting beside
-playbooks). **Human-reviewed knowledge always beats auto-captured knowledge.**
+**`skills > sources > wiki > lessons > episodic`**. **Human-reviewed knowledge
+always beats auto-captured knowledge.**
 
 - **Skills** are the curated top layer, the rules and how-to that have been human-reviewed
   and promoted.
@@ -57,26 +57,26 @@ playbooks). **Human-reviewed knowledge always beats auto-captured knowledge.**
     of starting from scratch.
 - **Sources + wiki** are the reference layer: version-pinned docs you consult
   repeatedly, plus synthesis pages that cross-link them.
-- **Playbooks** are auto-distilled from past *failures*, and they're the one layer
-  that's **enforced at the moment you act**. A playbook can inject "don't make this
-  mistake" right before the tool call, which a passive skill can't do.
-- **Strategies** are the mirror image: auto-distilled from past *successes*, surfaced
-  as advice when the topic comes up.
+- **Lessons** are auto-distilled from past sessions, both *failures* and *successes*
+  — each entry carries a `provenance` tag (`failure` or `success`) so recall can
+  frame it right ("avoid X" vs. "the approach that worked is Y"). Provenance is
+  independent of enforcement: any lesson, regardless of provenance, can optionally
+  carry an `enforce` block that gates the moment you act (a passive skill can't do
+  this) — most entries carry none and stay advisory-only.
 - **Episodic** is the bottom layer, a prunable narrative of what was worked on and
   where it left off, so a session next week can pick up the thread.
 
 Two pipelines keep the auto layers fed. A **capture** pipeline summarizes each
-session into episodic memory and distills its failures/successes into
-playbooks/strategies. A **performance** pipeline scores how much nervepack actually
+session into episodic memory and distills its failures/successes into lessons
+(tagged by provenance). A **performance** pipeline scores how much nervepack actually
 helped and renders it on a dashboard
 ([see a live example](https://nervepack.app/example/dashboard/), running on synthetic
 sample data). Everything is toggle-gated and fails open. No layer can break a session.
 
-The auto layers are a **staging pool**, not a dead end: when a playbook or strategy
-keeps proving itself (or outgrows what a skill is even allowed to be), the daily
-maintenance routine flags it to **graduate** into a real, human-reviewed skill. That's
-how a hard-won lesson climbs from "the system noticed this once" to "this is a rule
-now."
+The auto layers are a **staging pool**, not a dead end: when a lesson keeps proving
+itself (or outgrows what a skill is even allowed to be), the daily maintenance
+routine flags it to **graduate** into a real, human-reviewed skill. That's how a
+hard-won lesson climbs from "the system noticed this once" to "this is a rule now."
 
 For the full tour (every feature's purpose, the workflow that enforces it, a worked
 example of each flow) see [`docs/FEATURES.md`](docs/FEATURES.md).
@@ -105,7 +105,7 @@ publish/           # The secret/PII guard that keeps personal data out of the en
 .claude-plugin/    # Plugin manifest for `claude plugin install`.
 ```
 
-Your content layers (`wiki/` with its co-located sources, `memory/{episodic,playbooks,strategies}/`,
+Your content layers (`wiki/` with its co-located sources, `memory/{episodic,lessons}/`,
 `dashboard/data/`, your personal skills, design specs) do not live here. They live in
 your overlay, and optionally a team overlay above it. See `AGENTS.md` for the full
 directory contract and the team-merge rules.
