@@ -141,8 +141,7 @@ def _run_build_in_content(content_dir):
         pass
     out = os.path.join(tmp, "metrics.js")
     ev = dict(os.environ)
-    ev.pop("NP_PLAYBOOKS_DIR", None)
-    ev.pop("NP_STRATEGIES_DIR", None)
+    ev.pop("NP_LESSONS_DIR", None)
     ev["NP_CONTENT_DIR"] = content_dir
     subprocess.run(["python3", BUILD_PY, inp, out], check=True,
                    capture_output=True, text=True, env=ev)

@@ -45,7 +45,7 @@ def default_graduation():
 
 
 def load_graduation(path):
-    """Graduation candidates (strategies/playbooks overdue to become skills), as written
+    """Graduation candidates (lessons overdue to become skills), as written
     by 75-skill-maintain.sh via np-graduation-detect.py. Shape:
     {candidates:[{kind,name,seen,bytes,reasons[]}], thresholds:{graduate_seen,graduate_kb}}.
     Fail-open: missing file (cloud/CI, or no candidates) or malformed JSON -> empty
@@ -114,7 +114,7 @@ def _count_topics(path):
 def _content_dir():
     """Resolve the content-overlay root, mirroring np-content-lib.sh's precedence:
     $NP_CONTENT_DIR -> ~/.config/nervepack/content-dir (first line) -> engine root.
-    Since the engine/content split, playbooks/ and strategies/ live in the overlay,
+    Since the engine/content split, memory/lessons/ lives in the overlay,
     not the engine repo, so a bare build.py (manual open-dashboard, MCP summary) must
     resolve them here rather than defaulting to the now-empty engine paths. Unset
     config falls back to the engine root == byte-identical to the legacy layout."""
@@ -538,28 +538,52 @@ def render_pages(index, out_dir):
             fh.write(md_to_html(md, meta=meta, link_map=link_map, here=here))
 
 
+def _lesson_names_by_provenance(d):
+    """(failure_topic_names, success_topic_names) for the memory/lessons/*.md files
+    in one overlay root. A merged topic file can carry both provenances, so it can
+    appear in both sets."""
+    fails, succ = set(), set()
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return fails, succ
+    for name in names:
+        if not name.endswith(".md") or name in ("INDEX.md", "README.md") or name.startswith("."):
+            continue
+        try:
+            with open(os.path.join(d, name), encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        topic = name[:-3]
+        if "provenance: failure" in text:
+            fails.add(topic)
+        if "provenance: success" in text:
+            succ.add(topic)
+    return fails, succ
+
+
 def learned_counts():
-    """Accumulated memory the dashboard can show as a growth stat. strategy_names
-    lets the Wins & learnings panel chip the learned strategies, not just count them.
-    Layer-aware: with no explicit NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR override, unions
+    """Accumulated memory the dashboard shows as a growth stat, split by the lesson's
+    provenance so the Wins & learnings panel keeps its two tiles: failure-derived
+    lessons feed `playbooks`, success-derived feed `strategies` (+ `strategy_names`
+    for the chips). Layer-aware: with no explicit NP_LESSONS_DIR override, unions
     topic names across the team>personal overlays (a count can't double-count an
     identity, so dedup applies in every mode; team-only is handled by _content_layers
     -> np_merge_roots)."""
-    pb_env = os.environ.get("NP_PLAYBOOKS_DIR")
-    st_env = os.environ.get("NP_STRATEGIES_DIR")
-    if pb_env or st_env:
-        cd = _content_dir()
-        pb = pb_env or os.path.join(cd, "memory", "playbooks")
-        st = st_env or os.path.join(cd, "memory", "strategies")
-        names = _topic_names(st)
-        return {"playbooks": _count_topics(pb), "strategies": len(names),
+    le_env = os.environ.get("NP_LESSONS_DIR")
+    if le_env:
+        fails, succ = _lesson_names_by_provenance(le_env)
+        names = sorted(succ)
+        return {"playbooks": len(fails), "strategies": len(names),
                 "strategy_names": names}
-    pb_names, st_names = set(), set()
+    fails, succ = set(), set()
     for cd in _content_layers():
-        pb_names.update(_topic_names(os.path.join(cd, "memory", "playbooks")))
-        st_names.update(_topic_names(os.path.join(cd, "memory", "strategies")))
-    names = sorted(st_names)
-    return {"playbooks": len(pb_names), "strategies": len(names), "strategy_names": names}
+        f, s = _lesson_names_by_provenance(os.path.join(cd, "memory", "lessons"))
+        fails |= f
+        succ |= s
+    names = sorted(succ)
+    return {"playbooks": len(fails), "strategies": len(names), "strategy_names": names}
 
 
 def load_records(path):

@@ -8,7 +8,7 @@ mkdir -p "$tmp/dashboard/data"
 # $NP_CONTENT_DIR/dashboard/data/metrics.js. Without pinning NP_CONTENT_DIR here, it
 # resolves via _content_dir() to the engine root — whose dashboard/data is a SYMLINK
 # into the live content overlay — so the test would clobber the user's real dashboard
-# data (empty WIKI/LEARNED, because the engine root has no wiki/playbooks/strategies).
+# data (empty WIKI/LEARNED, because the engine root has no wiki/lessons).
 export NP_CONTENT_DIR="$tmp" NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local" \
   EVAL_INBOX="$tmp/inbox" METRICS_FILE="$tmp/metrics.jsonl" NP_AGG_NO_COMMIT=1
 printf 'evaluator|shared|runtime|on|\n' > "$tmp/toggles.conf"
@@ -23,11 +23,11 @@ echo "evaluator.aggregate=off" > "$tmp/local"; printf '{"session_id":"c"}\n' > "
 bash "$AGG" >/dev/null
 [[ "$(wc -l < "$tmp/metrics.jsonl" | tr -d '[:space:]')" == "2" ]] || { echo "FAIL: appended while off"; exit 1; }
 
-# NP_PLAYBOOKS_DIR/NP_STRATEGIES_DIR must point at memory/{playbooks,strategies}.
-# Seed files under memory/ and verify LEARNED counts > 0 in metrics.js.
-mkdir -p "$tmp/memory/playbooks" "$tmp/memory/strategies"
-printf 'x\n' > "$tmp/memory/playbooks/pb1.md"
-printf 'x\n' > "$tmp/memory/strategies/st1.md"
+# NP_LESSONS_DIR must point at memory/lessons. Seed lessons tagged by provenance
+# and verify LEARNED counts (failure -> playbooks, success -> strategies) in metrics.js.
+mkdir -p "$tmp/memory/lessons"
+printf -- '---\nprovenance: failure\n---\nx\n' > "$tmp/memory/lessons/pb1.md"
+printf -- '---\nprovenance: success\n---\nx\n' > "$tmp/memory/lessons/st1.md"
 : > "$tmp/local"  # re-enable toggles (clear local overrides)
 printf '{"session_id":"d","contribution_score":10}\n' > "$tmp/inbox/re-enable.jsonl"
 bash "$AGG" >/dev/null
@@ -35,7 +35,7 @@ LEARNED_JS="$tmp/dashboard/data/metrics.js"
 if [[ ! -f "$LEARNED_JS" ]]; then
   echo "FAIL: metrics.js not written by dashboard build"; exit 1
 fi
-grep -qE '"playbooks":\s*1' "$LEARNED_JS" || { echo "FAIL: NP_PLAYBOOKS_DIR not resolved to memory/playbooks"; exit 1; }
-grep -qE '"strategies":\s*1' "$LEARNED_JS" || { echo "FAIL: NP_STRATEGIES_DIR not resolved to memory/strategies"; exit 1; }
+grep -qE '"playbooks":\s*1' "$LEARNED_JS" || { echo "FAIL: failure lesson not counted in playbooks"; exit 1; }
+grep -qE '"strategies":\s*1' "$LEARNED_JS" || { echo "FAIL: success lesson not counted in strategies"; exit 1; }
 
 echo "PASS test_aggregate"
