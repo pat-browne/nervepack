@@ -2,7 +2,7 @@
 # nervepack content-dir resolver. SOURCE this; do not execute.
 #
 # np_content_dir -> prints the content overlay root (where the user's skills/
-# episodic/playbooks/strategies/sources/wiki + dashboard metrics live).
+# episodic/lessons/sources/wiki + dashboard metrics live).
 # Resolution order:
 #   1. $NP_CONTENT_DIR (env)
 #   2. ~/.config/nervepack/content-dir (first line)
@@ -75,9 +75,9 @@ np_team_dir() {
 }
 
 # np_layer_dir <layer> -> the single-root path of an agent-owned memory layer,
-# now grouped under memory/ (episodic|playbooks|strategies). Single source of truth
+# now grouped under memory/ (episodic|lessons). Single source of truth
 # for the layer subpath: future relocations change ONLY this function. Used by
-# single-root consumers (playbook-guard, 73, 75). Recall hooks use np_layer_roots
+# single-root consumers (lesson-guard, 73, 75). Recall hooks use np_layer_roots
 # (np-layer-lib.sh) for the team/personal merge.
 np_layer_dir() {
   local layer="$1"

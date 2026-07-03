@@ -31,7 +31,7 @@ else
   rm -f "$HOME/.cache/nervepack/architecture-stale" 2>/dev/null || true
 fi
 
-# Graduation candidates (advisory, deterministic): strategies/playbooks that have
+# Graduation candidates (advisory, deterministic): lessons that have
 # proven themselves (`seen` >= graduate_seen) or outgrown the skill body budget
 # (bytes > graduate_kb KB) are overdue to GRADUATE into a human-reviewed skill via
 # np-core-contribute. Skills require the human gate, so we only SURFACE candidates
@@ -47,12 +47,12 @@ if command -v np_content_dir >/dev/null 2>&1 && np_content_is_explicit 2>/dev/nu
      && CONTENT="$(np_content_dir 2>/dev/null)"; then
   export GRADUATE_SEEN="$(np_param skills.graduate_seen 10)"
   export GRADUATE_KB="$(np_param skills.graduate_kb 6)"
-  grad_out="$(python3 "$HERE/np-graduation-detect.py" "$CONTENT/memory/strategies" "$CONTENT/memory/playbooks" 2>/dev/null)"
+  grad_out="$(python3 "$HERE/np-graduation-detect.py" "$CONTENT/memory/lessons" 2>/dev/null)"
   grad_n="$(printf '%s' "$grad_out" | jq -r '.candidates | length' 2>/dev/null || echo 0)"
   # Committed, content-routed data file the dashboard build reads (the local marker is
   # cache-only, so build.py — which may run from committed data in cloud/CI — can't see
   # it). Mirrors the resolved-suggestions ledger: written under the CONTENT overlay's
-  # dashboard/data/ (candidates derive from personal strategies/playbooks — keeps the
+  # dashboard/data/ (candidates derive from personal lessons — keeps the
   # engine PII-clean), read by build.py load_graduation() -> window.GRADUATION panel.
   GRAD_DATA="$CONTENT/dashboard/data/graduation-candidates.json"
   if [[ "${grad_n:-0}" -gt 0 ]]; then

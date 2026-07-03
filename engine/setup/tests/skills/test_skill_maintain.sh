@@ -13,10 +13,10 @@ cp "$SETUP/75-skill-maintain.sh" "$SETUP/np-skill-budget.py" \
 printf 'skills|shared|runtime|on|split_kb=8,soft_kb=6,catalog_tok=4000,max_per_run=2,graduate_seen=10,graduate_kb=6\n' \
    > "$NP/engine/setup/toggles.conf"
 { echo "## Prompt"; echo "split it"; } > "$NP/agents/np-flow-skill-maintain.md"
-# A proven strategy under memory/strategies/ (content dir defaults to the repo root).
-mkdir -p "$NP/memory/strategies"
-printf -- '---\nname: proven\nkind: strategy\nstatus: candidate\nseen: 20\n---\nbody\n' \
-   > "$NP/memory/strategies/proven.md"
+# A proven lesson under memory/lessons/ (content dir defaults to the repo root).
+mkdir -p "$NP/memory/lessons"
+printf -- '---\nname: proven\nkind: lesson\nprovenance: failure\nstatus: candidate\nseen: 20\n---\nbody\n' \
+   > "$NP/memory/lessons/proven.md"
 # An over-budget skill (>8KB) with a cross-link.
 { printf -- '---\nname: big\ndescription: a big skill\n---\n[[np-core-sync]]\n';
   head -c 9000 /dev/zero | tr '\0' 'x'; } > "$NP/skills/big/SKILL.md"
@@ -45,8 +45,8 @@ test -f "$NP/skills/big/references/d.md" || { echo "FAIL: good split not applied
 # propagates that as failure even though the match succeeded (reliably bites on macOS).
 grep -q 'skill(maintain)' <<<"$(git -C "$NP" log --oneline)" || { echo "FAIL: good split not committed"; exit 1; }
 
-# --- graduation surfacing: the proven strategy is flagged (advisory, not acted on) ---
-grep -q 'GRADUATE: strategy proven' "$tmp/log" || { echo "FAIL: graduation candidate not surfaced in log"; exit 1; }
+# --- graduation surfacing: the proven lesson is flagged (advisory, not acted on) ---
+grep -q 'GRADUATE: failure proven' "$tmp/log" || { echo "FAIL: graduation candidate not surfaced in log"; exit 1; }
 test -f "$tmp/grad" || { echo "FAIL: graduation marker file not written"; exit 1; }
 grep -q '"name":"proven"' "$tmp/grad" || { echo "FAIL: marker missing the candidate"; exit 1; }
 # Committed, content-routed data file the dashboard build reads (mirror of the local

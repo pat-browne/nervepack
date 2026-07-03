@@ -26,19 +26,19 @@ export PATH="$tmp:$PATH"
 # Every family the audit's MAP can require must be declared here.
 cat > "$tmp/toggles.conf" <<'C'
 memory|shared|runtime|on|
-playbooks|shared|runtime|on|
+lessons|shared|runtime|on|enforce=on
 evaluator|shared|runtime|on|
 directive|shared|runtime|on|
 sync|shared|runtime|on|
 C
 
 # Settings whose hooks are ALL recognised nervepack scripts that map to a declared
-# family (memory + playbooks + directive), plus an installer that the audit must
+# family (memory + lessons + directive), plus an installer that the audit must
 # deliberately ignore (60-generate-index.sh) — so a clean install really is clean.
 jq -n '{hooks:{
   SessionStart:[{matcher:"",hooks:[{type:"command",command:"~/Code/nervepack/engine/setup/nervepack-session-directive.sh"}]}],
   UserPromptSubmit:[{matcher:"",hooks:[{type:"command",command:"~/Code/nervepack/engine/setup/episodic-recall.sh"}]}],
-  PreToolUse:[{matcher:"Bash",hooks:[{type:"command",command:"~/Code/nervepack/engine/setup/playbook-guard.sh"}]},
+  PreToolUse:[{matcher:"Bash",hooks:[{type:"command",command:"~/Code/nervepack/engine/setup/lesson-guard.sh"}]},
               {matcher:"",hooks:[{type:"command",command:"~/Code/nervepack/engine/setup/60-generate-index.sh"}]}]
 }}' > "$CLAUDE_SETTINGS"
 

@@ -84,7 +84,7 @@ invariant 12.
 - **Distill:** `agents/np-flow-episodic-maintain.md` clusters struggles into
   `playbooks/<topic>.md` with an `enforce` block and regenerates `playbooks/INDEX.md`.
 - **Enforce:** `engine/setup/lesson-guard.sh` (`PreToolUse` matcher `Bash`, installed by
-  `engine/setup/53-install-playbook-hooks.sh`) gates `ask` playbooks and injects `warn`
+  `engine/setup/53-install-lesson-hooks.sh`) gates `ask` playbooks and injects `warn`
   ones at the tool call; `engine/setup/lesson-recall.sh` (`UserPromptSubmit`, merged with
   the former `strategy-recall.sh`) injects topic-matched playbooks with imperative framing.
 - **Graduate:** a proven playbook is promoted to a `skills/np-kb-*` rule via the

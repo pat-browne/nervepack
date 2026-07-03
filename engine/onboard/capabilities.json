@@ -54,7 +54,7 @@
       "tier": "MUST",
       "check": "core",
       "title": "the engine can locate a content overlay (skills + memory dirs)",
-      "why": "Engine machinery is reusable; a user's skills/episodic/playbooks/strategies/sources/wiki live in a content overlay resolved by np_content_dir. Default is the repo root (single-repo install).",
+      "why": "Engine machinery is reusable; a user's skills/episodic/lessons/sources/wiki live in a content overlay resolved by np_content_dir. Default is the repo root (single-repo install).",
       "accept": "np_content_dir resolves to an existing directory.",
       "hints": { "generic": "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to your content repo; default is the engine repo root." }
     },
@@ -86,7 +86,7 @@
       "why": "Keeps the repo current and forces sessions to actually consult nervepack instead of working from scratch.",
       "accept": "A new session triggers 40-sync and injects nervepack-session-directive.",
       "hints": {
-        "claude-code": "SessionStart hooks in ~/.claude/settings.json (reference: 50/51). Also wire per-prompt recall hooks (UserPromptSubmit -> episodic-recall, playbook-recall, strategy-recall; reference: 52/53) so past notes/playbooks/strategies are injected on topic match.",
+        "claude-code": "SessionStart hooks in ~/.claude/settings.json (reference: 50/51). Also wire per-prompt recall hooks (UserPromptSubmit -> episodic-recall, lesson-recall; reference: 52/53) so past notes/lessons are injected on topic match.",
         "claude-code-windows": "Same SessionStart/UserPromptSubmit hooks, but Claude Code on Windows runs hook commands via PowerShell by default — so the install scripts route each .sh command through Git-bash. np-hook-lib.sh does this automatically on a MINGW/MSYS kernel (or force with NP_HOOK_WRAP=1): the stored command becomes `bash -lc '<original>'`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "goose": "SessionStart + UserPromptSubmit hooks in ~/.agents/plugins/nervepack/hooks/hooks.json (Open Plugins spec); map the recall hooks to your prompt-submit event.",
         "generic": "wire your host's session-start event to run 40-sync-nervepack.sh + emit the directive, and its per-prompt event to run the *-recall.sh hooks."

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Contract test for np-graduation-detect.py (stdlib unittest, per language policy).
-Black-box: builds fake strategies/ + playbooks/ trees and asserts the emitted JSON.
-The detector flags auto-distilled strategies/playbooks that have proven themselves
-(high `seen`) or outgrown a skill's body budget (bytes) as candidates to graduate
-into a human-reviewed skill — it never acts, only surfaces."""
+Black-box: builds a fake memory/lessons/ tree and asserts the emitted JSON.
+The detector flags auto-distilled lessons that have proven themselves (high `seen`)
+or outgrown a skill's body budget (bytes) as candidates to graduate into a
+human-reviewed skill — it never acts, only surfaces. The candidate `kind` carries
+the lesson's `provenance` (failure|success)."""
 import json
 import os
 import subprocess
@@ -14,23 +15,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DET = os.path.join(HERE, "..", "..", "np-graduation-detect.py")
 
 
-def make_entry(root, name, *, seen=1, body_bytes=900, status="candidate", kind="strategy"):
+def make_entry(root, name, *, seen=1, body_bytes=900, status="candidate", provenance="failure"):
     os.makedirs(root, exist_ok=True)
-    fm = ("---\nname: %s\nkind: %s\nstatus: %s\nseen: %d\n---\n"
-          % (name, kind, status, seen))
+    fm = ("---\nname: %s\nkind: lesson\nprovenance: %s\nstatus: %s\nseen: %d\n---\n"
+          % (name, provenance, status, seen))
     pad = "x" * max(0, body_bytes - len(fm.encode()))
     with open(os.path.join(root, name + ".md"), "w") as fh:
         fh.write(fm + pad)
 
 
-def run(strategies_dir, playbooks_dir="", **env):
+def run(lessons_dir, **env):
     e = dict(os.environ)
     e.update(env)
-    args = ["python3", DET, strategies_dir]
-    if playbooks_dir:
-        args.append(playbooks_dir)
-    out = subprocess.run(args, env=e, capture_output=True, text=True,
-                         check=True).stdout
+    out = subprocess.run(["python3", DET, lessons_dir], env=e,
+                         capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 
 
@@ -58,14 +56,13 @@ class TestGraduationDetect(unittest.TestCase):
             r = run(tmp, GRADUATE_SEEN="10")
             self.assertEqual(r["candidates"], [])
 
-    def test_reports_kind_from_dir(self):
-        with tempfile.TemporaryDirectory() as strat, \
-                tempfile.TemporaryDirectory() as play:
-            make_entry(strat, "s1", seen=20, kind="strategy")
-            make_entry(play, "p1", seen=20, kind="playbook")
-            r = run(strat, play, GRADUATE_SEEN="10")
+    def test_reports_kind_from_provenance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_entry(tmp, "s1", seen=20, provenance="success")
+            make_entry(tmp, "p1", seen=20, provenance="failure")
+            r = run(tmp, GRADUATE_SEEN="10")
             kinds = {c["name"]: c["kind"] for c in r["candidates"]}
-            self.assertEqual(kinds, {"s1": "strategy", "p1": "playbook"})
+            self.assertEqual(kinds, {"s1": "success", "p1": "failure"})
 
     def test_ignores_index_and_dotfiles(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -85,7 +82,7 @@ class TestGraduationDetect(unittest.TestCase):
             self.assertEqual([c["name"] for c in r["candidates"]], ["mid"])
 
     def test_missing_dir_fail_open(self):
-        r = run("/nonexistent/strategies")
+        r = run("/nonexistent/lessons")
         self.assertEqual(r["candidates"], [])
 
 
