@@ -42,22 +42,23 @@ def signal_log_path(sid):
 
 def count_markers(log_path):
     """Count fire markers by prefix. Missing file -> all zero (fail-open).
-    Returns (lesson_guard, playbook_recall, episodic_recall, strategy_recall)."""
-    pg = pr = er = sr = 0
+    Returns (lesson_guard, lesson_recall, episodic_recall).
+    lesson-recall REPLACES the old playbook-recall/strategy-recall markers —
+    those hooks were merged into engine/setup/lesson-recall.sh and no longer
+    exist, so their branches are gone rather than kept dead alongside this."""
+    pg = lr = er = 0
     try:
         with open(log_path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 if line.startswith("lesson-guard"):
                     pg += 1
-                elif line.startswith("playbook-recall"):
-                    pr += 1
+                elif line.startswith("lesson-recall"):
+                    lr += 1
                 elif line.startswith("episodic-recall"):
                     er += 1
-                elif line.startswith("strategy-recall"):
-                    sr += 1
     except OSError:
         pass
-    return pg, pr, er, sr
+    return pg, lr, er
 
 
 def gated_fingerprints(log_path):
@@ -204,7 +205,7 @@ def main():
     transcript = sys.argv[2] if len(sys.argv) > 2 else ""
 
     log_path = signal_log_path(sid)
-    pg, pr, er, sr = count_markers(log_path)
+    pg, lr, er = count_markers(log_path)
     tool_calls, skills, tokens, exec_fps = parse_transcript(transcript)
     # heeded = guarded commands the session did NOT then run (intervention worked).
     heeded = len(gated_fingerprints(log_path) - exec_fps)
@@ -213,7 +214,7 @@ def main():
         "skills_invoked": skills,
         "playbook_fires": pg,
         "playbook_heeded": heeded,
-        "recall_injections": pr + er + sr,
+        "recall_injections": lr + er,
         "directive_present": directive_present(),
         "directive_tokens": directive_tokens(),
         "struggles": episodic_struggles(sid),
