@@ -14,3 +14,10 @@ engine/setup/tests/episodic/test_scrub_failure.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
 engine/setup/tests/playbook/test_capture_struggles.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
 engine/setup/tests/playbook/test_capture_strategies.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
 engine/setup/tests/evaluator/test_evaluator.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
+# Fake private IPs and token in pii_filter implementation plan — documented examples of what the filter catches:
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	192.168.1.100
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	10.0.0.1
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	172.16.0.5
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	192.168.1.1
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	192.168.1.5
+docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	sk-ABCDEFGHIJKLMNOPQRSTUVWX
