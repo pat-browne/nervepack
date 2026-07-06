@@ -83,6 +83,26 @@ class TestFastModeRegex(unittest.TestCase):
         self.assertIn("[TOKEN]", out)
         self.assertNotIn("abcdef123456ghijklmno", out)
 
+    def test_api_token_github(self):
+        out, _, _ = _run("key " + "ghp_" + "ABCDEFGHIJKLMNOPQRSTU" + " end")
+        self.assertIn("[TOKEN]", out)
+        self.assertNotIn("ghp_ABCDEFG", out)
+
+    def test_api_token_github_pat(self):
+        out, _, _ = _run("key " + "github_pat_" + "0123456789ABCDEFGHIJklmnopqrstuvwx" + " end")
+        self.assertIn("[TOKEN]", out)
+        self.assertNotIn("github_pat_0123", out)
+
+    def test_api_token_aws(self):
+        out, _, _ = _run("key " + "AKIA" + "0123456789ABCDEF" + " end")
+        self.assertIn("[TOKEN]", out)
+        self.assertNotIn("AKIA0123", out)
+
+    def test_api_token_slack(self):
+        out, _, _ = _run("key " + "xoxb-" + "abcdefghij-klmnopqrstu" + " end")
+        self.assertIn("[TOKEN]", out)
+        self.assertNotIn("xoxb-abcdefghij", out)
+
     def test_clean_text_unchanged(self):
         out, _, _ = _run("just normal text about oauth flow")
         self.assertEqual(out, "just normal text about oauth flow")
