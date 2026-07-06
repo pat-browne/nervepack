@@ -93,6 +93,7 @@ Windows *is* installed, use the POSIX `nervepack-mcp` launcher (it also pins
 | Tool | Does | Gate |
 |---|---|---|
 | `nervepack_doctor` | Verify this install against the onboard contract | — (read) |
+| `nervepack_onboard` | Bootstrap the full install on this host: link skills, wire every lifecycle hook, install the scheduler, register the MCP, run the doctor (idempotent). Args: `content_dir`, `team_dir`. Needs bash. | `mcp.writes` |
 | `nervepack_recall` | Recall topic-matched episodic notes / lessons | — (read) |
 | `nervepack_dashboard` | Read dashboard data (`summary` counts or raw `metrics`) | — (read) |
 | `nervepack_toggle` | Get/list/set feature toggles | `mcp.writes` |

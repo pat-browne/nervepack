@@ -207,6 +207,21 @@ class TestProtocol(unittest.TestCase):
         for n in ("nervepack_capture", "nervepack_evaluate", "nervepack_flush", "nervepack_sync"):
             self.assertIn(n, names)
 
+    def test_onboard_tool_listed(self):
+        self.c.initialize()
+        names = [t["name"] for t in self.c.call("tools/list")["result"]["tools"]]
+        self.assertIn("nervepack_onboard", names)
+
+    def test_onboard_blocked_when_writes_off(self):
+        # onboard wires the whole host, so it must be write-gated: mcp.writes=off must
+        # make it refuse BEFORE running any installer (a real read-only lockdown).
+        c = MCPClient(extra_env={"NP_TOGGLES_LOCAL": os.path.join(REPO, "engine/setup/tests/mcp/fixtures/writes-off.local")})
+        self.addCleanup(c.close)
+        c.initialize()
+        r = c.call("tools/call", {"name": "nervepack_onboard", "arguments": {}})
+        self.assertTrue(r["result"]["isError"])
+        self.assertIn("disabled", r["result"]["content"][0]["text"].lower())
+
     def test_sync_blocked_when_writes_off(self):
         c = MCPClient(extra_env={"NP_TOGGLES_LOCAL": os.path.join(REPO, "engine/setup/tests/mcp/fixtures/writes-off.local")})
         self.addCleanup(c.close)
