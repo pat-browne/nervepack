@@ -60,7 +60,7 @@ the brand guide, design language, and source stay in the overlay.
 | `agents/<name>.md` | Prompts for `/schedule` or `/loop` agents | Yes |
 | _(no `docs/` tree)_ | Design specs + plans (superpowers brainstorm output) are **content, not engine** — they live in the overlay at `$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/`, never in this repo. Promote durable lessons into skills/ via [[np-core-contribute]]. The `nervepack-content-example` repo shows where they go (`docs/specs/`). | N/A — write specs to the overlay |
 | `.claude-plugin/plugin.json` | Plugin manifest for `claude plugin install` | Update on add/remove skills |
-| `LICENSE`, `NOTICE` | Apache-2.0 license + third-party attribution | No |
+| `LICENSE`, `NOTICE` | MIT license + third-party attribution | No |
 
 ### Content overlay repo (`$NP_CONTENT_DIR`, e.g. `~/Code/nervepack-content`)
 

@@ -1,8 +1,9 @@
 nervepack
 Copyright 2026 Pat Browne
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE).
-It includes ideas and material adapted from the third-party sources below.
+This product is licensed under the MIT License (see LICENSE).
+It includes ideas and material adapted from the third-party sources below,
+whose own license notices are preserved here as attribution.
 
 ------------------------------------------------------------------------------
 Karpathy coding guidelines
