@@ -97,6 +97,7 @@ core_check() {
       local broken=() cmd script
       while IFS= read -r cmd; do
         [[ -z "$cmd" ]] && continue
+        cmd="${cmd%$'\r'}"       # jq on Windows emits \r\n; read -r strips \n but not \r
         cmd="${cmd/#\~/$HOME}"   # expand ~/
         script="${cmd%% *}"     # first token — strip trailing args / &
         [[ "$script" != */* ]] && continue   # skip bare command names
