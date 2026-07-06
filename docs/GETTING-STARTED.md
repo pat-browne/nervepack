@@ -121,26 +121,24 @@ From here, every session loads `skills/*`, a SessionStart directive tells the se
 consult nervepack first, and `/np-core-sync` / `/np-core-contribute` are available as
 slash commands.
 
-## What about the MCP server?
+## Bootstrapping over MCP
 
-The MCP server is a *surface*, not a bootstrapper. It can't install nervepack from
-nothing, because the server itself lives in the engine repo you just cloned. What it
-does is expose nervepack's tools, resources, and prompts to any MCP-speaking client.
+The one thing the MCP server can't do is clone itself onto a bare machine — *something*
+has to `git clone` the engine first (the one command in step 1), because the server
+binary lives in that repo. But once the repo is here and your MCP client is pointed at
+the server, a single tool call wires everything else:
 
-- **On Claude Code** you don't need to do anything extra. A full onboard installs the
-  `5x` hooks, and one of them (`58-install-mcp.sh`) registers the MCP server for you
-  when the `mcp` toggle is on. Your skills, the session directive, and lifecycle
-  capture come from the onboard itself, not from MCP.
-- **On any other MCP client** (Cursor, Codex, a local-model client) point it at the
-  server instead of wiring each script by hand.
+- **`nervepack_onboard`** links the skills, installs every lifecycle hook, sets up the
+  scheduler, registers the MCP, and runs the doctor — idempotent, one call. Pass
+  `content_dir` (and optionally `team_dir`) to point at your overlay first.
 
-Either way, the shortcut is one guided command:
+So the whole story over MCP is: **clone → point your MCP client at the server → call
+`nervepack_onboard` → installed.** Any MCP client (Cursor, Codex, a local-model client)
+gets the same tools, resources, and prompts Claude Code does. Connecting a client needs
+nothing but the repo path — see [`../engine/onboard/MCP.md`](../engine/onboard/MCP.md)
+for the `mcpServers` block, the full tool/resource list, and the write-gating story.
+(`nervepack_onboard` shells out to the bash installers, so on Windows it needs Git for
+Windows.)
 
-```bash
-~/Code/nervepack/engine/bin/nervepack-install
-```
-
-It configures your content (and optional team) overlay, registers the server, and runs
-the doctor. It re-runs safely and takes defaults on a non-interactive shell. See
-[`../engine/onboard/MCP.md`](../engine/onboard/MCP.md) for the full tool and resource
-list and the write-gating story.
+Prefer the scripted path? `~/Code/nervepack/engine/bin/nervepack-install` does the
+content/team-dir config + MCP registration + doctor from the shell instead.

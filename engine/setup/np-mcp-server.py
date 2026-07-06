@@ -436,6 +436,26 @@ def _tool_maintain(args):
     return (out + err).strip() or f"{job} done"
 
 
+def _tool_onboard(args):
+    # Bootstrap the whole install: link skills, wire the lifecycle hooks, install the
+    # scheduler, register the MCP, run the doctor. Shells out to the bash installers
+    # (via np-onboard.sh), so it refuses cleanly on a bash-free host like flush/maintain.
+    require_writes()
+    if USE_PY and not _bash_available():
+        raise Disabled("nervepack_onboard needs bash — it runs the setup/installer "
+                       "scripts (not supported on a bash-free host)")
+    # Optionally point at the overlays first, mirroring ~/.config/nervepack/{content,team}-dir.
+    cfg = os.path.join(os.path.expanduser("~"), ".config", "nervepack")
+    for key, fname in (("content_dir", "content-dir"), ("team_dir", "team-dir")):
+        val = (args.get(key) or "").strip()
+        if val:
+            os.makedirs(cfg, exist_ok=True)
+            with open(os.path.join(cfg, fname), "w", encoding="utf-8") as fh:
+                fh.write(val + "\n")
+    rc, out, err = run(["bash", os.path.join(SETUP, "np-onboard.sh")])
+    return (out + err).strip() or "onboarded"
+
+
 TOOLS += [
     {"name": "nervepack_contribute",
      "description": "Write a durable skill/source/wiki page and git-commit it (bypasses human review — gated by mcp.contribute, default off). kind: skill|source|wiki; name; topic (source); body; wiki_kind.",
@@ -451,6 +471,12 @@ TOOLS += [
          "job": {"type": "string", "enum": ["promote", "maintain", "aggregate", "skills"]}},
          "additionalProperties": False},
      "handler": _tool_maintain},
+    {"name": "nervepack_onboard",
+     "description": "Bootstrap the full nervepack install on this host: link skills, wire all lifecycle hooks, install the scheduler, register the MCP, and run the doctor (idempotent). Optional args: content_dir, team_dir — point at your overlay(s) first. Needs bash.",
+     "inputSchema": {"type": "object", "properties": {
+         "content_dir": {"type": "string"}, "team_dir": {"type": "string"}},
+         "additionalProperties": False},
+     "handler": _tool_onboard},
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
