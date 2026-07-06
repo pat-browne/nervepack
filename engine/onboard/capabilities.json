@@ -142,6 +142,17 @@
         "claude-code-windows": "Windows Task Scheduler, not crontab (reference: 70-install-memory-schtasks.sh; runs under Git-bash, shells to schtasks.exe); verify with `schtasks //Query //FO LIST | grep -i nervepack`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: 76/77 can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
       }
+    },
+    {
+      "id": "pii_filter_full",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "Presidio NER available for pii_filter --mode full",
+      "why": "Enables name/org/location scrubbing at storage time. Without it, pii_filter falls back to regex-only (structural PII only).",
+      "accept": "python3 -c 'import presidio_analyzer' succeeds.",
+      "hints": {
+        "generic": "Run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy en_core_web_lg."
+      }
     }
   ]
 }

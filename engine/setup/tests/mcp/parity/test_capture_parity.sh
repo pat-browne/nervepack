@@ -23,7 +23,12 @@ command -v jq      >/dev/null 2>&1 || { echo "SKIP test_capture_parity: no jq"; 
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home"; mkdir -p "$HOME/.config/nervepack"
-: > "$tmp/conf"; export NP_TOGGLES_CONF="$tmp/conf" NP_TOGGLES_LOCAL="$HOME/.config/nervepack/toggles.local"; : > "$NP_TOGGLES_LOCAL"
+# pii_filter must be off to match production (toggles.conf: pii_filter|shared|runtime|off|).
+# An empty conf makes np_enabled fail-open (unknown=on), accidentally enabling PII scrub
+# in the bash path. Python checks NP_PII_FILTER=1 env var instead — so without this line
+# the two paths diverge: bash applies /home/u/ -> [PATH]/, python does not.
+printf 'pii_filter|shared|runtime|off|\n' > "$tmp/conf"
+export NP_TOGGLES_CONF="$tmp/conf" NP_TOGGLES_LOCAL="$HOME/.config/nervepack/toggles.local"; : > "$NP_TOGGLES_LOCAL"
 
 # A transcript file (content irrelevant — the stub ignores the prompt; only its
 # size matters for the dedup fingerprint, which we keep out of the way per-run).

@@ -99,6 +99,10 @@ ctx=""
 [[ -n "$success_ctx" ]] && ctx+="Approaches that worked before (Nervepack lessons) — consider whether each applies before acting:"$'\n'"$success_ctx"
 [[ -z "$ctx" ]] && exit 0
 
+if np_enabled pii_filter 2>/dev/null && command -v python3 >/dev/null 2>&1 && [[ -x "$HERE/np-pii-filter.py" ]]; then
+  ctx="$(printf '%s' "$ctx" | python3 "$HERE/np-pii-filter.py" --mode fast)"
+fi
+
 np_signal "$sid" "lesson-recall"
 jq -nc --arg c "$ctx" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$c}}'
 exit 0

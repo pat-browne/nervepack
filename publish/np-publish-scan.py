@@ -29,7 +29,7 @@ RULES = {
     # ranges, or public IPs. The dashboard's intentional 127.0.0.1 binds stay clean.
     "lan-ip":      re.compile(r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b"),
 }
-SKIP_DIRS = {".git", "__pycache__", "node_modules", ".claude"}
+SKIP_DIRS = {".git", "__pycache__", "node_modules", ".claude", ".superpowers"}
 SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2", ".zip", ".lock"}
 # The scanner's own machinery: this source file holds the detection regexes
 # (e.g. the pii- patterns) and the scanner's unit tests plant fake-but-real-looking
@@ -42,6 +42,8 @@ SKIP_FILES = {
     "engine/setup/tests/publish/test_scan.py",
     "engine/setup/tests/publish/test_no_engine_pii.py",
     "engine/setup/tests/publish/test_snapshot.sh",  # plants a fake AKIA + LAN IP to prove the gate blocks
+    "engine/setup/tests/pii/test_pii_filter.py",    # plants fake LAN IPs + OpenAI key to prove the filter fires
+    "engine/setup/tests/pii/test_pii_hooks.sh",     # plants fake LAN IPs in recall fixtures to prove the hooks fire
 }
 
 

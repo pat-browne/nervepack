@@ -42,6 +42,11 @@ for _d in ${_ep_roots[@]+"${_ep_roots[@]}"}; do
   done < <(printf '%s' "$prompt" | "$HERE/episodic-match.sh" "$INDEX" | head -n "$TOP")
 done
 [[ "$_hit_any" == 1 ]] || exit 0
+
+if np_enabled pii_filter 2>/dev/null && command -v python3 >/dev/null 2>&1 && [[ -x "$HERE/np-pii-filter.py" ]]; then
+  ctx="$(printf '%s' "$ctx" | python3 "$HERE/np-pii-filter.py" --mode fast)"
+fi
+
 np_signal "$sid" "episodic-recall"
 
 jq -nc --arg c "$ctx" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit", additionalContext:$c}}'
