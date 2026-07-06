@@ -661,6 +661,8 @@ def main():
     if not np_enabled("mcp"):
         log("mcp feature disabled; exiting")
         return 0
+    if np_enabled("pii_filter"):
+        os.environ["NP_PII_FILTER"] = "1"
     for line in sys.stdin:
         line = line.strip()
         if not line:
