@@ -87,6 +87,30 @@ core_check() {
           echo "WARN (dashboard/data bridge missing — run 35-link-dashboard-data.sh to create the symlink into the content overlay; the dashboard will show no metrics until then)"
         fi
       fi ;;
+    hook-scripts)
+      local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+      if [[ ! -f "$settings" ]]; then
+        echo "PASS (no settings.json at $settings)"
+        return
+      fi
+      command -v jq >/dev/null || { echo "SKIP (jq unavailable)"; return; }
+      local broken=() cmd script
+      while IFS= read -r cmd; do
+        [[ -z "$cmd" ]] && continue
+        cmd="${cmd/#\~/$HOME}"   # expand ~/
+        script="${cmd%% *}"     # first token — strip trailing args / &
+        [[ "$script" != */* ]] && continue   # skip bare command names
+        [[ -e "$script" ]] || broken+=("$script")
+      done < <(jq -r '(.hooks // {}) | .. | objects | select(.type? == "command") | .command' "$settings" 2>/dev/null)
+      if [[ ${#broken[@]} -eq 0 ]]; then
+        echo PASS
+      else
+        printf 'FAIL (%d missing script(s): %s)\n' "${#broken[@]}" "${broken[*]}"
+      fi ;;
+    pii_filter_full)
+      python3 -c "import presidio_analyzer" >/dev/null 2>&1 \
+        && echo PASS \
+        || echo "FAIL (run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy)" ;;
     *) echo SKIP ;;
   esac
 }

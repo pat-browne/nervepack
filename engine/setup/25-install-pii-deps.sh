@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Optional: install Presidio + spaCy for np-pii-filter --mode full.
+# Safe to skip — filter degrades gracefully to regex-only without these.
+set -euo pipefail
+pip install presidio-analyzer presidio-anonymizer
+python -m spacy download en_core_web_lg
