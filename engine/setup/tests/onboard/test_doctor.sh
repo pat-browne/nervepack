@@ -77,4 +77,38 @@ set +e; outD="$(doctor "$tmp/pipe.json" 2>&1)"; rcD=$?; set -e
 [[ $rcD -eq 0 ]] || { echo "FAIL: 'producer | grep -q' verify must not SIGPIPE-fail under pipefail; got $rcD"; echo "$outD"; exit 1; }
 echo "$outD" | grep -qi 'knowledge.*PASS' || { echo "FAIL: pipe-form verify should PASS"; echo "$outD"; exit 1; }
 
+# helper: run doctor with a specific CLAUDE_SETTINGS file (uses ok.json adapter)
+doctor_hooks() { CLAUDE_SETTINGS="$1" NP_DIR="$repo" NP_CAPABILITIES="$CAPS" NP_ADAPTER="$tmp/ok.json" CLAUDE_BIN="$tmp/claude" bash "$DOCTOR"; }
+
+# Case E: no settings.json → hook-scripts PASS with advisory note.
+set +e; outE="$(CLAUDE_SETTINGS="$tmp/nonexistent.json" NP_DIR="$repo" NP_CAPABILITIES="$CAPS" NP_ADAPTER="$tmp/ok.json" CLAUDE_BIN="$tmp/claude" bash "$DOCTOR" 2>&1)"; rcE=$?; set -e
+[[ $rcE -eq 0 ]] || { echo "FAIL: absent settings.json should not fail doctor; got $rcE"; echo "$outE"; exit 1; }
+echo "$outE" | grep -qi 'hook-scripts.*PASS' || { echo "FAIL: absent settings.json should report hook-scripts PASS"; echo "$outE"; exit 1; }
+
+# Case F: settings.json references scripts that all exist → hook-scripts PASS.
+# Use this script itself as a stand-in "existing" command.
+cat > "$tmp/hooks-ok.json" <<EOF
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"$SETUP/np-doctor.sh"}]}]}}
+EOF
+set +e; outF="$(doctor_hooks "$tmp/hooks-ok.json" 2>&1)"; rcF=$?; set -e
+[[ $rcF -eq 0 ]] || { echo "FAIL: all-existing hook scripts should exit 0; got $rcF"; echo "$outF"; exit 1; }
+echo "$outF" | grep -qi 'hook-scripts.*PASS' || { echo "FAIL: all-existing hook scripts should report PASS"; echo "$outF"; exit 1; }
+
+# Case G: settings.json has two missing scripts and one real one → hook-scripts FAIL in report.
+# Doctor still exits 0 (hook-scripts is SHOULD, not MUST).
+cat > "$tmp/hooks-bad.json" <<EOF
+{"hooks":{
+  "PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"$tmp/missing-guard.sh"}]}],
+  "SessionStart":[{"matcher":"","hooks":[
+    {"type":"command","command":"$SETUP/np-doctor.sh"},
+    {"type":"command","command":"$tmp/another-gone.sh"}
+  ]}]
+}}
+EOF
+set +e; outG="$(doctor_hooks "$tmp/hooks-bad.json" 2>&1)"; rcG=$?; set -e
+[[ $rcG -eq 0 ]] || { echo "FAIL: missing hook scripts are SHOULD — doctor must still exit 0; got $rcG"; echo "$outG"; exit 1; }
+echo "$outG" | grep -qi 'hook-scripts.*FAIL' || { echo "FAIL: missing hook scripts should report FAIL on hook-scripts line"; echo "$outG"; exit 1; }
+echo "$outG" | grep -qi 'missing-guard' || { echo "FAIL: report should name missing-guard.sh"; echo "$outG"; exit 1; }
+echo "$outG" | grep -qi 'another-gone' || { echo "FAIL: report should name another-gone.sh"; echo "$outG"; exit 1; }
+
 echo "PASS test_doctor"
