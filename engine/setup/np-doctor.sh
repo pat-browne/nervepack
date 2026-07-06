@@ -107,6 +107,10 @@ core_check() {
       else
         printf 'FAIL (%d missing script(s): %s)\n' "${#broken[@]}" "${broken[*]}"
       fi ;;
+    pii_filter_full)
+      python3 -c "import presidio_analyzer" >/dev/null 2>&1 \
+        && echo PASS \
+        || echo "FAIL (run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy)" ;;
     *) echo SKIP ;;
   esac
 }
