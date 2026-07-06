@@ -32,6 +32,7 @@ SKIP_SUBPATHS = (
     os.path.join("docs", "superpowers", "plans"),
     os.path.join("docs", "superpowers", "specs"),
     os.path.join("docs", "superpowers", "runbooks"),
+    "specs",   # engine-root design specs reference planned (not yet implemented) paths
     os.path.join("memory", "episodic"),
     os.path.join("memory", "playbooks"),
     os.path.join("memory", "strategies"),
