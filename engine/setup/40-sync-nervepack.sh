@@ -94,7 +94,7 @@ if [[ "$local_rev" == "$remote_rev" ]]; then
   if git diff-index --quiet HEAD -- && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then
     write_status "np-core-sync: $(now) — up to date ($(git rev-parse --short HEAD))"
   else
-    dirty=$(git status --porcelain | wc -l)
+    dirty=$(git status --porcelain | wc -l | tr -d ' ')
     write_status "np-core-sync: $(now) — up to date with origin ($dirty uncommitted change(s) in working tree)"
   fi
   exit 0
@@ -102,7 +102,7 @@ fi
 
 # Case 2: working tree dirty — never auto-modify
 if ! git diff-index --quiet HEAD -- || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
-  dirty=$(git status --porcelain | wc -l)
+  dirty=$(git status --porcelain | wc -l | tr -d ' ')
   behind=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "?")
   write_status "np-core-sync: $(now) — SKIPPED (working tree dirty: $dirty files; $behind remote commits waiting). Commit/stash, then re-run /np-core-sync."
   exit 0
