@@ -76,8 +76,8 @@ the general principle.
 When you notice a failure that repeats — in logs, CI, a cron, a hook, test
 output — **prioritize investigating and fixing it**, even if it's tangential to
 the task in front of you. A recurring error is a signal, not wallpaper; stepping
-over it lets real bugs hide in the noise. Root-cause it first (no fix without
-root cause — `superpowers:systematic-debugging`), fix the cause not the symptom,
+over it lets real bugs hide in the noise. Root-cause it first (no fix without a
+root cause; apply systematic root-cause debugging), fix the cause not the symptom,
 and add a regression test (Rule 5). **Silently swallowed failures are the worst
 kind:** `2>/dev/null || exit 0` / `|| true` around a command that's actually
 failing every run hides the signal entirely — when you find one, question

@@ -9,8 +9,8 @@ run() { printf '%s' "$1" | NP_SKILL_TRIGGER_STATE="$tmp/state" bash "$RECALL"; }
 # Matching: "refactor" near "skill" -> reminder injected
 out="$(run "$(jq -nc '{session_id:"s1",prompt:"I want to refactor this skill to be leaner"}')")"
 [[ -n "$out" ]] || { echo "FAIL: no output for skill-refactor prompt"; exit 1; }
-printf '%s' "$out" | jq -e '.hookSpecificOutput.additionalContext | test("superpowers:writing-skills")' >/dev/null \
-  || { echo "FAIL: skill name missing from injection: $out"; exit 1; }
+printf '%s' "$out" | jq -e '.hookSpecificOutput.additionalContext | test("disciplined skill-authoring process")' >/dev/null \
+  || { echo "FAIL: host-neutral skill-authoring guidance missing from injection: $out"; exit 1; }
 
 # Once-per-session: same session id should produce no output on second call
 out2="$(run "$(jq -nc '{session_id:"s1",prompt:"refactor the skill again"}')")"
