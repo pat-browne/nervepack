@@ -77,4 +77,4 @@ manual:          <change>    # README, ARCHITECTURE, CLAUDE.md, or docs
 ## License
 
 By contributing, you agree your contributions are licensed under the project's
-[Apache License 2.0](LICENSE).
+[MIT License](LICENSE).
