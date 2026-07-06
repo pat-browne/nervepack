@@ -36,6 +36,7 @@
     "./skills/np-kb-coding-rules",
     "./skills/np-kb-evaluator-signals",
     "./skills/np-kb-frontend-ui-gotchas",
+    "./skills/np-kb-git-gotchas",
     "./skills/np-kb-mermaid-authoring",
     "./skills/np-kb-parsing-exported-markdown",
     "./skills/np-kb-reader-friendly-monetization",

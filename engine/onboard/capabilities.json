@@ -79,6 +79,18 @@
       }
     },
     {
+      "id": "hook-scripts",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "all hook command scripts referenced in settings.json exist on disk",
+      "why": "A hook pointing at a deleted or renamed script fires on every relevant event and exits non-zero — noise that masks real failures (root cause: playbook-guard.sh→lesson-guard.sh rename left settings.json stale).",
+      "accept": "Every settings.json hooks[].command whose first token contains a path separator resolves to an existing file.",
+      "hints": {
+        "claude-code": "Re-run the install script for the renamed hook (e.g. engine/setup/53-install-lesson-hooks.sh) to rewrite settings.json in-place.",
+        "generic": "Set CLAUDE_SETTINGS to your host's hook settings file if it is not at ~/.claude/settings.json."
+      }
+    },
+    {
       "id": "session-start",
       "tier": "SHOULD",
       "check": "adapter",
