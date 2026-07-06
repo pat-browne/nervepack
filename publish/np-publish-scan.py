@@ -42,6 +42,7 @@ SKIP_FILES = {
     "engine/setup/tests/publish/test_scan.py",
     "engine/setup/tests/publish/test_no_engine_pii.py",
     "engine/setup/tests/publish/test_snapshot.sh",  # plants a fake AKIA + LAN IP to prove the gate blocks
+    "engine/setup/tests/pii/test_pii_filter.py",    # plants fake LAN IPs + OpenAI key to prove the filter fires
 }
 
 
