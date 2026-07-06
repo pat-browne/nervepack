@@ -51,19 +51,21 @@ def _apply_full(data: bytes) -> bytes:
         from presidio_analyzer import AnalyzerEngine
         from presidio_anonymizer import AnonymizerEngine
         from presidio_anonymizer.entities import OperatorConfig
-    except ImportError:
-        print("[np-pii] presidio unavailable, regex-only", file=sys.stderr)
+
+        # Invalid UTF-8 bytes become U+FFFD after decode+re-encode; regex floor still applies.
+        text = data.decode("utf-8", errors="replace")
+        analyzer = AnalyzerEngine()
+        anonymizer = AnonymizerEngine()
+        results = analyzer.analyze(text=text, language="en", entities=_NER_ENTITIES)
+        operators = {
+            entity: OperatorConfig("replace", {"new_value": placeholder})
+            for entity, placeholder in _NER_PLACEHOLDERS.items()
+        }
+        anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
+        return anonymized.text.encode("utf-8")
+    except Exception as exc:
+        print(f"[np-pii] presidio error ({type(exc).__name__}), regex-only", file=sys.stderr)
         return data
-    text = data.decode("utf-8", errors="replace")
-    analyzer = AnalyzerEngine()
-    anonymizer = AnonymizerEngine()
-    results = analyzer.analyze(text=text, language="en", entities=_NER_ENTITIES)
-    operators = {
-        entity: OperatorConfig("replace", {"new_value": placeholder})
-        for entity, placeholder in _NER_PLACEHOLDERS.items()
-    }
-    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
-    return anonymized.text.encode("utf-8")
 
 
 def main() -> None:

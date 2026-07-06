@@ -38,6 +38,11 @@ class TestFastModeRegex(unittest.TestCase):
         self.assertIn("[PHONE]", out)
         self.assertNotIn("415-555-1234", out)
 
+    def test_phone_us_parenthesized(self):
+        out, _, _ = _run("call (415) 555-1234 now")
+        self.assertIn("[PHONE]", out)
+        self.assertNotIn("(415) 555-1234", out)
+
     def test_ssn(self):
         out, _, _ = _run("ssn is 123-45-6789")
         self.assertIn("[SSN]", out)
@@ -153,7 +158,8 @@ class TestFullModeNoPrecidio(unittest.TestCase):
             _sys.stderr = old_stderr
 
         self.assertIn("[EMAIL]", result.decode())
-        self.assertIn("presidio unavailable", stderr_out)
+        self.assertIn("presidio error", stderr_out)
+        self.assertIn("regex-only", stderr_out)
 
 
 class TestExceptionSafety(unittest.TestCase):
