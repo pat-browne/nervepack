@@ -36,8 +36,8 @@ export CLAUDE_BIN="$tmp/stub" NP_LLM_MODEL_CHEAP="test-model-x" NP_LLM_BACKEND="
 cmp_complete() {  # $1=label  $2=prompt  $3=system (optional)
   local sysargs=()
   [[ -n "${3:-}" ]] && sysargs=(--system "$3")
-  printf '%s' "$2" | bash    "$SH" complete "${sysargs[@]}" > "$tmp/b.out" 2>/dev/null
-  printf '%s' "$2" | python3 "$PY" complete "${sysargs[@]}" > "$tmp/p.out" 2>/dev/null
+  printf '%s' "$2" | bash    "$SH" complete ${sysargs[@]+"${sysargs[@]}"} > "$tmp/b.out" 2>/dev/null
+  printf '%s' "$2" | python3 "$PY" complete ${sysargs[@]+"${sysargs[@]}"} > "$tmp/p.out" 2>/dev/null
   if ! cmp -s "$tmp/b.out" "$tmp/p.out"; then
     echo "FAIL [$1]:"; echo "--- bash ---"; cat "$tmp/b.out"; echo "--- python ---"; cat "$tmp/p.out"
     fails=$((fails+1))
