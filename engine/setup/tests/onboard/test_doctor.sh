@@ -86,9 +86,11 @@ set +e; outE="$(CLAUDE_SETTINGS="$tmp/nonexistent.json" NP_DIR="$repo" NP_CAPABI
 echo "$outE" | grep -qi 'hook-scripts.*PASS' || { echo "FAIL: absent settings.json should report hook-scripts PASS"; echo "$outE"; exit 1; }
 
 # Case F: settings.json references scripts that all exist → hook-scripts PASS.
-# Use this script itself as a stand-in "existing" command.
+# Use a stub in $tmp (guaranteed resolvable on all platforms, including Windows CI).
+printf '#!/usr/bin/env bash\n' > "$tmp/real-guard.sh"
+chmod +x "$tmp/real-guard.sh"
 cat > "$tmp/hooks-ok.json" <<EOF
-{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"$SETUP/np-doctor.sh"}]}]}}
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"$tmp/real-guard.sh"}]}]}}
 EOF
 set +e; outF="$(doctor_hooks "$tmp/hooks-ok.json" 2>&1)"; rcF=$?; set -e
 [[ $rcF -eq 0 ]] || { echo "FAIL: all-existing hook scripts should exit 0; got $rcF"; echo "$outF"; exit 1; }
