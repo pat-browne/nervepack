@@ -480,7 +480,8 @@ Don't drop a foreign skill in verbatim — adapt it so it belongs:
 4. **Wire it to repo conventions** — temp-dir not repo for ephemeral output, redaction
    via [[np-env-secrets-refresh]], reference-don't-duplicate, point "suggested skills"
    at real `np-*` skills.
-5. **Verify before deploying** (superpowers `writing-skills`): one subagent application
+5. **Verify before deploying** (a disciplined skill-authoring/verification pass — e.g.
+   superpowers `writing-skills` if your host has it): one subagent application
    test that an agent given only the skill produces compliant output. Then the standard
    add-skill steps (plugin.json → `30-link-skills.sh` → commit).
 

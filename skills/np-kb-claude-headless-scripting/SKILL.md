@@ -157,5 +157,5 @@ Specific patterns, portable replacements, and portability test: references/macos
 ## Related
 
 - [[np-kb-coding-rules]] §8 (noisy failures) and §5 (regression tests)
-- `superpowers:systematic-debugging` — root-cause discipline used to find the §1, §6, §7 and §8 bugs
+- Systematic root-cause debugging — used to find the §1, §6, §7 and §8 bugs
 - docs/ARCHITECTURE.md invariant 12 (SessionEnd unreliable; SessionStart is the reliable trigger)

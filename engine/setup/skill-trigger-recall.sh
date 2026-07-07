@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook: inject a once-per-session reminder to invoke
-# superpowers:writing-skills when the prompt matches a skill-writing pattern
-# (skill.*refactor, refactor.*skill, or SKILL.md reference). Fail-open.
+# UserPromptSubmit hook: inject a once-per-session reminder to follow a
+# disciplined skill-authoring process when the prompt matches a skill-writing
+# pattern (skill.*refactor, refactor.*skill, or SKILL.md reference). Host-neutral:
+# names a skill-authoring skill only as an optional example. Fail-open.
 set -uo pipefail
 _npl="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/np-toggle-lib.sh"
 [[ -r "$_npl" ]] && source "$_npl" && { np_enabled skills.trigger_recall || exit 0; }
@@ -26,6 +27,6 @@ fired="$STATE_DIR/fired_${sid//\//_}"
 touch "$fired"
 np_signal "$sid" "skill-trigger-recall"
 
-msg="Skill-writing trigger (Nervepack): this prompt matches a skill-writing pattern. Invoke the superpowers:writing-skills skill BEFORE proceeding."
+msg="Skill-writing trigger (Nervepack): this prompt matches a skill-writing pattern. Before proceeding, follow a disciplined skill-authoring process (spec the skill, write it, then verify with a subagent application test). If your host has a dedicated skill-authoring skill (e.g. superpowers:writing-skills), invoke it first."
 jq -nc --arg c "$msg" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$c}}'
 exit 0
