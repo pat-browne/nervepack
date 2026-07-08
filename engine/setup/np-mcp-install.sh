@@ -50,7 +50,8 @@ fi
 # 2. Team overlay (optional) -----------------------------------------------------
 echo
 echo "Team overlay (optional): a shared content layer above your personal one."
-echo "Leave blank for none."
+echo "Leave blank for none. Multiple team dirs may be given comma-separated, highest"
+echo "precedence first (max 4) — e.g. squad-dir,division-dir."
 team="$(expand "$(ask 'Team content directory' '')")"
 if [[ -n "$team" ]]; then
   if [[ -d "$team" ]]; then
