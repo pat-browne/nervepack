@@ -48,4 +48,16 @@ out="$(NP_CONTENT_DIR="$ov" bash -c 'source "'"$CLIB"'"; np_layer_dir strategies
   || { echo "FAIL np_layer_dir: got [$out] want [$ov/memory/strategies]"; exit 1; }
 echo "OK np_layer_dir/np_layer_roots"
 
+# --- multi-team stack -------------------------------------------------------
+mkdir -p "$tmp/teamB" "$tmp/teamC"
+printf 'team=on\n' > "$tmp/local"
+export NP_TEAM_DIR="$tmp/team,$tmp/teamB,$tmp/teamC"
+got="$(bash -c "source '$LIB'; np_content_layers" | tr '\n' ',')"
+[[ "$got" == "$tmp/team,$tmp/teamB,$tmp/teamC,$tmp/personal," ]] || fail "multi-team layers: '$got'"
+# team-only with multiple teams -> all team roots, personal dropped
+printf 'team=on\nteam.merge=team-only\n' > "$tmp/local"
+got="$(bash -c "source '$LIB'; np_merge_roots" | tr '\n' ',')"
+[[ "$got" == "$tmp/team,$tmp/teamB,$tmp/teamC," ]] || fail "multi-team team-only roots: '$got'"
+export NP_TEAM_DIR="$tmp/team"   # restore
+
 echo "PASS test_layer_lib"

@@ -110,15 +110,18 @@ def team_origin():
 
 # --- layer stack (np-layer-lib.sh) ------------------------------------------
 def content_layers():
-    """np_content_layers: overlay roots, team-first when the `team` toggle is on
-    and a team dir resolves; deduped. [] when the personal dir fails to resolve."""
+    """np_content_layers: all team roots (precedence order, deduped vs personal)
+    when the `team` toggle is on, then personal. [] if personal fails to resolve."""
     personal = content_dir()
     if not personal:
         return []
-    team = team_dir() if np_toggle.enabled("team") else ""
-    if team and team != personal:
-        return [team, personal]
-    return [personal]
+    layers = []
+    if np_toggle.enabled("team"):
+        for t in team_dirs():
+            if t != personal and t not in layers:
+                layers.append(t)
+    layers.append(personal)
+    return layers
 
 
 def merge_mode():
@@ -128,10 +131,11 @@ def merge_mode():
 
 
 def merge_roots():
-    """np_merge_roots: the roots a reader scans for the current mode."""
+    """np_merge_roots: the roots a reader scans for the current mode. team-only
+    with >=1 team -> all team roots (personal, the last layer, dropped)."""
     roots = content_layers()
     if merge_mode() == "team-only" and len(roots) > 1:
-        return [roots[0]]
+        return roots[:-1]
     return roots
 
 
