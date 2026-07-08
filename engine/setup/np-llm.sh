@@ -38,7 +38,7 @@ case "$BACKEND" in
   claude)
     case "$mode" in
       complete)
-        args=(-p --bare --model "$MODEL_CHEAP" --allowedTools "")
+        args=(-p --model "$MODEL_CHEAP" --allowedTools "")
         [[ -n "$sys" ]] && args+=(--append-system-prompt "$sys")
         printf '%s' "$prompt" | NERVEPACK_AGENT=1 "$CLAUDE" "${args[@]}"
         ;;
