@@ -31,12 +31,28 @@ PLUGINS=(
   stripe
 )
 
+# Plugins installed but left OFF by default (opt in per-project via that
+# project's .claude/settings.local.json). Global-enable means every Claude
+# Code process — including every subagent/one-shot spawned via Agent/Task/
+# Workflow — launches its own independent MCP server instance; with Serena's
+# uvx-from-git launch cost and subagent fan-out, that produces a burst of
+# short-lived server spawns that looks like a launch loop. Install still
+# happens so it's available and pre-warmed; just not globally active.
+DEFAULT_OFF=(
+  serena
+)
+
 failed=()
 for p in "${PLUGINS[@]}"; do
   echo "==> $p"
   if ! claude plugin install "${p}@claude-plugins-official"; then
     failed+=("$p")
   fi
+done
+
+for p in "${DEFAULT_OFF[@]}"; do
+  echo "==> disabling $p globally (opt in per-project instead)"
+  claude plugin disable "${p}@claude-plugins-official" || true
 done
 
 # Karpathy's coding guidelines are absorbed natively into the np-kb-coding-rules
