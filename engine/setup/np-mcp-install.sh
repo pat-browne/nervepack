@@ -52,16 +52,40 @@ echo
 echo "Team overlay (optional): a shared content layer above your personal one."
 echo "Leave blank for none. Multiple team dirs may be given comma-separated, highest"
 echo "precedence first (max 4) — e.g. squad-dir,division-dir."
-team="$(expand "$(ask 'Team content directory' '')")"
-if [[ -n "$team" ]]; then
-  if [[ -d "$team" ]]; then
+team_raw="$(ask 'Team content directory' '')"
+if [[ -n "$team_raw" ]]; then
+  # Split on ',', trim each entry, expand a leading ~ per-entry (expand() only
+  # handles one leading ~ on the whole string, so it must run per split piece —
+  # see np_team_dirs in np-content-lib.sh, which this mirrors).
+  team_entries=() team_err=""
+  IFS=',' read -ra _team_parts <<< "$team_raw"
+  for p in "${_team_parts[@]}"; do
+    d="${p#"${p%%[![:space:]]*}"}"   # ltrim
+    d="${d%"${d##*[![:space:]]}"}"   # rtrim
+    [[ -n "$d" ]] || continue
+    team_entries+=("$(expand "$d")")
+  done
+  if [[ ${#team_entries[@]} -eq 0 ]]; then
+    team_err="no team dir given"
+  elif [[ ${#team_entries[@]} -gt 4 ]]; then
+    team_err=">4 team dirs — max 4"
+  else
+    for d in "${team_entries[@]}"; do
+      if [[ ! -d "$d" ]]; then
+        team_err="'$d' does not exist"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$team_err" ]]; then
+    team="$(IFS=,; printf '%s' "${team_entries[*]}")"
     printf '%s\n' "$team" > "$CFG/team-dir"
     # The `team` feature is on by default (shared toggle) — configuring the dir is what
     # activates the overlay. We never flip the shared toggle here: that would commit to
     # the engine repo. If you've disabled it, re-enable with: nervepack-toggle team on.
     echo "  ✓ wrote $CFG/team-dir (the 'team' overlay is active by default)"
   else
-    echo "  ! '$team' does not exist — skipping team overlay" >&2
+    echo "  ! $team_err — skipping team overlay" >&2
   fi
 fi
 
