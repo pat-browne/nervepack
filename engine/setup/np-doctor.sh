@@ -27,8 +27,10 @@ command -v jq >/dev/null || { echo "doctor: jq required" >&2; exit 2; }
 core_check() {
   case "$1" in
     llm-cli)
-      local out; out="$(printf 'ping' | "$HERE/np-llm.sh" complete 2>/dev/null)"
-      [[ -n "$out" ]] && echo PASS || echo FAIL ;;
+      local out rc
+      out="$(printf 'ping' | "$HERE/np-llm.sh" complete 2>/dev/null)"
+      rc=$?
+      [[ $rc -eq 0 && -n "$out" ]] && echo PASS || echo FAIL ;;
     git-sync)
       git -C "$NP" rev-parse --git-dir >/dev/null 2>&1 \
         && git -C "$NP" remote get-url origin >/dev/null 2>&1 && echo PASS || echo FAIL ;;

@@ -34,7 +34,7 @@ def complete(prompt, system=None):
     env = dict(os.environ)
     env["NERVEPACK_AGENT"] = "1"   # the SessionEnd-recursion guard np-llm.sh sets
     if backend == "claude":
-        argv = [_claude_bin(), "-p", "--bare", "--model", _model_cheap(), "--allowedTools", ""]
+        argv = [_claude_bin(), "-p", "--model", _model_cheap(), "--allowedTools", ""]
         if system:
             argv += ["--append-system-prompt", system]
     elif backend == "local":

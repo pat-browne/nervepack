@@ -33,9 +33,10 @@ grep -q 'Bash Read Write' "$tmp/a"          || { echo "FAIL: agent tools not for
 grep -q 'AGENT=1' "$tmp/a"                  || { echo "FAIL: agent must set NERVEPACK_AGENT=1"; exit 1; }
 grep -q -- '--bare' "$tmp/a"                || { echo "FAIL: agent must pass --bare to suppress third-party hooks (see sdd/investigate-implement.md): $(cat "$tmp/a")"; exit 1; }
 
-# 3b. complete: --bare also passed to suppress hooks in single-shot invocations.
+# 3b. complete: --bare NOT passed; keychain auth must work (--allowedTools "" means no
+#     tool use, so PostToolUse hooks can't fire; NERVEPACK_AGENT=1 handles recursion).
 printf 'hello' | CLAUDE_BIN="$tmp/claude" STUB_OUT="$tmp/cb" NP_LLM_MODEL_CHEAP=cheapM bash "$NPLLM" complete >/dev/null
-grep -q -- '--bare' "$tmp/cb"               || { echo "FAIL: complete must pass --bare to suppress hooks: $(cat "$tmp/cb")"; exit 1; }
+grep -q -- '--bare' "$tmp/cb" && { echo "FAIL: complete must NOT pass --bare (breaks keychain auth on Windows): $(cat "$tmp/cb")"; exit 1; } || true
 
 # 3c. local backend: --bare is NOT passed (local backend has no claude hooks).
 # Intercept the `python3 <path>/np-llm-local.py` call by prepending a stub python3 to
