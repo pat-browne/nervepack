@@ -41,21 +41,24 @@ NERVEPACK="${NP_SYNC_TARGET:-$HOME/Code/nervepack}"   # override aids the parity
 STATUS="${NP_SYNC_STATUS:-$HOME/.cache/np-core-sync-status}"
 mkdir -p "$(dirname "$STATUS")"
 
-# Optional team layer: keep a shared team checkout current (strict-safe: ff-only).
+# Optional team layer: keep every configured team checkout current (strict-safe:
+# ff-only, one repo at a time — never just the highest-precedence dir).
 _np_team_sync() {
-  declare -f np_enabled >/dev/null 2>&1 || return 0
-  declare -f np_team_dir >/dev/null 2>&1 || return 0
-  local _team_dir
+  declare -f np_enabled  >/dev/null 2>&1 || return 0
+  declare -f np_team_dirs >/dev/null 2>&1 || return 0
   np_enabled team || return 0
-  _team_dir="$(np_team_dir 2>/dev/null)" || return 0
-  git -C "$_team_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-  if [[ -z "$(git -C "$_team_dir" status --porcelain 2>/dev/null)" ]]; then
-    git -C "$_team_dir" fetch --quiet origin 2>/dev/null \
-      && git -C "$_team_dir" merge --ff-only --quiet '@{u}' 2>/dev/null \
-      || echo "np-core-sync: team layer not fast-forwarded (diverged/dirty/no upstream) — left as-is" >&2
-  else
-    echo "np-core-sync: team layer has local edits — skipping pull" >&2
-  fi
+  local _team_dir
+  while IFS= read -r _team_dir; do
+    [[ -n "$_team_dir" ]] || continue
+    git -C "$_team_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || continue
+    if [[ -z "$(git -C "$_team_dir" status --porcelain 2>/dev/null)" ]]; then
+      git -C "$_team_dir" fetch --quiet origin 2>/dev/null \
+        && git -C "$_team_dir" merge --ff-only --quiet '@{u}' 2>/dev/null \
+        || echo "np-core-sync: team layer $_team_dir not fast-forwarded (diverged/dirty/no upstream) — left as-is" >&2
+    else
+      echo "np-core-sync: team layer $_team_dir has local edits — skipping pull" >&2
+    fi
+  done < <(np_team_dirs 2>/dev/null || true)
 }
 
 # Arm the team pull HERE — after the deliberate early-outs above (within-interval
