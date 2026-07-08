@@ -69,7 +69,7 @@ for `toggle`/`sync`/`capture`/`evaluate` — those run in-process (verified by a
 }
 ```
 
-It spawns the server with native `python` (which must be on `PATH`) — no bash
+It spawns the server with `py -3` (Windows Python Launcher, standard with Python 3.x from python.org) falling back to bare `python` if `py` is absent — no bash
 anywhere. The two maintenance tools that still shell out to the agent-mode crons
 (`nervepack_flush`, `nervepack_maintain`) **refuse cleanly** on a bash-free host
 ("needs bash — not supported bash-free yet"); everything else works. If Git for
