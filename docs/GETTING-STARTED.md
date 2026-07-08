@@ -1,144 +1,96 @@
 # Getting started with nervepack
 
-nervepack is a context hub you run across your machines: skills, memory, tools, and
-workflows your AI coding assistant reads every session. This walks you through a first
-install on a new box. It leads with **Claude Code** (the proven host); for any other
-agentic host, the same steps apply but the wiring is done by the onboarding contract in
-[`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md).
+nervepack is a context hub you run across your machines — skills, memory, tools, and
+workflows your AI coding assistant reads every session. This is the first-time install.
 
-> **Prerequisite:** an *agentic* host, one that can read/write files and run shell
-> commands. A plain chat UI can only consume the knowledge as context, not self-wire.
+> **Prerequisite:** an *agentic* host — one that can read/write files and run shell
+> commands (Claude Code, Cursor, Codex, Goose, …). A plain chat UI can only consume the
+> knowledge as context; it can't self-wire.
 
-## 1. Clone the engine
+## Quick start
 
-You need git first (the chicken-and-egg). Install just enough to clone:
+The same four steps on Linux, macOS, and Windows. The host **self-wires** — you don't
+hand-edit hooks or settings; `/np-onboard` does it and proves it with the doctor.
+
+**1. Get the code.**
 
 ```bash
-sudo apt update && sudo apt install -y git
 git clone https://github.com/pat-browne/nervepack ~/Code/nervepack
 ```
 
-## 2. Install the toolchain
+Git is the only prerequisite for this step. On **Windows, install
+[Git for Windows](https://gitforwindows.org) first** — it supplies the `bash` that runs
+every nervepack hook and cron.
+
+**2. Install the toolchain** (gh, jq, node, python, go, build tools):
+
+| OS | Command |
+|---|---|
+| Linux | `~/Code/nervepack/engine/setup/00-apt-baseline.sh` |
+| macOS | `~/Code/nervepack/engine/setup/00-brew-baseline.sh` |
+| Windows | No installer script — install **Node 20, Python 3, `gh`, and `jq`** by hand (Git for Windows already covers bash). |
+
+The engine runs on **Bash + Python 3** — the baseline above installs Python (`apt` on
+Linux, `uv python install` on macOS; install it by hand on Windows), so every engine
+script works out of the box. On a Claude host, finish with
+`~/Code/nervepack/engine/setup/20-claude-plugins.sh`.
+
+**3. Authenticate GitHub** (so the maintenance jobs can push your content):
 
 ```bash
-~/Code/nervepack/engine/setup/00-apt-baseline.sh   # gh, jq, node, python, go, cron, build (sudo)
-~/Code/nervepack/engine/setup/10-rustup.sh         # rustup, user-space, no sudo
-~/Code/nervepack/engine/setup/20-claude-plugins.sh # Claude Code plugins (Claude host only)
+gh auth login    # GitHub.com · HTTPS · login with a browser
 ```
 
-**On macOS**, run `00-brew-baseline.sh` instead of `00-apt-baseline.sh` (the
-Homebrew sibling — same toolset: gh, jq, node, go, and Python via uv). It runs on
-the system `/bin/bash` (3.2), so no newer bash is required; `gh auth login` (step 5)
-covers the GitHub credential the clone needs.
-
-## 3. Onboard your host
-
-Open your agent in `~/Code/nervepack` and run the onboarding walkthrough. Your agent
-reads the tool-neutral contract, wires this host (skills, session hooks, scheduler),
-writes `~/.config/nervepack/adapter.json`, and runs the doctor.
+**4. Onboard the host.** Open your agent in `~/Code/nervepack` and run:
 
 ```text
 /np-onboard      # or just say "onboard nervepack"
 ```
 
-On a non-Claude host, follow [`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md)
-directly. Either way, verify any time:
+Your agent reads the tool-neutral contract, links the skills, installs the session hooks
+and scheduler, writes `~/.config/nervepack/adapter.json`, and runs the doctor until every
+MUST capability is green. Verify any time:
 
 ```bash
-~/Code/nervepack/engine/setup/np-doctor.sh   # per-capability PASS/MISSING, non-zero on a real gap
+~/Code/nervepack/engine/setup/np-doctor.sh   # per-capability PASS/MISSING; non-zero on a real gap
 ```
 
-## 4. Point the engine at your content
+That's the whole install. What differs by OS is handled for you:
 
-The engine is the shared machinery. Your skills, sources, memory, and metrics live in
-a separate **content overlay** so they stay yours. Tell the engine where it is:
+| | macOS | Windows |
+|---|---|---|
+| Toolchain | `00-brew-baseline.sh` | manual (Node · Python · gh · jq) |
+| Scheduler backend | launchd LaunchAgents | Windows Task Scheduler |
+| Hook execution | native bash | commands auto-wrapped through Git-bash |
 
-```bash
-mkdir -p ~/.config/nervepack
-echo "$HOME/Code/nervepack-content" > ~/.config/nervepack/content-dir
-```
+On a **non-Claude host**, `/np-onboard` isn't a slash command — follow the same contract
+directly in [`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md).
 
-The `mkdir` is required the first time — `>` creates the *file* but not its parent
-directory, so writing `content-dir` into a `~/.config/nervepack` that doesn't exist
-yet fails with `no such file or directory`.
+## Going deeper
 
-No overlay yet? Fork [`nervepack-content-example`](https://github.com/pat-browne/nervepack-content-example),
-rename it to something private, and point at that. Skip this and the engine falls back
-to its own root, which works, but gives you nowhere personal to grow.
+Everything above gets you running. These child pages cover the optional, heavier setup:
 
-**On a team?** You can point at a *second*, shared overlay that sits above your
-personal one:
+- **[Content & team overlays](CONTENT-OVERLAY.md)** — point the engine at your own
+  private skills/memory repo (and an optional shared team overlay). Recommended; without
+  it the engine falls back to its own root and you have nowhere personal to grow.
+- **[Scheduled maintenance agents](../agents/README.md)** — the crons/routines that
+  promote memory, compact skills, and lint. Optional; nervepack works without them.
+- **[Onboarding contract](../engine/onboard/ONBOARD.md)** — the tool-neutral capability
+  contract for wiring any agentic host by hand.
+- **[Bootstrapping over MCP](../engine/onboard/MCP.md)** — after the one `git clone`,
+  point any MCP client at the server and a single `nervepack_onboard` call wires the rest.
+- **[Architecture](ARCHITECTURE.md)** · **[Features](FEATURES.md)** — how the engine,
+  layers, and toggles fit together.
 
-```bash
-echo "$HOME/Code/team-nervepack-content" > ~/.config/nervepack/team-dir
-```
+### Sanity-checking paths
 
-The stack becomes `team > personal > engine`. Reads merge with the team winning
-(a team skill or playbook shadows your personal one of the same name), and writes
-still land in your personal overlay unless you explicitly "save to the team layer."
-This is optional, and dormant until a team dir resolves.
-
-## 5. Authenticate GitHub
-
-```bash
-gh auth login    # GitHub.com, HTTPS, login with a browser, authenticate Git
-```
-
-This sets up the credential helper so the maintenance jobs can `git push` your content
-without prompting.
-
-## 6. Schedule the maintenance agents
-
-nervepack can keep itself tidy with scheduled agents (promote memory, compact skills,
-lint). Some run as local crons, some as cloud routines on your AI account. Set up your
-own from the payloads and cadence in [`../agents/README.md`](../agents/README.md). This
-step is optional; nervepack works fine without it.
-
-## 7. Verify and use it
-
-Re-run the doctor. A green report means every MUST capability is wired.
+The engine and your content overlay live in separate repos, so a script named in a skill
+can drift. This catches a stale path before you chase a dead command:
 
 ```bash
-~/Code/nervepack/engine/setup/np-doctor.sh
-```
-
-Then confirm the paths your docs and skills point at actually resolve on this machine.
-The engine and content overlay live in separate repos, so a script named in one skill
-sometimes moves under the other. This check catches a stale or renamed path before you
-chase a dead command for a given feature:
-
-```bash
-python3 ~/Code/nervepack/engine/setup/np-path-check.py                        # engine only
-# add your overlay to check its skills and docs too:
 python3 ~/Code/nervepack/engine/setup/np-path-check.py ~/Code/nervepack ~/Code/nervepack-content
 ```
 
-A clean run prints `all setup/onboard path references resolve ✓`. Any hit names the
-file, the line, and the path to fix. The same check runs in CI, so the engine's own docs
-stay honest.
-
-From here, every session loads `skills/*`, a SessionStart directive tells the session to
-consult nervepack first, and `/np-core-sync` / `/np-core-contribute` are available as
-slash commands.
-
-## Bootstrapping over MCP
-
-The one thing the MCP server can't do is clone itself onto a bare machine — *something*
-has to `git clone` the engine first (the one command in step 1), because the server
-binary lives in that repo. But once the repo is here and your MCP client is pointed at
-the server, a single tool call wires everything else:
-
-- **`nervepack_onboard`** links the skills, installs every lifecycle hook, sets up the
-  scheduler, registers the MCP, and runs the doctor — idempotent, one call. Pass
-  `content_dir` (and optionally `team_dir`) to point at your overlay first.
-
-So the whole story over MCP is: **clone → point your MCP client at the server → call
-`nervepack_onboard` → installed.** Any MCP client (Cursor, Codex, a local-model client)
-gets the same tools, resources, and prompts Claude Code does. Connecting a client needs
-nothing but the repo path — see [`../engine/onboard/MCP.md`](../engine/onboard/MCP.md)
-for the `mcpServers` block, the full tool/resource list, and the write-gating story.
-(`nervepack_onboard` shells out to the bash installers, so on Windows it needs Git for
-Windows.)
-
-Prefer the scripted path? `~/Code/nervepack/engine/bin/nervepack-install` does the
-content/team-dir config + MCP registration + doctor from the shell instead.
+A clean run prints `all setup/onboard path references resolve ✓`; any hit names the file,
+the line, and the path to fix. The same check runs in CI, so the engine's own docs stay
+honest.
