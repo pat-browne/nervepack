@@ -138,8 +138,12 @@ render_index "$NERVEPACK/INDEX.md" "$ENGINE_SKILLS"
 # index already covers the full set there.
 if [[ "$CONTENT_DIR" != "$NERVEPACK" ]]; then
   _merged_bases=("$ENGINE_SKILLS" "$OVERLAY_SKILLS")
-  if np_enabled team && TEAM_DIR="$(np_team_dir 2>/dev/null)"; then
-    _merged_bases+=("$TEAM_DIR/skills")
+  if np_enabled team; then
+    _team_dirs=(); while IFS= read -r _td; do [[ -n "$_td" ]] && _team_dirs+=("$_td"); done \
+      < <(np_team_dirs 2>/dev/null || true)
+    for ((_i = ${#_team_dirs[@]} - 1; _i >= 0; _i--)); do
+      _merged_bases+=("${_team_dirs[$_i]}/skills")
+    done
   fi
   render_index "$CONTENT_DIR/INDEX.md" "${_merged_bases[@]}"
 fi
