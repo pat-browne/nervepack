@@ -107,6 +107,15 @@ cmp_l np_content_layers content_layers path       # team, personal
 cmp_l np_merge_mode merge_mode               # override (default)
 cmp_l np_merge_roots merge_roots path             # team, personal
 
+# multi-team list: np_team_dirs parity (order, trim, dedup)
+mkdir -p "$tmp/team2" "$tmp/team3"
+export NP_TEAM_DIR="$tmp/team, $tmp/team2 ,$tmp/team3"
+cmp_c np_team_dirs team_dirs path
+cmp_c np_team_dir team_dir path                   # first entry
+cmp_l np_content_layers content_layers path       # team,team2,team3,personal
+cmp_l np_merge_roots merge_roots path
+export NP_TEAM_DIR="$tmp/team"                    # restore single-team for later cases
+
 # --- Case F: team-only merge mode -------------------------------------------
 printf 'team=on\nteam.merge=team-only\n' > "$NP_TOGGLES_LOCAL"
 cmp_l np_merge_mode merge_mode

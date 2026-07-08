@@ -66,18 +66,37 @@ def content_is_explicit():
     return content_origin() != "default"
 
 
-def team_dir():
-    """np_team_dir: the optional team overlay root, or "" when unconfigured OR an
-    explicit path doesn't exist (bash returns non-zero + no stdout in both)."""
+def team_dirs():
+    """np_team_dirs: configured team overlay roots, highest-precedence first.
+    Comma-separated value; split / trim / drop-empty / dedup, then validate the
+    <=4 cap and each dir's existence. Returns [] on unconfigured, over-cap, or a
+    missing dir (bash: no stdout + exit 1 in all three; loud stderr is bash-only
+    and ignored by the parity harness)."""
     env = os.environ.get("NP_TEAM_DIR")
     if env:
-        d = env
+        raw = env
     else:
         cfg = _cfg("team-dir")
-        d = _first_line(cfg) if os.path.isfile(cfg) else ""
-    if not d:
-        return ""
-    return d if os.path.isdir(d) else ""
+        raw = _first_line(cfg) if os.path.isfile(cfg) else ""
+    if not raw:
+        return []
+    dirs = []
+    for part in raw.split(","):
+        d = part.strip()
+        if d and d not in dirs:
+            dirs.append(d)
+    if not dirs or len(dirs) > 4:
+        return []
+    for d in dirs:
+        if not os.path.isdir(d):
+            return []
+    return dirs
+
+
+def team_dir():
+    """np_team_dir: the highest-precedence team dir (first of team_dirs), or ""."""
+    ds = team_dirs()
+    return ds[0] if ds else ""
 
 
 def team_origin():
@@ -138,6 +157,12 @@ if __name__ == "__main__":
         if not d:
             sys.exit(1)
         sys.stdout.write(d + "\n")
+    elif cmd == "team_dirs":
+        ds = team_dirs()
+        if not ds:
+            sys.exit(1)
+        for d in ds:
+            sys.stdout.write(d + "\n")
     elif cmd == "team_origin":
         sys.stdout.write(team_origin() + "\n")
     elif cmd == "content_layers":
@@ -150,5 +175,5 @@ if __name__ == "__main__":
             sys.stdout.write(r + "\n")
     else:
         sys.stderr.write("usage: np_content.py {content_dir|content_origin|is_explicit|"
-                         "team_dir|team_origin|content_layers|merge_mode|merge_roots}\n")
+                         "team_dir|team_dirs|team_origin|content_layers|merge_mode|merge_roots}\n")
         sys.exit(2)

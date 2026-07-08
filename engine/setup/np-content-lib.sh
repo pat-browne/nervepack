@@ -54,24 +54,53 @@ np_content_is_explicit() {
   [[ "$(np_content_dir_origin)" != default ]]
 }
 
-# np_team_dir -> prints the OPTIONAL team overlay root (a shared content layer that
-# overrides the personal overlay). Resolution mirrors np_content_dir:
-#   1. $NP_TEAM_DIR (env)   2. ~/.config/nervepack/team-dir (first line)   3. none
-# Unconfigured -> print nothing, return non-zero (callers treat "no team" as normal).
-# Explicit-but-missing -> loud error, return 1 (parity with np_content_dir).
-np_team_dir() {
-  local d=""
+# np_team_dirs -> one line per configured team overlay, HIGHEST-PRECEDENCE FIRST.
+# The value (NP_TEAM_DIR env, else ~/.config/nervepack/team-dir first line) is a
+# comma-separated list; a single value is the 1-element case. Splits on ',', trims
+# surrounding whitespace, drops empties, dedups (order-preserving). Validates:
+#   - > 4 entries exceeds the 5-layer cap (team+personal) -> loud error, return 1;
+#   - any entry that isn't a dir -> loud error, return 1.
+# Unconfigured -> print nothing, return 1 ("no team" is normal). This is the single
+# parse/validate point; np_team_dir and every consumer build on it.
+np_team_dirs() {
+  local raw=""
   if [[ -n "${NP_TEAM_DIR:-}" ]]; then
-    d="$NP_TEAM_DIR"
+    raw="$NP_TEAM_DIR"
   elif [[ -f "$HOME/.config/nervepack/team-dir" ]]; then
-    d="$(head -n1 "$HOME/.config/nervepack/team-dir" 2>/dev/null)"
+    raw="$(head -n1 "$HOME/.config/nervepack/team-dir" 2>/dev/null)"
   fi
-  [[ -n "$d" ]] || return 1
-  if [[ ! -d "$d" ]]; then
-    echo "np-content: team dir not found: $d" >&2
+  [[ -n "$raw" ]] || return 1
+  local dirs=() parts=() p d e dup
+  IFS=',' read -ra parts <<< "$raw"
+  for p in "${parts[@]}"; do
+    d="${p#"${p%%[![:space:]]*}"}"   # ltrim
+    d="${d%"${d##*[![:space:]]}"}"   # rtrim
+    [[ -n "$d" ]] || continue
+    dup=0
+    for e in "${dirs[@]:-}"; do [[ "$e" == "$d" ]] && { dup=1; break; }; done
+    [[ "$dup" == 1 ]] || dirs+=("$d")
+  done
+  [[ ${#dirs[@]} -gt 0 ]] || return 1
+  if [[ ${#dirs[@]} -gt 4 ]]; then
+    echo "np-content: team list exceeds cap (max 4 team dirs / 5 layers): $raw" >&2
     return 1
   fi
-  printf '%s\n' "$d"
+  for d in "${dirs[@]}"; do
+    if [[ ! -d "$d" ]]; then
+      echo "np-content: team dir not found: $d" >&2
+      return 1
+    fi
+  done
+  printf '%s\n' "${dirs[@]}"
+}
+
+# np_team_dir -> the HIGHEST-PRECEDENCE team dir (first line of np_team_dirs), for
+# consumers that legitimately want just "the team". Single-line stdout contract
+# unchanged. Loud errors from np_team_dirs pass through on stderr.
+np_team_dir() {
+  local out
+  out="$(np_team_dirs)" || return 1
+  printf '%s\n' "${out%%$'\n'*}"
 }
 
 # np_layer_dir <layer> -> the single-root path of an agent-owned memory layer,
