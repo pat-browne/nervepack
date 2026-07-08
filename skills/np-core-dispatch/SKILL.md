@@ -89,6 +89,18 @@ branch, confirm content identity (`git diff <orphan> <cherry-pick>` empty), then
 `git reset --hard origin/main` the polluted checkout. Pin the worktree path emphatically in
 the dispatch and have the agent echo `git rev-parse --show-toplevel` before its first edit.
 
+## Verify the whole plan, not just each task
+
+Green per-task reviews don't mean the plan is done. A task can be silently **skipped**
+when an earlier commit made a superficial one-line touch to the file it was meant to
+substantively change — a false "done" no per-task review catches, since each sees only
+its own diff. The net is a **whole-branch review**: one fresh, most-capable-model pass
+over the full diff *against the spec*, told to hunt the missing consumer / unwired
+write-path — not just critique what changed. This once caught a skipped write-path
+migration (an agent's one-line stat edit made the file look handled) that would have
+silently broken the feature on the next cron run. Never skip it, even when every task
+came back clean.
+
 ## Not this
 
 - A persistent message bus or agent-to-agent chat — this is one-shot dispatch +
