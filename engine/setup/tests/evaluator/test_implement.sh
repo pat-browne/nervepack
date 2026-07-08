@@ -37,10 +37,16 @@ chmod +x "$tmp/llm-ok" "$tmp/llm-noimpl"
 run() {  # $1=mode-local(optional)  reads stdin? no — args: $2=text, env IMPLEMENT_LLM
   local localfile="$tmp/local"; : > "$localfile"
   [[ -n "${MODE_OVERRIDE:-}" ]] && echo "evaluator.implement_mode=$MODE_OVERRIDE" > "$localfile"
+  # NP_CONTENT_DIR defaults to a path that doesn't exist so np_content_dir() errors
+  # loudly and the content-overlay fallback stays OFF for tests that don't set
+  # CONTENT_OVERRIDE — otherwise it would silently default to this machine's real
+  # engine checkout (np-content-lib.sh's own ../.. ), and a "not implementable"/
+  # "no commit" test case would spawn a real second agentic attempt against it.
   NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$localfile" \
   IMPLEMENT_REPO="$repo" IMPLEMENT_LLM="${LLM:-$tmp/llm-ok}" \
   IMPLEMENT_LOG="$tmp/impl.log" IMPLEMENT_LOCK="$tmp/lock" \
   IMPLEMENT_STATUS_DIR="$tmp/status" \
+  NP_CONTENT_DIR="${CONTENT_OVERRIDE:-$tmp/no-content-dir}" \
   NP_RESOLVED_SUGGESTIONS="${RESOLVED:-$tmp/resolved.txt}" NP_RESOLVE_NO_BUILD=1 \
   bash "$SCRIPT" "$1"
 }
@@ -49,6 +55,10 @@ has_branch() { git -C "$repo" rev-parse --verify -q "refs/heads/np-suggest/$1" >
 status_of() {  # $1=suggestion text -> prints the recorded state (or empty)
   local h; h="$(printf '%s' "$1" | sha256sum | cut -c1-16)"
   python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('state',''))" "$tmp/status/$h.json" 2>/dev/null
+}
+reason_of() {  # $1=suggestion text -> prints the recorded ref/reason (or empty)
+  local h; h="$(printf '%s' "$1" | sha256sum | cut -c1-16)"
+  python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('ref',''))" "$tmp/status/$h.json" 2>/dev/null
 }
 
 # 1. pr mode (default): branch created with the agent's commit; suggestion resolved; main clean
@@ -156,5 +166,73 @@ chmod +x "$tmp/llm-timeout-wrap"
 MODE_OVERRIDE="" LLM="$tmp/llm-timeout-wrap" run "hang forever"
 [[ "$(status_of "hang forever")" == "failed" ]] || { echo "FAIL: timeout/fail-open should write 'failed' status, got: $(status_of "hang forever")"; exit 1; }
 [[ ! -e "$tmp/lock" ]] || { echo "FAIL: lock not released after timeout/fail-open"; exit 1; }
+
+# --- content-overlay fallback (a suggestion whose target file only exists outside
+#     the engine repo, e.g. a memory/lessons/*.md entry in the personal overlay) ---
+content="$tmp/content"; mkdir -p "$content/dashboard/data"
+git -C "$content" init -q
+git -C "$content" config user.email t@t; git -C "$content" config user.name t
+echo marker > "$content/content-marker.txt"   # a file that exists ONLY in the content repo,
+git -C "$content" add content-marker.txt      # so the stub can tell which worktree it's in
+git -C "$content" commit -qm init
+content_base="$(git -C "$content" rev-parse --abbrev-ref HEAD)"
+
+# stub: NOT_IMPLEMENTABLE unless run from a worktree that has content-marker.txt
+# (i.e. only "implementable" when it's actually the content-overlay worktree)
+cat > "$tmp/llm-content-only" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+if [[ -f content-marker.txt ]]; then
+  echo done >> CONTENT_MARKER.txt
+  git add CONTENT_MARKER.txt
+  git -c user.email=t@t -c user.name=t commit -qm "wiki: implemented in content overlay"
+  echo "implemented"
+else
+  echo "NOT_IMPLEMENTABLE: wrong repo, needs content overlay"
+fi
+EOF
+chmod +x "$tmp/llm-content-only"
+
+# 10. engine attempt misses (wrong repo) -> falls back to the content overlay -> lands
+#     there with a DIRECT push, even though mode is 'pr' (content overlay has no PR
+#     gate — it always lands directly, independent of implement_mode).
+: > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+CONTENT_OVERRIDE="$content" RESOLVED="$content/dashboard/data/resolved-suggestions.txt" \
+  MODE_OVERRIDE="pr" LLM="$tmp/llm-content-only" run "fallback to content overlay"
+has_branch "fallback-to-content-overlay" && { echo "FAIL: a branch was left in the engine repo for a content-overlay success"; exit 1; }
+git -C "$content" cat-file -e "$content_base:CONTENT_MARKER.txt" 2>/dev/null || { echo "FAIL: content-overlay commit did not land on its base"; exit 1; }
+git -C "$content" rev-parse --verify -q "refs/heads/np-suggest/fallback-to-content-overlay" >/dev/null 2>&1 && { echo "FAIL: content-overlay np-suggest branch not cleaned up after landing"; exit 1; }
+[[ "$(status_of "fallback to content overlay")" == "done" ]] || { echo "FAIL: fallback status not 'done', got: $(status_of "fallback to content overlay")"; exit 1; }
+grep -qiF "fallback to content overlay" "$content/dashboard/data/resolved-suggestions.txt" 2>/dev/null || { echo "FAIL: suggestion not resolved in the content-overlay ledger"; exit 1; }
+git -C "$content" log -1 --format='%s' | grep -qi 'resolve' || { echo "FAIL: resolution not committed in the content-overlay repo (top commit: $(git -C "$content" log -1 --format='%s'))"; exit 1; }
+
+# 11. cheap common case: when the ENGINE attempt already succeeds, the content overlay
+#     is never touched — no wasted second agentic pass, no branch created there.
+: > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+CONTENT_OVERRIDE="$content" MODE_OVERRIDE="direct" LLM="$tmp/llm-ok" run "engine succeeds no content touch"
+git -C "$content" rev-parse --verify -q "refs/heads/np-suggest/engine-succeeds-no-content-touch" >/dev/null 2>&1 && { echo "FAIL: content overlay was touched even though the engine attempt succeeded"; exit 1; }
+[[ "$(status_of "engine succeeds no content touch")" == "done" ]] || { echo "FAIL: engine-only status not 'done'"; exit 1; }
+
+# 12. both repos miss -> status is 'failed' (not silently 'not_implementable') with a
+#     reason naming BOTH repos, so a human isn't left staring at a bare "agent produced
+#     no commit" with no idea what was even tried (this is the actual reported bug).
+cat > "$tmp/llm-silent" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+echo "looked around, found nothing obviously wrong"
+EOF
+chmod +x "$tmp/llm-silent"
+: > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+CONTENT_OVERRIDE="$content" MODE_OVERRIDE="" LLM="$tmp/llm-silent" run "both repos miss"
+[[ "$(status_of "both repos miss")" == "failed" ]] || { echo "FAIL: both-miss status should be 'failed', got: $(status_of "both repos miss")"; exit 1; }
+reason="$(reason_of "both repos miss")"
+echo "$reason" | grep -qi "engine" || { echo "FAIL: failure reason doesn't mention the engine attempt: $reason"; exit 1; }
+echo "$reason" | grep -qi "content overlay" || { echo "FAIL: failure reason doesn't mention the content-overlay attempt: $reason"; exit 1; }
+
+# 13. both repos explicitly say NOT_IMPLEMENTABLE -> stays 'not_implementable' (a real
+#     "not a code change" verdict), not misreported as a generic 'failed'.
+: > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+CONTENT_OVERRIDE="$content" MODE_OVERRIDE="" LLM="$tmp/llm-noimpl" run "both say not implementable"
+[[ "$(status_of "both say not implementable")" == "not_implementable" ]] || { echo "FAIL: both-not-implementable status should stay 'not_implementable', got: $(status_of "both say not implementable")"; exit 1; }
 
 echo "PASS test_implement"
