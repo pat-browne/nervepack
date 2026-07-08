@@ -575,7 +575,7 @@
             elSug.querySelector(".panelhead").after(note);
             dropResolved(text);
           } else if (s.state === "not_implementable") {
-            setPill("warn", "▲ Not a code change — left open"); buttons.forEach(x => x.style.display = "");
+            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "failed") {
             setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "busy") {
