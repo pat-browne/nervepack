@@ -3,3 +3,4 @@
 | 2026-07-08 | np-kb-campminder-ado | relocated → nervepack-content | engine-minimization |
 | 2026-07-08 | np-kb-campminder-azure | relocated → nervepack-content | engine-minimization |
 | 2026-07-08 | np-kb-campminder-brand | relocated → nervepack-content | engine-minimization |
+| 2026-07-08 | np-kb-coding-rules | relocated → nervepack-content (full) + nervepack-content-example (generic) | straddle-split |

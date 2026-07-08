@@ -32,7 +32,6 @@
     "./skills/np-kb-chrome-extension-content-script",
     "./skills/np-kb-chrome-extension-publishing",
     "./skills/np-kb-claude-headless-scripting",
-    "./skills/np-kb-coding-rules",
     "./skills/np-kb-evaluator-signals",
     "./skills/np-kb-frontend-ui-gotchas",
     "./skills/np-kb-git-gotchas",
