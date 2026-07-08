@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Deterministic skill-budget detector for the daily skill-maintenance routine.
 
-Scans <skills_dir>/*/SKILL.md and reports which exceed the hard split threshold,
-which exceed the soft authoring target, and the always-loaded catalog token total
-vs its budget. No LLM. Thresholds via env (the cron wrapper resolves them from
-toggle params; tests set them directly), with built-in defaults:
+Scans <skills_dir>/*/SKILL.md (one or more roots — e.g. the engine skills/ dir
+AND a content-overlay skills/ dir) and reports which exceed the hard split
+threshold, which exceed the soft authoring target, and the always-loaded
+catalog token total vs its budget. No LLM. Thresholds via env (the cron
+wrapper resolves them from toggle params; tests set them directly), with
+built-in defaults:
 
     SKILL_SPLIT_KB    (default 8)     hard auto-split trigger
     SKILL_SOFT_KB     (default 6)     advisory authoring target
     SKILL_CATALOG_TOK (default 4000)  flat->tree restructure budget
 
-Usage: np-skill-budget.py [skills_dir]   (default: <repo>/skills)
-Emits one JSON object to stdout. Fail-open: on error, an empty report.
+Usage: np-skill-budget.py [skills_dir ...]   (default: <repo>/skills)
+Multiple roots are merged into one report; the JSON shape is unchanged
+(skills keyed by directory name under `skill`). Emits one JSON object to
+stdout. Fail-open: on error, an empty report.
 """
 import json
 import os
@@ -41,31 +45,40 @@ def _description(text):
     return ""
 
 
-def scan(skills_dir):
+def scan(skills_dirs):
+    """skills_dirs: a single path (str) or an iterable of root paths to merge."""
+    if isinstance(skills_dirs, str):
+        skills_dirs = [skills_dirs]
+
     split_kb = _int_env("SKILL_SPLIT_KB", 8)
     soft_kb = _int_env("SKILL_SOFT_KB", 6)
     catalog_tok = _int_env("SKILL_CATALOG_TOK", 4000)
     split_b, soft_b = split_kb * 1024, soft_kb * 1024
 
     split_candidates, soft_over, desc_chars = [], [], 0
-    try:
-        names = sorted(os.listdir(skills_dir))
-    except OSError:
-        names = []
-    for name in names:
-        path = os.path.join(skills_dir, name, "SKILL.md")
-        if not os.path.isfile(path):
-            continue
+    seen = set()  # dedup by skill dir name across roots (e.g. team==personal)
+    for skills_dir in skills_dirs:
         try:
-            nbytes = os.path.getsize(path)
-            with open(path, encoding="utf-8", errors="replace") as fh:
-                desc_chars += len(_description(fh.read()))
+            names = sorted(os.listdir(skills_dir))
         except OSError:
-            continue
-        if nbytes > split_b:
-            split_candidates.append({"skill": name, "bytes": nbytes})
-        elif nbytes > soft_b:
-            soft_over.append({"skill": name, "bytes": nbytes})
+            names = []
+        for name in names:
+            if name in seen:
+                continue
+            path = os.path.join(skills_dir, name, "SKILL.md")
+            if not os.path.isfile(path):
+                continue
+            try:
+                nbytes = os.path.getsize(path)
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    desc_chars += len(_description(fh.read()))
+            except OSError:
+                continue
+            seen.add(name)
+            if nbytes > split_b:
+                split_candidates.append({"skill": name, "bytes": nbytes})
+            elif nbytes > soft_b:
+                soft_over.append({"skill": name, "bytes": nbytes})
     catalog_tokens = desc_chars // 4
     return {
         "split_candidates": split_candidates,
@@ -78,8 +91,8 @@ def scan(skills_dir):
 
 
 def main(argv):
-    skills_dir = argv[1] if len(argv) > 1 else DEFAULT_SKILLS
-    print(json.dumps(scan(skills_dir), separators=(",", ":")))
+    skills_dirs = argv[1:] if len(argv) > 1 else [DEFAULT_SKILLS]
+    print(json.dumps(scan(skills_dirs), separators=(",", ":")))
     return 0
 
 
