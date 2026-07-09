@@ -18,15 +18,22 @@ any time.
 ## Steps
 
 ### 1. Locate candidate themes
+
+Episodic lives in the **content overlay** under `memory/episodic/`, not the
+engine repo. Resolve the roots (merge-aware, team > personal):
+
 ```bash
-ls ~/Code/nervepack/episodic/*.md 2>/dev/null      # available themes
-sed -n '1,80p' ~/Code/nervepack/episodic/INDEX.md  # topic | keywords index
+source ~/Code/nervepack/engine/setup/np-layer-lib.sh
+np_layer_roots episodic            # one dir per overlay root
 ```
-Match the user's query against topic slugs and the `keywords` column. If they
-gave no query, list the most recently updated themes and ask which.
+
+For each root: `ls <root>/*.md` (available themes) and `sed -n '1,80p'
+<root>/INDEX.md` (topic | keywords index). Match the user's query against topic
+slugs and the `keywords` column. If they gave no query, list the most recently
+updated themes and ask which.
 
 ### 2. Read the matching theme(s)
-Read `episodic/<topic>.md` for the best match(es). Prefer the most recent
+Read `<root>/<topic>.md` for the best match(es). Prefer the most recent
 entries; mention the `## Rolled-up summary` block if older context is relevant.
 
 ### 3. Present
@@ -36,7 +43,7 @@ may be stale — if it conflicts with a `skills/`, `sources/`, or `wiki/` page,
 the durable layer wins. Say so when relevant.
 
 ## What this skill does NOT do
-- Does not write to `episodic/` (capture + the weekly agent own writes).
+- Does not write to the episodic layer (capture + the episodic-maintain agent own writes).
 - Does not promote anything to `skills/` — if a recalled entry is actually a
   durable rule, route it through [[np-core-contribute]].
 - Does not surface secrets; if a theme somehow contains one, redact in your

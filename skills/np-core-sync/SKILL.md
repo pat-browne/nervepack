@@ -55,8 +55,9 @@ landed. The linker already ran inside the script; no further action.
 ### `local is N ahead`
 Show the unpushed commits with `git -C ~/Code/nervepack log @{u}..HEAD --oneline`,
 then **push without asking** — Pat set a standing preference (2026-06-03): always
-auto-approve nervepack pushes, no per-push confirmation (matches the
-[[np-core-contribute]] default). Push the current branch to its tracking remote;
+auto-approve nervepack **sync** pushes (already-committed local state), no per-push
+confirmation. New content writes still go through [[np-core-contribute]]'s push
+gate. Push the current branch to its tracking remote;
 if it's a main-tracking branch, fast-forward-push the pinned SHA to `origin/main`
 per the concurrency protocol. Never force-push; on non-fast-forward, surface it.
 
@@ -84,7 +85,9 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 
 - Does not silently rebase, autostash, or merge-with-strategy. The whole
   point is predictability.
-- Does not push. Push happens via [[np-core-contribute]] or explicit user ask.
+- Does not push **except** in the `local is N ahead` outcome (the standing
+  auto-approval above). Pushing *new* content happens via [[np-core-contribute]]
+  or explicit user ask.
 - Does not re-run `engine/setup/*.sh` scripts. If a setup script changed (e.g.
   `00-apt-baseline.sh` added a new package), surface that to the user.
 - Does not edit `~/.claude/settings.json`. If

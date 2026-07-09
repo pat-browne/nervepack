@@ -1,11 +1,11 @@
 ---
 name: np-core-contribute
-description: Capture a new durable learning (rule, preference, plugin choice, environment quirk, useful command) into ~/Code/nervepack in the correct file, then commit and push. Use when the user says "remember this in nervepack", "save to nervepack", "add this to my AI context", or whenever you notice a fact worth keeping across sessions, or "save this to the team layer".
+description: Capture a new durable learning (rule, preference, plugin choice, environment quirk, useful command) into the correct nervepack file. Use when the user says "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or whenever you notice a fact worth keeping across sessions.
 ---
 
 # np-core-contribute
 
-The protocol for writing a new piece of context into `~/Code/nervepack` so it survives
+The protocol for writing a new piece of context into nervepack so it survives
 across sessions and machines.
 
 ## When to invoke
@@ -25,115 +25,84 @@ across sessions and machines.
 - It's a secret or credential
 - It's project-specific — it belongs in that project's own `CLAUDE.md`
 
-## First: which layer?
+## First: which repo + layer?
 
-Most contributions go to your **personal** overlay (the default). Write to the
-**team** overlay instead when the learning is a shared team convention — triggered by
-"save to the team layer", "this is a team rule", "contribute to the team", or an explicit
-`--layer team`.
+Nervepack is split (`docs/ARCHITECTURE.md` § "Content seam"):
 
-- **personal** (default): the write/commit steps below target `~/Code/nervepack` (engine)
-  or your personal content overlay, exactly as today.
-- **team**: resolve the team overlay root with `TEAM="$(cd ~/Code/nervepack && source engine/setup/np-content-lib.sh && np_team_dir)"`.
-  If that errors (no team layer configured), STOP and tell the user the team layer isn't
-  set up (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`) — do not silently fall back to
-  personal. Otherwise run the same write + `git -C "$TEAM" add/commit/push` steps against
-  `$TEAM` instead of `~/Code/nervepack`. The team overlay has the same shape
-  (`skills/`, `wiki/`, …); skill relink/index regeneration is already team-aware.
+- **engine** (`~/Code/nervepack`) — machinery only, PII-clean: `np-core-*`/`np-flow-*`
+  skills, `engine/setup/`, `agents/`, its own docs.
+- **personal content overlay** — the default target for domain knowledge
+  (`np-kb-*`/`np-env-*` skills, `wiki/`, `sources/`). Resolve it:
+  `CONTENT="$(source ~/Code/nervepack/engine/setup/np-content-lib.sh && np_content_dir)"`
+  (single-repo layouts resolve to the engine root, so the same paths work).
+- **team overlay** — only for a shared team convention ("save to the team layer",
+  "this is a team rule", `--layer team`): resolve with `np_team_dir` (same lib).
+  If that errors, STOP and tell the user the team layer isn't configured
+  (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`) — never silently fall back to
+  personal. Team overlays have the same shape; relink/index are team-aware.
 
-`team.merge` governs how a team entry combines with a personal one at *read* time; this
-gate only controls *where the write lands*.
+`team.merge` governs read-time merging only; this gate controls *where the
+write lands*. Below, `$REPO` = the root you picked.
 
 ## Decision tree: where does this go?
 
-| Kind of learning | Target file |
+| Kind of learning | Target |
 |---|---|
-| Personal coding rule | `skills/np-kb-coding-rules/SKILL.md` |
-| Environment / toolchain detail | `skills/np-env-ubuntu-claude-dev-setup/SKILL.md` |
-| Claude plugin choice or rationale | `skills/np-env-claude-plugin-stack/SKILL.md` |
-| New cross-cutting skill (behavior) | New dir: `skills/<kebab-name>/SKILL.md` |
-| Curated technical reference doc (version-pinned spec, RFC, official docs) | `sources/<topic>/<name>.md` — **invoke ingest protocol** (see below) |
-| Reusable how-to / capability the user will hit again (e.g. "how to build a persona agent") | New behavioral skill: `skills/<kebab-name>/SKILL.md` |
-| Curated synthesis of a topic backed by sources | `wiki/topics/<topic>/<topic>.md` (`kind: topic`) |
-| Source-free synthesis of one entity/concept (a specific build, a cross-cutting idea) | `wiki/concepts/<name>.md` (`kind: concept`) |
-| Bootstrap step (re-runnable) | New script: `engine/setup/NN-name.sh` |
-| Repo workflow / protocol | `CLAUDE.md` (this is the AI manual) |
-| Recurring AI-agent prompt | `agents/<name>.md` |
-| Roadmap / deferred-work item — for nervepack itself | `docs/ROADMAP.md` |
+| Personal coding rule | `$CONTENT/skills/np-kb-coding-rules/SKILL.md` |
+| Environment / toolchain detail | `$CONTENT/skills/np-env-ubuntu-claude-dev-setup/SKILL.md` |
+| Claude plugin choice or rationale | `$CONTENT/skills/np-env-claude-plugin-stack/SKILL.md` |
+| New cross-cutting skill / reusable how-to the user will hit again | `$CONTENT/skills/<kebab-name>/SKILL.md` (engine only for new machinery skills) |
+| Curated technical reference doc (version-pinned spec, RFC, official docs) | `$CONTENT/sources/<topic>/<name>.md` — **invoke ingest protocol** (see below) |
+| Curated synthesis of a topic backed by sources | `$CONTENT/wiki/topics/<topic>/<topic>.md` (`kind: topic`) |
+| Source-free synthesis of one entity/concept (a specific build, a cross-cutting idea) | `$CONTENT/wiki/concepts/<name>.md` (`kind: concept`) |
+| Bootstrap step (re-runnable) | Engine: `engine/setup/NN-name.sh` |
+| Repo workflow / protocol | Engine: `CLAUDE.md` (this is the AI manual) |
+| Recurring AI-agent prompt | Engine: `agents/<name>.md` |
+| Roadmap / deferred-work item — for nervepack itself | Engine: `docs/ROADMAP.md` |
 | Roadmap / deferred-work item — for a pointed-to project (local-llm, pbrowne-net, …) | that project's `ROADMAP.md` if it has one; else its `np-kb-<project>` pointer skill's **Roadmap** section (look + contribute there) |
 
 When in doubt, prefer **editing an existing skill** over creating a new one.
 Skills with overlapping descriptions are worse than one slightly bigger skill.
 
-### Classify by LAYER before you capture (anti-drawer rule)
-
-Decide *what kind of thing* the learning is **before** picking a file:
-
-- **Behavioral / how-to** (a reusable technique, rule, or capability) → a **skill**
-  (new one if it's worth a name — not a paragraph buried elsewhere).
-- **Knowledge** (what a thing is, how a build works, a synthesized topic) → the
-  **wiki** (`concepts/` or `topics/`).
-- **Deferred work** (not done yet, revisit on a trigger) → a **roadmap** row only.
-
-A roadmap (incl. `references/roadmap.md`) is **deferred-work tracking, not a
-knowledge drawer** — even for a roadmap item, the deferred line goes in the
-roadmap and the durable how-to/detail goes in a skill or wiki page, cross-linked.
-(Miss: the Walter persona how-to was dumped in the local-llm roadmap, then split
-out to [[np-kb-persona-llm-agents]] + wiki. Classify first, skip the rework.)
-
-### Skills vs sources — which layer?
-
-- **Skill** = "how to act / what's installed / what to prefer." Behavioral
-  guidance, opinion, choice. User-specific.
-- **Source** = "what the spec says." Official reference content, version-
-  pinned, defer-first when answering. Not opinionated — quotes/excerpts
-  the canonical document.
-- Cross-link them in a `wiki/` synthesis page when the entity (e.g. Rust)
-  has both skill content *and* source content.
-
-### Cross-tree linking — look before you author
-
-Durable docs favor links over duplication. Beyond the same-topic dup check in
-step 2, do a **lightweight cross-tree lookup**: grep `INDEX.md` / `wiki/` /
-`sources/` for the subject matter you are documenting. If a related node lives
-in a *different* tree — even with zero duplication risk — add a `[[wikilink]]`
-(or path) so a future agent can navigate to it. Depth lives in one place and is
-linked from everywhere else, never copied (see `docs/ARCHITECTURE.md`).
+**Classify by layer first** — behavioral/how-to → a *skill*; knowledge → the
+*wiki*; deferred work → a *roadmap row only* (a roadmap is not a knowledge
+drawer). Cross-link related nodes across trees. Full rules, the skills-vs-
+sources test, and the cross-tree lookup: references/classification.md
 
 ## Steps
 
 1. **Sync first.** Invoke [[np-core-sync]] to avoid creating a fork.
-2. **Check INDEX.md before writing.** This is the single most important
-   step for avoiding duplicate skills from disparate sessions/repos:
+2. **Check the merged INDEX before writing.** The single most important step
+   for avoiding duplicate skills from disparate sessions/repos:
    ```bash
-   cat ~/Code/nervepack/INDEX.md
+   cat "$CONTENT/INDEX.md"   # merged engine+overlay index (engine INDEX.md lists engine skills only)
    ```
-   For the learning you're about to write, identify keywords (the topic,
-   the trigger conditions, the kind of artifact). Grep/scan the INDEX
-   descriptions for those keywords. If any existing skill scores meaningful
-   overlap (same topic, overlapping "use when…" triggers, or similar
-   artifact class), **extend that skill** instead of creating a new one.
-   When in doubt between extend-vs-create, prefer extend.
+   Scan the descriptions for your topic / trigger / artifact keywords. If an
+   existing skill overlaps meaningfully (same topic, overlapping "use when…"
+   triggers, or similar artifact class), **extend that skill** instead of
+   creating a new one. When in doubt, prefer extend.
 3. **Pick the target** using the decision table above (or the existing
    skill identified in step 2).
 4. **Write the update.** For an existing skill: minimal surgical edit. For
    a new skill: include `---` frontmatter with `name:` and `description:`.
    The description must say WHAT it teaches and WHEN to use it — specific
    enough that step 2 will work for the next contributor.
-5. **Update `.claude-plugin/plugin.json`** if you added a new skill —
-   append `./skills/<name>` to the `skills` array.
+5. **New engine skill only:** append `./skills/<name>` to the `skills` array
+   in the engine's `.claude-plugin/plugin.json`. Overlay skills are picked up
+   by the relink alone.
 6. **Relink + regenerate INDEX:** `~/Code/nervepack/engine/setup/30-link-skills.sh`
-   (handles new skills, prunes dangling symlinks, and re-runs
+   (handles new skills in every layer, prunes dangling symlinks, and re-runs
    `60-generate-index.sh`).
-7. **Diff:** `git -C ~/Code/nervepack diff` — show the user.
-8. **Commit** with conventional subject (see `CLAUDE.md` § "Commit conventions"):
+7. **Diff:** `git -C "$REPO" diff` — show the user.
+8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions"),
+   staging explicit paths (never `-A` — a cron or second session may share the tree):
    ```bash
-   git -C ~/Code/nervepack add -A
-   git -C ~/Code/nervepack commit -m "skill(<name>): <what changed>"
+   git -C "$REPO" add <changed paths>
+   git -C "$REPO" commit -m "skill(<name>): <what changed>"
    ```
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
 9. **Ask before pushing.** Push is the action that affects another machine.
-   Default to `git -C ~/Code/nervepack push` only after the user confirms — unless
+   Default to `git -C "$REPO" push` only after the user confirms — unless
    they've said "auto-push" or this run was invoked from a scheduled agent
    (which has a standing mandate; see `agents/np-flow-scheduled-refine.md` and
    `agents/np-flow-weekly-compact.md`).
@@ -146,24 +115,28 @@ write the file. Full steps: references/ingest-protocol.md
 ## Conflict policy
 
 If the push is rejected as non-fast-forward:
-1. `git -C ~/Code/nervepack pull --rebase --autostash`
+1. `git -C "$REPO" pull --rebase --autostash`
 2. If conflicts: surface them to the user; do not auto-resolve content
    conflicts in `SKILL.md` files (those are user intent).
 3. Retry push.
 
 ## Size budget — keep skills lean
 
-Soft cap: **~6 KB per `SKILL.md`**. Hard limit: 8 KB (enforced daily by `engine/setup/75-skill-maintain.sh`).
-Body carries the *decision*; `references/*.md` carries the detail (read on demand).
+Soft cap: **~6 KB per `SKILL.md`**. Hard limit: 8 KB (enforced daily by
+`engine/setup/75-skill-maintain.sh`). Body carries the *decision*;
+`references/*.md` carries the detail (read on demand).
 Full guidance: references/size-budget.md
 
 ## Anti-patterns
 
 - **Don't write to memory** (`~/.claude/projects/.../memory/`) for things
   that should live in nervepack. Memory is session-scoped; nervepack is durable.
+- **Don't put domain knowledge in the engine.** `np-kb-*`/`np-env-*` skills,
+  wiki, and sources belong in the content overlay; the engine is machinery-only
+  and PII-clean.
 - **Don't create a skill per fact.** Aggregate related facts into one skill.
-- **Don't create a new skill without checking INDEX.md.** Duplicates from
-  parallel sessions are the failure mode this protocol exists to prevent.
+- **Don't create a new skill without checking the merged INDEX.** Duplicates
+  from parallel sessions are the failure mode this protocol exists to prevent.
 - **Don't edit `archive/`** — that's the immutable history.
 - **Don't include the user's email, tokens, or hostnames** in skills — those
   are environment-specific and should be parameterized or omitted.
