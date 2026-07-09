@@ -33,6 +33,14 @@ def free_port():
 
 
 class TestServer(unittest.TestCase):
+    CONF_FIXTURE = (
+        "evaluator|shared|runtime|on|implement=on,implement_mode=pr,dashboard_open=on,"
+        "dashboard_serve=on,toggle_ui=on,dashboard_port=8787\n"
+        "memory|shared|runtime|on|cap_bytes=48000\n"
+        "testlocal|local|runtime|on|\n"
+        "maintain.refine|shared|runtime|on|\n"
+    )
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
@@ -67,7 +75,15 @@ class TestServer(unittest.TestCase):
         cls.toggles_local = os.path.join(d, "toggles.local")
         cls.toggles_conf = os.path.join(d, "toggles.conf")
         with open(cls.toggles_conf, "w") as fh:
-            fh.write("evaluator|shared|runtime|on|implement=on,implement_mode=pr\n")
+            fh.write(cls.CONF_FIXTURE)
+        # isolated schema, so a test asserting "no schema entry" never depends on
+        # what real toggle-schema.json happens to contain
+        cls.schema = os.path.join(d, "toggle-schema.json")
+        with open(cls.schema, "w") as fh:
+            json.dump({
+                "evaluator.implement_mode": {"type": "enum", "options": ["pr", "direct"], "description": "x"},
+                "evaluator.dashboard_port": {"type": "number", "min": 1024, "max": 65535, "description": "x"},
+            }, fh)
         cls.port = free_port()
         env = dict(os.environ)
         env.update({
@@ -76,6 +92,7 @@ class TestServer(unittest.TestCase):
             "NP_RESOLVE_NO_BUILD": "1", "NP_SUGGESTIONS_TOP": "5", "CLAUDE_BIN": claude,
             "NP_IMPLEMENT": impl, "NP_IMPLEMENT_STATUS_DIR": cls.status_dir,
             "NP_TOGGLES_LOCAL": cls.toggles_local, "NP_TOGGLES_CONF": cls.toggles_conf,
+            "NP_TOGGLE_SCHEMA": cls.schema, "NP_TOGGLE_NO_COMMIT": "1",
         })
         cls.proc = subprocess.Popen(["python3", SERVER], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -103,6 +120,8 @@ class TestServer(unittest.TestCase):
             fh.write("# test ledger\n")
         with open(self.toggles_local, "w") as fh:  # reset per-machine override
             fh.write("")
+        with open(self.toggles_conf, "w") as fh:  # reset in case a toggle test flipped a bare feature
+            fh.write(self.CONF_FIXTURE)
 
     @classmethod
     def _conn(cls):
@@ -245,6 +264,102 @@ class TestServer(unittest.TestCase):
     def test_set_mode_rejects_invalid(self):
         status, _ = self._post("/api/implement-mode", {"mode": "yolo"})
         self.assertEqual(status, 400)
+
+    def test_toggles_lists_families_with_params(self):
+        status, body = self._get("/api/toggles")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        fams = {f["feature"]: f for f in data["families"]}
+        self.assertIn("evaluator", fams)
+        self.assertIn("memory", fams)
+        self.assertIn("testlocal", fams)
+        ev = fams["evaluator"]
+        self.assertEqual(ev["scope"], "shared")
+        self.assertTrue(ev["self_lockout"])  # evaluator is dashboard-gating
+        params = {p["key"]: p for p in ev["params"]}
+        self.assertTrue(params["dashboard_serve"]["self_lockout"])
+        self.assertTrue(params["implement_mode"]["valid"])
+        self.assertEqual(params["implement_mode"]["coerced"], "pr")
+
+    def test_toggles_flags_invalid_param_value(self):
+        with open(self.toggles_local, "w") as fh:
+            fh.write("evaluator.dashboard_port=not-a-number\n")
+        status, body = self._get("/api/toggles")
+        fams = {f["feature"]: f for f in json.loads(body)["families"]}
+        params = {p["key"]: p for p in fams["evaluator"]["params"]}
+        self.assertFalse(params["dashboard_port"]["valid"])
+        self.assertIn("number", params["dashboard_port"]["error"])
+
+    def test_toggle_routes_404_when_toggle_ui_disabled(self):
+        with open(self.toggles_local, "w") as fh:
+            fh.write("evaluator.toggle_ui=off\n")
+        status, _ = self._get("/api/toggles")
+        self.assertEqual(status, 404)
+        status, _ = self._post("/api/toggle", {"key": "testlocal", "value": "off"})
+        self.assertEqual(status, 404)
+
+    def test_post_toggle_rejects_self_lockout_feature(self):
+        status, body = self._post("/api/toggle", {"key": "evaluator", "value": "off"})
+        self.assertEqual(status, 400)
+        self.assertIn("dashboard itself", json.loads(body)["error"])
+
+    def test_post_toggle_rejects_self_lockout_param(self):
+        status, body = self._post("/api/toggle", {"key": "evaluator.dashboard_serve", "value": "off"})
+        self.assertEqual(status, 400)
+
+    def test_post_toggle_flips_local_bare_feature(self):
+        status, body = self._post("/api/toggle", {"key": "testlocal", "value": "off"})
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        with open(self.toggles_local) as fh:
+            self.assertIn("testlocal=off", fh.read())
+
+    def test_post_toggle_flips_shared_bare_feature_without_touching_real_repo(self):
+        status, body = self._post("/api/toggle", {"key": "memory", "value": "off"})
+        self.assertEqual(status, 200)
+        with open(self.toggles_conf) as fh:
+            self.assertIn("memory|shared|runtime|off|", fh.read())
+
+    def test_post_toggle_writes_dotted_param_local(self):
+        status, body = self._post("/api/toggle", {"key": "evaluator.implement_mode", "value": "direct"})
+        self.assertEqual(status, 200)
+        with open(self.toggles_local) as fh:
+            self.assertIn("evaluator.implement_mode=direct", fh.read())
+
+    def test_post_toggle_rejects_param_without_schema_entry(self):
+        # cap_bytes has no entry in this test's isolated schema fixture
+        status, body = self._post("/api/toggle", {"key": "evaluator.cap_bytes", "value": "99999"})
+        self.assertEqual(status, 400)
+
+    def test_post_toggle_rejects_unknown_feature(self):
+        status, body = self._post("/api/toggle", {"key": "not-a-real-feature", "value": "on"})
+        self.assertEqual(status, 400)
+
+    def test_post_toggle_flips_bare_feature_name_containing_a_dot(self):
+        """Regression guard: some bare feature names in toggles.conf themselves
+        contain a dot (e.g. maintain.refine). The handler must check membership
+        in np_toggle.features() BEFORE falling back to the "." in key dotted-param
+        path. If that ordering were ever swapped, this would be misrouted into the
+        dotted-param path and rejected with a 400 (no schema entry) instead of
+        being flipped as a bare feature."""
+        status, body = self._post("/api/toggle", {"key": "maintain.refine", "value": "off"})
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        with open(self.toggles_conf) as fh:
+            self.assertIn("maintain.refine|shared|runtime|off|", fh.read())
+        # Prove the flip actually takes effect through the resolver, not just that
+        # the conf file changed (np_toggle.enabled() must check "maintain.refine"'s
+        # OWN conf row before falling back to a truncated "maintain" family row).
+        env = dict(os.environ, NP_TOGGLES_CONF=self.toggles_conf, NP_TOGGLES_LOCAL=self.toggles_local)
+        r = subprocess.run(["python3", os.path.join(SETUP, "np_toggle.py"), "enabled", "maintain.refine"],
+                            env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1, "resolver still reports maintain.refine as on after the flip")
+        self.assertEqual(r.stdout, "off")
+
+    def test_post_toggle_without_csrf_is_forbidden(self):
+        status, _ = self._post("/api/toggle", {"key": "testlocal", "value": "off"},
+                               headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 403)
 
     def test_set_mode_without_csrf_is_forbidden(self):
         status, _ = self._post("/api/implement-mode", {"mode": "direct"},

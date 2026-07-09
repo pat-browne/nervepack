@@ -9,6 +9,11 @@ source "$HERE/np-toggle-lib.sh"
 
 _scope() { awk -F'|' -v f="$1" '!/^[[:space:]]*#/ && $1==f{gsub(/^ +| +$/,"",$2);print $2;exit}' "$NP_TOGGLES_CONF"; }
 _features() { awk -F'|' '!/^[[:space:]]*#/ && NF>=4 {gsub(/^ +| +$/,"",$1); print $1}' "$NP_TOGGLES_CONF"; }
+_is_declared() {  # feature-name
+  local f="$1" x
+  while IFS= read -r x; do [[ "$x" == "$f" ]] && return 0; done < <(_features)
+  return 1
+}
 
 _set_local() {  # key value
   mkdir -p "$(dirname "$NP_TOGGLES_LOCAL")"; touch "$NP_TOGGLES_LOCAL"
@@ -38,12 +43,14 @@ _managed() {  # feature on|off
 }
 
 flip() {  # feature on|off
-  local feat="$1" state="$2" fam="${1%%.*}" scope; scope="$(_scope "$fam")"
+  local feat="$1" state="$2" fam scope
+  if _is_declared "$feat"; then fam="$feat"; else fam="${feat%%.*}"; fi
+  scope="$(_scope "$fam")"
   case "$scope" in
     managed) _managed "$feat" "$state" ;;
     local)   _set_local "$feat" "$state" ;;
     shared|"")
-      if [[ "$feat" == *.* ]]; then _set_local "$feat" "$state"
+      if [[ "$feat" != "$fam" ]]; then _set_local "$feat" "$state"
       else _set_conf_state "$feat" "$state"; _commit_shared "toggle($feat): $state"; fi ;;
   esac
   echo "$feat -> $state"

@@ -23,10 +23,11 @@ _np_conf_param() {  # $1=feature.param -> prints param value
   }' "$NP_TOGGLES_CONF"
 }
 np_enabled() {  # $1=feature
-  local feat="$1" v
+  local feat="$1" fam v
   v="$(_np_local_get "$feat")"
-  if [[ -z "$v" && "$feat" == *.* ]]; then feat="${feat%%.*}"; v="$(_np_local_get "$feat")"; fi
+  if [[ -z "$v" && "$feat" == *.* ]]; then fam="${feat%%.*}"; v="$(_np_local_get "$fam")"; fi
   [[ -z "$v" ]] && v="$(_np_conf_state "$feat")"
+  if [[ -z "$v" && "$feat" == *.* ]]; then v="$(_np_conf_state "${fam:-${feat%%.*}}")"; fi
   [[ -z "$v" ]] && v="on"
   [[ "$v" == "on" ]]
 }

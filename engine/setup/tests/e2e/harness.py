@@ -38,7 +38,8 @@ def _build_metrics_js(metrics_jsonl: str, out_js: str) -> None:
         fh.write(js)
 
 
-def start(stub_state: str = "done", metrics_path: str | None = None) -> tuple[str, callable]:
+def start(stub_state: str = "done", metrics_path: str | None = None,
+          toggles_conf: str | None = None) -> tuple[str, callable]:
     """Boot the dashboard server in a temp-isolated env. Returns (base_url, stop_fn)."""
     e2e_dir = Path(__file__).resolve().parent
     # parents[3] of e2e_dir (which is .../engine/setup/tests/e2e/) == repo root
@@ -74,10 +75,13 @@ def start(stub_state: str = "done", metrics_path: str | None = None) -> tuple[st
         "NP_IMPLEMENT": str(e2e_dir / "stub-implement.sh"),
         "NP_IMPLEMENT_STATUS_DIR": os.path.join(tmp, "status"),
         "NP_TOGGLES_LOCAL": os.path.join(tmp, "toggles.json"),
+        "NP_TOGGLE_NO_COMMIT": "1",
         "NP_RESOLVE_NO_BUILD": "1",
         "NP_STUB_STATE": stub_state,
         "HOME": tmp,
     }
+    if toggles_conf:
+        env["NP_TOGGLES_CONF"] = toggles_conf
 
     proc = subprocess.Popen(
         [sys.executable, str(server_script)],
