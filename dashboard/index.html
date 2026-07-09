@@ -363,8 +363,10 @@
       headers: { "Content-Type": "application/json", "X-Requested-With": "nervepack" },
       body: body ? JSON.stringify(body) : null,
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+    let data;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    return data;
   }
 
   // ---- render ----
