@@ -42,6 +42,28 @@ chk "MCP server registered (claude mcp add)"  "grep -q 'mcp add nervepack' '$tmp
 chk "doctor ran (capability output present)"  "printf '%s' \"\$out\" | grep -qiE 'doctor|knowledge|llm-cli|capabilit'"
 chk "path check ran and the tree is clean"    "printf '%s' \"\$out\" | grep -q 'path references resolve'"
 
+# --- team overlay: comma-separated list of two existing dirs ---
+rm -rf "$home"; mkdir -p "$home"; : > "$tmp/claude-calls"
+team2="$tmp/team2"; mkdir -p "$team2"
+out3="$(printf '%s\n%s\n' "$content" "$team,$team2" | run 2>&1)"
+chk "multi team-dir written comma-joined, expanded, in order" \
+  "[ \"\$(cat '$cfg/team-dir' 2>/dev/null)\" = '$team,$team2' ]"
+
+# --- team overlay: comma list where one entry is missing -> not written ---
+rm -rf "$home"; mkdir -p "$home"; : > "$tmp/claude-calls"
+missing="$tmp/does-not-exist"
+out4="$(printf '%s\n%s\n' "$content" "$team,$missing" | run 2>&1)"
+chk "team-dir NOT written when one entry is missing" "[ ! -f '$cfg/team-dir' ]"
+chk "skip message names the missing entry" "printf '%s' \"\$out4\" | grep -q \"'$missing' does not exist\""
+
+# --- team overlay: 5 dirs exceeds the max-4 cap -> not written ---
+rm -rf "$home"; mkdir -p "$home"; : > "$tmp/claude-calls"
+t3="$tmp/t3"; t4="$tmp/t4"; t5="$tmp/t5"; mkdir -p "$t3" "$t4" "$t5"
+five="$team,$team2,$t3,$t4,$t5"
+out5="$(printf '%s\n%s\n' "$content" "$five" | run 2>&1)"
+chk "team-dir NOT written for a 5-dir list (max 4)" "[ ! -f '$cfg/team-dir' ]"
+chk "skip message mentions the max-4 cap" "printf '%s' \"\$out5\" | grep -qi 'max 4'"
+
 # --- non-interactive path: empty stdin -> engine-root default, no team, no crash ---
 rm -rf "$home"; mkdir -p "$home"; : > "$tmp/claude-calls"
 out2="$(printf '' | run 2>&1)"; rc=$?

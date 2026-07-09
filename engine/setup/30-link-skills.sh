@@ -23,10 +23,15 @@ mkdir -p "$DST"
 # so the parallel-array upsert's "later wins" makes team override personal/engine).
 # team is included only when configured AND the `team` toggle is on.
 _bases=("$ENGINE_SKILLS" "$OVERLAY_SKILLS")
-TEAM_SKILLS=""
-if np_enabled team && TEAM_DIR="$(np_team_dir 2>/dev/null)"; then
-  TEAM_SKILLS="$TEAM_DIR/skills"
-  _bases+=("$TEAM_SKILLS")
+# Team overlays: append highest-precedence team LAST so the later-wins upsert makes
+# it override lower teams / personal / engine. np_team_dirs lists highest-first, so
+# iterate it in reverse.
+if np_enabled team; then
+  _team_dirs=(); while IFS= read -r _td; do [[ -n "$_td" ]] && _team_dirs+=("$_td"); done \
+    < <(np_team_dirs 2>/dev/null || true)
+  for ((_i = ${#_team_dirs[@]} - 1; _i >= 0; _i--)); do
+    _bases+=("${_team_dirs[$_i]}/skills")
+  done
 fi
 
 _is_known_base() {   # $1=path ; true if under any source base we manage

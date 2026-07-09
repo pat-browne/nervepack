@@ -9,20 +9,24 @@ source "$_npll_dir/np-content-lib.sh"
 # np-toggle-lib provides np_enabled / np_param; load best-effort (fail-open).
 [[ -r "$_npll_dir/np-toggle-lib.sh" ]] && source "$_npll_dir/np-toggle-lib.sh"
 
-# np_content_layers -> overlay roots, highest precedence first (team then personal).
-# Team is included only when the `team` toggle is on AND np_team_dir resolves.
-# Dedup so team==personal collapses to one line.
+# np_content_layers -> overlay roots, highest precedence first: all configured team
+# dirs (in precedence order) then personal. Team roots included only when the `team`
+# toggle is on. Dedup so a team root equal to personal collapses.
 np_content_layers() {
-  local personal team
+  local personal
   personal="$(np_content_dir 2>/dev/null)" || return 0
+  local layers=()
   if declare -f np_enabled >/dev/null 2>&1 && np_enabled team 2>/dev/null; then
-    team="$(np_team_dir 2>/dev/null || true)"
+    local t e dup
+    while IFS= read -r t; do
+      [[ -n "$t" && "$t" != "$personal" ]] || continue
+      dup=0
+      for e in "${layers[@]:-}"; do [[ "$e" == "$t" ]] && { dup=1; break; }; done
+      [[ "$dup" == 1 ]] || layers+=("$t")
+    done < <(np_team_dirs 2>/dev/null || true)
   fi
-  if [[ -n "${team:-}" && "$team" != "$personal" ]]; then
-    printf '%s\n%s\n' "$team" "$personal"
-  else
-    printf '%s\n' "$personal"
-  fi
+  layers+=("$personal")
+  printf '%s\n' "${layers[@]}"
 }
 
 # np_merge_mode -> validated team.merge value (override|concatenate|team-only).
@@ -33,15 +37,16 @@ np_merge_mode() {
 }
 
 # np_merge_roots -> the roots a reader should scan for the current mode.
-# team-only + a configured team -> just the team (first) root; otherwise all layers.
-# (team-only with NO team configured has only the personal root, so it falls through
-# to "all layers" = personal-only — intended fail-open.)
+# team-only + >=1 configured team -> all team roots (personal dropped); otherwise
+# all layers. (team-only with NO team configured has only the personal root, so it
+# falls through to "all layers" = personal-only — intended fail-open.)
 np_merge_roots() {
   local mode i
   mode="$(np_merge_mode)"
   local roots=(); while IFS= read -r d; do [[ -n "$d" ]] && roots+=("$d"); done < <(np_content_layers)
   if [[ "$mode" == team-only && ${#roots[@]} -gt 1 ]]; then
-    printf '%s\n' "${roots[0]}"
+    # all team roots = every layer except the personal (last) one
+    for ((i = 0; i < ${#roots[@]} - 1; i++)); do printf '%s\n' "${roots[$i]}"; done
   else
     for ((i = 0; i < ${#roots[@]}; i++)); do printf '%s\n' "${roots[$i]}"; done
   fi

@@ -31,4 +31,27 @@ o="$(bash -c "source '$LIB'; np_team_dir_origin")"
 if NP_TEAM_DIR="$tmp/nope" bash -c "source '$LIB'; np_team_dir" 2>/dev/null; then
   echo "FAIL: missing explicit path returned 0"; exit 1; fi
 
+# 5) comma list -> one line per dir, highest-precedence first
+mkdir -p "$tmp/t1" "$tmp/t2" "$tmp/t3"
+out="$(NP_TEAM_DIR="$tmp/t1,$tmp/t2,$tmp/t3" bash -c "source '$LIB'; np_team_dirs" | tr '\n' ',')"
+[[ "$out" == "$tmp/t1,$tmp/t2,$tmp/t3," ]] || { echo "FAIL: list order: got '$out'"; exit 1; }
+# np_team_dir returns the highest-precedence (first) entry
+out="$(NP_TEAM_DIR="$tmp/t1,$tmp/t2,$tmp/t3" bash -c "source '$LIB'; np_team_dir")"
+[[ "$out" == "$tmp/t1" ]] || { echo "FAIL: np_team_dir first: got '$out'"; exit 1; }
+
+# 6) whitespace trimmed + exact duplicates deduped
+out="$(NP_TEAM_DIR="$tmp/t1 , $tmp/t2 , $tmp/t1" bash -c "source '$LIB'; np_team_dirs" | tr '\n' ',')"
+[[ "$out" == "$tmp/t1,$tmp/t2," ]] || { echo "FAIL: trim/dedup: got '$out'"; exit 1; }
+
+# 7) over-cap (5 entries) -> loud error + non-zero + no stdout
+mkdir -p "$tmp/t4" "$tmp/t5"
+if out="$(NP_TEAM_DIR="$tmp/t1,$tmp/t2,$tmp/t3,$tmp/t4,$tmp/t5" bash -c "source '$LIB'; np_team_dirs" 2>/dev/null)"; then
+  echo "FAIL: over-cap returned 0"; exit 1; fi
+[[ -z "$out" ]] || { echo "FAIL: over-cap printed '$out'"; exit 1; }
+
+# 8) a missing dir among valid ones -> non-zero + no stdout
+if out="$(NP_TEAM_DIR="$tmp/t1,$tmp/nope,$tmp/t2" bash -c "source '$LIB'; np_team_dirs" 2>/dev/null)"; then
+  echo "FAIL: missing dir returned 0"; exit 1; fi
+[[ -z "$out" ]] || { echo "FAIL: missing dir printed '$out'"; exit 1; }
+
 echo "PASS test_team_dir"
