@@ -32,4 +32,19 @@ capped="$(python3 "$EX" "$tmp/t.jsonl" 40)"
 [[ ${#capped} -le 40 ]] || { echo "FAIL: cap not honoured (${#capped} > 40)"; exit 1; }
 grep -q 'LAST_MARKER' <<<"$capped" || { echo "FAIL: cap dropped the tail instead of the head"; exit 1; }
 
+# --last-user: role-aware extraction returns the LAST genuine user text turn,
+# skipping tool_result turns (arrive as type:"user" too) and hook/skill
+# additionalContext envelopes (synthetic type:"user" turns marked isMeta:true
+# in real transcripts) — not the newest type:"user" line by position.
+{
+  jq -nc --arg t "resume the migration" '{type:"user", message:{role:"user",content:[{type:"text",text:$t}]}}'
+  jq -nc '{type:"assistant", message:{role:"assistant",content:[{type:"text",text:"On it."}]}}'
+  jq -nc '{type:"user", message:{role:"user",content:[{tool_use_id:"toolu_1",type:"tool_result",content:"some tool output"}]}}'
+  jq -nc --arg t "<system-reminder>additionalContext injected by hook</system-reminder>" \
+      '{type:"user", isMeta:true, message:{role:"user",content:[{type:"text",text:$t}]}}'
+} > "$tmp/last_user.jsonl"
+
+lu="$(python3 "$EX" --last-user "$tmp/last_user.jsonl")"
+[[ "$lu" == "resume the migration" ]] || { echo "FAIL: --last-user returned '$lu', want 'resume the migration'"; exit 1; }
+
 echo "PASS test_transcript_extract"

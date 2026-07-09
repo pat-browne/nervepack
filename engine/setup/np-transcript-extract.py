@@ -68,9 +68,61 @@ def extract(path):
     return _scrub_blobs("\n".join(out))
 
 
+def last_user_text(path):
+    """Return the LAST genuine user text message in a transcript JSONL.
+
+    A candidate line qualifies only if `obj["type"] == "user"`, it is not a
+    synthetic envelope (hook `additionalContext` injections and skill-invocation
+    turns are marked `isMeta: true` in real transcripts), and its message
+    content is either a plain str or a list whose blocks are ALL `type=="text"`.
+    A list containing a `tool_result` (or any other non-text) block is a
+    synthetic user-role turn (tool output, not human input) and is rejected.
+    Recency wins: the last qualifying line found is returned.
+    """
+    last = None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except ValueError:
+                continue  # tolerate a stray non-JSON line
+            if obj.get("type") != "user" or obj.get("isMeta"):
+                continue
+            content = (obj.get("message") or {}).get("content")
+            if isinstance(content, str):
+                last = content
+            elif isinstance(content, list) and content:
+                texts = []
+                for blk in content:
+                    if not isinstance(blk, dict) or blk.get("type") != "text":
+                        texts = None
+                        break
+                    texts.append(blk.get("text", ""))
+                if texts is not None:
+                    last = "\n".join(texts)
+    return _scrub_blobs(last) if last is not None else ""
+
+
 def main(argv):
     if len(argv) < 2:
         return 1
+    if argv[1] == "--last-user":
+        if len(argv) < 3:
+            return 1
+        try:
+            text = last_user_text(argv[2])
+        except OSError:
+            return 0  # fail-open: caller's bail-on-empty handles it
+        data = text.encode("utf-8", "replace")
+        try:
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+        except BrokenPipeError:
+            pass  # downstream closed early — not an error
+        return 0
     path = argv[1]
     try:
         cap = int(argv[2]) if len(argv) > 2 else 200000
