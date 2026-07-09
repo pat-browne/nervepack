@@ -69,15 +69,26 @@ def extract(path):
 
 
 def last_user_text(path):
-    """Return the LAST genuine user text message in a transcript JSONL.
+    """Return the LAST genuine (human-typed) user text message in a transcript.
 
-    A candidate line qualifies only if `obj["type"] == "user"`, it is not a
-    synthetic envelope (hook `additionalContext` injections and skill-invocation
-    turns are marked `isMeta: true` in real transcripts), and its message
-    content is either a plain str or a list whose blocks are ALL `type=="text"`.
-    A list containing a `tool_result` (or any other non-text) block is a
-    synthetic user-role turn (tool output, not human input) and is rejected.
-    Recency wins: the last qualifying line found is returned.
+    Many synthetic turns also arrive as `type:"user"` lines: `tool_result`
+    blocks, hook `additionalContext` injections, `<task-notification>`
+    background-task completions, session-continuation banners, slash-command
+    envelopes, and SDK-injected prompts. These MUST NOT be returned as "the
+    user's instruction" — doing so poisons the resume pointer.
+
+    Discrimination is an ALLOWLIST on the field Claude Code stamps on genuine
+    keyboard input: a line qualifies only if `obj["type"] == "user"` AND
+    `obj["promptSource"] == "typed"`. Every synthetic category above lacks that
+    (the field is absent, or `system`/`queued`/`sdk`/`suggestion_accepted`), so
+    the allowlist fails SAFE — if a message isn't clearly typed we skip it, and
+    an empty last-instruction is fine (the pointer still carries branch + SDD
+    ledger) versus returning a task-notification as if it were user intent.
+
+    A content-shape check is kept as a defensive secondary guard: content must
+    be a plain str or a list whose blocks are ALL `type=="text"` (any
+    `tool_result`/non-text block disqualifies the line). Recency wins: the last
+    qualifying line found is returned.
     """
     last = None
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -89,7 +100,7 @@ def last_user_text(path):
                 obj = json.loads(line)
             except ValueError:
                 continue  # tolerate a stray non-JSON line
-            if obj.get("type") != "user" or obj.get("isMeta"):
+            if obj.get("type") != "user" or obj.get("promptSource") != "typed":
                 continue
             content = (obj.get("message") or {}).get("content")
             if isinstance(content, str):
