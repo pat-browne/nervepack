@@ -36,8 +36,8 @@ different project, a different machine, or six months from now?**
 | Hostnames, paths, tokens, anything machine-specific | **memory** (session — and even then, avoid secrets) |
 | Mid-conversation context the next session won't need | **memory** (session) |
 
-When genuinely uncertain → **default to memory**. The weekly
-`memory-promote` cron will lift it to nervepack on Sunday if it turns out to
+When genuinely uncertain → **default to memory**. The daily
+`memory-promote` cron will lift it to nervepack if it turns out to
 be durable. Going the other way (demoting something out of nervepack) is
 harder, so bias conservative.
 
@@ -87,7 +87,7 @@ just says "save this", and the routing happens transparently.
 
 - Does not push to nervepack without confirmation (delegates to
   [[np-core-contribute]] which has the push gate).
-- Does not promote past memory entries — that's the weekly
+- Does not promote past memory entries — that's the daily
   `memory-promote` cron's job.
 - Does not capture secrets, credentials, or PII. If the content includes
   any, refuse with one sentence and ask the user to redact.
