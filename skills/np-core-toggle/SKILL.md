@@ -19,7 +19,8 @@ back-capture params), `lessons` (auto-distilled lessons; `.enforce`), `directive
 `sync` (`interval`, default 86400s/1 day), `allowlist` (managed Claude permission
 entries), `evaluator` (metrics + dashboard/suggestions/implement params), `skills`
 (budget + graduation params), `team` (`merge` mode), `mcp` (`writes`/`contribute`),
-`maintain` (`.refine`/`.compact` weekly crons), `pii_filter` (default off).
+`maintain` (`.refine`/`.compact` weekly crons), `resume` (resume-pointer;
+`interval`/`max_age`/`cron` params), `pii_filter` (default off).
 Sub-toggles like `memory.recall` inherit their family unless explicitly set.
 
 **Scope:** shared features commit their state to the repo and propagate on the
