@@ -41,12 +41,21 @@ command -v jq >/dev/null || exit 0
 # timestamps/volatile fields in the fragment, so the composed output stays
 # byte-stable (invariant 11).
 _inputs=("$DIRECTIVE")
-_npcl="$DIR/np-content-lib.sh"
-if [[ -r "$_npcl" ]]; then
+# Feed a directive-routing.md fragment from EVERY merge root (team[0..n] > personal),
+# highest-precedence first, so a team overlay's domain-skill routing reaches sessions
+# — not personal-only. np_merge_roots (np-layer-lib.sh) honors the `team` toggle and
+# `team.merge` mode; with no team configured it yields just the personal root, so this
+# stays byte-identical to the personal-only behavior. Fail-open: a missing lib or an
+# empty merge set appends nothing and the engine directive stands alone.
+_npll="$DIR/np-layer-lib.sh"
+if [[ -r "$_npll" ]]; then
   # shellcheck source=/dev/null
-  source "$_npcl"
-  _frag="$(np_content_dir 2>/dev/null)/directive-routing.md"
-  [[ -f "$_frag" ]] && _inputs+=("$_frag")
+  source "$_npll"
+  while IFS= read -r _root; do
+    [[ -n "$_root" ]] || continue
+    _frag="$_root/directive-routing.md"
+    [[ -f "$_frag" ]] && _inputs+=("$_frag")
+  done < <(np_merge_roots 2>/dev/null)
 fi
 
 jq -Rs '{
