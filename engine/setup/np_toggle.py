@@ -159,6 +159,39 @@ def features():
     return out
 
 
+def all_params(family):
+    """Every declared param for `family` (conf column 5) in one shot, each
+    overlaid by its LOCAL override when one is set. Returns dict[bare_key] ->
+    raw string value (bare_key has no family prefix — e.g. 'dashboard_port',
+    not 'evaluator.dashboard_port'). Mirrors _conf_param's parsing but for every
+    key of one family at once — param() only fetches a single key, which is
+    enough for a runtime check but not for rendering an entire panel."""
+    path = _conf_path()
+    out = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, "r", newline="") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if re.match(r'^[' + _WS + r']*#', line):
+                continue
+            fields = line.split("|")
+            if not fields or fields[0] != family:
+                continue
+            params = fields[4] if len(fields) > 4 else ""
+            for tok in re.split(r'[ ,]+', params):
+                if not tok:
+                    continue
+                kv = tok.split("=")
+                key = kv[0].strip(" ")
+                if not key:
+                    continue
+                conf_val = kv[1] if len(kv) > 1 else ""
+                out[key] = _local_get(family + "." + key) or conf_val
+            break
+    return out
+
+
 def set_local(key, value):
     """Write key=value to toggles.local, dropping any prior line for key. Mirrors
     _set_local byte-for-byte: kept lines verbatim, then the new line appended last."""
