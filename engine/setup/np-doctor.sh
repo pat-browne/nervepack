@@ -55,7 +55,11 @@ core_check() {
       torigin="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dir_origin 2>/dev/null)"
       tcount="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dirs 2>/dev/null | grep -c .)"
       if [[ -z "$tlist" ]]; then
-        echo "PASS (no team layer configured)"
+        if [[ "$torigin" != none ]]; then
+          echo "WARN (team layer configured (origin $torigin) but invalid — over-cap (>4) or a missing dir; falling back to personal-only)"
+        else
+          echo "PASS (no team layer configured)"
+        fi
       elif np_enabled team; then
         tmode="$(source "$HERE/np-layer-lib.sh" 2>/dev/null; np_merge_mode 2>/dev/null || echo override)"
         echo "PASS (team layers ($tcount): $tlist — origin $torigin, merge $tmode)"

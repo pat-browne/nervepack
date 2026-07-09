@@ -114,6 +114,14 @@ cmp_c np_team_dirs team_dirs path
 cmp_c np_team_dir team_dir path                   # first entry
 cmp_l np_content_layers content_layers path       # team,team2,team3,personal
 cmp_l np_merge_roots merge_roots path
+
+# team-only mode WITH >1 team still configured: exercises Python's roots[:-1]
+# slice vs bash's loop for the multi-team case (Case F below only ever runs
+# team-only after NP_TEAM_DIR is restored to a single team dir).
+printf 'team=on\nteam.merge=team-only\n' > "$NP_TOGGLES_LOCAL"
+cmp_l np_merge_roots merge_roots path             # team,team2,team3 (personal dropped)
+printf 'team=on\n' > "$NP_TOGGLES_LOCAL"          # restore override mode
+
 export NP_TEAM_DIR="$tmp/team"                    # restore single-team for later cases
 
 # --- Case F: team-only merge mode -------------------------------------------

@@ -43,4 +43,23 @@ if ! cmp -s "$tmp/b.out" "$tmp/p.out"; then
 fi
 # Sanity: we actually compared the five core lines (not an empty match).
 [[ "$(wc -l < "$tmp/b.out")" -eq 5 ]] || { echo "FAIL test_doctor_parity: expected 5 core lines, got $(wc -l < "$tmp/b.out")"; exit 1; }
+
+# --- over-cap fixture: NP_TEAM_DIR set to 5 existing dirs (> the 4-dir cap), team
+# toggle on -> np_team_dirs/team_dirs returns empty + non-zero but origin is "env"
+# (not "none"), so the `team` core-check line must WARN (configured-but-invalid),
+# not silently PASS as "no team layer configured". Confirm bash/python stay identical.
+mkdir -p "$tmp/team1" "$tmp/team2" "$tmp/team3" "$tmp/team4" "$tmp/team5"
+export NP_TEAM_DIR="$tmp/team1,$tmp/team2,$tmp/team3,$tmp/team4,$tmp/team5"
+printf 'team=on\n' > "$NP_TOGGLES_LOCAL"
+bash    "$SH" 2>/dev/null | grep -E '\] team ' > "$tmp/b-overcap.out"
+python3 "$PY" 2>/dev/null | grep -E '\] team ' > "$tmp/p-overcap.out"
+if ! cmp -s "$tmp/b-overcap.out" "$tmp/p-overcap.out"; then
+  echo "FAIL test_doctor_parity: over-cap team line differs"
+  echo "--- bash ---";   cat "$tmp/b-overcap.out"
+  echo "--- python ---"; cat "$tmp/p-overcap.out"
+  exit 1
+fi
+grep -q 'WARN (team layer configured (origin env) but invalid' "$tmp/b-overcap.out" \
+  || { echo "FAIL test_doctor_parity: over-cap team line missing expected WARN text: $(cat "$tmp/b-overcap.out")"; exit 1; }
+
 echo "PASS test_doctor_parity"

@@ -60,6 +60,10 @@ def _core_check(cap_id, np):
     if cap_id == "team":
         tdirs = np_content.team_dirs()
         if not tdirs:
+            torigin = np_content.team_origin()
+            if torigin != "none":
+                return ("WARN (team layer configured (origin %s) but invalid — over-cap "
+                         "(>4) or a missing dir; falling back to personal-only)" % torigin)
             return "PASS (no team layer configured)"
         tlist = ",".join(tdirs)
         tcount = len(tdirs)
