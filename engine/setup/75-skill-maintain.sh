@@ -8,6 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../.." && pwd)"
 source "$HERE/np-toggle-lib.sh"
 source "$HERE/np-content-lib.sh" 2>/dev/null || true   # np_content_dir (graduation scan)
+source "$HERE/np-layer-lib.sh" 2>/dev/null || true     # np_merge_roots (skill roots: engine + overlay [+ team])
 np_enabled skills || { echo "$(date -u +%FT%TZ) skipped: skills disabled"; exit 0; }
 
 LOG="${SKILL_MAINTAIN_LOG:-$HOME/.cache/nervepack/skill-maintain.log}"
@@ -75,7 +76,18 @@ export SKILL_SOFT_KB="$(np_param skills.soft_kb 6)"
 export SKILL_CATALOG_TOK="$(np_param skills.catalog_tok 4000)"
 MAX_PER_RUN="$(np_param skills.max_per_run 2)"
 
-report="$(python3 "$HERE/np-skill-budget.py" "$NP/skills" 2>/dev/null)"
+# Skill roots to scan: the engine's skills/ ALWAYS, plus the content-overlay's
+# skills/ (and a team overlay's, when merged) when it resolves to something other
+# than the engine root itself. Fail-open: an unset/absent/identical overlay just
+# leaves the engine root as the sole scan target (single-repo legacy layout).
+ROOTS=("$NP/skills")
+if declare -f np_merge_roots >/dev/null 2>&1; then
+  while IFS= read -r _r; do
+    [[ -n "$_r" && "$_r" != "$NP" && -d "$_r/skills" ]] && ROOTS+=("$_r/skills")
+  done < <(np_merge_roots 2>/dev/null)
+fi
+
+report="$(python3 "$HERE/np-skill-budget.py" "${ROOTS[@]}" 2>/dev/null)"
 [[ -n "$report" ]] || { echo "$(date -u +%FT%TZ) detector produced no output" >>"$LOG"; exit 0; }
 
 if [[ "$(printf '%s' "$report" | jq -r '.catalog_over')" == "true" ]]; then
@@ -104,12 +116,28 @@ BACKEND="${NP_LLM_BACKEND:-claude}"
 # persist into .git/config and mis-author later interactive commits in this repo.
 base_prompt="$(awk '/^## Prompt$/{p=1; next} p' "$PROMPT_FILE")"
 committed=0
+commit_repos=()   # repos that received a commit this run — each gets pushed once
+
+# Locates which ROOTS entry holds $1 (a skill dir name); prints that root, or
+# nothing + non-zero if not found under any scanned root.
+find_skill_root() {
+  local skill="$1" r
+  for r in "${ROOTS[@]}"; do
+    [[ -f "$r/$skill/SKILL.md" ]] && { printf '%s\n' "$r"; return 0; }
+  done
+  return 1
+}
 
 for skill in "${cands[@]:0:$MAX_PER_RUN}"; do
-  dir="$NP/skills/$skill"; md="$dir/SKILL.md"
+  skill_root="$(find_skill_root "$skill")" || continue
+  # skill_root is <repo>/skills, so its parent is the repo that owns this skill —
+  # the engine ($NP) or a content-overlay repo. Split-and-commit must operate on
+  # THAT repo, path-limited, not always $NP (issue #11 pattern, extended to overlays).
+  repo_root="$(dirname "$skill_root")"
+  dir="$skill_root/$skill"; md="$dir/SKILL.md"
   [[ -f "$md" ]] || continue
   orig="$(mktemp)"
-  git -C "$NP" show "HEAD:skills/$skill/SKILL.md" > "$orig" 2>/dev/null || cp "$md" "$orig"
+  git -C "$repo_root" show "HEAD:skills/$skill/SKILL.md" > "$orig" 2>/dev/null || cp "$md" "$orig"
 
   prompt="$base_prompt
 
@@ -119,23 +147,28 @@ Hard body budget: ${SKILL_SPLIT_KB}KB. Move overflow into skills/$skill/referenc
 
   # np-llm.sh sets NERVEPACK_AGENT=1 on the backend call so this headless agent's
   # SessionEnd can't re-fire episodic-capture/np-evaluator into a self-recursion loop.
-  ( cd "$NP" && printf '%s' "$prompt" | "$HERE/np-llm.sh" agent --tools "Read Write Edit" >/dev/null 2>&1 )
+  ( cd "$repo_root" && printf '%s' "$prompt" | "$HERE/np-llm.sh" agent --tools "Read Write Edit" >/dev/null 2>&1 )
 
   if python3 "$HERE/np-skill-validate.py" "$dir" "$orig" 2>>"$LOG"; then
-    git -C "$NP" add "skills/$skill" >/dev/null 2>&1
+    git -C "$repo_root" add "skills/$skill" >/dev/null 2>&1
     # Path-limit the commit to this skill dir — a bare commit would sweep any other
-    # session's staged work in the shared engine tree (issue #11 pattern).
-    if git -C "$NP" commit -q -m "skill(maintain): split $skill into body+references (auto)" -- "skills/$skill" >/dev/null 2>&1; then
-      committed=$((committed+1)); echo "$(date -u +%FT%TZ) split OK: $skill" >>"$LOG"
+    # session's staged work in the shared tree (issue #11 pattern).
+    if git -C "$repo_root" commit -q -m "skill(maintain): split $skill into body+references (auto)" -- "skills/$skill" >/dev/null 2>&1; then
+      committed=$((committed+1)); echo "$(date -u +%FT%TZ) split OK: $skill ($repo_root)" >>"$LOG"
+      already=0
+      for r in "${commit_repos[@]:-}"; do [[ "$r" == "$repo_root" ]] && already=1; done
+      [[ $already -eq 0 ]] && commit_repos+=("$repo_root")
     fi
   else
-    git -C "$NP" checkout -- "skills/$skill" >/dev/null 2>&1
-    git -C "$NP" clean -fdq "skills/$skill" >/dev/null 2>&1
+    git -C "$repo_root" checkout -- "skills/$skill" >/dev/null 2>&1
+    git -C "$repo_root" clean -fdq "skills/$skill" >/dev/null 2>&1
     echo "$(date -u +%FT%TZ) split ABORTED (reverted): $skill" >>"$LOG"
   fi
   rm -f "$orig"
 done
 
 [[ "${SKILL_MAINTAIN_NO_PUSH:-0}" == "1" ]] && exit 0
-[[ "$committed" -gt 0 ]] && git -C "$NP" push -q origin HEAD:main >/dev/null 2>&1
+for repo in "${commit_repos[@]:-}"; do
+  [[ -n "$repo" ]] && git -C "$repo" push -q origin HEAD:main >/dev/null 2>&1
+done
 exit 0
