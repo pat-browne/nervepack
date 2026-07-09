@@ -36,6 +36,8 @@ engine at it, and you're running.
 **Working on a team? Add a third overlay.** A team can share a baseline that sits
 *above* your personal content. Point at it with `NP_TEAM_DIR` (or write the path into
 `~/.config/nervepack/team-dir`) and the stack becomes `team > personal > engine`.
+Nested org? Comma-separate up to four team dirs, highest-precedence first
+(`squad,division,org` → `squad > division > org > personal > engine`).
 Reads merge with the team winning, so a team skill or lesson shadows your personal
 one of the same name. Writes still land in your personal overlay, so nothing you
 capture bleeds into the team by accident. When you *do* want to publish to the team,
