@@ -115,4 +115,69 @@ jq -e '.sdd_ledger == "" and .sdd_plan == ""' "$NP_RESUME_POINTER" >/dev/null ||
 
 echo "PASS: non-git cwd"
 
+# === RUN 7: hang guard — a value-taking flag as the LAST token must not loop ===
+# Regression: `shift 2` with only one positional left is a no-op (no set -e), so a
+# naive parser spins forever. Run in the background with a timeout and assert the
+# process exits promptly (fail-open) rather than hanging.
+rm -f "$NP_RESUME_POINTER"
+bash "$SCRIPT" --session "$SID" --transcript "$TRANSCRIPT" --cwd >/dev/null 2>&1 &
+hang_pid=$!
+gone=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  kill -0 "$hang_pid" 2>/dev/null || { gone=1; break; }
+  sleep 0.2
+done
+if [[ "$gone" != 1 ]]; then
+  kill -9 "$hang_pid" 2>/dev/null
+  wait "$hang_pid" 2>/dev/null
+  fail "writer hung on a trailing value-less flag (--cwd with no value)"
+fi
+wait "$hang_pid" 2>/dev/null
+echo "PASS: no hang on trailing value-less flag"
+
+# === RUN 8: throttle armed but stale stamp -> writes through ===
+echo $(( $(date +%s) - 99999 )) > "$NP_RESUME_STAMP"
+rm -f "$NP_RESUME_POINTER"
+bash "$SCRIPT" --session "stale-throttle" --transcript "$TRANSCRIPT" --cwd "$REPO" --throttle
+[[ -f "$NP_RESUME_POINTER" ]] || fail "throttle with a stale stamp should still write"
+jq -e '.session_id == "stale-throttle"' "$NP_RESUME_POINTER" >/dev/null || fail "throttle stale: pointer not updated"
+
+echo "PASS: throttle lets a stale stamp through"
+
+# === RUN 9: ledger present but no Plan: line -> sdd_plan empty, no error ===
+PLANLESS="$tmp/planless"
+mkdir -p "$PLANLESS"
+git -C "$PLANLESS" init -q -b main
+git -C "$PLANLESS" config user.email "test@example.com"
+git -C "$PLANLESS" config user.name "Test"
+mkdir -p "$PLANLESS/.superpowers/sdd"
+printf '# Progress\n\nStatus: going\n' > "$PLANLESS/.superpowers/sdd/progress.md"
+echo hi > "$PLANLESS/README.md"
+git -C "$PLANLESS" add -A
+git -C "$PLANLESS" commit -q -m baseline
+planless_root="$(git -C "$PLANLESS" rev-parse --show-toplevel)"
+rm -f "$NP_RESUME_POINTER"
+bash "$SCRIPT" --session "planless" --transcript "$TRANSCRIPT" --cwd "$PLANLESS"
+jq -e --arg v "$planless_root/.superpowers/sdd/progress.md" '.sdd_ledger == $v' "$NP_RESUME_POINTER" >/dev/null || fail "planless: sdd_ledger should still be set"
+jq -e '.sdd_plan == ""' "$NP_RESUME_POINTER" >/dev/null || fail "planless: sdd_plan should be empty"
+
+echo "PASS: plan-less ledger"
+
+# === RUN 10: git repo with no ledger -> sdd_ledger empty, still writes ===
+NOLEDGER="$tmp/noledger"
+mkdir -p "$NOLEDGER"
+git -C "$NOLEDGER" init -q -b main
+git -C "$NOLEDGER" config user.email "test@example.com"
+git -C "$NOLEDGER" config user.name "Test"
+echo hi > "$NOLEDGER/README.md"
+git -C "$NOLEDGER" add -A
+git -C "$NOLEDGER" commit -q -m baseline
+rm -f "$NP_RESUME_POINTER"
+bash "$SCRIPT" --session "noledger" --transcript "$TRANSCRIPT" --cwd "$NOLEDGER"
+[[ -f "$NP_RESUME_POINTER" ]] || fail "noledger: pointer not written"
+jq -e '.sdd_ledger == "" and .sdd_plan == ""' "$NP_RESUME_POINTER" >/dev/null || fail "noledger: sdd fields should be empty"
+jq -e '.git_head != ""' "$NP_RESUME_POINTER" >/dev/null || fail "noledger: git_head should still be populated"
+
+echo "PASS: git repo without ledger"
+
 echo "PASS test_resume_write"

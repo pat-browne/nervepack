@@ -40,11 +40,15 @@ bail() { mkdir -p "$(dirname "$LOG")" 2>/dev/null && printf '%s resume: %s\n' "$
 command -v jq >/dev/null 2>&1 || bail "jq not found"
 
 SESSION="" TRANSCRIPT="" CWD="" THROTTLE=0
+# Guard each value-taking flag: `shift 2` with only one positional left is a no-op
+# (bash leaves $1 unchanged; with no `set -e` the non-zero shift is swallowed), so
+# an unguarded parser loops forever on a trailing value-less flag (e.g. a caller
+# collapsing `--cwd "$X"` into a lone `--cwd` when $X is empty). Bail fail-open.
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --session) SESSION="${2:-}"; shift 2;;
-    --transcript) TRANSCRIPT="${2:-}"; shift 2;;
-    --cwd) CWD="${2:-}"; shift 2;;
+    --session)    [[ $# -ge 2 ]] || bail "missing value for --session";    SESSION="$2";    shift 2;;
+    --transcript) [[ $# -ge 2 ]] || bail "missing value for --transcript"; TRANSCRIPT="$2"; shift 2;;
+    --cwd)        [[ $# -ge 2 ]] || bail "missing value for --cwd";        CWD="$2";        shift 2;;
     --throttle) THROTTLE=1; shift;;
     *) shift;;
   esac
@@ -62,7 +66,7 @@ if [[ "$THROTTLE" == 1 && -f "$STAMP" ]]; then
   [[ "$_age" -lt "$_interval" ]] && exit 0
 fi
 
-mkdir -p "$(dirname "$POINTER")" 2>/dev/null || exit 0
+mkdir -p "$(dirname "$POINTER")" 2>/dev/null || bail "mkdir failed for $(dirname "$POINTER")"
 
 # --- git fields: only if $CWD is a git work-tree; else empty/false ---
 git_branch="" git_head="" git_dirty=false repo_root=""
