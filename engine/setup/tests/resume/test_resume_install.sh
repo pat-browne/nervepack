@@ -175,4 +175,46 @@ rc=0; out="$(bash "$WRITER" --active 2>&1)" || rc=$?
 
 echo "PASS: writer --active with no candidate transcripts exits 0 silently"
 
+# --active freshness bound: a STALE sole candidate (mtime older than
+# resume.active_window) must be treated as "no active session" -> exit 0, no write.
+# Guards the max_age reset regression: without this bound a days-old sole transcript
+# would get a fresh-ts pointer every cron tick, perpetually resetting the recall
+# staleness gate. Portable back-date helper (GNU -d @epoch, else BSD -t stamp).
+touch_ago() {  # $1=file $2=seconds-ago
+  local f="$1" secs="$2" epoch stamp
+  epoch=$(( $(date +%s) - secs ))
+  touch -d "@$epoch" "$f" 2>/dev/null && return 0
+  stamp="$(date -r "$epoch" +%Y%m%d%H%M.%S 2>/dev/null)"   # BSD/macOS
+  [[ -n "$stamp" ]] && touch -t "$stamp" "$f"
+}
+
+stale_projects="$tmp/stale-projects"; mkdir -p "$stale_projects/proj"
+STALE_T="$stale_projects/proj/old-session-xyz.jsonl"
+cat > "$STALE_T" <<EOF
+{"type":"user","promptSource":"typed","message":{"role":"user","content":"days ago"},"cwd":"$REPO"}
+EOF
+touch_ago "$STALE_T" 99999   # ~27h old, well past the 900s default window
+export CLAUDE_PROJECTS_DIR="$stale_projects"
+rm -f "$NP_RESUME_POINTER"
+rc=0; out="$(bash "$WRITER" --active 2>&1)" || rc=$?
+[[ "$rc" == 0 ]] || fail "--active with a stale sole candidate should exit 0, got $rc"
+[[ -f "$NP_RESUME_POINTER" ]] && fail "--active must NOT write a pointer for a stale (out-of-window) candidate"
+[[ -z "$out" ]] || fail "--active with a stale candidate should be silent, got: $out"
+
+echo "PASS: writer --active rejects a stale (out-of-window) sole candidate"
+
+# Positive control: a FRESH-mtime candidate in the same otherwise-stale dir IS
+# accepted (proves the reject above is the freshness bound, not a broken dir).
+FRESH_T="$stale_projects/proj/fresh-session-live.jsonl"
+cat > "$FRESH_T" <<EOF
+{"type":"user","promptSource":"typed","message":{"role":"user","content":"right now"},"cwd":"$REPO"}
+EOF
+rm -f "$NP_RESUME_POINTER"
+bash "$WRITER" --active
+[[ -f "$NP_RESUME_POINTER" ]] || fail "--active did not write a pointer for a fresh candidate"
+jq -e '.session_id == "fresh-session-live"' "$NP_RESUME_POINTER" >/dev/null \
+  || fail "--active fresh-candidate session mismatch: $(jq -c . "$NP_RESUME_POINTER")"
+
+echo "PASS: writer --active accepts a fresh (in-window) candidate"
+
 echo "PASS test_resume_install"

@@ -16,6 +16,14 @@
 # exactly as the explicit-flags path. Composes with --throttle. No candidate found ->
 # exit 0 silently (nothing to record yet).
 #
+# FRESHNESS BOUND: the candidate is only accepted if it is genuinely ACTIVE, i.e.
+# modified within `np_param resume.active_window 900` seconds. Without this, a cron
+# tick on a machine whose newest transcript is days old would rewrite the pointer
+# with ts=now every tick, perpetually resetting np-resume-recall.sh's max_age
+# staleness gate to ~0 and defeating it. A stale sole candidate -> treat as "no
+# active session" -> exit 0, no write. The bound applies ONLY to --active discovery;
+# the explicit --session/--transcript/--cwd path is unaffected.
+#
 # Writes ${NP_RESUME_POINTER:-$HOME/.cache/nervepack/resume-pointer.json} atomically
 # (tmp file + `mv`):
 #   {schema_version:1, session_id, ts:<epoch>, cwd, git_branch, git_head,
@@ -87,6 +95,12 @@ if [[ "$ACTIVE" == 1 ]]; then
                | sort -rn | cut -d' ' -f2-)
   fi
   [[ -n "$active_tpath" ]] || exit 0   # no candidate -> nothing to record, silent
+  # Freshness bound: only accept a genuinely-active (recently-modified) candidate,
+  # else a stale sole transcript would reset the recall staleness gate every tick.
+  _window="$(np_param resume.active_window 900 2>/dev/null || echo 900)"
+  [[ "$_window" =~ ^[0-9]+$ ]] || _window=900
+  _amt="$(np_mtime "$active_tpath" 2>/dev/null)"; [[ "$_amt" =~ ^[0-9]+$ ]] || _amt=0
+  (( $(date +%s) - _amt >= _window )) && exit 0   # stale -> no active session, silent
   SESSION="$(basename "$active_tpath" .jsonl)"
   TRANSCRIPT="$active_tpath"
   CWD="$(grep -m1 -oE '"cwd":"[^"]*"' "$active_tpath" 2>/dev/null | head -1 | sed -E 's/^"cwd":"//; s/"$//')"
