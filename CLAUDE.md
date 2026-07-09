@@ -71,11 +71,22 @@ is the guaranteed path: it scans `~/.claude/projects/*/*.jsonl`, and for each
 **completed** prior session with no record yet, re-runs the same capture + evaluator
 against the saved transcript. SessionStart is awaited and the backgrounded work
 survives because the parent session stays alive. Idempotent (per-`session_id` claim
-marker + dedup vs committed `metrics.jsonl`), bounded (`backcapture_days`/`_max`
-params), skips `agent-*` subagent transcripts and the active session, fail-open.
+marker + dedup vs committed `metrics.jsonl`), bounded per sweep (`backcapture_max`),
+skips `agent-*` subagent transcripts and the active session, fail-open.
 Promotion to the committed layers still rides the on-exit flush + daily/weekly crons
 (the awaited triggers). See [[np-kb-claude-headless-scripting]] §8, ARCHITECTURE
 invariant 12.
+
+`backcapture_days` (default 7) is a **max discovery window**, not a processing
+deadline — a session is enqueued into a persistent queue
+(`~/.cache/nervepack/backcapture-queue/<sid>`, one JSON file: `{sid, mtime,
+transcript_path, cwd}`) the first time it's seen inside that window, and stays
+queued — tracked, visible in the log line's "still queued" count — until processed,
+even after its mtime ages past the window. Processing is oldest-enqueued-first (by
+the mtime recorded at enqueue time), so a burst of new sessions can't starve an
+older backlog. Before this, "pending" was re-derived every run from `find -mtime
+-N` minus the seen-marker dir, so anything not processed before aging out of the
+window was silently and permanently lost — no record it ever existed.
 
 ### Lessons layer (wiring)
 
