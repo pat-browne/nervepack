@@ -409,7 +409,7 @@
     } else if (p.schema.type === "number") {
       control = `<input class="togin" type="number" data-key="${esc(dotted)}" data-kind="param-number"
         data-saved="${esc(p.value)}" value="${esc(p.value)}"
-        ${p.schema.min != null ? `min="${p.schema.min}"` : ""} ${p.schema.max != null ? `max="${p.schema.max}"` : ""}>`;
+        ${p.schema.min != null ? `min="${esc(p.schema.min)}"` : ""} ${p.schema.max != null ? `max="${esc(p.schema.max)}"` : ""}>`;
     } else {
       control = `<input class="togin" type="text" data-key="${esc(dotted)}" data-kind="param-string"
         data-saved="${esc(p.value)}" value="${esc(p.value)}">`;
