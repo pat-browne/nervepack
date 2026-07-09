@@ -85,6 +85,11 @@ if [[ ! -f "$marker" ]]; then
 
           mkdir -p "$STATE_DIR" 2>/dev/null
           jq -nc --arg c "$msg" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit", additionalContext:$c}}'
+          # Deliberately touched here — on first ACTUAL offer — not unconditionally
+          # on prompt 1. This lets a slow, backgrounded SessionStart pointer write that
+          # lands between prompt 1 and prompt 2 still produce the single offer on
+          # prompt 2. Do NOT move this to an unconditional first-prompt touch; that
+          # reintroduces missed offers on that race.
           touch "$marker" 2>/dev/null
         fi
       fi

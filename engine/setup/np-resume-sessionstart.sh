@@ -74,6 +74,11 @@ prior_cwd="$(grep -m1 -oE '"cwd":"[^"]*"' "$prior_tpath" 2>/dev/null | head -1 |
 [[ -x "$HERE/np-resume-write.sh" ]] || bail "np-resume-write.sh missing/not executable"
 
 # No --throttle: SessionStart always forces a fresh write of the reconstructed pointer.
+# Note: this non-throttled write also updates the SHARED throttle stamp
+# (NP_RESUME_STAMP), so the current session's first live UserPromptSubmit write
+# (np-resume-recall.sh, which IS throttled) may be deferred up to `resume.interval`.
+# Crash-recovery is unaffected: the next SessionStart reconstructs directly from the
+# settled transcript on disk, regardless of the stamp.
 "$HERE/np-resume-write.sh" --session "$prior_sid" --transcript "$prior_tpath" --cwd "$prior_cwd" \
   || bail "np-resume-write.sh failed for $prior_sid"
 
