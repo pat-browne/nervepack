@@ -108,8 +108,75 @@ Toggle: `memory`.
 
 **Situational example.** You spend a session migrating a box's network to a new
 subnet but don't finish. Next week you ask "where did we leave the eero migration?" and
-recall surfaces the episodic theme with the new IPs and the resume point, instead of
-you reconstructing it from scratch.
+recall surfaces the episodic theme with the new IPs and where things stood, instead of
+you reconstructing it from scratch. (For the *exact* deterministic state of the
+session you were just in — branch@head, SDD ledger, last typed instruction — see
+**Resume pointer**, next.)
+
+## Resume pointer — deterministic where-we-left-off ("resume from exactly this branch/commit/instruction")
+
+**Purpose.** Episodic memory (above) surfaces *topical themes* — narrative,
+summarized, may be stale. The resume pointer is the opposite: an exact,
+**deterministic** (no LLM) snapshot of literally the immediately-preceding
+session's state — git branch/head/dirty, the SDD ledger/plan in flight, and the
+last genuinely-typed instruction — so a fresh session can offer to pick up
+precisely where the last one stopped instead of reconstructing state from
+scratch or from a fuzzy summary.
+
+**Workflow — three triggers write/refresh the pointer, one surfaces it:**
+1. **`SessionStart`** — `np-resume-sessionstart.sh` (backgrounded, `&`): the
+   reliable trigger (invariant 12). On every new session it scans
+   `~/.claude/projects/*/*.jsonl` newest-first, skips the current session and
+   any `agent-*` subagent transcript, skips anything not yet settled (mtime
+   younger than 120s), and reconstructs the pointer from the first survivor —
+   the most-recent **completed prior session** — via `np-resume-write.sh`
+   (always a fresh write, no `--throttle`). This is the backstop for whatever
+   the live writer below missed on that session's final tick.
+2. **`UserPromptSubmit`** — `np-resume-recall.sh`. On a session's first prompt
+   (deduped via a marker file so it fires at most once per session): if the
+   on-disk pointer belongs to a **different** session and is younger than
+   `resume.max_age` (default 86400s = 24h), it emits **one**
+   `additionalContext` offer naming the prior branch@head (flagging dirty),
+   the SDD ledger/plan if present, and the last typed instruction — surfacing
+   BEFORE writing so it never compares the pointer against itself. It then
+   (always) writes/refreshes the **current** session's pointer via
+   `np-resume-write.sh --throttle`, gated by `resume.interval` (default 300s).
+3. **Opt-in cron** (`resume.cron`, default `off`) — `70-install-memory-cron.sh`
+   installs `np-resume-write.sh --active --throttle` every `resume.cron_min`
+   minutes (default 5) when enabled. `--active` discovers the current session
+   as the newest non-`agent-*` transcript, bounded by `resume.active_window`
+   (default 900s) so a stale sole transcript never resets the staleness gate.
+
+**The pointer** (`~/.cache/nervepack/resume-pointer.json`, written atomically —
+tmp file + `mv`):
+```
+{schema_version, session_id, ts, cwd, git_branch, git_head, git_dirty,
+ transcript_path, last_user_instruction, sdd_ledger, sdd_plan}
+```
+`git_*` fields come from `git -C <cwd>` and are empty/`false` when `cwd` isn't a
+git work-tree (`git_head` is the short SHA). `last_user_instruction` is
+`np-transcript-extract.py --last-user` — the last **genuinely typed** message
+(gated on `promptSource=="typed"`), empty on any failure. `sdd_ledger` is
+`<repo-root>/.superpowers/sdd/progress.md` if it exists; `sdd_plan` is the value
+after that ledger's `Plan:` line, if present.
+
+**Assets.** `np-resume-write.sh` (writer, no LLM calls), `np-resume-sessionstart.sh`,
+`np-resume-recall.sh`, `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh`.
+Toggle: `resume` (params: `interval=300`, `max_age=86400`, `cron=off`, `cron_min=5`,
+`active_window=900`). **Doctor:** the `resume-pointer` capability checks the writer
+is executable and both hooks are registered in `settings.json`, else `WARN`s to
+run `61-install-resume-hook.sh`.
+
+**Situational example.** You're mid-way through Task 4 of an SDD plan on
+`feat/resume-pointer-wiring`, several files dirty, when the session dies —
+context limit, a closed terminal, a crash. Nothing was committed and no episodic
+summary ran. The next session's `SessionStart` reconstructs the pointer from
+that now-complete transcript; your very first prompt gets an
+`additionalContext` offer: *"A prior nervepack session (~40m ago) was working in
+feat/resume-pointer-wiring@a1b2c3d (dirty) — implement Task 4's throttled
+writer. Resume from the SDD ledger (.superpowers/sdd/progress.md) / plan
+resume-pointer / the branch, or start fresh."* You say "resume" and are back on
+the exact branch, head, and task — no re-deriving state from a stale summary.
 
 ## Lessons — auto-distilled, provenance-tagged, optionally enforced ("in situation X, do/avoid Y — or the approach that worked is Z")
 

@@ -35,6 +35,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Episodic memory** (auto working-memory) | `memory` | `episodic-capture.sh`, `episodic-recall.sh`, `episodic-match.sh`, `episodic-scrub.sh`, `np-transcript-extract.py`, `agents/np-flow-episodic-maintain.md` | `specs/2026-06-02-episodic-memory-layer-design.md` |
 | **Back-capture sweep** (reliable capture path) | `memory` (`.backcapture`; `backcapture_days`/`backcapture_max` params) | `np-backcapture-sweep.sh` (SessionStart, backgrounded) | CLAUDE.md §"Back-capture sweep"; see invariant 12 |
 | **Local memory promotion** | `memory` | `71-run-memory-promote.sh` | CLAUDE.md §"Memory-store promotion" |
+| **Resume pointer** (deterministic where-we-left-off) | `resume` (`.interval`, `.max_age`, `.cron`, `.cron_min`, `.active_window`) | `np-resume-write.sh` (writer, no LLM calls), `np-resume-sessionstart.sh` (SessionStart, backgrounded — reliable trigger), `np-resume-recall.sh` (UserPromptSubmit — surface + throttled write), `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh` | `nervepack-content/docs/superpowers/plans/2026-07-09-resume-pointer.md` |
 | **Lessons** (auto-distilled, provenance-tagged, optionally enforced) | `lessons` (`.enforce`, default on) | `lesson-recall.sh`, `lesson-guard.sh`, `memory/lessons/`, `agents/np-flow-episodic-maintain.md` (distills capture `struggles[]`→`provenance: failure` and `strategies[]`→`provenance: success`) | `specs/2026-07-02-lessons-layer-merge-design.md` (was: `specs/2026-06-03-playbook-layer-design.md` + `specs/2026-06-05-nervepack-vs-sota-evaluation.md`) |
 | **Performance evaluator** | `evaluator` | `np-evaluator.sh`, `np-eval-signals.py` | `specs/2026-06-03-performance-evaluator-design.md` |
 | **Metrics aggregation** | `evaluator` (`.aggregate`; `retain_days=90` TTL prune, 0 = unlimited) | `73-aggregate-metrics.sh` | ↑ same |
@@ -64,8 +65,8 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 
 | Event | Scripts (in order) |
 |---|---|
-| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `np-backcapture-sweep.sh &` |
-| `UserPromptSubmit` | `episodic-recall.sh` · `lesson-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` |
+| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `np-backcapture-sweep.sh &` · `np-resume-sessionstart.sh &` |
+| `UserPromptSubmit` | `episodic-recall.sh` · `lesson-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` · `np-resume-recall.sh` |
 | `PreToolUse` | `lesson-guard.sh` (matchers: `Bash`, `Read`) |
 | `PreCompact` | `episodic-capture.sh checkpoint` |
 | `SessionEnd` | `episodic-capture.sh session-end` · `40-sync-nervepack.sh exit &` · `np-evaluator.sh` · `np-session-flush.sh` (promotes both inboxes on exit; crons = backup) |
@@ -80,9 +81,10 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Daily 09:15 | `75-skill-maintain.sh` |
 | Weekly Sun 09:30 | `76-run-refine.sh` (maintain.refine toggle, default on) |
 | Weekly Wed 10:00 | `77-run-compact.sh` (maintain.compact toggle, default on) |
+| Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `np-resume-write.sh --active --throttle` |
 
 **Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `35` link-dashboard-data (content bridge) · `40`
-sync · `50–56` install hooks · `70` install crons / `71–77` cron bodies · `80–91`
+sync · `50–56` install hooks · `61` install-resume-hook · `70` install crons / `71–77` cron bodies · `80–91`
 vscode + permissions. Scripts are idempotent and run in order on a fresh box.
 
 ## The two data pipelines (the heart of the system)
