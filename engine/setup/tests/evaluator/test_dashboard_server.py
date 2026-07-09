@@ -347,6 +347,14 @@ class TestServer(unittest.TestCase):
         self.assertTrue(json.loads(body)["ok"])
         with open(self.toggles_conf) as fh:
             self.assertIn("maintain.refine|shared|runtime|off|", fh.read())
+        # Prove the flip actually takes effect through the resolver, not just that
+        # the conf file changed (np_toggle.enabled() must check "maintain.refine"'s
+        # OWN conf row before falling back to a truncated "maintain" family row).
+        env = dict(os.environ, NP_TOGGLES_CONF=self.toggles_conf, NP_TOGGLES_LOCAL=self.toggles_local)
+        r = subprocess.run(["python3", os.path.join(SETUP, "np_toggle.py"), "enabled", "maintain.refine"],
+                            env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1, "resolver still reports maintain.refine as on after the flip")
+        self.assertEqual(r.stdout, "off")
 
     def test_post_toggle_without_csrf_is_forbidden(self):
         status, _ = self._post("/api/toggle", {"key": "testlocal", "value": "off"},

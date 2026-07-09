@@ -36,4 +36,10 @@ run maintain.refine off >/dev/null
 awk -F'|' '$1=="maintain.refine"{print $4}' "$tmp/toggles.conf" | grep -q '^off$' || { echo "FAIL: dotted bare feature flip not in conf"; exit 1; }
 grep -q '^maintain\.refine=' "$tmp/local" 2>/dev/null && { echo "FAIL: dotted bare feature flip incorrectly written to local"; exit 1; }
 
+# ...and the flip must actually take effect through the resolver, not just land
+# in the file: maintain (the truncated family) is still "on", so this proves
+# np_enabled checks maintain.refine's OWN conf row rather than falling back to it.
+( source "$HERE/../../np-toggle-lib.sh"; np_enabled maintain.refine ) \
+  && { echo "FAIL: np_enabled maintain.refine still reports on after the flip"; exit 1; }
+
 echo "PASS test_cli"

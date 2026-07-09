@@ -98,14 +98,22 @@ def _conf_param(key):
 
 
 def enabled(feature):
-    """np_enabled: True if on. Fail-open (unknown -> on). Sub-toggle inherits family."""
+    """np_enabled: True if on. Fail-open (unknown -> on). Checks the feature's OWN
+    conf state first (even when it contains a dot and is itself a declared row,
+    e.g. "maintain.refine"), THEN falls back to the truncated parent family's
+    conf state — never the reverse, which was the bug: the parent fallback used
+    to run with `feat` already overwritten by the truncated name, so a declared
+    dotted feature's own conf row was unreachable."""
     feat = feature
+    fam = None
     v = _local_get(feat)
     if not v and "." in feat:
-        feat = feat.split(".", 1)[0]
-        v = _local_get(feat)
+        fam = feat.split(".", 1)[0]
+        v = _local_get(fam)
     if not v:
-        v = _conf_state(feat)
+        v = _conf_state(feature)
+    if not v and "." in feature:
+        v = _conf_state(fam if fam is not None else feature.split(".", 1)[0])
     if not v:
         v = "on"
     return v == "on"
