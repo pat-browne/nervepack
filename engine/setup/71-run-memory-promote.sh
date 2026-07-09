@@ -5,6 +5,10 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _npl="$HERE/np-toggle-lib.sh"; [[ -r "$_npl" ]] && source "$_npl" && { np_enabled memory.promote || { echo "$(date -u +%FT%TZ) skipped: memory.promote disabled via toggle"; exit 0; }; }
+# Invariant 2: bail if already running inside a nervepack agent context
+# (prevents re-entrancy when called from a headless session). Mirrors
+# 76-run-refine.sh / 77-run-compact.sh.
+[[ -z "${NERVEPACK_AGENT:-}" ]] || exit 0
 source "$HERE/np-content-lib.sh"   # personal skills + memory layers live in the content overlay (cwd below)
 
 LOG="$HOME/.cache/nervepack/memory-promote.log"
@@ -20,8 +24,8 @@ if ! np_content_is_explicit; then
   exit 0
 fi
 
-NERVEPACK="$HOME/Code/nervepack"
-CLAUDE="$HOME/.local/bin/claude"
+NERVEPACK="$(cd "$HERE/../.." && pwd)"
+CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 PROMPT_FILE="$NERVEPACK/agents/np-flow-memory-promote.md"
 
 # Only the claude backend needs the binary; a local agentic backend is served via
@@ -30,10 +34,10 @@ PROMPT_FILE="$NERVEPACK/agents/np-flow-memory-promote.md"
 BACKEND="${NP_LLM_BACKEND:-claude}"
 if [[ "$BACKEND" == claude && ! -x "$CLAUDE" ]]; then
   echo "$(date -u +%FT%TZ) ERROR: claude CLI not found at $CLAUDE" >> "$LOG"
-  exit 1
+  exit 0
 elif [[ "$BACKEND" != claude && -z "${NP_LLM_AGENT_CMD:-}" ]]; then
   echo "$(date -u +%FT%TZ) ERROR: local backend agent mode needs NP_LLM_AGENT_CMD" >> "$LOG"
-  exit 1
+  exit 0
 fi
 
 if [[ ! -f "$PROMPT_FILE" ]]; then

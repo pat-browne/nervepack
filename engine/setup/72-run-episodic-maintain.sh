@@ -20,7 +20,7 @@ if ! np_content_is_explicit; then
   exit 0
 fi
 
-NERVEPACK="$HOME/Code/nervepack"
+NERVEPACK="$(cd "$HERE/../.." && pwd)"
 CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 PROMPT_FILE="$NERVEPACK/agents/np-flow-episodic-maintain.md"
 
