@@ -62,13 +62,13 @@ echo "$outC" | grep -qE 'resume-pointer +WARN' \
 
 echo "PASS: only one hook registered -> resume-pointer still WARN (non-vacuous)"
 
-# === 4. Writer not executable -> WARN, even with BOTH hooks registered. ===
-# Point NP_DIR at a throwaway tree whose np-resume-write.sh exists but is NOT
-# executable, so the ONLY unmet condition is the writer-executable half. Settings
-# still register both hooks, isolating that branch.
+# === 4. Writer not usable -> WARN, even with BOTH hooks registered. ===
+# Point NP_DIR at a throwaway tree where np-resume-write.sh is ABSENT, so the ONLY
+# unmet condition is the writer-executable half. We leave it MISSING rather than
+# chmod -x it: `[[ ! -x ]]` is reliably true for a missing file on every platform,
+# whereas `chmod -x` is a no-op under Git-bash (no POSIX exec bit) so a present file
+# still reads as executable there. Missing exercises the same writer-check branch.
 altnp="$tmp/altnp"; mkdir -p "$altnp/engine/setup"
-printf '#!/usr/bin/env bash\n' > "$altnp/engine/setup/np-resume-write.sh"
-chmod -x "$altnp/engine/setup/np-resume-write.sh"
 # NP_DIR override also redirects the default capabilities.json path, so pin
 # NP_CAPABILITIES back to the real contract (only the writer path should change).
 outD="$(NP_DIR="$altnp" NP_CAPABILITIES="$NP/engine/onboard/capabilities.json" doctor "$tmp/settings-ok.json")"
@@ -77,6 +77,6 @@ echo "$outD" | grep -qE 'resume-pointer +PASS$' \
 echo "$outD" | grep 'resume-pointer' | grep -qi 'not executable' \
   || fail "non-executable writer should WARN about the writer: $(echo "$outD" | grep resume-pointer)"
 
-echo "PASS: writer not executable -> resume-pointer WARN (writer branch)"
+echo "PASS: writer absent (not executable) -> resume-pointer WARN (writer branch)"
 
 echo "PASS test_resume_doctor"

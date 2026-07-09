@@ -84,7 +84,10 @@ if [[ ! -f "$marker" ]]; then
           msg+=", or start fresh."
 
           mkdir -p "$STATE_DIR" 2>/dev/null
-          jq -nc --arg c "$msg" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit", additionalContext:$c}}'
+          # MSYS_NO_PATHCONV: on Git-bash, MSYS rewrites POSIX-path-like substrings in
+          # arguments to native jq.exe (an embedded /tmp/... in the offer becomes
+          # C:/Users/...). Disable it so the offer text is emitted verbatim. No-op off Windows.
+          MSYS_NO_PATHCONV=1 jq -nc --arg c "$msg" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit", additionalContext:$c}}'
           # Deliberately touched here — on first ACTUAL offer — not unconditionally
           # on prompt 1. This lets a slow, backgrounded SessionStart pointer write that
           # lands between prompt 1 and prompt 2 still produce the single offer on

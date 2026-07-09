@@ -85,7 +85,10 @@ out1="$(payload "$CURRENT_SID" | bash "$SCRIPT")"
 ctx="$(printf '%s' "$out1" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
 [[ -n "$ctx" ]] || fail "case1: expected an additionalContext offer, got: $out1"
 printf '%s' "$ctx" | grep -qF "$PRIOR_BRANCH" || fail "case1: offer missing prior branch: $ctx"
-printf '%s' "$ctx" | grep -qF "$PRIOR_LEDGER" || fail "case1: offer missing sdd_ledger path: $ctx"
+# Assert a stable path SUFFIX, not the full absolute path: on Git-bash/MSYS the
+# leading /tmp/... of a POSIX path is rewritten to a Windows form; the tail survives.
+# (Production ledger paths are git-derived Windows-form and unaffected either way.)
+printf '%s' "$ctx" | grep -qF "prior-repo/.superpowers/sdd/progress.md" || fail "case1: offer missing sdd_ledger path: $ctx"
 printf '%s' "$ctx" | grep -qF "$PRIOR_LAST" || fail "case1: offer missing last_user_instruction: $ctx"
 
 echo "PASS: case1 offer emitted with branch/ledger/last-instruction"
