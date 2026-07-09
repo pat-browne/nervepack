@@ -15,12 +15,18 @@ deliberate exception: the dashboard's localhost-only server,
 
 ## Skill namespaces (tiers)
 
-| Prefix | Tier | Holds |
-|---|---|---|
-| `np-core-` | cognition machinery | capture, recall, sync, toggle, contribute |
-| `np-kb-` | knowledge base | domain how-to (branding, chrome-ext, coding rules…) |
-| `np-env-` | environment | machine setup (ubuntu, plugins, vscode, secrets) |
-| `np-flow-` | workflows | recurring agent prompts (`agents/*.md`) |
+| Prefix | Tier | Holds | Ships in |
+|---|---|---|---|
+| `np-core-` | cognition machinery | capture, recall, sync, toggle, contribute | **engine** |
+| `np-flow-` | workflows | recurring agent prompts (`agents/*.md`) | **engine** |
+| `np-kb-` | knowledge base | domain how-to (branding, chrome-ext, coding rules…) | **content overlay** |
+| `np-env-` | environment | machine setup (ubuntu, plugins, vscode, secrets) | **content overlay** |
+
+The prefixes name the namespace convention; they do **not** all ship from the same repo.
+The **engine repo is machinery-only** — it ships `np-core-*` + `np-flow-merge-gate`. The
+domain `np-kb-*`/`np-env-*` skills are **content** (personal/instance identity), delivered by
+your content overlay (or a starter), not the public engine (PR #89). `30-link-skills.sh`
+merges engine + overlay(s) at link time so every tier reaches the session.
 
 ## Feature catalog (every feature ↔ its toggle ↔ its code ↔ its design doc)
 
