@@ -51,15 +51,20 @@ core_check() {
         echo PASS
       fi ;;
     team)
-      tdir="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dir 2>/dev/null || true)"
+      tlist="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dirs 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
       torigin="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dir_origin 2>/dev/null)"
-      if [[ -z "$tdir" ]]; then
-        echo "PASS (no team layer configured)"
+      tcount="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_team_dirs 2>/dev/null | grep -c .)"
+      if [[ -z "$tlist" ]]; then
+        if [[ "$torigin" != none ]]; then
+          echo "WARN (team layer configured (origin $torigin) but invalid — over-cap (>4) or a missing dir; falling back to personal-only)"
+        else
+          echo "PASS (no team layer configured)"
+        fi
       elif np_enabled team; then
         tmode="$(source "$HERE/np-layer-lib.sh" 2>/dev/null; np_merge_mode 2>/dev/null || echo override)"
-        echo "PASS (team layer: $tdir — origin $torigin, merge $tmode)"
+        echo "PASS (team layers ($tcount): $tlist — origin $torigin, merge $tmode)"
       else
-        echo "PASS (team layer present at $tdir but the 'team' toggle is OFF — not merged)"
+        echo "PASS (team layers ($tcount): $tlist but the 'team' toggle is OFF — not merged)"
       fi
       ;;
     dashboard-data)

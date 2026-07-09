@@ -58,13 +58,20 @@ def _core_check(cap_id, np):
                     "~/.config/nervepack/content-dir; writers skip commits until then)")
         return "PASS"
     if cap_id == "team":
-        tdir = np_content.team_dir()
-        if not tdir:
+        tdirs = np_content.team_dirs()
+        if not tdirs:
+            torigin = np_content.team_origin()
+            if torigin != "none":
+                return ("WARN (team layer configured (origin %s) but invalid — over-cap "
+                         "(>4) or a missing dir; falling back to personal-only)" % torigin)
             return "PASS (no team layer configured)"
+        tlist = ",".join(tdirs)
+        tcount = len(tdirs)
         if np_toggle.enabled("team"):
-            return "PASS (team layer: %s — origin %s, merge %s)" % (
-                tdir, np_content.team_origin(), np_content.merge_mode())
-        return "PASS (team layer present at %s but the 'team' toggle is OFF — not merged)" % tdir
+            return "PASS (team layers (%d): %s — origin %s, merge %s)" % (
+                tcount, tlist, np_content.team_origin(), np_content.merge_mode())
+        return "PASS (team layers (%d): %s but the 'team' toggle is OFF — not merged)" % (
+            tcount, tlist)
     if cap_id == "dashboard-data":
         cdir = np_content.content_dir()
         ddlink = os.path.join(np, "dashboard", "data")
