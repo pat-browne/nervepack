@@ -56,5 +56,5 @@ shouldn't hold the foreground.
 - Strip any forbidden trailer **before** the merge, never after it lands on `main`
   (see [[np-kb-testing-ci]] §4 for the `filter-branch` recipe).
 
-Related: [[np-kb-coding-rules]] (§6 no AI attribution), [[np-kb-testing-ci]]
-(§4 trailer scrub), and the `AGENTS.md` concurrency section this operationalizes.
+Related: `AGENTS.md` § "Commit conventions" (no AI attribution), [[np-kb-testing-ci]]
+(the `filter-branch` trailer-scrub recipe), and the `AGENTS.md` concurrency section this operationalizes.
