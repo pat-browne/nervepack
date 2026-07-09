@@ -15,6 +15,7 @@ import posixpath
 import re
 import subprocess
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_IN = os.path.join(HERE, "data", "metrics.jsonl")
@@ -24,6 +25,7 @@ DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 # `bash` resolves to System32 WSL there). It lives in engine/setup/ — no-op off Windows.
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
 import np_bashlib  # noqa: E402
+import np_toggle  # noqa: E402
 
 
 def default_resolved():
@@ -58,6 +60,69 @@ def load_graduation(path):
     if not isinstance(data, dict) or not isinstance(data.get("candidates"), list):
         return dict(EMPTY_GRADUATION)
     return data
+
+
+EMPTY_BACKLOG = {"pending": 0, "oldest_pending_days": None, "ceiling_days": 7.0,
+                 "resolved_last_24h": 0}
+
+
+def backlog_metrics():
+    """Back-capture sweep backlog snapshot: how many prior sessions are queued but
+    not yet processed by np-backcapture-sweep.sh, how stale the oldest pending one
+    is relative to the memory.backcapture_days discovery ceiling, and how many were
+    resolved (captured, or found already-in-metrics) in the last 24h. Reads the same
+    local-cache dirs the sweep script uses; BACKCAPTURE_QUEUE_DIR/BACKCAPTURE_SEEN_DIR
+    env overrides match the sweep script's own names so tests can point both at temp
+    dirs. Fail-open: a missing dir or an unreadable/malformed queue entry is skipped,
+    never crashes the build."""
+    queue_dir = os.environ.get(
+        "BACKCAPTURE_QUEUE_DIR", os.path.expanduser("~/.cache/nervepack/backcapture-queue"))
+    seen_dir = os.environ.get(
+        "BACKCAPTURE_SEEN_DIR", os.path.expanduser("~/.cache/nervepack/backcapture-seen"))
+    try:
+        ceiling_days = float(np_toggle.param("memory.backcapture_days", "7"))
+    except (ValueError, TypeError):
+        ceiling_days = 7.0
+
+    try:
+        queued = os.listdir(queue_dir)
+    except OSError:
+        queued = []
+    try:
+        seen = set(os.listdir(seen_dir))
+    except OSError:
+        seen = set()
+
+    now = time.time()
+    pending = 0
+    oldest_mt = None
+    for sid in queued:
+        if sid in seen:
+            continue
+        pending += 1
+        try:
+            with open(os.path.join(queue_dir, sid), encoding="utf-8") as fh:
+                mt = json.load(fh).get("mtime")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(mt, (int, float)) and (oldest_mt is None or mt < oldest_mt):
+            oldest_mt = mt
+
+    resolved_last_24h = 0
+    for sid in seen:
+        try:
+            mt = os.path.getmtime(os.path.join(seen_dir, sid))
+        except OSError:
+            continue
+        if now - mt < 86400:
+            resolved_last_24h += 1
+
+    return {
+        "pending": pending,
+        "oldest_pending_days": round((now - oldest_mt) / 86400, 1) if oldest_mt is not None else None,
+        "ceiling_days": ceiling_days,
+        "resolved_last_24h": resolved_last_24h,
+    }
 
 
 def _norm(s):
@@ -654,12 +719,14 @@ def main(argv):
         sys.stderr.write("build.py render_pages: %s\n" % exc)
     graduation = json.dumps(load_graduation(
         os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())))
+    backlog = json.dumps(backlog_metrics())
     with open(out, "w") as fh:
         fh.write(f"window.METRICS = {payload};\n")
         fh.write(f"window.LEARNED = {learned};\n")
         fh.write(f"window.TOKENS_SAVED = {saved};\n")
         fh.write(f"window.WIKI = {wiki};\n")
         fh.write(f"window.GRADUATION = {graduation};\n")
+        fh.write(f"window.BACKLOG = {backlog};\n")
     return 0
 
 
