@@ -62,4 +62,21 @@ echo "$outC" | grep -qE 'resume-pointer +WARN' \
 
 echo "PASS: only one hook registered -> resume-pointer still WARN (non-vacuous)"
 
+# === 4. Writer not executable -> WARN, even with BOTH hooks registered. ===
+# Point NP_DIR at a throwaway tree whose np-resume-write.sh exists but is NOT
+# executable, so the ONLY unmet condition is the writer-executable half. Settings
+# still register both hooks, isolating that branch.
+altnp="$tmp/altnp"; mkdir -p "$altnp/engine/setup"
+printf '#!/usr/bin/env bash\n' > "$altnp/engine/setup/np-resume-write.sh"
+chmod -x "$altnp/engine/setup/np-resume-write.sh"
+# NP_DIR override also redirects the default capabilities.json path, so pin
+# NP_CAPABILITIES back to the real contract (only the writer path should change).
+outD="$(NP_DIR="$altnp" NP_CAPABILITIES="$NP/engine/onboard/capabilities.json" doctor "$tmp/settings-ok.json")"
+echo "$outD" | grep -qE 'resume-pointer +PASS$' \
+  && fail "non-executable writer must not PASS resume-pointer: $(echo "$outD" | grep resume-pointer)"
+echo "$outD" | grep 'resume-pointer' | grep -qi 'not executable' \
+  || fail "non-executable writer should WARN about the writer: $(echo "$outD" | grep resume-pointer)"
+
+echo "PASS: writer not executable -> resume-pointer WARN (writer branch)"
+
 echo "PASS test_resume_doctor"
