@@ -118,7 +118,7 @@ PERFORMANCE
 
 Record shapes (keep these stable; readers depend on them):
 - **episodic inbox**: `{session_id, ts, project, cwd, mode} + {headline, body, candidate_topics[], keywords[], struggles[]}` (`session_id` lets the evaluator count this session's `struggles[]` cross-pipeline)
-- **metrics**: `{session_id, ts, project, signals{skills_invoked[], playbook_fires, playbook_heeded, recall_injections, directive_present, struggles, tool_calls, tokens{…}}, contribution_score, helped[], shortfalls[], suggestions[], assets_used[]}`
+- **metrics**: `{session_id, ts, project, signals{skills_invoked[], playbook_fires, playbook_heeded, recall_injections, directive_present, directive_tokens, struggles, tool_calls, tokens{…}}, contribution_score, helped[], shortfalls[], suggestions[], assets_used[]}` (field-by-field source + zero-bias notes: `docs/FEATURES.md` "Performance evaluator + signals")
 
 ## Design invariants — the proven choices. Don't relitigate these silently.
 

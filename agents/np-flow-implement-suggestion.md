@@ -48,8 +48,9 @@ Your `Bash` access is for running this repo's tests/validators only.
 
 1. **Read the rules first.** `docs/ARCHITECTURE.md` (the change-impact map — touch X,
    check Y) and `CLAUDE.md` (commit conventions, language/model policy, the
-   directory contract). Also `skills/np-kb-coding-rules` if the change is
-   code. Honor them — your change must fit nervepack's existing patterns.
+   directory contract). Also `AGENTS.md` § "Commit conventions" and
+   `docs/ARCHITECTURE.md` invariants 1/6/9 if the change is code. Honor them —
+   your change must fit nervepack's existing patterns.
 2. **Decide if it's actually implementable.** If the suggestion is behavioral or
    advisory ("consider a leaner approach", "be more careful with X") — i.e. there
    is no concrete file change that satisfies it — **make no commit** and print

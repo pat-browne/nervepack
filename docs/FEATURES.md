@@ -217,13 +217,37 @@ directive present, struggles, tokens) from fire-time markers the hooks dropped, 
 a Haiku verdict adds score + helped/shortfalls/suggestions. Records land in a local
 inbox.
 
-**Assets.** `np-evaluator.sh`, `np-eval-signals.py`, `np-kb-evaluator-signals` (the
-field reference). Toggle: `evaluator`.
+**Assets.** `np-evaluator.sh`, `np-eval-signals.py`. Toggle: `evaluator`.
 
 **Situational example.** A session where you invoked three skills and heeded an
 enforced lesson scores higher on "nervepack helped" than one where the directive was
 present but no skill fired. The low-help session generates a suggestion you can act
 on later.
+
+**Signal field reference.** `signals{}` in the metrics record (shape pinned in
+`docs/ARCHITECTURE.md` "Record shapes") is produced **deterministically** by
+`np-eval-signals.py` — no LLM, no guessing. Each field's zero-bias is documented
+here so a dashboard panel reading zero isn't mistaken for a wiring gap:
+
+| Field | Source | Zero-bias note |
+|---|---|---|
+| `skills_invoked[]` | regex over the transcript JSONL for Skill-tool calls | Legitimately empty if no skills were invoked — not a pipeline gap |
+| `playbook_fires` | `lesson-guard` markers in the session-signals log | Genuinely sparse today — only lessons carrying an enforcing `tool_match` fire it; rises naturally as the enforcing-lesson catalog grows |
+| `playbook_heeded` | gated-command fingerprints minus fingerprints that were executed anyway | Inherits `playbook_fires` sparseness; also 0 if a gated command ran despite the guard |
+| `recall_injections` | `lesson-recall`/`episodic-recall` markers in the session-signals log | **Structural zero for back-captured sessions** — the ephemeral signal log for the original session is gone by the time the back-capture sweep re-scores it, even when recall fired live |
+| `directive_present` | `np_enabled directive` at evaluation time | Always populated; reflects the toggle state, not session behavior |
+| `directive_tokens` | byte length ÷ 4 of `nervepack-session-directive.md` | Fixed at evaluation time (~876 tokens at current size), not session-specific — the injection-cost side of invariant 11 |
+| `struggles` | `struggles[]` length from the matching episodic-inbox record | 0 either because SessionEnd/capture didn't fire for this session, or because it was genuinely clean — not dead code |
+| `tool_calls` | count of `tool_use` lines in the transcript | 0 for pure-text automation runs (crons, episodic-maintain) |
+| `tokens{input,output,cache_read,cache_creation,total}` | `usage` blocks from assistant turns, deduped by message id | Near-zero for cron/automation sessions; `cache_read` dominates real interactive sessions |
+
+**LLM-derived fields** (top-level on the record, not inside `signals{}`, from the
+Haiku verdict): `contribution_score` (int 0-100), `helped[]`, `shortfalls[]`,
+`suggestions[]` (`{text, confidence, target, auto_safe}`), `assets_used[]`
+(`{asset, kind, used}`). A deterministic cost-aware suggestion is appended by the
+evaluator shell itself — independent of the Haiku call — when
+`tokens.output >= evaluator.cost_hi_tokens` (default 200k) AND
+`contribution_score <= evaluator.score_lo` (default 40).
 
 ## Metrics aggregation + dashboard
 

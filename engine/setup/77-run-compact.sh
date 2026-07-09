@@ -6,7 +6,21 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../.." && pwd)"
 source "$HERE/np-toggle-lib.sh"
+source "$HERE/np-content-lib.sh" 2>/dev/null || true   # np_content_dir
+source "$HERE/np-layer-lib.sh" 2>/dev/null || true     # np_merge_roots (skill roots: engine + overlay [+ team])
 np_enabled maintain.compact || { echo "$(date -u +%FT%TZ) skipped: maintain.compact disabled"; exit 0; }
+
+# Extra skill roots (content overlay [+ team]) beyond the engine's own skills/ —
+# this is an agentic pass driven by a prose prompt (no Python enumeration to
+# retarget), so retargeting means telling the agent about the other repo(s) to
+# also scan for dedup/split candidates, each committed separately. Fail-open:
+# no overlay -> no note, behavior unchanged from before this repo split existed.
+EXTRA_ROOTS=()
+if declare -f np_merge_roots >/dev/null 2>&1; then
+  while IFS= read -r _r; do
+    [[ -n "$_r" && "$_r" != "$NP" && -d "$_r/skills" ]] && EXTRA_ROOTS+=("$_r")
+  done < <(np_merge_roots 2>/dev/null)
+fi
 
 # Invariant 2: bail if already running inside a nervepack agent context
 # (prevents re-entrancy when called from a headless session).
@@ -32,6 +46,14 @@ fi
 
 prompt="$(awk '/^## Prompt$/{p=1; next} p' "$PROMPT_FILE")"
 [[ -n "$prompt" ]] || bail "ERROR: empty prompt extracted from $PROMPT_FILE"
+
+if [[ ${#EXTRA_ROOTS[@]} -gt 0 ]]; then
+  extra_note=$'\n\n### Additional skill roots (content overlay)\n\nBesides `skills/` in this working directory, also apply steps 2-5 to the `skills/` directory under EACH of these paths — content-overlay (and/or team) repos that hold the personal/knowledge skills relocated out of the engine:\n'
+  for _r in "${EXTRA_ROOTS[@]}"; do
+    extra_note+="- \`$_r/skills/\` — a SEPARATE git repo rooted at \`$_r\`, with its own \`archive/\`, \`compact-proposals/\`, and \`.claude-plugin/plugin.json\` (or none, if it doesn't ship a plugin manifest). Stage and commit ONLY the paths you changed there via \`git -C \"$_r\" add <paths> && git -C \"$_r\" commit -m ... -- <paths>\`, then \`git -C \"$_r\" push\`. Never combine its commit with this repo's commit."$'\n'
+  done
+  prompt="$prompt$extra_note"
+fi
 
 { echo; echo "=== $(date -u +%FT%TZ) compact run ==="; } >> "$LOG"
 # cd into the repo so relative paths in the prompt resolve correctly.

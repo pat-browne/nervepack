@@ -76,7 +76,7 @@ Use the [[np-core-contribute]] decision tree to pick the right target file:
 
 | Kind | Target |
 |---|---|
-| Personal coding rule | `skills/np-kb-coding-rules/SKILL.md` |
+| Personal coding rule | `$NP_CONTENT_DIR/skills/np-kb-coding-rules/SKILL.md` (personal overlay) |
 | Environment / toolchain | `skills/np-env-ubuntu-claude-dev-setup/SKILL.md` |
 | Claude plugin choice | `skills/np-env-claude-plugin-stack/SKILL.md` |
 | New cross-cutting topic | Check `INDEX.md` first — extend an existing skill if any overlap |
