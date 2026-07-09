@@ -3,9 +3,18 @@
 #
 # Usage:
 #   np-resume-write.sh --session <id> --transcript <path> --cwd <dir> [--throttle]
+#   np-resume-write.sh --active [--throttle]
 #
 # Flags (not stdin) so SessionStart/cron callers don't have to fake a hook payload;
 # UserPromptSubmit-style callers just forward the fields they already have.
+#
+# --active: for the opt-in interval cron (70-install-memory-cron.sh), which has no
+# stdin/hook payload to source --session/--transcript/--cwd from. Discovers the
+# current session as the NEWEST ${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}/*/*.jsonl
+# by mtime that is NOT an `agent-*` subagent transcript, derives session_id from its
+# basename and cwd from the transcript's own embedded `"cwd":"..."`, then proceeds
+# exactly as the explicit-flags path. Composes with --throttle. No candidate found ->
+# exit 0 silently (nothing to record yet).
 #
 # Writes ${NP_RESUME_POINTER:-$HOME/.cache/nervepack/resume-pointer.json} atomically
 # (tmp file + `mv`):
@@ -37,9 +46,12 @@ _npl="$HERE/np-toggle-lib.sh"; [[ -r "$_npl" ]] && source "$_npl" && { np_enable
 LOG="${NP_RESUME_LOG:-$HOME/.cache/nervepack/resume.log}"
 bail() { mkdir -p "$(dirname "$LOG")" 2>/dev/null && printf '%s resume: %s\n' "$(date -u +%FT%TZ)" "$1" >> "$LOG" 2>/dev/null; exit 0; }
 
+# Portable epoch mtime (BSD has no `stat -c`/`find -printf`): try GNU then BSD.
+np_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
 command -v jq >/dev/null 2>&1 || bail "jq not found"
 
-SESSION="" TRANSCRIPT="" CWD="" THROTTLE=0
+SESSION="" TRANSCRIPT="" CWD="" THROTTLE=0 ACTIVE=0
 # Guard each value-taking flag: `shift 2` with only one positional left is a no-op
 # (bash leaves $1 unchanged; with no `set -e` the non-zero shift is swallowed), so
 # an unguarded parser loops forever on a trailing value-less flag (e.g. a caller
@@ -50,9 +62,35 @@ while [[ $# -gt 0 ]]; do
     --transcript) [[ $# -ge 2 ]] || bail "missing value for --transcript"; TRANSCRIPT="$2"; shift 2;;
     --cwd)        [[ $# -ge 2 ]] || bail "missing value for --cwd";        CWD="$2";        shift 2;;
     --throttle) THROTTLE=1; shift;;
+    --active)   ACTIVE=1; shift;;
     *) shift;;
   esac
 done
+
+# --active: discover the current/most-recent session transcript instead of relying
+# on --session/--transcript/--cwd (the cron caller has neither stdin nor a hook
+# payload to source them from). Newest-first by mtime, skipping agent-* subagent
+# transcripts — the first survivor is the active session.
+if [[ "$ACTIVE" == 1 ]]; then
+  PROJECTS_DIR="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
+  active_tpath=""
+  if [[ -d "$PROJECTS_DIR" ]]; then
+    while IFS= read -r tpath; do
+      [[ -n "$tpath" && -f "$tpath" ]] || continue
+      sid="$(basename "$tpath" .jsonl)"
+      [[ -n "$sid" ]] || continue
+      [[ "$sid" == agent-* ]] && continue
+      active_tpath="$tpath"
+      break   # newest-first -> first non-agent survivor is the active session
+    done < <(find "$PROJECTS_DIR" -name '*.jsonl' -type f 2>/dev/null \
+               | while IFS= read -r p; do printf '%s %s\n' "$(np_mtime "$p" 2>/dev/null || echo 0)" "$p"; done \
+               | sort -rn | cut -d' ' -f2-)
+  fi
+  [[ -n "$active_tpath" ]] || exit 0   # no candidate -> nothing to record, silent
+  SESSION="$(basename "$active_tpath" .jsonl)"
+  TRANSCRIPT="$active_tpath"
+  CWD="$(grep -m1 -oE '"cwd":"[^"]*"' "$active_tpath" 2>/dev/null | head -1 | sed -E 's/^"cwd":"//; s/"$//')"
+fi
 
 [[ -n "$CWD" ]] || bail "missing required --cwd"
 
