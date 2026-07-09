@@ -471,7 +471,12 @@ overlay stays yours, and a third overlay carries what the team holds in common.
 
 **Workflow.** Configure a team root with `NP_TEAM_DIR` (or write the path into
 `~/.config/nervepack/team-dir`) and the overlay stack becomes `team > personal >
-engine`. `np-layer-lib.sh` builds that stack and every reader scans it highest-first.
+engine`. That value may be a **comma-separated list of up to four team dirs**,
+highest-precedence first (`squad,division,org` → `squad > division > org > personal >
+engine`), so a nested org can layer shared content; more than four is a hard error and
+the session falls back to personal-only (the doctor's `team` check `WARN`s on such an
+invalid config rather than hiding it). `np-layer-lib.sh` builds that stack and every
+reader scans it highest-first.
 Skills are **override-only**, so a team `np-kb-branding` shadows your personal one of
 the same name. The topic layers (lessons, episodic, wiki) combine per the
 `team.merge` param, `override` (default, team wins on a name clash), `concatenate`
@@ -486,7 +491,8 @@ dir resolves. Complete through Phase 3 (recall hooks, wiki index, dashboard
 learned-counts, and MCP recall all merge across layers).
 
 **Assets.** `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`/
-`np_layer_roots`), `np_team_dir` in `np-content-lib.sh`, the two recall hooks
+`np_layer_roots`), `np_team_dirs`/`np_team_dir` (the comma-list parse/validate/cap
+resolver, and its highest-precedence first entry) in `np-content-lib.sh`, the two recall hooks
 (`episodic-recall.sh`, `lesson-recall.sh`), `dashboard/build.py` (`wiki_index`,
 `learned_counts`), `np-mcp-server.py` (`_tool_recall`), `np-core-contribute`.
 Toggle: `team` (`team.merge`).

@@ -37,6 +37,18 @@ skill or playbook shadows your personal one of the same name), and writes still 
 your personal overlay unless you explicitly "save to the team layer." This is dormant
 until a team dir resolves, and enabled by the `team` toggle.
 
+For a nested organization, the value can be a **comma-separated list of up to four team
+dirs**, highest-precedence first:
+
+```bash
+echo "$HOME/Code/squad-content,$HOME/Code/division-content,$HOME/Code/org-content" \
+  > ~/.config/nervepack/team-dir
+```
+
+That stacks **squad > division > org > personal > engine** (the leftmost wins a name
+clash). More than four team dirs is a hard error — the session falls back to
+personal-only, and `np-doctor.sh` flags the invalid config.
+
 ## Verify
 
 ```bash
