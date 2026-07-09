@@ -27,20 +27,6 @@
     "./skills/np-core-suggestions-review",
     "./skills/np-core-sync",
     "./skills/np-core-toggle",
-    "./skills/np-flow-merge-gate",
-    "./skills/np-kb-asset-sourcing",
-    "./skills/np-kb-browser-extension-monetization",
-    "./skills/np-kb-chrome-extension-content-script",
-    "./skills/np-kb-chrome-extension-publishing",
-    "./skills/np-kb-claude-headless-scripting",
-    "./skills/np-kb-coding-rules",
-    "./skills/np-kb-evaluator-signals",
-    "./skills/np-kb-frontend-ui-gotchas",
-    "./skills/np-kb-git-gotchas",
-    "./skills/np-kb-mermaid-authoring",
-    "./skills/np-kb-parsing-exported-markdown",
-    "./skills/np-kb-reader-friendly-monetization",
-    "./skills/np-kb-security-review",
-    "./skills/np-kb-testing-ci"
+    "./skills/np-flow-merge-gate"
   ]
 }
