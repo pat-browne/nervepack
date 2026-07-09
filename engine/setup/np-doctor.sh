@@ -115,6 +115,25 @@ core_check() {
       else
         printf 'FAIL (%d missing script(s): %s)\n' "${#broken[@]}" "${broken[*]}"
       fi ;;
+    resume-pointer)
+      local writer="$NP/engine/setup/np-resume-write.sh"
+      if [[ ! -x "$writer" ]]; then
+        echo "WARN (np-resume-write.sh not executable — run engine/setup/61-install-resume-hook.sh)"
+        return
+      fi
+      local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+      if [[ ! -f "$settings" ]]; then
+        echo "WARN (no settings.json at $settings — run engine/setup/61-install-resume-hook.sh)"
+        return
+      fi
+      command -v jq >/dev/null || { echo "SKIP (jq unavailable)"; return; }
+      local cmds
+      cmds="$(jq -r '(.hooks // {}) | .. | objects | select(.type? == "command") | .command' "$settings" 2>/dev/null)"
+      if grep -q 'np-resume-sessionstart\.sh' <<<"$cmds" && grep -q 'np-resume-recall\.sh' <<<"$cmds"; then
+        echo PASS
+      else
+        echo "WARN (resume-pointer hooks not registered in $settings — run engine/setup/61-install-resume-hook.sh)"
+      fi ;;
     pii_filter_full)
       python3 -c "import presidio_analyzer" >/dev/null 2>&1 \
         && echo PASS \

@@ -91,6 +91,17 @@
       }
     },
     {
+      "id": "resume-pointer",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the deterministic resume pointer is wired end-to-end",
+      "why": "Without the writer + both hooks registered, a new session has no deterministic 'where we left off' pointer to reconstruct from — the feature silently does nothing.",
+      "accept": "np-resume-write.sh is executable, and settings.json registers np-resume-sessionstart.sh on SessionStart and np-resume-recall.sh on UserPromptSubmit.",
+      "hints": {
+        "generic": "run engine/setup/61-install-resume-hook.sh — it registers np-resume-sessionstart.sh on SessionStart and np-resume-recall.sh on UserPromptSubmit."
+      }
+    },
+    {
       "id": "session-start",
       "tier": "SHOULD",
       "check": "adapter",
