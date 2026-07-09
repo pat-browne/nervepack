@@ -98,14 +98,22 @@ def _conf_param(key):
 
 
 def enabled(feature):
-    """np_enabled: True if on. Fail-open (unknown -> on). Sub-toggle inherits family."""
+    """np_enabled: True if on. Fail-open (unknown -> on). Checks the feature's OWN
+    conf state first (even when it contains a dot and is itself a declared row,
+    e.g. "maintain.refine"), THEN falls back to the truncated parent family's
+    conf state — never the reverse, which was the bug: the parent fallback used
+    to run with `feat` already overwritten by the truncated name, so a declared
+    dotted feature's own conf row was unreachable."""
     feat = feature
+    fam = None
     v = _local_get(feat)
     if not v and "." in feat:
-        feat = feat.split(".", 1)[0]
-        v = _local_get(feat)
+        fam = feat.split(".", 1)[0]
+        v = _local_get(fam)
     if not v:
-        v = _conf_state(feat)
+        v = _conf_state(feature)
+    if not v and "." in feature:
+        v = _conf_state(fam if fam is not None else feature.split(".", 1)[0])
     if not v:
         v = "on"
     return v == "on"
@@ -156,6 +164,39 @@ def features():
             fields = line.split("|")
             if len(fields) >= 4:
                 out.append(fields[0].strip(" "))
+    return out
+
+
+def all_params(family):
+    """Every declared param for `family` (conf column 5) in one shot, each
+    overlaid by its LOCAL override when one is set. Returns dict[bare_key] ->
+    raw string value (bare_key has no family prefix — e.g. 'dashboard_port',
+    not 'evaluator.dashboard_port'). Mirrors _conf_param's parsing but for every
+    key of one family at once — param() only fetches a single key, which is
+    enough for a runtime check but not for rendering an entire panel."""
+    path = _conf_path()
+    out = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, "r", newline="") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if re.match(r'^[' + _WS + r']*#', line):
+                continue
+            fields = line.split("|")
+            if not fields or fields[0] != family:
+                continue
+            params = fields[4] if len(fields) > 4 else ""
+            for tok in re.split(r'[ ,]+', params):
+                if not tok:
+                    continue
+                kv = tok.split("=")
+                key = kv[0].strip(" ")
+                if not key:
+                    continue
+                conf_val = kv[1] if len(kv) > 1 else ""
+                out[key] = _local_get(family + "." + key) or conf_val
+            break
     return out
 
 

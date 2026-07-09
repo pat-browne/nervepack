@@ -101,6 +101,20 @@ export NP_TOGGLES_CONF="$tmp/none.conf" NP_TOGGLES_LOCAL="$tmp/f.local"
 cmp_param greeting X
 cmp_param expr X
 
+# --- Case G: declared feature whose own name contains a dot -----------------
+# (e.g. maintain.refine — a real toggles.conf row). Its own conf state must win
+# over the truncated parent family's state, in both directions, and regardless
+# of whether the parent family row is even present.
+cat > "$tmp/g.conf" <<'C'
+maintain|shared|runtime|on|
+maintain.refine|shared|runtime|off|
+solo.sub|shared|runtime|off|
+C
+export NP_TOGGLES_CONF="$tmp/g.conf" NP_TOGGLES_LOCAL="$tmp/none.local"
+cmp_enabled maintain           # parent family: on
+cmp_enabled maintain.refine    # own row off, must NOT inherit parent's on
+cmp_enabled solo.sub           # own row off, parent family row absent entirely
+
 if [[ "$fails" -gt 0 ]]; then
   echo "FAIL test_toggle_parity: $fails parity mismatch(es)"
   exit 1
