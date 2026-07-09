@@ -75,7 +75,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | `UserPromptSubmit` | `episodic-recall.sh` · `lesson-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` · `np-resume-recall.sh` |
 | `PreToolUse` | `lesson-guard.sh` (matchers: `Bash`, `Read`) |
 | `PreCompact` | `episodic-capture.sh checkpoint` |
-| `SessionEnd` | `episodic-capture.sh session-end` · `40-sync-nervepack.sh exit &` · `np-evaluator.sh` · `np-session-flush.sh` (promotes both inboxes on exit; crons = backup) |
+| `SessionEnd` | `40-sync-nervepack.sh exit &` · `episodic-capture.sh session-end &` · `np-evaluator.sh &` · `np-session-flush.sh` (promotes both inboxes on exit; crons = backup) — the three `&` entries are backgrounded so Claude Code's hook-runner returns before it would otherwise report them "Hook cancelled" (invariant 12) |
 
 **Crons** (installed by `70-install-memory-cron.sh`):
 
@@ -106,7 +106,12 @@ doesn't fire SessionEnd at all, so the SessionEnd capture/evaluator are
 **best-effort**; the `np-backcapture-sweep.sh` SessionStart hook is what actually
 back-captures the previous session (from its now-complete on-disk transcript) by
 re-running the same capture + evaluator. Same inboxes, same readers. Only the
-trigger differs.
+trigger differs. Both SessionEnd entries are registered with a trailing `&`
+(`52-install-episodic-hooks.sh`, `54-install-evaluator-hook.sh`) so the hook
+process itself returns immediately instead of being killed mid-flight and
+surfaced to the user as "Hook cancelled" — this is cosmetic (it doesn't make the
+backgrounded `claude -p` call any more likely to finish), the sweep is still what
+makes capture actually reliable.
 
 ```
 EPISODIC MEMORY
