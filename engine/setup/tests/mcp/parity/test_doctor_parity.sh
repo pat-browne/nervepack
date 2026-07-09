@@ -19,6 +19,12 @@ command -v git     >/dev/null 2>&1 || { echo "SKIP test_doctor_parity: no git"; 
 command -v jq      >/dev/null 2>&1 || { echo "SKIP test_doctor_parity: no jq"; exit 0; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Use a path form BOTH Git-bash and the native-Windows Python resolve to the SAME
+# location (mixed C:/... form), so the team-list dirs the doctor prints exist for the
+# bash resolver AND the native-Python port — otherwise native Python can't stat the
+# MSYS-only /tmp/... path, team_dirs() returns empty, and the team line diverges from
+# bash. Mirrors test_content_parity.sh. No-op off Windows (no cygpath).
+if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
 export HOME="$tmp/home"; mkdir -p "$HOME/.config/nervepack"
 
 # A throwaway repo with an origin remote (git-sync PASS), a separate content dir
