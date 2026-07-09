@@ -40,7 +40,10 @@ proven pattern *up* the stack into a skill.
 **Purpose.** The highest-authority, human-reviewed layer. Rules, conventions, and
 domain how-to that you want to load into *every* session. Tiered by namespace:
 `np-core-` (cognition machinery), `np-kb-` (knowledge), `np-env-` (environment),
-`np-flow-` (workflows).
+`np-flow-` (workflows). The **engine ships only the machinery tiers** (`np-core-` +
+`np-flow-merge-gate`); the `np-kb-`/`np-env-` domain skills are **content** — they live
+in your content overlay (or a starter), not the public engine (PR #89), and
+`30-link-skills.sh` merges both at link time.
 
 **Workflow.** `skills/<name>/SKILL.md` carries frontmatter (`name` + `description`)
 and a lean body. `30-link-skills.sh` symlinks each into `~/.claude/skills/` (the
