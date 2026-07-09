@@ -131,7 +131,7 @@ linked from everywhere else, never copied (see `docs/ARCHITECTURE.md`).
    git -C ~/Code/nervepack add -A
    git -C ~/Code/nervepack commit -m "skill(<name>): <what changed>"
    ```
-   No LLM attribution trailer — see [[np-kb-coding-rules]] § 6.
+   No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
 9. **Ask before pushing.** Push is the action that affects another machine.
    Default to `git -C ~/Code/nervepack push` only after the user confirms — unless
    they've said "auto-push" or this run was invoked from a scheduled agent
