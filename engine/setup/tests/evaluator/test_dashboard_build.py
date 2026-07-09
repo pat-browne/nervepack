@@ -8,6 +8,7 @@ import json
 import subprocess
 import tempfile
 import shutil
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -789,6 +790,91 @@ class TestConceptFolders(unittest.TestCase):
                         "co-located concept source not indexed")
         self.assertEqual(lc["playbooks"], 1, "learned counts not reading memory/playbooks")
         self.assertEqual(lc["strategies"], 1, "learned counts not reading memory/strategies")
+
+
+class TestBacklogMetrics(unittest.TestCase):
+    """window.BACKLOG: the back-capture sweep's pending/oldest-age/drain-rate
+    snapshot, read from the same local-cache dirs np-backcapture-sweep.sh uses
+    (BACKCAPTURE_QUEUE_DIR/BACKCAPTURE_SEEN_DIR — same env var names as the sweep
+    script's own overrides, so tests sandbox exactly what production reads)."""
+
+    def _queue_entry(self, qdir, sid, mtime):
+        with open(os.path.join(qdir, sid), "w") as fh:
+            json.dump({"sid": sid, "mtime": mtime, "transcript_path": "/x", "cwd": "/x"}, fh)
+
+    def _mark_seen(self, sdir, sid):
+        open(os.path.join(sdir, sid), "w").close()
+
+    def _parse(self, js):
+        m = re.search(r"window\.BACKLOG = (\{.*?\});", js, re.S)
+        self.assertTrue(m, f"window.BACKLOG missing from output:\n{js}")
+        return json.loads(m.group(1))
+
+    def test_pending_excludes_seen_and_oldest_wins(self):
+        """pending = queued minus seen; oldest_pending_days reflects the OLDEST
+        still-pending entry's recorded mtime, not the newest or an already-seen one."""
+        now = time.time()
+        with tempfile.TemporaryDirectory() as qdir, tempfile.TemporaryDirectory() as sdir:
+            self._queue_entry(qdir, "a-older", now - 5 * 86400)   # 5 days old, pending
+            self._queue_entry(qdir, "b-newer", now - 1 * 86400)   # 1 day old, pending
+            self._queue_entry(qdir, "c-done", now - 9 * 86400)    # oldest of all, but already seen
+            self._mark_seen(sdir, "c-done")
+            js = run_build("", BACKCAPTURE_QUEUE_DIR=qdir, BACKCAPTURE_SEEN_DIR=sdir)
+        b = self._parse(js)
+        self.assertEqual(b["pending"], 2, "seen entry must not count as pending")
+        # oldest_pending_days is computed against build.py's own time.time() call,
+        # a few ms after `now` above — assert it's much closer to 5 days than 1.
+        self.assertGreater(b["oldest_pending_days"], 3)
+
+    def test_missing_dirs_is_empty_fail_open(self):
+        """No queue/seen dirs yet (fresh box, or backcapture never ran) -> zeroed
+        stats, never a crash — the panel renders its quiet empty state."""
+        js = run_build("", BACKCAPTURE_QUEUE_DIR="/nonexistent/queue",
+                       BACKCAPTURE_SEEN_DIR="/nonexistent/seen")
+        b = self._parse(js)
+        self.assertEqual(b["pending"], 0)
+        self.assertIsNone(b["oldest_pending_days"])
+        self.assertEqual(b["resolved_last_24h"], 0)
+
+    def test_malformed_queue_entry_still_counts_as_pending_but_not_aged(self):
+        """A corrupt/unreadable queue file must not break the build or vanish from
+        the pending count — it just can't contribute to the oldest-age figure."""
+        with tempfile.TemporaryDirectory() as qdir, tempfile.TemporaryDirectory() as sdir:
+            with open(os.path.join(qdir, "corrupt"), "w") as fh:
+                fh.write("{not valid json")
+            self._queue_entry(qdir, "valid", time.time() - 86400)
+            js = run_build("", BACKCAPTURE_QUEUE_DIR=qdir, BACKCAPTURE_SEEN_DIR=sdir)
+        b = self._parse(js)
+        self.assertEqual(b["pending"], 2, "corrupt entry should still count toward the backlog")
+        self.assertIsNotNone(b["oldest_pending_days"], "the one valid entry should still yield an age")
+
+    def test_ceiling_days_reads_backcapture_days_toggle(self):
+        """ceiling_days mirrors memory.backcapture_days (the discovery ceiling), not
+        a hardcoded constant — so the dashboard stays truthful if the toggle changes."""
+        with tempfile.TemporaryDirectory() as h:
+            local = os.path.join(h, "local")
+            with open(local, "w") as fh:
+                fh.write("memory.backcapture_days=3\n")
+            conf = os.path.join(os.path.dirname(__file__), "..", "..", "toggles.conf")
+            js = run_build("", NP_TOGGLES_CONF=conf, NP_TOGGLES_LOCAL=local,
+                           BACKCAPTURE_QUEUE_DIR="/nonexistent/queue",
+                           BACKCAPTURE_SEEN_DIR="/nonexistent/seen")
+        b = self._parse(js)
+        self.assertEqual(b["ceiling_days"], 3.0)
+
+    def test_resolved_last_24h_counts_recently_seen_markers(self):
+        """resolved_last_24h reflects how many seen-markers were touched recently —
+        the drain-rate half of the panel."""
+        with tempfile.TemporaryDirectory() as qdir, tempfile.TemporaryDirectory() as sdir:
+            self._mark_seen(sdir, "just-resolved-1")
+            self._mark_seen(sdir, "just-resolved-2")
+            old_marker = os.path.join(sdir, "long-ago")
+            open(old_marker, "w").close()
+            old_ts = time.time() - 2 * 86400
+            os.utime(old_marker, (old_ts, old_ts))
+            js = run_build("", BACKCAPTURE_QUEUE_DIR=qdir, BACKCAPTURE_SEEN_DIR=sdir)
+        b = self._parse(js)
+        self.assertEqual(b["resolved_last_24h"], 2, "a 2-day-old seen marker must not count as last-24h")
 
 
 if __name__ == "__main__":

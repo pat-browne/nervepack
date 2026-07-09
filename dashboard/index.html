@@ -184,6 +184,7 @@
         <section class="panel" id="panel-suggestions"></section>
       </div>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
       <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
       <section class="panel full" id="panel-assets" style="margin-top:16px"></section>
     </main>
@@ -350,6 +351,7 @@
   const elAssets = document.getElementById("panel-assets");
   const elWins = document.getElementById("panel-wins");
   const elGrad = document.getElementById("panel-graduation");
+  const elBacklog = document.getElementById("panel-backlog");
   const empty = msg => `<div class="empty">${msg}</div>`;
   const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
@@ -377,6 +379,32 @@
       : empty("No strategies or playbooks are overdue to graduate."));
   }
 
+  // B4 · Back-capture backlog: how many prior sessions are still waiting on
+  // np-backcapture-sweep.sh, how close the oldest one is to falling outside the
+  // memory.backcapture_days discovery ceiling (past that point a never-yet-seen
+  // session would be permanently lost — see np-backcapture-sweep.sh header), and
+  // the last-24h drain rate. Independent of session records, so it renders in both
+  // the empty and populated branches. Fail-open: no/missing data -> zeroed stats,
+  // never a crash.
+  function renderBacklog() {
+    const B = window.BACKLOG || { pending: 0, oldest_pending_days: null, ceiling_days: 7, resolved_last_24h: 0 };
+    const ceiling = B.ceiling_days || 7;
+    const oldest = B.oldest_pending_days;
+    const pct = oldest != null ? oldest / ceiling : 0;
+    const ageColor = pct >= 0.85 ? "var(--status-neg)" : pct >= 0.6 ? "var(--status-warn)" : "var(--text)";
+    const ageLabel = oldest != null ? `${oldest}<span style="font-size:12px">/${ceiling}d</span>` : "—";
+    const note = oldest != null && pct >= 0.85
+      ? `<div class="note">oldest pending item is within ${Math.round((1 - pct) * ceiling * 10) / 10}d of the discovery ceiling — items this old that were never queued are permanently lost past ${ceiling}d</div>`
+      : "";
+    elBacklog.innerHTML = `<span class="lbl">Back-capture backlog</span>
+      <div class="statstrip">
+        <div class="stat"><b>${B.pending}</b><span>sessions pending</span></div>
+        <div class="stat"><b style="color:${ageColor}">${ageLabel}</b><span>oldest pending age</span></div>
+        <div class="stat"><b>${B.resolved_last_24h}</b><span>resolved last 24h</span></div>
+      </div>
+      ${note}`;
+  }
+
   if (!M.length) {
     document.getElementById("subtitle").textContent = "0 sessions recorded yet" + learnedNote;
     elTrend.innerHTML = `<span class="lbl">Trend</span>` + empty("No sessions recorded yet.");
@@ -386,6 +414,7 @@
     elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + empty("No asset usage yet.");
     elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>` + empty("No wins recorded yet.");
     renderGraduation();
+    renderBacklog();
   } else {
     const scores = M.map(r => r.contribution_score || 0);
     const struggles = M.reduce((a, r) => a + ((r.signals || {}).struggles || 0), 0);
@@ -625,6 +654,9 @@
 
     // B3 · Graduation candidates (overdue strategies/playbooks → skills)
     renderGraduation();
+
+    // B4 · Back-capture backlog (pending / oldest-age-vs-ceiling / drain rate)
+    renderBacklog();
 
     // D · Latest session
     const last = M[M.length - 1];
