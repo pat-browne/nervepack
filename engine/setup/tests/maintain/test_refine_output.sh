@@ -116,7 +116,7 @@ if [[ -n "$lintfix_sha" ]]; then
   subj="$(git -C "$engine2" log -1 --format=%s "$lintfix_sha")"
   case "$subj" in skill\(*) : ;; *) fail_msg "happy-path: subject lacks conventional 'skill(' prefix: $subj" ;; esac
   body="$(git -C "$engine2" log -1 --format=%B "$lintfix_sha")"
-  echo "$body" | grep -qi 'co-authored-by\|generated with' \
+  echo "$body" | grep -qiE 'co-authored-by|generated with' \
     && fail_msg "happy-path: commit carries an LLM-attribution trailer: $body"
 else
   fail_msg "happy-path: no skill(np-stub-lintfix) commit found to inspect"
