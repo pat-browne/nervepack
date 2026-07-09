@@ -160,6 +160,31 @@
   .verdict.implement { color:var(--status-pos); }
   .verdict.skip { color:var(--text-tertiary); }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
+
+  /* Feature-toggle switches (served-mode only; see renderToggles()) */
+  .togfam { border-top:1px solid var(--border); padding:10px 0; }
+  .togfam:first-child { border-top:none; }
+  .togfamhead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .togfamname { font-weight:600; font-size:13px; }
+  .togscope { font-size:10px; color:var(--text-tertiary); text-transform:uppercase;
+              letter-spacing:.04em; margin-left:6px; }
+  .togparams { margin:6px 0 0 4px; display:flex; flex-direction:column; gap:6px; }
+  .togparam { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
+  .togparam .togkey { color:var(--text-secondary); }
+  .togro { color:var(--text-tertiary); font-size:11px; margin-left:6px; }
+  .togwarn { color:var(--status-neg); font-size:10px; margin-left:6px; }
+  .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
+  .swtoggle input { opacity:0; width:0; height:0; }
+  .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
+    border:1px solid var(--border); border-radius:999px; cursor:pointer; transition:background .15s; }
+  .swtoggle .swtrack::before { content:""; position:absolute; width:13px; height:13px; left:2px; top:2px;
+    background:#fff; border-radius:50%; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+  .swtoggle input:checked + .swtrack { background:var(--accent-sage); border-color:var(--accent-sage); }
+  .swtoggle input:checked + .swtrack::before { transform:translateX(15px); }
+  .swtoggle input:disabled + .swtrack { opacity:.5; cursor:default; }
+  .togin { font:inherit; font-size:12px; width:90px; padding:2px 6px;
+    border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); }
+  .togin:disabled { opacity:.6; }
 </style>
 </head>
 <body>
@@ -184,6 +209,7 @@
         <section class="panel" id="panel-suggestions"></section>
       </div>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-toggles" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
       <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
       <section class="panel full" id="panel-assets" style="margin-top:16px"></section>
@@ -356,6 +382,109 @@
   const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
 
+  // ---- E · Feature toggles (served-mode only — the panel needs a backend to
+  // write through). Fetches /api/toggles, renders a switch per bare feature +
+  // its schema-typed params, writes through POST /api/toggle. Self-lockout
+  // entries (the dashboard's own gating toggles) render read-only, matching the
+  // server's own refusal to write them — see np-dashboard-server.py SELF_LOCKOUT_*.
+  const elToggles = document.getElementById("panel-toggles");
+
+  function paramControl(fam, p) {
+    const dotted = fam + "." + p.key;
+    const ro = p.self_lockout || !p.schema;
+    const roNote = p.self_lockout
+      ? `<span class="togro" title="Controls this dashboard — edit via nervepack-toggle.sh">locked</span>`
+      : !p.schema ? `<span class="togro" title="No schema entry — edit via: nervepack-toggle param ${esc(dotted)} &lt;value&gt;">read-only</span>` : "";
+    const warn = (p.schema && !p.valid) ? `<span class="togwarn" title="${esc(p.error || "")}">⚠ invalid: ${esc(p.value)}</span>` : "";
+    let control;
+    if (ro) {
+      control = `<span class="togro">${esc(p.value)}</span>`;
+    } else if (p.schema.type === "bool") {
+      control = `<label class="swtoggle"><input type="checkbox" data-key="${esc(dotted)}" data-kind="param-bool"
+        data-saved="${esc(p.value)}" ${p.value === "on" ? "checked" : ""}><span class="swtrack"></span></label>`;
+    } else if (p.schema.type === "enum") {
+      const opts = (p.schema.options || []).map(o =>
+        `<option value="${esc(o)}" ${o === p.value ? "selected" : ""}>${esc(o)}</option>`).join("");
+      control = `<select class="togin" data-key="${esc(dotted)}" data-kind="param-enum" data-saved="${esc(p.value)}">${opts}</select>`;
+    } else if (p.schema.type === "number") {
+      control = `<input class="togin" type="number" data-key="${esc(dotted)}" data-kind="param-number"
+        data-saved="${esc(p.value)}" value="${esc(p.value)}"
+        ${p.schema.min != null ? `min="${p.schema.min}"` : ""} ${p.schema.max != null ? `max="${p.schema.max}"` : ""}>`;
+    } else {
+      control = `<input class="togin" type="text" data-key="${esc(dotted)}" data-kind="param-string"
+        data-saved="${esc(p.value)}" value="${esc(p.value)}">`;
+    }
+    return `<div class="togparam" title="${esc((p.schema || {}).description || "")}">
+      <span class="togkey">${esc(p.key)}${roNote}${warn}</span>${control}
+    </div>`;
+  }
+
+  function familyControl(fam) {
+    if (fam.self_lockout) {
+      return `<span class="togro" title="Controls this dashboard — edit via nervepack-toggle.sh">${fam.enabled ? "on" : "off"} (locked)</span>`;
+    }
+    return `<label class="swtoggle"><input type="checkbox" data-key="${esc(fam.feature)}" data-kind="feature"
+      data-scope="${esc(fam.scope)}" ${fam.enabled ? "checked" : ""}><span class="swtrack"></span></label>`;
+  }
+
+  function wireToggleInputs() {
+    elToggles.querySelectorAll("input[data-kind='feature']").forEach(input => {
+      input.addEventListener("change", async () => {
+        const key = input.dataset.key, next = input.checked ? "on" : "off";
+        if (input.dataset.scope === "shared" && !confirm(
+          `"${key}" is a shared toggle — flipping it will commit + push toggles.conf. Continue?`)) {
+          input.checked = !input.checked; return;
+        }
+        input.disabled = true;
+        try { await api("/api/toggle", { key, value: next }); }
+        catch (e) { input.checked = !input.checked; alert("Toggle failed: " + e.message); }
+        finally { input.disabled = false; }
+      });
+    });
+    elToggles.querySelectorAll("[data-kind^='param-']").forEach(el => {
+      el.addEventListener("change", async () => {
+        const key = el.dataset.key;
+        const isBool = el.dataset.kind === "param-bool";
+        const value = isBool ? (el.checked ? "on" : "off") : String(el.value);
+        el.disabled = true;
+        try {
+          await api("/api/toggle", { key, value });
+          el.dataset.saved = value;
+        } catch (e) {
+          if (isBool) el.checked = el.dataset.saved === "on"; else el.value = el.dataset.saved;
+          alert("Toggle failed: " + e.message);
+        } finally { el.disabled = false; }
+      });
+    });
+  }
+
+  function paintToggles(data) {
+    const families = data.families || [];
+    elToggles.innerHTML = `<span class="lbl">Feature toggles</span>` + (families.length ? families.map(fam => `
+      <div class="togfam">
+        <div class="togfamhead">
+          <span class="togfamname">${esc(fam.feature)}<span class="togscope">${esc(fam.scope)}</span></span>
+          ${familyControl(fam)}
+        </div>
+        ${fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
+      </div>`).join("") : empty("No toggles declared.")) +
+      `<div class="note">Shared-scope switches commit + push toggles.conf; params always stay local to this machine.</div>`;
+    wireToggleInputs();
+  }
+
+  function renderToggles() {
+    if (!elToggles) return;
+    if (!SERVED) {
+      elToggles.innerHTML = `<span class="lbl">Feature toggles</span>` +
+        empty("Open the served dashboard (evaluator.dashboard_serve on) to view and flip feature toggles.");
+      return;
+    }
+    elToggles.innerHTML = `<span class="lbl">Feature toggles</span>` + empty("Loading…");
+    fetch("/api/toggles").then(r => r.json()).then(paintToggles).catch(() => {
+      elToggles.innerHTML = `<span class="lbl">Feature toggles</span>` + empty("Could not load toggle state.");
+    });
+  }
+
   // Graduation candidates: strategies/playbooks that have proven themselves (high `seen`)
   // or outgrown the skill body budget (bytes) and are overdue to GRADUATE into a
   // human-reviewed skill via np-core-contribute. Independent of session records, so it
@@ -414,6 +543,7 @@
     elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + empty("No asset usage yet.");
     elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>` + empty("No wins recorded yet.");
     renderGraduation();
+    renderToggles();
     renderBacklog();
   } else {
     const scores = M.map(r => r.contribution_score || 0);
@@ -654,6 +784,7 @@
 
     // B3 · Graduation candidates (overdue strategies/playbooks → skills)
     renderGraduation();
+    renderToggles();
 
     // B4 · Back-capture backlog (pending / oldest-age-vs-ceiling / drain rate)
     renderBacklog();
