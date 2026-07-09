@@ -14,6 +14,18 @@
 # transcripts, and for any with no record yet runs the EXISTING capture + evaluator
 # against the saved transcript (reuse, not reimplement). Idempotent (per-sid claim
 # marker), bounded (recent days, capped count), fail-open (never disrupts startup).
+#
+# Backlog tracking: `backcapture_days` is a MAX DISCOVERY window, not a processing
+# deadline. A session is enqueued into a persistent queue (BACKCAPTURE_QUEUE_DIR,
+# one JSON file per sid: {sid,mtime,transcript_path,cwd}) the first time it's seen
+# inside that window, and stays queued — tracked, visible, counted — until Phase B
+# processes it, even after its mtime ages past the window. Previously "pending" was
+# re-derived every run from `find -mtime -N` minus the seen-marker dir, so anything
+# not processed before aging out of the window was dropped with no record: a
+# session could be permanently lost with nothing to show it ever existed. Processing
+# order is oldest-queued-first (by the mtime recorded at enqueue time, not
+# re-derived), not newest-mtime-first — the prior sort direction let new arrivals
+# starve the backlog indefinitely instead of draining it.
 set -uo pipefail
 # Re-entry guard: the capture/evaluator we invoke call `claude -p` (which sets
 # NERVEPACK_AGENT); if we're already inside one, do nothing.
@@ -35,12 +47,13 @@ np_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 PROJECTS_DIR="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 [[ -d "$PROJECTS_DIR" ]] || exit 0
 SEEN_DIR="${BACKCAPTURE_SEEN_DIR:-$HOME/.cache/nervepack/backcapture-seen}"
-mkdir -p "$SEEN_DIR" 2>/dev/null || exit 0
+QUEUE_DIR="${BACKCAPTURE_QUEUE_DIR:-$HOME/.cache/nervepack/backcapture-queue}"
+mkdir -p "$SEEN_DIR" "$QUEUE_DIR" 2>/dev/null || exit 0
 METRICS="${BACKCAPTURE_METRICS:-$(np_content_dir)/dashboard/data/metrics.jsonl}"
 CAPTURE="$HERE/episodic-capture.sh"
 EVAL="$HERE/np-evaluator.sh"
 
-DAYS="$(np_param memory.backcapture_days 2)"
+DAYS="$(np_param memory.backcapture_days 7)"    # max discovery window — not a deadline; see header
 MAX="$(np_param memory.backcapture_max 5)"
 MIN_AGE_SEC="${BACKCAPTURE_MIN_AGE_SEC:-120}"   # skip transcripts touched recently (likely an active session)
 
@@ -50,13 +63,14 @@ payload="$(cat 2>/dev/null || true)"
 cur_sid="$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)"
 
 now="$(date +%s)"
-processed=0
+already_metrics() { [[ -f "$METRICS" ]] && grep -q "$1" "$METRICS" 2>/dev/null; }
 
-# Candidate transcripts modified within DAYS days, newest first (one .jsonl per
-# session; filename stem == session_id).
+# --- Phase A: discovery — enqueue any not-yet-tracked session inside the DAYS
+# window. One-way ratchet: once a sid has a queue file it stays a tracked pending
+# item (surviving its mtime aging past DAYS) until Phase B processes it or it turns
+# out to already have a metrics record.
 while IFS= read -r tpath; do
   [[ -n "$tpath" && -f "$tpath" ]] || continue
-  (( processed >= MAX )) && break
   sid="$(basename "$tpath" .jsonl)"
   [[ -n "$sid" ]] || continue
   [[ "$sid" == agent-* ]] && continue                      # subagent transcript, not a real session
@@ -64,18 +78,44 @@ while IFS= read -r tpath; do
   mt="$(np_mtime "$tpath")"; mt="${mt:-$now}"
   (( now - mt < MIN_AGE_SEC )) && continue                 # unsettled / active
   [[ -e "$SEEN_DIR/$sid" ]] && continue                    # already handled
-  # Already has a committed metrics record -> nothing to do; mark seen so we stop
-  # re-checking it on every session start.
-  if [[ -f "$METRICS" ]] && grep -q "$sid" "$METRICS" 2>/dev/null; then
+  [[ -e "$QUEUE_DIR/$sid" ]] && continue                   # already tracked
+  # Already has a committed metrics record -> nothing to do; mark seen directly so
+  # it's never queued and we stop re-checking it on every session start.
+  if already_metrics "$sid"; then
     : > "$SEEN_DIR/$sid" 2>/dev/null || true
+    continue
+  fi
+  cwd="$(grep -m1 -oE '"cwd":"[^"]*"' "$tpath" 2>/dev/null | head -1 | sed -E 's/^"cwd":"//; s/"$//')"
+  [[ -n "$cwd" ]] || cwd="$HOME"
+  jq -nc --arg sid "$sid" --argjson mt "$mt" --arg tp "$tpath" --arg cwd "$cwd" \
+    '{sid:$sid, mtime:$mt, transcript_path:$tp, cwd:$cwd}' > "$QUEUE_DIR/$sid" 2>/dev/null || true
+done < <(find "$PROJECTS_DIR" -name '*.jsonl' -type f -mtime "-$DAYS" 2>/dev/null)
+
+# --- Phase B: processing — work the queue oldest-enqueued-first, capped at MAX per
+# sweep. Pending = queued minus seen; sorted by the mtime recorded at enqueue time
+# (not re-derived from the filesystem), so backlog age is exactly what's tracked.
+processed=0
+while IFS=' ' read -r _mt sid; do
+  [[ -n "$sid" ]] || continue
+  (( processed >= MAX )) && break
+  [[ -e "$SEEN_DIR/$sid" ]] && continue
+  qfile="$QUEUE_DIR/$sid"
+  tpath="$(jq -r '.transcript_path // empty' "$qfile" 2>/dev/null)"
+  cwd="$(jq -r '.cwd // empty' "$qfile" 2>/dev/null)"
+  [[ -n "$cwd" ]] || cwd="$HOME"
+  if [[ -z "$tpath" || ! -f "$tpath" ]]; then
+    : > "$SEEN_DIR/$sid" 2>/dev/null || true               # queue entry corrupt or transcript pruned — drop, don't retry forever
+    log "dropped $sid (transcript missing or queue entry unreadable)"
+    continue
+  fi
+  if already_metrics "$sid"; then
+    : > "$SEEN_DIR/$sid" 2>/dev/null || true                # captured live while it sat in the queue
     continue
   fi
   # Claim atomically (race-safe against a concurrent sweep): noclobber `>` fails if
   # the marker already exists. Marking before processing also means a failed
   # back-capture is not retried in a storm — acceptable, the loss we fix is systematic.
   ( set -C; : > "$SEEN_DIR/$sid" ) 2>/dev/null || continue
-  cwd="$(grep -m1 -oE '"cwd":"[^"]*"' "$tpath" 2>/dev/null | head -1 | sed -E 's/^"cwd":"//; s/"$//')"
-  [[ -n "$cwd" ]] || cwd="$HOME"
   bp="$(jq -nc --arg sid "$sid" --arg tp "$tpath" --arg cwd "$cwd" \
     '{session_id:$sid, transcript_path:$tp, cwd:$cwd}' 2>/dev/null)" || continue
   # Reuse the existing pipeline. Both self-guard their internal `claude -p`
@@ -84,9 +124,23 @@ while IFS= read -r tpath; do
   printf '%s' "$bp" | "$EVAL" >/dev/null 2>&1 || true
   processed=$((processed + 1))
   log "back-captured $sid (project $(basename "$cwd"))"
-done < <(find "$PROJECTS_DIR" -name '*.jsonl' -type f -mtime "-$DAYS" 2>/dev/null \
-           | while IFS= read -r p; do printf '%s %s\n' "$(np_mtime "$p")" "$p"; done \
-           | sort -rn | cut -d' ' -f2-)
+done < <(
+  for qf in "$QUEUE_DIR"/*; do
+    [[ -f "$qf" ]] || continue
+    qsid="$(basename "$qf")"
+    [[ -e "$SEEN_DIR/$qsid" ]] && continue
+    qmt="$(jq -r '.mtime // empty' "$qf" 2>/dev/null)"
+    [[ -n "$qmt" ]] || continue
+    printf '%s %s\n' "$qmt" "$qsid"
+  done | sort -n
+)
 
-(( processed > 0 )) && log "sweep done: $processed session(s)"
+if (( processed > 0 )); then
+  pending=0
+  for qf in "$QUEUE_DIR"/*; do
+    [[ -f "$qf" ]] || continue
+    [[ -e "$SEEN_DIR/$(basename "$qf")" ]] || pending=$((pending + 1))
+  done
+  log "sweep done: $processed session(s) captured, $pending still queued"
+fi
 exit 0
