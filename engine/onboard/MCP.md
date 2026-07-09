@@ -23,12 +23,14 @@ From a cloned repo, run the guided installer:
 
 It walks you through it: enter your **content directory** (where your personal
 skills/memory live — blank uses the engine root), optionally a **team content
-directory**, then it registers the MCP server with your host (Claude Code via
-`58-install-mcp.sh`; any other client gets the `mcpServers` block printed for you),
-and finally verifies the wiring with **`np-doctor.sh`** plus a check that the paths
-your docs and skills reference actually resolve (`np-path-check.py`). Re-runnable and
-idempotent; on a non-interactive shell (CI) every prompt takes its default and it
-never blocks.
+directory**, then — if no content overlay ended up configured — it optionally
+offers to adopt the public `nervepack-content-example` starter pack as a ready-made
+overlay (declinable, no personal data), then it registers the MCP server with your
+host (Claude Code via `58-install-mcp.sh`; any other client gets the `mcpServers`
+block printed for you), and finally verifies the wiring with **`np-doctor.sh`** plus
+a check that the paths your docs and skills reference actually resolve
+(`np-path-check.py`). Re-runnable and idempotent; on a non-interactive shell (CI)
+every prompt takes its default and it never blocks.
 
 ## Install: the generic `mcpServers` block (manual)
 

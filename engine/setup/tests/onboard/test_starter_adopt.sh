@@ -47,4 +47,27 @@ chk "already-configured overlay: exits 0" "[ $rc3 -eq 0 ]"
 chk "already-configured overlay: config left untouched" \
   "[ \"\$(cat '$tmp3/.config/nervepack/content-dir')\" = '/already/configured' ]"
 
+# --- regression: the starter offer must not perturb the guided-install stdin
+# sequence -----------------------------------------------------------------------
+# Drive the FULL installer (not --starter-only) with the documented guided-install
+# pattern: a blank content-dir answer, then a team-dir path on the next line.
+# NP_STARTER_ADOPT_FORCE is deliberately UNSET (real interactive use) so
+# offer_starter_adopt (if still wired inside step 1) issues its own `ask()` and
+# swallows the team-dir line meant for step 2. Stub `claude` off PATH — a fresh
+# PATH without git/coreutils dirs would break the script's own commands, so we
+# stub `claude` (used by 58-install-mcp.sh / the doctor's registration check)
+# rather than removing real PATH, mirroring test_mcp_install.sh.
+tmp4="$(mktemp -d)"; trap 'rm -rf "$tmp" "$tmp2" "$tmp3" "$tmp4"' EXIT
+home4="$tmp4/home"; team4="$tmp4/team"; mkdir -p "$home4" "$team4" "$tmp4/bin"
+cat > "$tmp4/bin/claude" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+chmod +x "$tmp4/bin/claude"
+
+out4="$(printf '\n%s\n' "$team4" | HOME="$home4" PATH="$tmp4/bin:$PATH" \
+  env -u NP_STARTER_ADOPT_FORCE bash "$INSTALL" 2>&1)"
+chk "guided flow: team-dir IS written (not swallowed by the starter offer)" \
+  "[ \"\$(cat '$home4/.config/nervepack/team-dir' 2>/dev/null)\" = '$team4' ]"
+
 [ $fail -eq 0 ] && echo "PASS test_starter_adopt" || { echo "FAIL test_starter_adopt"; exit 1; }

@@ -65,7 +65,7 @@ offer_starter_adopt() {
 
   echo "Cloning $STARTER_REPO_URL -> $dest ..."
   mkdir -p "$(dirname "$dest")"
-  if git clone -q "$STARTER_REPO_URL" "$dest" >/dev/null 2>&1; then
+  if GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 "$STARTER_REPO_URL" "$dest" >/dev/null 2>&1; then
     printf '%s\n' "$dest" > "$CFG/content-dir"
     echo "  ✓ wrote $CFG/content-dir -> $dest"
     content="$dest"   # feed the rest of this run (MCP env, path-check roots)
@@ -101,7 +101,6 @@ if [[ -n "$content" ]]; then
 else
   rm -f "$CFG/content-dir" 2>/dev/null || true
   echo "  ✓ using the engine root (no content overlay configured)"
-  offer_starter_adopt
 fi
 
 # 2. Team overlay (optional) -----------------------------------------------------
@@ -120,6 +119,12 @@ if [[ -n "$team" ]]; then
     echo "  ! '$team' does not exist — skipping team overlay" >&2
   fi
 fi
+
+# Offer the starter overlay only after the content/team question sequence is fully
+# resolved — running it earlier (inside step 1) would consume a stdin line meant for
+# step 2's team prompt. Its own guard (content-dir already configured) makes this a
+# no-op when the user supplied a content dir above.
+offer_starter_adopt
 
 # 3. Register the MCP server with the host ---------------------------------------
 echo
