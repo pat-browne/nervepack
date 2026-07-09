@@ -95,7 +95,17 @@ make_agent_sandbox() {
 #   dedup-two-commit    (77) — archive/merge commit, then a separate proposal commit.
 stub_agent() {
   local mode="$1" tmp
-  tmp="$(mktemp -d)"
+  # Reuse ONE module-level dir across invocations instead of a fresh mktemp per
+  # call — the dir must outlive stub_agent (CLAUDE_BIN points into it for the
+  # driver run), so it can't be cleaned here. Reusing bounds leakage to a single
+  # dir per shell process regardless of how many times stub_agent is called, and
+  # exports its path as _AGENTJOB_STUB_DIR so the caller's cleanup trap can
+  # remove it (the self-test does; tasks 2-5 should too).
+  if [[ -z "${_AGENTJOB_STUB_DIR:-}" ]]; then
+    _AGENTJOB_STUB_DIR="$(mktemp -d)"
+    export _AGENTJOB_STUB_DIR
+  fi
+  tmp="$_AGENTJOB_STUB_DIR"
 
   case "$mode" in
     promote)
@@ -163,6 +173,12 @@ STUB
 # <subject-substr> AND that commit's diff touches <pathspec>.
 assert_commit_in() {
   local repo="$1" pathspec="$2" subject="$3" log sha
+  # Guard: git -C "" (or a non-repo) silently falls through to the CURRENT
+  # working directory — i.e. the real nervepack repo — which would make this
+  # oracle validate against the wrong history and return a misleading verdict.
+  [[ -n "$repo" && -d "$repo/.git" ]] || {
+    echo "FAIL: assert_commit_in: '$repo' is not a valid sandbox repo"; return 1;
+  }
   log="$(git -C "$repo" log --format='%H%x09%s' 2>/dev/null)" || {
     echo "FAIL: assert_commit_in($repo): not a git repo"; return 1;
   }
@@ -171,7 +187,11 @@ assert_commit_in() {
     echo "FAIL: assert_commit_in($repo): no commit subject contains '$subject'"
     return 1
   fi
-  if ! git -C "$repo" show --stat "$sha" 2>/dev/null | grep -qF -- "$pathspec"; then
+  # Match the pathspec against the commit's full file list (name-only, untruncated).
+  # `git show --stat` truncates long paths, so a deep pathspec like
+  # skills/<name>/references/<file>.md would miss; diff-tree --name-only doesn't.
+  if ! git -C "$repo" diff-tree --no-commit-id --name-only -r "$sha" 2>/dev/null \
+       | grep -qF -- "$pathspec"; then
     echo "FAIL: assert_commit_in($repo): commit $sha ('$subject') does not touch '$pathspec'"
     return 1
   fi
@@ -182,6 +202,9 @@ assert_commit_in() {
 # PASS iff NO commit in <repo>'s history has a subject containing <subject-substr>.
 assert_no_commit_in() {
   local repo="$1" subject="$2" log
+  [[ -n "$repo" && -d "$repo/.git" ]] || {
+    echo "FAIL: assert_no_commit_in: '$repo' is not a valid sandbox repo"; return 1;
+  }
   log="$(git -C "$repo" log --oneline 2>/dev/null)" || {
     echo "FAIL: assert_no_commit_in($repo): not a git repo"; return 1;
   }
@@ -197,6 +220,9 @@ assert_no_commit_in() {
 # empty commit — a real agent run must have actually produced a change).
 assert_no_empty_commit() {
   local repo="$1" sha files
+  [[ -n "$repo" && -d "$repo/.git" ]] || {
+    echo "FAIL: assert_no_empty_commit: '$repo' is not a valid sandbox repo"; return 1;
+  }
   sha="$(git -C "$repo" rev-parse HEAD 2>/dev/null)" || {
     echo "FAIL: assert_no_empty_commit($repo): not a git repo"; return 1;
   }
