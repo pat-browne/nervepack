@@ -2,12 +2,13 @@
 the MCP server on a host with no bash.
 
 Mirrors np-doctor.sh's core checks (git-sync, toggles, content, team,
-dashboard-data) using native git + np_toggle / np_content — no bash. The model
-seam (llm-cli) and host-adapter checks (knowledge, session-*, scheduled-maint)
-need bash / a shell / the model CLI, so they're reported **N/A** here and do NOT
-count against the MUST gate; run np-doctor.sh on a host with bash for those (the
-MCP server uses the full bash doctor whenever bash is available — this Python path
-is the bash-free fallback). Slice 3 of the git-for-windows-free MCP work (#38).
+dashboard-data, resume-pointer) using native git + np_toggle / np_content — no
+bash. The model seam (llm-cli) and host-adapter checks (knowledge, session-*,
+scheduled-maint) need bash / a shell / the model CLI, so they're reported
+**N/A** here and do NOT count against the MUST gate; run np-doctor.sh on a
+host with bash for those (the MCP server uses the full bash doctor whenever
+bash is available — this Python path is the bash-free fallback). Slice 3 of
+the git-for-windows-free MCP work (#38).
 
 Core-check lines are parity-locked to np-doctor.sh by
 tests/mcp/parity/test_doctor_parity.sh. stdlib only.
@@ -93,6 +94,38 @@ def _core_check(cap_id, np):
         return ("WARN (dashboard/data bridge missing — run 35-link-dashboard-data.sh to "
                 "create the symlink into the content overlay; the dashboard will show no "
                 "metrics until then)")
+    if cap_id == "resume-pointer":
+        writer = os.path.join(np, "engine", "setup", "np-resume-write.sh")
+        if not (os.path.isfile(writer) and os.access(writer, os.X_OK)):
+            return ("WARN (np-resume-write.sh not executable — run "
+                    "engine/setup/61-install-resume-hook.sh)")
+        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
+            os.path.expanduser("~"), ".claude", "settings.json")
+        if not os.path.isfile(settings_path):
+            return ("WARN (no settings.json at %s — run "
+                    "engine/setup/61-install-resume-hook.sh)" % settings_path)
+        try:
+            settings = json.load(open(settings_path, encoding="utf-8"))
+        except (OSError, ValueError):
+            return ("WARN (resume-pointer hooks not registered in %s — run "
+                    "engine/setup/61-install-resume-hook.sh)" % settings_path)
+        cmds = []
+        def _walk(node):  # mirror the bash jq walk: `.. | objects | select(.type?=="command")`
+            if isinstance(node, dict):
+                if node.get("type") == "command" and "command" in node:
+                    cmds.append(node["command"])
+                for v in node.values():
+                    _walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    _walk(v)
+        _walk(settings.get("hooks") or {})
+        has_session = any("np-resume-sessionstart.sh" in c for c in cmds)
+        has_recall = any("np-resume-recall.sh" in c for c in cmds)
+        if has_session and has_recall:
+            return "PASS"
+        return ("WARN (resume-pointer hooks not registered in %s — run "
+                "engine/setup/61-install-resume-hook.sh)" % settings_path)
     return "SKIP"
 
 

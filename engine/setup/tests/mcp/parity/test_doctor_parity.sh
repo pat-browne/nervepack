@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # A/B parity: np_doctor.py's deterministic CORE-check lines (git-sync, toggles,
-# content, team, dashboard-data) must be byte-identical to np-doctor.sh's, in a
-# controlled environment. The model-seam (llm-cli) and host-adapter checks are
-# intentionally NOT compared — the Python doctor reports them N/A (bash-free),
-# while the bash doctor runs them; that divergence is by design.
+# content, team, dashboard-data, resume-pointer) must be byte-identical to
+# np-doctor.sh's, in a controlled environment. The model-seam (llm-cli) and
+# host-adapter checks are intentionally NOT compared — the Python doctor reports
+# them N/A (bash-free), while the bash doctor runs them; that divergence is by
+# design. hook-scripts is also excluded: it has NO python mirror (SKIP in
+# np_doctor.py) so there is nothing to compare — but resume-pointer DOES have a
+# mirror, so it is included and driven with a real (both-hooks-registered) fixture
+# below so the compared line is a meaningful PASS, not the trivial no-settings WARN.
 #
 # Requires bash + git, so it runs on Linux + the Git-bash Windows lane, not the
 # bash-free lane.
@@ -37,7 +41,24 @@ export NP_DIR="$tmp/repo" NP_CONTENT_DIR="$tmp/content" NP_CAPABILITIES="$CAPS"
 export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$HOME/.config/nervepack/toggles.local"
 export NP_TEAM_DIR="$tmp/team,$tmp/team2"
 
-core='\] (git-sync|toggles|content|team|dashboard-data) '
+# resume-pointer fixture: an executable writer stub under the throwaway NP_DIR
+# (both doctors resolve the writer at $NP_DIR/engine/setup/np-resume-write.sh) plus
+# a CLAUDE_SETTINGS registering BOTH hooks (SessionStart -> np-resume-sessionstart.sh,
+# UserPromptSubmit -> np-resume-recall.sh). This drives the check's real logic so both
+# bash and python emit the PASS line — proving they agree on a non-trivial input, not
+# just the no-settings WARN both sides would emit vacuously.
+mkdir -p "$tmp/repo/engine/setup"
+printf '#!/usr/bin/env bash\n' > "$tmp/repo/engine/setup/np-resume-write.sh"
+chmod +x "$tmp/repo/engine/setup/np-resume-write.sh"
+cat > "$tmp/settings.json" <<'JSON'
+{"hooks":{
+  "SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"~/Code/nervepack/engine/setup/np-resume-sessionstart.sh &"}]}],
+  "UserPromptSubmit":[{"matcher":"","hooks":[{"type":"command","command":"~/Code/nervepack/engine/setup/np-resume-recall.sh"}]}]
+}}
+JSON
+export CLAUDE_SETTINGS="$tmp/settings.json"
+
+core='\] (git-sync|toggles|content|team|dashboard-data|resume-pointer) '
 bash    "$SH" 2>/dev/null | grep -E "$core" > "$tmp/b.out"
 python3 "$PY" 2>/dev/null | grep -E "$core" > "$tmp/p.out"
 
@@ -47,8 +68,12 @@ if ! cmp -s "$tmp/b.out" "$tmp/p.out"; then
   echo "--- python ---"; cat "$tmp/p.out"
   exit 1
 fi
-# Sanity: we actually compared the five core lines (not an empty match).
-[[ "$(wc -l < "$tmp/b.out")" -eq 5 ]] || { echo "FAIL test_doctor_parity: expected 5 core lines, got $(wc -l < "$tmp/b.out")"; exit 1; }
+# Sanity: we actually compared the six core lines (not an empty match).
+[[ "$(wc -l < "$tmp/b.out")" -eq 6 ]] || { echo "FAIL test_doctor_parity: expected 6 core lines, got $(wc -l < "$tmp/b.out")"; exit 1; }
+# And that the resume-pointer line we compared is the meaningful PASS (fixture drove
+# the real both-hooks-registered logic), not a trivial WARN both sides emit vacuously.
+grep -qE '\] resume-pointer +PASS$' "$tmp/b.out" \
+  || { echo "FAIL test_doctor_parity: resume-pointer fixture did not yield PASS: $(grep resume-pointer "$tmp/b.out")"; exit 1; }
 
 # --- over-cap fixture: NP_TEAM_DIR set to 5 existing dirs (> the 4-dir cap), team
 # toggle on -> np_team_dirs/team_dirs returns empty + non-zero but origin is "env"
