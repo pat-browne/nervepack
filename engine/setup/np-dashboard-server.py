@@ -39,6 +39,8 @@ NP = os.path.dirname(os.path.dirname(HERE))
 # resolves to System32 WSL; .sh can't be exec'd directly). No-op off Windows.
 sys.path.insert(0, HERE)
 import np_bashlib  # noqa: E402
+import np_toggle  # noqa: E402
+import np_toggle_schema  # noqa: E402
 # Static root + data source are env-overridable so the server is isolatable in tests
 # (NP_DASH_ROOT / NP_METRICS / NP_RESOLVED_SUGGESTIONS), same pattern as build.py.
 DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dashboard"))
@@ -51,7 +53,13 @@ RESOLVE = os.path.join(HERE, "np-suggestion-resolve.sh")
 IMPLEMENT = os.environ.get("NP_IMPLEMENT") or os.path.join(HERE, "np-implement-suggestion.sh")
 NPLLM = os.path.join(HERE, "np-llm.sh")
 TOGGLES_LIB = os.path.join(HERE, "np-toggle-lib.sh")
+TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
+# Toggles the dashboard's OWN gating — flipping any of these from the panel would
+# disable the very server/panel serving that click, so the panel renders them
+# read-only and the server refuses to write them even if asked directly.
+SELF_LOCKOUT_FEATURES = {"evaluator"}
+SELF_LOCKOUT_PARAMS = {"evaluator.dashboard_open", "evaluator.dashboard_serve", "evaluator.toggle_ui"}
 IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or os.path.expanduser("~/.cache/nervepack/implement-status")
 LOG = os.path.join(os.path.expanduser("~"), ".cache", "nervepack", "dashboard-server.log")
 
@@ -128,6 +136,33 @@ def set_implement_mode(mode):
         fh.writelines(lines)
 
 
+def toggle_ui_enabled():
+    return np_toggle.param("evaluator.toggle_ui", "on") == "on"
+
+
+def toggle_families():
+    """Every declared feature, schema-annotated for the dashboard panel. See
+    np_toggle.all_params() (Task 2) and np_toggle_schema.validate() (Task 1)."""
+    out = []
+    for feat in np_toggle.features():
+        params = []
+        for key, raw in sorted(np_toggle.all_params(feat).items()):
+            dotted = feat + "." + key
+            valid, coerced, error = np_toggle_schema.validate(dotted, raw)
+            params.append({
+                "key": key, "value": raw, "valid": valid, "coerced": coerced,
+                "error": error, "schema": np_toggle_schema.load().get(dotted),
+                "self_lockout": dotted in SELF_LOCKOUT_PARAMS,
+            })
+        out.append({
+            "feature": feat, "scope": np_toggle.scope(feat),
+            "enabled": np_toggle.enabled(feat),
+            "self_lockout": feat in SELF_LOCKOUT_FEATURES,
+            "params": params,
+        })
+    return out
+
+
 def review_rows():
     """Top-N open suggestions (deterministic) annotated with a single Haiku verdict
     pass. Returns (rows, degraded) — degraded=True if the LLM seam was unavailable,
@@ -199,6 +234,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.split("?")[0] == "/api/implement-status":
                 text = (parse_qs(urlparse(self.path).query).get("text") or [""])[0]
                 return self._json(implement_status(text))
+            if self.path.split("?")[0] == "/api/toggles":
+                if not toggle_ui_enabled():
+                    return self._json({"error": "not found"}, 404)
+                return self._json({"families": toggle_families()})
             full = self._safe_path()
             if not full or not os.path.isfile(full):
                 return self._json({"error": "not found"}, 404)
@@ -267,6 +306,36 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "mode must be pr or direct"}, 400)
                 set_implement_mode(mode)
                 return self._json({"ok": True, "mode": mode})
+            if route == "/api/toggle":
+                if not toggle_ui_enabled():
+                    return self._json({"error": "not found"}, 404)
+                body = self._body()
+                key = (body.get("key") or "").strip()
+                value = body.get("value")
+                if not key or value is None:
+                    return self._json({"error": "missing key or value"}, 400)
+                value = str(value)
+                if key in SELF_LOCKOUT_FEATURES or key in SELF_LOCKOUT_PARAMS:
+                    return self._json({"error": "this toggle controls the dashboard itself — "
+                                                 "use the CLI (nervepack-toggle.sh)"}, 400)
+                if key in np_toggle.features():
+                    # A bare feature — note some feature NAMES contain a dot themselves
+                    # (e.g. "maintain.refine"), so membership in features() is checked
+                    # BEFORE falling back to "contains a dot -> dotted param" below.
+                    if value not in ("on", "off"):
+                        return self._json({"error": "value must be on or off"}, 400)
+                    r = subprocess.run(np_bashlib.argv([TOGGLE_CLI, key, value]), cwd=NP,
+                                       capture_output=True, text=True, timeout=30)
+                    if r.returncode != 0:
+                        return self._json({"error": (r.stderr or "toggle failed").strip()}, 500)
+                    return self._json({"ok": True, "key": key, "value": value})
+                if "." in key:
+                    valid, coerced, error = np_toggle_schema.validate(key, value)
+                    if not valid:
+                        return self._json({"error": error}, 400)
+                    np_toggle.set_local(key, value)
+                    return self._json({"ok": True, "key": key, "value": value})
+                return self._json({"error": "unknown feature %r" % (key,)}, 400)
             if route == "/api/review":
                 rows, degraded = review_rows()
                 return self._json({"rows": rows, "degraded": degraded})
