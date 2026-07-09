@@ -7,6 +7,8 @@ cat > "$tmp/toggles.conf" <<'C'
 memory|shared|runtime|on|
 allowlist|local|managed|on|
 sync|shared|runtime|on|interval=86400
+maintain|shared|runtime|on|
+maintain.refine|shared|runtime|on|
 C
 export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local" NP_TOGGLE_NO_COMMIT=1 NP_TOGGLE_NO_MANAGED=1
 run() { bash "$CLI" "$@"; }
@@ -26,4 +28,12 @@ run param sync.interval 3600 >/dev/null
 # status lists features with state (capture first; `| grep -q` + pipefail SIGPIPEs the producer)
 out="$(run status)"
 echo "$out" | grep -qiE 'memory.*off' || { echo "FAIL: status missing memory off"; echo "$out"; exit 1; }
+
+# regression: a bare declared feature whose own name contains a dot
+# (e.g. maintain.refine) must update toggles.conf's shared state column,
+# not be misrouted to toggles.local as if it were family.param
+run maintain.refine off >/dev/null
+awk -F'|' '$1=="maintain.refine"{print $4}' "$tmp/toggles.conf" | grep -q '^off$' || { echo "FAIL: dotted bare feature flip not in conf"; exit 1; }
+grep -q '^maintain\.refine=' "$tmp/local" 2>/dev/null && { echo "FAIL: dotted bare feature flip incorrectly written to local"; exit 1; }
+
 echo "PASS test_cli"

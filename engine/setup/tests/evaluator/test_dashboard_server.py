@@ -38,6 +38,7 @@ class TestServer(unittest.TestCase):
         "dashboard_serve=on,toggle_ui=on,dashboard_port=8787\n"
         "memory|shared|runtime|on|cap_bytes=48000\n"
         "testlocal|local|runtime|on|\n"
+        "maintain.refine|shared|runtime|on|\n"
     )
 
     @classmethod
@@ -289,6 +290,14 @@ class TestServer(unittest.TestCase):
         self.assertFalse(params["dashboard_port"]["valid"])
         self.assertIn("number", params["dashboard_port"]["error"])
 
+    def test_toggle_routes_404_when_toggle_ui_disabled(self):
+        with open(self.toggles_local, "w") as fh:
+            fh.write("evaluator.toggle_ui=off\n")
+        status, _ = self._get("/api/toggles")
+        self.assertEqual(status, 404)
+        status, _ = self._post("/api/toggle", {"key": "testlocal", "value": "off"})
+        self.assertEqual(status, 404)
+
     def test_post_toggle_rejects_self_lockout_feature(self):
         status, body = self._post("/api/toggle", {"key": "evaluator", "value": "off"})
         self.assertEqual(status, 400)
@@ -325,6 +334,19 @@ class TestServer(unittest.TestCase):
     def test_post_toggle_rejects_unknown_feature(self):
         status, body = self._post("/api/toggle", {"key": "not-a-real-feature", "value": "on"})
         self.assertEqual(status, 400)
+
+    def test_post_toggle_flips_bare_feature_name_containing_a_dot(self):
+        """Regression guard: some bare feature names in toggles.conf themselves
+        contain a dot (e.g. maintain.refine). The handler must check membership
+        in np_toggle.features() BEFORE falling back to the "." in key dotted-param
+        path. If that ordering were ever swapped, this would be misrouted into the
+        dotted-param path and rejected with a 400 (no schema entry) instead of
+        being flipped as a bare feature."""
+        status, body = self._post("/api/toggle", {"key": "maintain.refine", "value": "off"})
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        with open(self.toggles_conf) as fh:
+            self.assertIn("maintain.refine|shared|runtime|off|", fh.read())
 
     def test_post_toggle_without_csrf_is_forbidden(self):
         status, _ = self._post("/api/toggle", {"key": "testlocal", "value": "off"},
