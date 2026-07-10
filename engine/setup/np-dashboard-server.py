@@ -158,6 +158,7 @@ def toggle_families():
             "feature": feat, "scope": np_toggle.scope(feat),
             "enabled": np_toggle.enabled(feat),
             "self_lockout": feat in SELF_LOCKOUT_FEATURES,
+            "description": (np_toggle_schema.load().get(feat) or {}).get("description"),
             "params": params,
         })
     return out

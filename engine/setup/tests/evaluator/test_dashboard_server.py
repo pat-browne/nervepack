@@ -83,6 +83,7 @@ class TestServer(unittest.TestCase):
             json.dump({
                 "evaluator.implement_mode": {"type": "enum", "options": ["pr", "direct"], "description": "x"},
                 "evaluator.dashboard_port": {"type": "number", "min": 1024, "max": 65535, "description": "x"},
+                "evaluator": {"description": "what evaluator controls"},
             }, fh)
         cls.port = free_port()
         env = dict(os.environ)
@@ -276,6 +277,8 @@ class TestServer(unittest.TestCase):
         ev = fams["evaluator"]
         self.assertEqual(ev["scope"], "shared")
         self.assertTrue(ev["self_lockout"])  # evaluator is dashboard-gating
+        self.assertEqual(ev["description"], "what evaluator controls")
+        self.assertIsNone(fams["memory"]["description"])  # no schema entry for this family
         params = {p["key"]: p for p in ev["params"]}
         self.assertTrue(params["dashboard_serve"]["self_lockout"])
         self.assertTrue(params["implement_mode"]["valid"])

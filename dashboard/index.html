@@ -173,6 +173,11 @@
   .togparam .togkey { color:var(--text-secondary); }
   .togro { color:var(--text-tertiary); font-size:11px; margin-left:6px; }
   .togwarn { color:var(--status-neg); font-size:10px; margin-left:6px; }
+  .tighelp { display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; margin-left:5px; border-radius:50%;
+    border:1px solid var(--border); background:var(--surface-alt);
+    color:var(--text-tertiary); font-size:9px; font-weight:700; line-height:1;
+    cursor:help; flex:0 0 auto; }
   .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
   .swtoggle input { opacity:0; width:0; height:0; }
   .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
@@ -391,6 +396,10 @@
   // server's own refusal to write them — see np-dashboard-server.py SELF_LOCKOUT_*.
   const elToggles = document.getElementById("panel-toggles");
 
+  function helpIcon(desc) {
+    return desc ? `<span class="tighelp" title="${esc(desc)}" aria-label="What this controls">?</span>` : "";
+  }
+
   function paramControl(fam, p) {
     const dotted = fam + "." + p.key;
     const ro = p.self_lockout || !p.schema;
@@ -416,8 +425,8 @@
       control = `<input class="togin" type="text" data-key="${esc(dotted)}" data-kind="param-string"
         data-saved="${esc(p.value)}" value="${esc(p.value)}">`;
     }
-    return `<div class="togparam" title="${esc((p.schema || {}).description || "")}">
-      <span class="togkey">${esc(p.key)}${roNote}${warn}</span>${control}
+    return `<div class="togparam">
+      <span class="togkey">${esc(p.key)}${helpIcon((p.schema || {}).description)}${roNote}${warn}</span>${control}
     </div>`;
   }
 
@@ -465,7 +474,7 @@
     elToggles.innerHTML = `<span class="lbl">Feature toggles</span>` + (families.length ? families.map(fam => `
       <div class="togfam">
         <div class="togfamhead">
-          <span class="togfamname">${esc(fam.feature)}<span class="togscope">${esc(fam.scope)}</span></span>
+          <span class="togfamname">${esc(fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
           ${familyControl(fam)}
         </div>
         ${fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
