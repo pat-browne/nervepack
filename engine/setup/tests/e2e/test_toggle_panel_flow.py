@@ -63,6 +63,25 @@ class TestTogglePanelFlow(unittest.TestCase):
         finally:
             self._cleanup(browser, pw, stop_fn)
 
+    def test_family_help_badge_shows_tooltip_on_hover(self):
+        """The '?' badge next to a family name uses a CSS-only tooltip (::after,
+        driven by data-tip), NOT the native `title` attribute — title is delayed
+        ~1s and unreliable across browsers (notably Safari/macOS), which is why a
+        user reported "no text pops up on hover" against the title-based version.
+        This asserts the tooltip is actually hidden by default and visible on hover."""
+        page, browser, pw, stop_fn = self._open_page()
+        try:
+            badge = page.locator('.togfam:has(input[data-key="memory"]) .togfamhead .tighelp')
+            badge.wait_for(timeout=5000)
+            tip_text = badge.get_attribute("data-tip")
+            self.assertTrue(tip_text)
+            self.assertEqual(badge.evaluate("el => getComputedStyle(el, '::after').opacity"), "0")
+            badge.hover()
+            page.wait_for_timeout(200)
+            self.assertEqual(badge.evaluate("el => getComputedStyle(el, '::after').opacity"), "1")
+        finally:
+            self._cleanup(browser, pw, stop_fn)
+
     def test_shared_feature_flip_requires_confirm(self):
         """Flipping a shared bare feature (memory) triggers window.confirm(); if the
         user dismisses it, the switch reverts and stays checked.
