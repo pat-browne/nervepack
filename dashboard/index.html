@@ -173,11 +173,22 @@
   .togparam .togkey { color:var(--text-secondary); }
   .togro { color:var(--text-tertiary); font-size:11px; margin-left:6px; }
   .togwarn { color:var(--status-neg); font-size:10px; margin-left:6px; }
-  .tighelp { display:inline-flex; align-items:center; justify-content:center;
+  /* CSS-only tooltip (not the native `title` attribute — that's delayed ~1s and
+     unreliable across browsers, notably Safari/macOS). data-tip holds the text;
+     ::after renders it on hover/focus, positioned above the badge. */
+  .tighelp { position:relative; display:inline-flex; align-items:center; justify-content:center;
     width:14px; height:14px; margin-left:5px; border-radius:50%;
     border:1px solid var(--border); background:var(--surface-alt);
     color:var(--text-tertiary); font-size:9px; font-weight:700; line-height:1;
     cursor:help; flex:0 0 auto; }
+  .tighelp::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px);
+    left:50%; transform:translateX(-50%); width:max-content; max-width:240px;
+    background:var(--text); color:var(--surface); font-size:11px; font-weight:400;
+    line-height:1.4; white-space:normal; text-align:left; padding:6px 9px;
+    border-radius:var(--radius-sm); box-shadow:var(--shadow);
+    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease;
+    z-index:20; }
+  .tighelp:hover::after, .tighelp:focus-visible::after { opacity:1; visibility:visible; }
   .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
   .swtoggle input { opacity:0; width:0; height:0; }
   .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
@@ -397,7 +408,7 @@
   const elToggles = document.getElementById("panel-toggles");
 
   function helpIcon(desc) {
-    return desc ? `<span class="tighelp" title="${esc(desc)}" aria-label="What this controls">?</span>` : "";
+    return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
   }
 
   function paramControl(fam, p) {
