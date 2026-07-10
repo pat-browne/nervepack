@@ -306,7 +306,7 @@ here so a dashboard panel reading zero isn't mistaken for a wiring gap:
 | `playbook_heeded` | gated-command fingerprints minus fingerprints that were executed anyway | Inherits `playbook_fires` sparseness; also 0 if a gated command ran despite the guard |
 | `recall_injections` | `lesson-recall`/`episodic-recall` markers in the session-signals log | **Structural zero for back-captured sessions** — the ephemeral signal log for the original session is gone by the time the back-capture sweep re-scores it, even when recall fired live |
 | `directive_present` | `np_enabled directive` at evaluation time | Always populated; reflects the toggle state, not session behavior |
-| `directive_tokens` | byte length ÷ 4 of `nervepack-session-directive.md` | Fixed at evaluation time (~876 tokens at current size), not session-specific — the injection-cost side of invariant 11 |
+| `directive_tokens` | byte length ÷ 4 of `nervepack-session-directive.md` | Fixed at evaluation time (~730 tokens at current size), not session-specific — the injection-cost side of invariant 11 |
 | `struggles` | `struggles[]` length from the matching episodic-inbox record | 0 either because SessionEnd/capture didn't fire for this session, or because it was genuinely clean — not dead code |
 | `tool_calls` | count of `tool_use` lines in the transcript | 0 for pure-text automation runs (crons, episodic-maintain) |
 | `tokens{input,output,cache_read,cache_creation,total}` | `usage` blocks from assistant turns, deduped by message id | Near-zero for cron/automation sessions; `cache_read` dominates real interactive sessions |
@@ -335,15 +335,20 @@ and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fi
 `index.html` renders it as a grouped/collapsible left sidebar (entities / concepts /
 sources-by-topic) with a client-side search filter; clicking an entry opens the
 build-rendered HTML page in a new tab; Markdown stays the source (invariant 14).
-`build.py` `md_to_html`/`render_pages` writes `data/{wiki,sources}/*.html` into the
+`build.py` `md_to_html`/`render_pages` writes `data/wiki/{topics,concepts}/*.html` into the
 content overlay at build time (content-resident & gitignored). Param-gated by
 `evaluator.wiki_nav` (default on); off OR no `wiki/` dir → empty index, the sidebar
-shows its empty state (fail-open). The wiki **data stays in the content overlay**
+shows its empty state (fail-open). Mermaid diagrams in wiki pages render client-side
+via the vendored `dashboard/vendor/mermaid.min.js` (loaded only on pages that contain
+a diagram — the dashboard's no-external-fetch invariant holds), gated by
+`evaluator.wiki_mermaid` (default on). The wiki **data stays in the content overlay**
 (`metrics.js`); the engine carries only the build + render code.
 
 **Assets.** `73-aggregate-metrics.sh`, `dashboard/build.py` (`wiki_index()`),
-`dashboard/index.html`, `74-open-dashboard.sh`, `open-dashboard.sh`, `np-core-dashboard`.
-Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`).
+`dashboard/index.html`, `dashboard/vendor/mermaid.min.js`, `74-open-dashboard.sh`,
+`open-dashboard.sh`, `np-core-dashboard`.
+Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`,
+`wiki_mermaid`, `dashboard_sessions`).
 
 **Situational example.** Over a fortnight the dashboard's struggles panel keeps showing
 "skill not invoked" (a signal the directive routing needs a new row), visible as a
@@ -439,7 +444,18 @@ load-bearing-without-escape and new behavior is always reversible.
 check goes through `np_enabled`/`np_param`. A flag needing its own default is a *param*,
 not a sub-toggle (sub-toggles wrongly inherit an "on" parent).
 
-**Assets.** `toggles.conf`, `np-toggle-lib.sh`, `nervepack-toggle.sh`, `np-core-toggle`.
+**Dashboard panel.** The served dashboard renders a Feature Toggles panel: switches
+for bare features and schema-typed inputs for params (types/validation from
+`toggle-schema.json` via `np_toggle_schema.py`), with hover help per row.
+`np-dashboard-server.py` exposes `GET /api/toggles` + `POST /api/toggle` — bare-feature
+flips shell out to `nervepack-toggle.sh` (shared scope commits+pushes; local/managed
+stays local, after a confirm dialog for shared flips), dotted params write locally via
+`np_toggle.set_local()`. A self-lockout guard refuses to flip `evaluator` or the
+panel's own gating params (`dashboard_open`/`dashboard_serve`/`toggle_ui`). Gated by
+`evaluator.toggle_ui` (default on).
+
+**Assets.** `toggles.conf`, `np-toggle-lib.sh`, `nervepack-toggle.sh`, `np-core-toggle`,
+`toggle-schema.json`, `np_toggle_schema.py`, `np-dashboard-server.py` (`/api/toggles`).
 
 **Situational example.** Lesson enforcement is too aggressive on a given machine. You
 run `np-core-toggle` → set `lessons.enforce` off locally; the guard hook no-ops there

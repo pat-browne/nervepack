@@ -16,7 +16,7 @@ onboards through these same docs.
    the model, fires lifecycle events (session start/end), and runs a headless model
    call. Check `engine/onboard/capabilities.json` `hints` for a recipe for your host.
 2. **Satisfy each capability** in `engine/onboard/capabilities.json` (the contract). Tiers:
-   - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`. Onboarding fails without these.
+   - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`, `content`. Onboarding fails without these.
    - **SHOULD**: `session-start`, `session-end-capture`, `session-end-flush`,
      `scheduled-maint`. Wire what your host supports; mark the rest `unsupported`
      (and prefer the wrapper fallbacks the hints describe).
