@@ -50,7 +50,10 @@ Report and stop.
 
 ### `fast-forwarded N commit(s)`
 Show the user `git -C ~/Code/nervepack log <prev>..HEAD --oneline` so they see what
-landed. The linker already ran inside the script; no further action.
+landed. The linker already ran inside the script, and (as of #106) so has every
+`5[0-9]-install-*.sh` hook installer — a pulled change to a hook's registered
+command (e.g. a stdout/stderr redirect fix) reaches `~/.claude/settings.json` in
+the same sync, not on some later manual re-install. No further action.
 
 ### `local is N ahead`
 Show the unpushed commits with `git -C ~/Code/nervepack log @{u}..HEAD --oneline`,
@@ -88,10 +91,20 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 - Does not push **except** in the `local is N ahead` outcome (the standing
   auto-approval above). Pushing *new* content happens via [[np-core-contribute]]
   or explicit user ask.
-- Does not re-run `engine/setup/*.sh` scripts. If a setup script changed (e.g.
-  `00-apt-baseline.sh` added a new package), surface that to the user.
-- Does not edit `~/.claude/settings.json`. If
-  `50-install-session-hook.sh` changed, surface it.
+- Does not re-run non-hook `engine/setup/*.sh` scripts. If a one-off setup
+  script changed (e.g. `00-apt-baseline.sh` added a new package), surface that
+  to the user — only `30-link-skills.sh` and every `5[0-9]-install-*.sh` hook
+  installer auto-run on a fast-forward (see above; #106).
+- **Does** edit `~/.claude/settings.json` as a side effect of the fast-forward
+  case above (since #106) — if a hook installer's registered command changed,
+  the live settings.json is updated in the same sync, no separate step needed.
+  Before #106 this was a real gap: a merged hook fix could sync clean while
+  settings.json ran the stale command for days (symptom: "we fixed this
+  yesterday" for any hook-command change, or unexplained SessionStart delays
+  from an un-redirected backgrounded hook). If you ever see that symptom again,
+  check the live settings.json hook strings against the installer source —
+  they can only diverge for setup scripts outside the `5[0-9]-install-*.sh`
+  glob (e.g. `61-install-resume-hook.sh`), which still need a manual re-run.
 
 ## Why this is safe across many session starts before cron runs
 
