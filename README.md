@@ -21,8 +21,10 @@ your own.
 nervepack splits into an engine and your content, in two repos.
 
 - **The engine** (this repo) is the reusable machinery. Hooks, crons, the toggle
-  system, onboarding, the MCP server, and the generic `np-core-*` / `np-kb-*` /
-  `np-env-*` skills. No personal data lives here, and a CI guard keeps it that way.
+  system, onboarding, the MCP server, and the generic cognition + workflow skills
+  (`np-core-*` / `np-flow-*`). No personal data lives here, and a CI guard keeps it
+  that way. Domain and environment skills (`np-kb-*` / `np-env-*`) are content —
+  they ship in your overlay, not the engine.
 - **Your content** is everything personal the engine reads and writes as you use it.
   Your own skills, your sources and wiki, the memory it accrues, your metrics. It
   lives in a separate overlay repo that the engine finds through `NP_CONTENT_DIR`.
