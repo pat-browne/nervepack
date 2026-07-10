@@ -26,5 +26,25 @@
   "skills.graduate_kb": {"type": "number", "min": 1, "description": "Body size (KB) at which a lesson is flagged overdue to graduate."},
   "team.merge": {"type": "enum", "options": ["override", "concatenate", "team-only"], "description": "How team + personal content layers combine."},
   "mcp.writes": {"type": "bool", "description": "Allow the MCP server to perform local toggle writes."},
-  "mcp.contribute": {"type": "bool", "description": "Allow the MCP server to invoke np-core-contribute."}
+  "mcp.contribute": {"type": "bool", "description": "Allow the MCP server to invoke np-core-contribute."},
+  "resume.interval": {"type": "number", "min": 1, "description": "Minimum seconds between resume-note writes."},
+  "resume.max_age": {"type": "number", "min": 1, "description": "How long (seconds) a resume note stays eligible for recall before going stale."},
+  "resume.cron": {"type": "bool", "description": "Also write resume notes on a periodic cron, in addition to the SessionStart/UserPromptSubmit triggers. Off by default."},
+  "resume.cron_min": {"type": "number", "min": 1, "description": "Minutes between cron-triggered resume writes, when resume.cron is on."},
+  "resume.active_window": {"type": "number", "min": 1, "description": "Seconds of recent activity considered \"active\" when deciding whether to write a fresh resume note."},
+
+  "memory": {"description": "Episodic working-memory capture, the back-capture sweep, and local promotion into memory/episodic/."},
+  "lessons": {"description": "Auto-distilled patterns from past sessions (failure→recovery and proven wins), optionally enforced at the tool call."},
+  "directive": {"description": "The \"consult nervepack first\" directive injected into every session at SessionStart."},
+  "sync": {"description": "Cross-machine sync of this nervepack checkout with origin/main."},
+  "allowlist": {"description": "Managed permission allowlist for common read-only tool calls."},
+  "evaluator": {"description": "Per-session performance scoring, the dashboard, and the suggestion review/implement pipeline."},
+  "skills": {"description": "Daily skill-body budget enforcement — auto-splits oversized skills into references/."},
+  "team": {"description": "Optional team content overlay, layered above your personal overlay."},
+  "mcp": {"description": "The model-agnostic MCP server surface (tool-neutral access to nervepack's recall/toggle/sync)."},
+  "maintain": {"description": "Weekly engine maintenance — parent toggle for the refine and compact passes."},
+  "maintain.refine": {"description": "Weekly lint + cross-reference audit pass over skills/wiki content."},
+  "maintain.compact": {"description": "Weekly skill dedup + split-proposal pass."},
+  "pii_filter": {"description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."},
+  "resume": {"description": "Deterministic \"where we left off\" pointer — writes and recalls a resume note across sessions."}
 }
