@@ -10,7 +10,7 @@ workflows your AI coding assistant reads every session. This is the first-time i
 ## Quick start
 
 The same four steps on Linux, macOS, and Windows. The host **self-wires** — you don't
-hand-edit hooks or settings; `/np-onboard` does it and proves it with the doctor.
+hand-edit hooks or settings; the onboard does it and proves it with the doctor.
 
 **1. Get the code.**
 
@@ -41,11 +41,18 @@ script works out of the box. On a Claude host, finish with
 gh auth login    # GitHub.com · HTTPS · login with a browser
 ```
 
-**4. Onboard the host.** Open your agent in `~/Code/nervepack` and run:
+**4. Onboard the host.** Open your agent in `~/Code/nervepack` and say:
 
 ```text
-/np-onboard      # or just say "onboard nervepack"
+onboard nervepack
 ```
+
+(On a fresh box there is no slash command yet — `/np-onboard` is itself a nervepack
+skill, so it only exists *after* onboarding links the skills. Saying "onboard
+nervepack" works from zero because the agent auto-loads this repo's `CLAUDE.md`,
+which routes it to the contract. Non-interactive alternative:
+`~/Code/nervepack/engine/setup/np-onboard.sh` runs the same wiring directly. Once
+onboarded, `/np-onboard` is available for re-runs.)
 
 Your agent reads the tool-neutral contract, links the skills, installs the session hooks
 and scheduler, writes `~/.config/nervepack/adapter.json`, and runs the doctor until every
@@ -63,8 +70,9 @@ That's the whole install. What differs by OS is handled for you:
 | Scheduler backend | launchd LaunchAgents | Windows Task Scheduler |
 | Hook execution | native bash | commands auto-wrapped through Git-bash |
 
-On a **non-Claude host**, `/np-onboard` isn't a slash command — follow the same contract
-directly in [`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md).
+On a **non-Claude host**, there's no `CLAUDE.md` auto-load or slash command — point
+your agent at the same contract directly:
+[`../engine/onboard/ONBOARD.md`](../engine/onboard/ONBOARD.md).
 
 ## Going deeper
 

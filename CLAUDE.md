@@ -88,6 +88,19 @@ older backlog. Before this, "pending" was re-derived every run from `find -mtime
 -N` minus the seen-marker dir, so anything not processed before aging out of the
 window was silently and permanently lost — no record it ever existed.
 
+### Resume pointer (wiring)
+
+The deterministic "where we left off" pointer (`engine/setup/61-install-resume-hook.sh`,
+toggle family `resume`, default on). Two hooks: `SessionStart` runs
+`engine/setup/np-resume-sessionstart.sh` **backgrounded** (reconstructs the pointer for
+the most-recent *completed prior* session, so it never delays start), and
+`UserPromptSubmit` runs `engine/setup/np-resume-recall.sh` (surfaces a stale pointer and
+does a throttled live write for the current session via `np-resume-write.sh`).
+Params: `resume.interval` (live-write throttle, 300s), `max_age` (86400s — older
+pointers aren't surfaced), `active_window` (900s), and an opt-in cron backstop
+(`cron=off`, `cron_min=5`). The installer registers by basename, so re-running after a
+path change replaces the stale entry instead of duplicating it.
+
 ### Lessons layer (wiring)
 
 - **Capture:** `engine/setup/episodic-capture.sh` emits `struggles[]` (failures) and
