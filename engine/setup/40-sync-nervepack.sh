@@ -123,6 +123,15 @@ if git merge-base --is-ancestor "$local_rev" "$remote_rev"; then
   pulled=$(git rev-list --count HEAD..origin/main)
   if git merge --ff-only --quiet origin/main 2>/tmp/np-core-sync.err; then
     "$NERVEPACK/engine/setup/30-link-skills.sh" >/dev/null 2>&1 || true
+    # Re-run every lifecycle hook installer (same 5x glob as np-onboard.sh) so a
+    # pulled change to a hook's registered command (e.g. a stdout/stderr redirect
+    # fix) actually reaches ~/.claude/settings.json. Hook registration is a
+    # one-time install-time artifact — git pull alone updates the scripts on disk
+    # but never re-applies them; without this, a hook fix can merge and sync clean
+    # while the live session still runs the stale, pre-fix command indefinitely.
+    for _f in "$NERVEPACK/engine/setup"/5[0-9]-install-*.sh; do
+      [[ -e "$_f" ]] && bash "$_f" >/dev/null 2>&1 || true
+    done
     write_status "np-core-sync: $(now) — fast-forwarded $pulled commit(s) to $(git rev-parse --short HEAD)"
   else
     write_status "np-core-sync: $(now) — ff-only merge failed: $(cat /tmp/np-core-sync.err)"
