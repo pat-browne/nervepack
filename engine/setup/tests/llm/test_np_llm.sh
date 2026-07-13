@@ -9,7 +9,13 @@ NPLLM="$HERE/../../np-llm.sh"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 cat > "$tmp/claude" <<'STUB'
 #!/usr/bin/env bash
-{ echo "ARGV: $*"; echo "AGENT=${NERVEPACK_AGENT:-unset}"; echo "STDIN: $(cat)"; } > "$STUB_OUT"
+{
+  echo "ARGV: $*"
+  echo "AGENT=${NERVEPACK_AGENT:-unset}"
+  echo "CLAUDECODE=${CLAUDECODE:-unset}"
+  echo "SESSION_ID=${CLAUDE_CODE_SESSION_ID:-unset}"
+  echo "STDIN: $(cat)"
+} > "$STUB_OUT"
 printf 'BACKEND_OK'
 STUB
 chmod +x "$tmp/claude"
@@ -59,6 +65,23 @@ printf 'hello' | CLAUDE_BIN="$tmp/claude" LOCAL_ARGV_OUT="$tmp/lc" \
 [[ -s "$tmp/lc" ]] || { echo "FAIL: local backend path was never exercised (stub argv file not written)"; exit 1; }
 # The real assertion: --bare must NOT appear in the local backend call.
 grep -q -- '--bare' "$tmp/lc" && { echo "FAIL: --bare must NOT appear in local backend call: $(cat "$tmp/lc")"; exit 1; } || true
+
+# 3d. a caller running inside an inherited Claude Code session (e.g. the dashboard
+#     server, backgrounded from a SessionStart hook and long-outliving it) must not
+#     leak that session's identity into the nested backend call — the child would
+#     otherwise be mistaken for a child of a possibly-stale session and fail auth
+#     ("Not logged in") instead of authenticating as its own top-level headless run.
+out="$(printf 'hello' | CLAUDECODE=1 CLAUDE_CODE_SESSION_ID=stale-parent-session \
+  CLAUDE_CODE_ENTRYPOINT=cli CLAUDE_CODE_CHILD_SESSION=1 \
+  CLAUDE_BIN="$tmp/claude" STUB_OUT="$tmp/leak" bash "$NPLLM" complete)"
+[[ "$out" == "BACKEND_OK" ]]                       || { echo "FAIL: complete didn't return backend stdout under inherited session env: $out"; exit 1; }
+grep -q 'CLAUDECODE=unset' "$tmp/leak"             || { echo "FAIL: CLAUDECODE leaked into nested claude call: $(cat "$tmp/leak")"; exit 1; }
+grep -q 'SESSION_ID=unset' "$tmp/leak"             || { echo "FAIL: CLAUDE_CODE_SESSION_ID leaked into nested claude call: $(cat "$tmp/leak")"; exit 1; }
+
+printf 'task' | CLAUDECODE=1 CLAUDE_CODE_SESSION_ID=stale-parent-session \
+  CLAUDE_BIN="$tmp/claude" STUB_OUT="$tmp/leak2" bash "$NPLLM" agent --tools "Bash" >/dev/null
+grep -q 'CLAUDECODE=unset' "$tmp/leak2"            || { echo "FAIL: CLAUDECODE leaked into nested agent call: $(cat "$tmp/leak2")"; exit 1; }
+grep -q 'SESSION_ID=unset' "$tmp/leak2"            || { echo "FAIL: CLAUDE_CODE_SESSION_ID leaked into nested agent call: $(cat "$tmp/leak2")"; exit 1; }
 
 # 4. unknown backend fails loudly (non-zero), doesn't silently no-op.
 set +e
