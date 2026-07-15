@@ -30,9 +30,12 @@ step() {  # $1 = script basename (relative to HERE), $2.. = args
 step 30-link-skills.sh
 step 35-link-dashboard-data.sh
 
-# 2. Every lifecycle hook installer (5x). Globbed + numeric-sorted so a newly added
-#    hook is picked up automatically, in order.
-for f in "$HERE"/5[0-9]-install-*.sh; do
+# 2. Every lifecycle hook installer (50–69). Globbed + numeric-sorted so a newly
+#    added hook is picked up automatically, in order. The range spans both the 5x
+#    and 6x bands: 6x installers (e.g. 61-install-resume-hook.sh) register real
+#    lifecycle hooks too and MUST be run. Stops before 70 — the 70-install-memory-*
+#    installers are platform-specific and dispatched individually below.
+for f in "$HERE"/[56][0-9]-install-*.sh; do
   [[ -e "$f" ]] && step "$(basename "$f")"
 done
 
