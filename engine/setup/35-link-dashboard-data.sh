@@ -45,5 +45,23 @@ elif [[ -e "$LINK" ]]; then
   bail "$LINK exists and is not a symlink — skipping (remove it manually to enable the bridge)"
 fi
 
-ln -s "$TARGET" "$LINK" || bail "ln -s failed for $LINK -> $TARGET"
-echo "35-link-dashboard-data: linked $LINK -> $TARGET"
+# Create the link. IMPORTANT (Windows): a bare `ln -s` under Git-Bash silently
+# DEEP-COPIES the target when native symlinks are off (the default), planting a real
+# dashboard/data dir that then freezes while the overlay keeps growing — the exact
+# drift this bridge exists to prevent. Force a *native* symlink (nativestrict makes ln
+# fail loudly instead of copying); on a box without symlink privilege, fall back to a
+# directory junction (mklink /J — no admin needed). On Linux/macOS the MSYS var is
+# ignored and this is a plain `ln -s`.
+if MSYS=winsymlinks:nativestrict ln -s "$TARGET" "$LINK" 2>/dev/null; then
+  echo "35-link-dashboard-data: linked $LINK -> $TARGET"
+elif [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]] && command -v cygpath >/dev/null 2>&1; then
+  # Windows without symlink privilege: a junction bridges I/O without admin.
+  [[ -e "$LINK" ]] && rm -rf "$LINK"
+  if cmd //c mklink /J "$(cygpath -w "$LINK")" "$(cygpath -w "$TARGET")" >/dev/null 2>&1; then
+    echo "35-link-dashboard-data: linked via junction $LINK -> $TARGET"
+  else
+    bail "could not create native symlink or junction for $LINK -> $TARGET"
+  fi
+else
+  bail "ln -s failed for $LINK -> $TARGET"
+fi
