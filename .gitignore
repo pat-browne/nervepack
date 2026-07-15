@@ -8,3 +8,4 @@ __pycache__/
 
 # Subagent worktree scratch (transient)
 .claude/
+.worktrees/
