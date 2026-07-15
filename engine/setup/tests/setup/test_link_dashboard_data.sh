@@ -57,7 +57,8 @@ restore_link() {
   # Restore the real link to its original state.
   rm -f "$REAL_LINK" 2>/dev/null || true
   if [[ $was_link -eq 1 ]]; then
-    ln -s "$(cat "$saved")" "$REAL_LINK" 2>/dev/null || true
+    # nativestrict so a Windows local run restores a real symlink, not a deep copy.
+    MSYS=winsymlinks:nativestrict ln -s "$(cat "$saved")" "$REAL_LINK" 2>/dev/null || true
   elif [[ $was_dir -eq 1 ]]; then
     mv "$tmp/saved_dir" "$REAL_LINK" 2>/dev/null || true
   fi
@@ -88,7 +89,7 @@ echo "  Case 2 OK: idempotent re-run — symlink unchanged"
 
 # --- Case 3: wrong symlink target — script must replace it. ---
 rm -f "$REAL_LINK"
-ln -s "/tmp/wrong-target-xyz" "$REAL_LINK"
+MSYS=winsymlinks:nativestrict ln -s "/tmp/wrong-target-xyz" "$REAL_LINK"
 out3="$(NP_CONTENT_DIR="$content1" bash "$SCRIPT" 2>&1)"
 [[ -L "$REAL_LINK" ]] || fail "Case 3: symlink gone after replacement; output: $out3"
 target3="$(readlink "$REAL_LINK")"
