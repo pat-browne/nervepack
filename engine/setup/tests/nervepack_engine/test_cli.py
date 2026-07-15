@@ -75,6 +75,36 @@ class TestDispatch(unittest.TestCase):
         rc = cli.main(["not-a-group"])
         self.assertEqual(rc, 0)
 
+    def test_dispatch_prints_hook_return_value_to_stdout(self):
+        from nervepack_engine import cli
+        import io as _io
+        from contextlib import redirect_stdout
+
+        with mock.patch.dict(cli._HOOKS, {"fake": lambda text: "hello from hook"}), \
+             mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(sys, "stdin", io.StringIO("{}")):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            buf = _io.StringIO()
+            with redirect_stdout(buf):
+                rc = cli.main(["hook", "fake"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(buf.getvalue(), "hello from hook")
+
+    def test_dispatch_prints_nothing_when_hook_returns_empty(self):
+        from nervepack_engine import cli
+        import io as _io
+        from contextlib import redirect_stdout
+
+        with mock.patch.dict(cli._HOOKS, {"fake": lambda text: ""}), \
+             mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(sys, "stdin", io.StringIO("{}")):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            buf = _io.StringIO()
+            with redirect_stdout(buf):
+                rc = cli.main(["hook", "fake"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(buf.getvalue(), "")
+
 
 class TestBackcaptureSweepEndToEnd(unittest.TestCase):
     """Real subprocess invocation of cli.py — proves the full settings.json

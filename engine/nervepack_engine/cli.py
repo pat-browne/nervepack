@@ -70,7 +70,9 @@ def main(argv=None):
         payload_text = ""
 
     try:
-        fn(payload_text)
+        result = fn(payload_text)
+        if result:
+            sys.stdout.write(result)
     except Exception as exc:  # fail-open: invariant 1
         _bail(name, "unhandled exception: %r" % exc)
 
