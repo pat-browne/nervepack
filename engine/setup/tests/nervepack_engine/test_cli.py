@@ -3,6 +3,7 @@ Stdlib unittest only, run via engine/setup/tests/run-all.sh."""
 import io
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -23,8 +24,10 @@ class TestPackageSkeleton(unittest.TestCase):
 class TestDispatch(unittest.TestCase):
     def test_unknown_hook_name_fails_open(self):
         from nervepack_engine import cli
-        with mock.patch.object(sys, "stdin", io.StringIO("{}")):
-            rc = cli.main(["hook", "does-not-exist"])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.dict(os.environ, {"NERVEPACK_CLI_LOG": os.path.join(tmp_dir, "cli.log")}), \
+                 mock.patch.object(sys, "stdin", io.StringIO("{}")):
+                rc = cli.main(["hook", "does-not-exist"])
         self.assertEqual(rc, 0)
 
     def test_nervepack_agent_guard_skips_dispatch(self):
@@ -54,11 +57,12 @@ class TestDispatch(unittest.TestCase):
         def _boom(_text):
             raise RuntimeError("boom")
 
-        with mock.patch.dict(cli._HOOKS, {"fake": _boom}), \
-             mock.patch.dict(os.environ, {}, clear=False), \
-             mock.patch.object(sys, "stdin", io.StringIO("{}")):
-            os.environ.pop("NERVEPACK_AGENT", None)
-            rc = cli.main(["hook", "fake"])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.dict(cli._HOOKS, {"fake": _boom}), \
+                 mock.patch.dict(os.environ, {"NERVEPACK_CLI_LOG": os.path.join(tmp_dir, "cli.log")}, clear=False), \
+                 mock.patch.object(sys, "stdin", io.StringIO("{}")):
+                os.environ.pop("NERVEPACK_AGENT", None)
+                rc = cli.main(["hook", "fake"])
         self.assertEqual(rc, 0)
 
     def test_malformed_argv_fails_open(self):
