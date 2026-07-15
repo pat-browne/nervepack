@@ -1,9 +1,12 @@
 """Tests for the nervepack CLI dispatcher (engine/nervepack_engine/cli.py).
 Stdlib unittest only, run via engine/setup/tests/run-all.sh."""
 import io
+import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -71,6 +74,75 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(rc, 0)
         rc = cli.main(["not-a-group"])
         self.assertEqual(rc, 0)
+
+
+class TestBackcaptureSweepEndToEnd(unittest.TestCase):
+    """Real subprocess invocation of cli.py — proves the full settings.json
+    dispatch shape (`python3 cli.py hook backcapture-sweep` with a JSON stdin
+    payload) actually reaches the ported hook and writes a real inbox record,
+    using the real np_capture/np_evaluator (stubbed CLAUDE_BIN, matching the
+    bash test's fake-claude approach for this one true integration check)."""
+
+    def test_full_dispatch_captures_a_settled_session(self):
+        cli_path = os.path.join(_ENGINE_DIR, "engine", "nervepack_engine", "cli.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            projects_dir = os.path.join(tmp, "projects")
+            proj = os.path.join(projects_dir, "proj")
+            os.makedirs(proj)
+            sid = "e2e-11111111"
+            tpath = os.path.join(proj, sid + ".jsonl")
+            with open(tpath, "w") as fh:
+                fh.write(json.dumps({"type": "user", "cwd": "/home/test/proj",
+                                      "message": {"role": "user", "content": "hi"}}) + "\n")
+            old = time.time() - 600
+            os.utime(tpath, (old, old))
+
+            toggles_conf = os.path.join(tmp, "toggles.conf")
+            with open(toggles_conf, "w") as fh:
+                fh.write("memory|shared|runtime|on|\nevaluator|shared|runtime|on|\n")
+
+            claude_stub = os.path.join(tmp, "claude")
+            with open(claude_stub, "w") as fh:
+                fh.write("#!/usr/bin/env bash\ncat >/dev/null\n"
+                         'printf %s \'{"headline":"h","body":"b","candidate_topics":["p"],'
+                         '"keywords":["a"],"struggles":[],"strategies":[],'
+                         '"contribution_score":70,"helped":[],"shortfalls":[],'
+                         '"suggestions":[],"assets_used":[]}\'\n')
+            os.chmod(claude_stub, 0o755)
+
+            env = dict(os.environ)
+            env.update({
+                "NP_TOGGLES_CONF": toggles_conf,
+                "NP_TOGGLES_LOCAL": os.path.join(tmp, "local"),
+                "CLAUDE_PROJECTS_DIR": projects_dir,
+                "BACKCAPTURE_SEEN_DIR": os.path.join(tmp, "seen"),
+                "BACKCAPTURE_QUEUE_DIR": os.path.join(tmp, "queue"),
+                "BACKCAPTURE_METRICS": os.path.join(tmp, "metrics.jsonl"),
+                "BACKCAPTURE_MIN_AGE_SEC": "120",
+                "BACKCAPTURE_LOG": os.path.join(tmp, "bc.log"),
+                "EPISODIC_INBOX": os.path.join(tmp, "ep-inbox"),
+                "EPISODIC_SEEN_DIR": os.path.join(tmp, "ep-seen"),
+                "EVAL_INBOX": os.path.join(tmp, "eval-inbox"),
+                "NP_SIGNAL_DIR": os.path.join(tmp, "sig"),
+                "CLAUDE_BIN": claude_stub,
+            })
+            env.pop("NERVEPACK_AGENT", None)
+
+            result = subprocess.run(
+                [sys.executable, cli_path, "hook", "backcapture-sweep"],
+                input=json.dumps({"session_id": "current"}),
+                env=env, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+
+            eval_inbox = os.path.join(tmp, "eval-inbox")
+            self.assertTrue(os.path.isdir(eval_inbox))
+            lines = []
+            for fname in os.listdir(eval_inbox):
+                with open(os.path.join(eval_inbox, fname)) as fh:
+                    lines.extend(fh.readlines())
+            self.assertEqual(len(lines), 1)
+            self.assertIn(sid, lines[0])
 
 
 if __name__ == "__main__":
