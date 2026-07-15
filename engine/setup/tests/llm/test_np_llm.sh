@@ -31,13 +31,16 @@ grep -q 'AGENT=1' "$tmp/c"                  || { echo "FAIL: np-llm must set NER
 printf 'p' | CLAUDE_BIN="$tmp/claude" STUB_OUT="$tmp/s" bash "$NPLLM" complete --system "SYSPROMPT" >/dev/null
 grep -q -- '--append-system-prompt SYSPROMPT' "$tmp/s" || { echo "FAIL: --system not forwarded: $(cat "$tmp/s")"; exit 1; }
 
-# 3. agent: bypass perms, agent model, the requested tools, guard set, --bare to suppress hooks.
+# 3. agent: bypass perms, agent model, the requested tools, guard set, --settings to
+#    suppress hooks (NOT --bare, which also disables keychain/OAuth auth).
 printf 'task' | CLAUDE_BIN="$tmp/claude" STUB_OUT="$tmp/a" NP_LLM_MODEL_AGENT=agentM bash "$NPLLM" agent --tools "Bash Read Write" >/dev/null
 grep -q 'bypassPermissions' "$tmp/a"        || { echo "FAIL: agent missing bypassPermissions"; exit 1; }
 grep -q -- '--model agentM' "$tmp/a"        || { echo "FAIL: agent model not used"; exit 1; }
 grep -q 'Bash Read Write' "$tmp/a"          || { echo "FAIL: agent tools not forwarded: $(cat "$tmp/a")"; exit 1; }
 grep -q 'AGENT=1' "$tmp/a"                  || { echo "FAIL: agent must set NERVEPACK_AGENT=1"; exit 1; }
-grep -q -- '--bare' "$tmp/a"                || { echo "FAIL: agent must pass --bare to suppress third-party hooks (see sdd/investigate-implement.md): $(cat "$tmp/a")"; exit 1; }
+grep -q -- '--settings' "$tmp/a"            || { echo "FAIL: agent must pass --settings to suppress third-party hooks (see sdd/investigate-implement.md): $(cat "$tmp/a")"; exit 1; }
+grep -qF -- '"hooks":{}' "$tmp/a"           || { echo "FAIL: agent --settings must disable hooks (\"hooks\":{}): $(cat "$tmp/a")"; exit 1; }
+grep -q -- '--bare' "$tmp/a"                && { echo "FAIL: agent must NOT pass --bare (breaks keychain/OAuth auth; use --settings): $(cat "$tmp/a")"; exit 1; } || true
 
 # 3b. complete: --bare NOT passed; keychain auth must work (--allowedTools "" means no
 #     tool use, so PostToolUse hooks can't fire; NERVEPACK_AGENT=1 handles recursion).
