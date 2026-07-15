@@ -72,7 +72,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 
 | Event | Scripts (in order) |
 |---|---|
-| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `np-backcapture-sweep.sh &` · `np-resume-sessionstart.sh &` |
+| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `cli.py hook backcapture-sweep &` · `np-resume-sessionstart.sh &` |
 | `UserPromptSubmit` | `episodic-recall.sh` · `lesson-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` · `np-resume-recall.sh` |
 | `PreToolUse` | `lesson-guard.sh` (matchers: `Bash`, `Read`) |
 | `PreCompact` | `episodic-capture.sh checkpoint` |
@@ -104,7 +104,8 @@ crons are an **idempotent backup** (empty inbox = no-op).
 **The reliable capture trigger is SessionStart, not SessionEnd** (invariant 12).
 Claude Code kills slow SessionEnd `claude -p` hooks before they finish and `/exit`
 doesn't fire SessionEnd at all, so the SessionEnd capture/evaluator are
-**best-effort**; the `np-backcapture-sweep.sh` SessionStart hook is what actually
+**best-effort**; the `engine/nervepack_engine/hooks/backcapture_sweep.py` SessionStart
+hook (dispatched via `cli.py hook backcapture-sweep`) is what actually
 back-captures the previous session (from its now-complete on-disk transcript) by
 re-running the same capture + evaluator. Same inboxes, same readers. Only the
 trigger differs. Both SessionEnd entries are registered with a trailing `&`
@@ -175,7 +176,8 @@ Record shapes (keep these stable; readers depend on them):
     Claude Code exits without awaiting slow SessionEnd hooks and `/exit` doesn't fire
     SessionEnd at all (GH #35892/#41577), so any SessionEnd step that calls `claude -p`
     (capture, evaluator) is **best-effort**. The guaranteed path is the SessionStart
-    `np-backcapture-sweep.sh`, which back-captures the previous session from its
+    `engine/nervepack_engine/hooks/backcapture_sweep.py` (dispatched via `cli.py hook
+    backcapture-sweep`), which back-captures the previous session from its
     complete on-disk transcript. New per-session capture/scoring work must ride the
     sweep (or another awaited trigger), never depend on SessionEnd completing.
 13. **Pre-flight gates check the backend, not the `claude` binary.** A hook/cron that
