@@ -271,7 +271,11 @@ def run(payload_text, capture_fn=None, evaluate_fn=None):
 
     if processed > 0:
         pending = 0
-        for name in os.listdir(queue_dir):
+        try:
+            names = os.listdir(queue_dir)
+        except OSError:
+            names = []
+        for name in names:
             if os.path.isfile(os.path.join(queue_dir, name)) and not os.path.exists(
                     os.path.join(seen_dir, name)):
                 pending += 1
