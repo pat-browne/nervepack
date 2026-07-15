@@ -36,4 +36,14 @@ chk "different script coexists" "[ \"\$(count_cmd '74-open-dashboard.sh')\" = 1 
 ( source "$LIB"; np_register_hook PreToolUse '~/Code/nervepack/engine/setup/playbook-guard.sh' 'Bash' ) >/dev/null
 chk "matcher preserved" "[ \"\$(jq -r '.hooks.PreToolUse[0].matcher' \"\$CLAUDE_SETTINGS\")\" = 'Bash' ]"
 
+# A CLI-dispatched hook dedups on the FULL "cli.py <group> <name>" invocation,
+# not the shared "cli.py" filename — else every future CLI-dispatched hook
+# would collide with this one on re-registration.
+( source "$LIB"; np_register_hook SessionStart 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook backcapture-sweep >/dev/null 2>&1 &' ) >/dev/null
+chk "first CLI-dispatched hook registered" "[ \"\$(count_cmd 'hook backcapture-sweep')\" = 1 ]"
+( source "$LIB"; np_register_hook SessionStart 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard >/dev/null 2>&1 &' ) >/dev/null
+chk "a second CLI-dispatched hook does not collide with the first" "[ \"\$(count_cmd 'hook backcapture-sweep')\" = 1 ] && [ \"\$(count_cmd 'hook lesson-guard')\" = 1 ]"
+( source "$LIB"; np_register_hook SessionStart 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook backcapture-sweep >/dev/null 2>&1 &' ) >/dev/null
+chk "re-registering the first CLI-dispatched hook still replaces only itself" "[ \"\$(count_cmd 'hook backcapture-sweep')\" = 1 ] && [ \"\$(count_cmd 'hook lesson-guard')\" = 1 ]"
+
 [ $fail -eq 0 ] && echo "PASS test_hook_lib" || { echo "FAIL test_hook_lib"; exit 1; }
