@@ -57,11 +57,17 @@ case "$BACKEND" in
         ;;
       agent)
         # shellcheck disable=SC2086 # word-split tools into the variadic --allowedTools
-        # --bare: suppress hooks so third-party PostToolUse hooks (e.g. security-review)
-        # cannot spawn long-running child processes that block the command substitution
-        # in the caller and prevent write_status from ever running (see sdd/investigate-implement.md).
+        # --settings '{"hooks":{}}': suppress hooks so third-party PostToolUse hooks (e.g.
+        # security-review) cannot spawn long-running child processes that block the command
+        # substitution in the caller and prevent write_status from ever running (see
+        # sdd/investigate-implement.md). We do NOT use --bare here: --bare also disables
+        # keychain/OAuth auth (auth becomes strictly ANTHROPIC_API_KEY/apiKeyHelper), which
+        # breaks every subscription/OAuth host — the agentic maintenance tier can never
+        # authenticate. #87 dropped --bare from complete mode for a related reason; agent
+        # mode was missed. includeCoAuthoredBy:false preserves the no-attribution policy that
+        # --bare's attribution-skip was silently providing (these crons commit).
         printf '%s' "$prompt" | NERVEPACK_AGENT=1 env "${STRIP_ENV[@]}" "$CLAUDE" -p \
-          --bare \
+          --settings '{"hooks":{},"includeCoAuthoredBy":false}' \
           --permission-mode bypassPermissions --model "$MODEL_AGENT" \
           --allowedTools $tools
         ;;
