@@ -485,11 +485,13 @@ nudge it mid-flight, not just at the next session.
 
 **Workflow.** `struggle-escalation.sh` (`UserPromptSubmit`, once/session) fires when
 the lesson guard has tripped enough times after enough prompts, injecting a skill-
-applicability reminder. `skill-trigger-recall.sh` matches skill-authoring prompt
-patterns and reminds you to follow a disciplined skill-authoring process first
-(naming a host skill such as `superpowers:writing-skills` only as an optional example).
+applicability reminder. `skill-trigger-recall` (Python port via `cli.py` dispatcher)
+matches skill-authoring prompt patterns and reminds you to follow a disciplined
+skill-authoring process first (naming a host skill such as `superpowers:writing-skills`
+only as an optional example).
 
-**Assets.** `struggle-escalation.sh`, `skill-trigger-recall.sh`, their installers.
+**Assets.** `struggle-escalation.sh`, `engine/nervepack_engine/hooks/skill_trigger_recall.py`,
+`59-install-skill-trigger-hook.sh`, their installers.
 Toggles: `evaluator.escalation`, `skills.trigger_recall`.
 
 **Situational example.** Three tool calls into a task you keep tripping the lesson
