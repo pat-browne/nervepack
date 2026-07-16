@@ -66,6 +66,14 @@ def content_is_explicit():
     return content_origin() != "default"
 
 
+def layer_dir(layer):
+    """np_layer_dir: single-root layer path (content_dir()/memory/<layer>).
+    The non-merge-aware sibling of merge_roots() — used by callers (like
+    lesson-guard.sh's Phase 1 Bash-command matching) that read one lesson/
+    episodic dir without team merging."""
+    return os.path.join(content_dir(), "memory", layer)
+
+
 def team_dirs():
     """np_team_dirs: configured team overlay roots, highest-precedence first.
     Comma-separated value; split / trim / drop-empty / dedup, then validate the
