@@ -186,8 +186,9 @@ class TestContentDir(unittest.TestCase):
             e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
                                             "EPISODIC_STATE_DIR": u(os.path.join(content, "_state"))})
             payload = '{"session_id":"t","prompt":"please frobnicate the widget"}'
-            r = sh(_setup_script("episodic-recall.sh"),
-                   input=payload, capture_output=True, text=True, env=e)
+            cli_path = os.path.join(REPO, "engine", "nervepack_engine", "cli.py")
+            r = subprocess.run([sys.executable, cli_path, "hook", "episodic-recall"],
+                                input=payload, capture_output=True, text=True, env=e)
             self.assertIn("widget", r.stdout)
 
 

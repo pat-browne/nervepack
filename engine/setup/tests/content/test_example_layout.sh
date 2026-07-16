@@ -42,10 +42,10 @@ printf '%s' "$lr" | grep -q 'demo' || fail "lesson-recall did not surface memory
 printf '%s' "$lr" | grep -qi 'past failure' || fail "lesson-recall missing failure-provenance framing (out=[$lr])"
 printf '%s' "$lr" | grep -qi 'worked' || fail "lesson-recall missing success-provenance framing (out=[$lr])"
 
-# 3. episodic-recall surfaces the fixture episodic theme from memory/episodic
+# 3. episodic-recall (Python CLI) surfaces the fixture episodic theme from memory/episodic
 st3="$(mktemp -d)"
 er="$(printf '{"session_id":"t3","prompt":"please handle demoword now"}' \
-      | EPISODIC_STATE_DIR="$st3" bash "$SETUP/episodic-recall.sh" 2>/dev/null || true)"
+      | EPISODIC_STATE_DIR="$st3" python3 "$REPO/engine/nervepack_engine/cli.py" hook episodic-recall 2>/dev/null || true)"
 printf '%s' "$er" | grep -q 'demo' || fail "episodic-recall did not surface memory/episodic (out=[$er])"
 
 # 4. lesson-guard RESOLVES + FIRES from memory/lessons: a command matching the

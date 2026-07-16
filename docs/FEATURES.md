@@ -105,7 +105,8 @@ write notes; the daily `episodic-maintain` cron drains them into `memory/episodi
 and auto-commits (the one subtree exempt from the human-review gate). *Recall*
 injects matching themes on a session's first prompts.
 
-**Assets.** `episodic-capture.sh`, `episodic-recall.sh`, `episodic-match.sh`,
+**Assets.** `episodic-capture.sh`, `engine/nervepack_engine/hooks/episodic_recall.py`
+(Python port via `cli.py` dispatcher; installed by `52-install-episodic-hooks.sh`), `episodic-match.sh`,
 `np-backcapture-sweep.sh`, `agents/np-flow-episodic-maintain.md`, `memory/episodic/` (overlay).
 Toggle: `memory`.
 
@@ -581,9 +582,11 @@ dir resolves. Complete through Phase 3 (recall hooks, wiki index, dashboard
 learned-counts, and MCP recall all merge across layers).
 
 **Assets.** `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`/
-`np_layer_roots`), `np_team_dirs`/`np_team_dir` (the comma-list parse/validate/cap
+`np_layer_roots`) and its Python mirror `np_content.py` (`merge_roots`/`merge_mode`),
+`np_team_dirs`/`np_team_dir` (the comma-list parse/validate/cap
 resolver, and its highest-precedence first entry) in `np-content-lib.sh`, the two recall hooks
-(`episodic-recall.sh`, `lesson-recall.sh`), `dashboard/build.py` (`wiki_index`,
+(`engine/nervepack_engine/hooks/episodic_recall.py` — Python port via `cli.py` dispatcher,
+`lesson-recall.sh`), `dashboard/build.py` (`wiki_index`,
 `learned_counts`), `np-mcp-server.py` (`_tool_recall`), `np-core-contribute`.
 Toggle: `team` (`team.merge`).
 

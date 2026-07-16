@@ -57,8 +57,10 @@ silently no-op because the memory dir won't exist in the cloud sandbox.
   `episodic/INDEX.md`, and **auto-commits + pushes**. This is the *only* subtree
   exempt from the human-reviewed-diff gate — accepted deliberately because the
   layer is second-class and bounded. Everything else keeps the gate.
-- **Recall**: `engine/setup/episodic-recall.sh` (`UserPromptSubmit`) injects matching
-  themes on a session's first prompts; the [[np-core-recall]] skill pulls on demand.
+- **Recall**: `engine/nervepack_engine/hooks/episodic_recall.py` (dispatched via
+  `engine/nervepack_engine/cli.py` as `cli.py hook episodic-recall`, registered on
+  `UserPromptSubmit`) injects matching themes on a session's first prompts; the
+  [[np-core-recall]] skill pulls on demand.
 
 ### Back-capture sweep (the reliable capture trigger)
 
