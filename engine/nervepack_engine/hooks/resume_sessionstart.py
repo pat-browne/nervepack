@@ -17,7 +17,7 @@ import time
 import np_toggle
 from nervepack_engine.hooks import resume_write
 
-_CWD_RE = re.compile(r'"cwd"\s*:\s*"([^"]*)"')
+_CWD_RE = re.compile(r'"cwd":"([^"]*)"')
 
 
 def _home():

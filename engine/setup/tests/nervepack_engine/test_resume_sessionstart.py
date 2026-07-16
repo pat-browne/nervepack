@@ -35,11 +35,17 @@ def _init_repo(path):
 
 
 def _write_transcript(path, cwd, extra_line=None):
+    # Compact (no spaces) to match real Claude Code transcript formatting —
+    # the cwd-extraction regex in resume_sessionstart.py mirrors the bash
+    # original's `grep -oE '"cwd":"[^"]*"'`, which has no tolerance for a
+    # space after the colon.
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps({"type": "user", "cwd": cwd, "message": {"role": "user", "content": "hi"}}) + "\n")
+        fh.write(json.dumps({"type": "user", "cwd": cwd, "message": {"role": "user", "content": "hi"}},
+                             separators=(",", ":")) + "\n")
         if extra_line:
             fh.write(json.dumps({"type": "user", "promptSource": "typed",
-                                  "message": {"role": "user", "content": extra_line}}) + "\n")
+                                  "message": {"role": "user", "content": extra_line}},
+                                 separators=(",", ":")) + "\n")
 
 
 class TestResumeSessionstart(unittest.TestCase):
