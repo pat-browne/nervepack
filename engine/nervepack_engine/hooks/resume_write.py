@@ -149,8 +149,11 @@ def write(session=None, transcript=None, cwd=None, throttle=False, active=False)
     git_branch = git_head = ""
     git_dirty = False
     repo_root = ""
-    is_repo = subprocess.run(["git", "-C", cwd, "rev-parse", "--is-inside-work-tree"],
-                              capture_output=True, text=True).returncode == 0
+    try:
+        is_repo = subprocess.run(["git", "-C", cwd, "rev-parse", "--is-inside-work-tree"],
+                                  capture_output=True, text=True).returncode == 0
+    except OSError:
+        is_repo = False
     if is_repo:
         git_branch = _git_field(cwd, "rev-parse", "--abbrev-ref", "HEAD")
         git_head = _git_field(cwd, "rev-parse", "--short", "HEAD")
