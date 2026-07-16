@@ -127,29 +127,36 @@ last genuinely-typed instruction — so a fresh session can offer to pick up
 precisely where the last one stopped instead of reconstructing state from
 scratch or from a fuzzy summary.
 
-**Workflow — three triggers write/refresh the pointer, one surfaces it:**
-1. **`SessionStart`** — `np-resume-sessionstart.sh` (backgrounded, `&`): the
-   reliable trigger (invariant 12). On every new session it scans
+**Workflow — three triggers write/refresh the pointer, one surfaces it (all
+three are Python, dispatched via `engine/nervepack_engine/cli.py`):**
+1. **`SessionStart`** — `cli.py hook resume-sessionstart` (backgrounded, `&`;
+   `engine/nervepack_engine/hooks/resume_sessionstart.py`): the reliable
+   trigger (invariant 12). On every new session it scans
    `~/.claude/projects/*/*.jsonl` newest-first, skips the current session and
    any `agent-*` subagent transcript, skips anything not yet settled (mtime
    younger than 120s), and reconstructs the pointer from the first survivor —
-   the most-recent **completed prior session** — via `np-resume-write.sh`
+   the most-recent **completed prior session** — via `resume_write.py`
    (always a fresh write, no `--throttle`). This is the backstop for whatever
    the live writer below missed on that session's final tick.
-2. **`UserPromptSubmit`** — `np-resume-recall.sh`. On a session's first prompt
-   (deduped via a marker file so it fires at most once per session): if the
-   on-disk pointer belongs to a **different** session and is younger than
+2. **`UserPromptSubmit`** — `cli.py hook resume-recall`
+   (`engine/nervepack_engine/hooks/resume_recall.py`). On a session's first
+   prompt (deduped via a marker file so it fires at most once per session): if
+   the on-disk pointer belongs to a **different** session and is younger than
    `resume.max_age` (default 86400s = 24h), it emits **one**
    `additionalContext` offer naming the prior branch@head (flagging dirty),
    the SDD ledger/plan if present, and the last typed instruction — surfacing
    BEFORE writing so it never compares the pointer against itself. It then
    (always) writes/refreshes the **current** session's pointer via
-   `np-resume-write.sh --throttle`, gated by `resume.interval` (default 300s).
+   `resume_write.py`'s `--throttle` mode, gated by `resume.interval` (default
+   300s).
 3. **Opt-in cron** (`resume.cron`, default `off`) — `70-install-memory-cron.sh`
-   installs `np-resume-write.sh --active --throttle` every `resume.cron_min`
-   minutes (default 5) when enabled. `--active` discovers the current session
-   as the newest non-`agent-*` transcript, bounded by `resume.active_window`
-   (default 900s) so a stale sole transcript never resets the staleness gate.
+   installs `cli.py resume-write --active --throttle` every `resume.cron_min`
+   minutes (default 5) when enabled — its own top-level dispatch branch (not a
+   `hook` subcommand, since the writer isn't in `_HOOKS` and the cron has no
+   stdin/hook payload to source `--session`/`--transcript`/`--cwd` from).
+   `--active` discovers the current session as the newest non-`agent-*`
+   transcript, bounded by `resume.active_window` (default 900s) so a stale
+   sole transcript never resets the staleness gate.
 
 **The pointer** (`~/.cache/nervepack/resume-pointer.json`, written atomically —
 tmp file + `mv`):
@@ -164,12 +171,15 @@ git work-tree (`git_head` is the short SHA). `last_user_instruction` is
 `<repo-root>/.superpowers/sdd/progress.md` if it exists; `sdd_plan` is the value
 after that ledger's `Plan:` line, if present.
 
-**Assets.** `np-resume-write.sh` (writer, no LLM calls), `np-resume-sessionstart.sh`,
-`np-resume-recall.sh`, `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh`.
-Toggle: `resume` (params: `interval=300`, `max_age=86400`, `cron=off`, `cron_min=5`,
-`active_window=900`). **Doctor:** the `resume-pointer` capability checks the writer
-is executable and both hooks are registered in `settings.json`, else `WARN`s to
-run `61-install-resume-hook.sh`.
+**Assets.** `engine/nervepack_engine/hooks/resume_write.py` (writer, no LLM calls;
+dispatched as `cli.py resume-write`), `engine/nervepack_engine/hooks/resume_sessionstart.py`
+(`cli.py hook resume-sessionstart`), `engine/nervepack_engine/hooks/resume_recall.py`
+(`cli.py hook resume-recall`), `np-transcript-extract.py --last-user`,
+`61-install-resume-hook.sh`. Toggle: `resume` (params: `interval=300`,
+`max_age=86400`, `cron=off`, `cron_min=5`, `active_window=900`). **Doctor:** the
+`resume-pointer` capability checks `resume_write.py` exists and both hooks are
+registered in `settings.json` (recognizing either the legacy bash commands or
+the new `cli.py` dispatch), else `WARN`s to run `61-install-resume-hook.sh`.
 
 **Situational example.** You're mid-way through Task 4 of an SDD plan on
 `feat/resume-pointer-wiring`, several files dirty, when the session dies —

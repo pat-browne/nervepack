@@ -2,16 +2,19 @@
 # np-test: resume|install
 # Task 5: the toggle row, hook installer (61-install-resume-hook.sh), the opt-in
 # interval cron (70-install-memory-cron.sh gated on resume.cron), and the writer's
-# --active discovery mode (np-resume-write.sh). Hermetic: temp CLAUDE_SETTINGS,
-# temp NP_TOGGLES_CONF/LOCAL, a stubbed crontab, and a temp CLAUDE_PROJECTS_DIR —
-# never touches real state (~/.claude/settings.json, the real crontab, ~/.cache).
+# --active discovery mode (dispatched via engine/nervepack_engine/cli.py as
+# `cli.py resume-write --active` — its own top-level dispatch branch, not a
+# `hook` subcommand, since the writer isn't in _HOOKS). Hermetic: temp
+# CLAUDE_SETTINGS, temp NP_TOGGLES_CONF/LOCAL, a stubbed crontab, and a temp
+# CLAUDE_PROJECTS_DIR — never touches real state (~/.claude/settings.json, the
+# real crontab, ~/.cache).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"   # tests/resume -> setup -> engine -> repo root
 INSTALL_HOOK="$NP/engine/setup/61-install-resume-hook.sh"
 INSTALL_CRON="$NP/engine/setup/70-install-memory-cron.sh"
 TOGGLE="$NP/engine/setup/nervepack-toggle.sh"
-WRITER="$NP/engine/setup/np-resume-write.sh"
+CLI="$NP/engine/nervepack_engine/cli.py"
 
 fail() { echo "FAIL: $*"; exit 1; }
 
@@ -35,12 +38,12 @@ up_count="$(jq '[.hooks.UserPromptSubmit[].hooks[].command] | length' "$CLAUDE_S
 [[ "$ss_count" == "1" ]] || fail "SessionStart count=$ss_count (want 1 — idempotency broken)"
 [[ "$up_count" == "1" ]] || fail "UserPromptSubmit count=$up_count (want 1 — idempotency broken)"
 
-jq -e '.hooks.SessionStart[0].hooks[0].command | test("np-resume-sessionstart\\.sh")' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "SessionStart command has the wrong script basename"
+jq -e '.hooks.SessionStart[0].hooks[0].command | test("cli\\.py hook resume-sessionstart")' "$CLAUDE_SETTINGS" >/dev/null \
+  || fail "SessionStart command has the wrong dispatch"
 jq -e '.hooks.SessionStart[0].hooks[0].command | test(" &$")' "$CLAUDE_SETTINGS" >/dev/null \
   || fail "SessionStart command should be backgrounded with a trailing &"
-jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | test("np-resume-recall\\.sh")' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "UserPromptSubmit command has the wrong script basename"
+jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | test("cli\\.py hook resume-recall")' "$CLAUDE_SETTINGS" >/dev/null \
+  || fail "UserPromptSubmit command has the wrong dispatch"
 jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | test(" &$") | not' "$CLAUDE_SETTINGS" >/dev/null \
   || fail "UserPromptSubmit command should NOT be backgrounded"
 
@@ -95,7 +98,7 @@ export NP_TOGGLES_CONF="$tmp/toggles-cron-on.conf"
 printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=on,cron_min=7\n' > "$NP_TOGGLES_CONF"
 PATH="$tmp:$PATH" bash "$INSTALL_CRON" >/dev/null
 grep -q 'nervepack-resume-cron' "$tmp_cron" || fail "resume cron entry missing while resume.cron=on"
-grep -qE '\*/7 \* \* \* \* .*np-resume-write\.sh --active --throttle' "$tmp_cron" \
+grep -qE '\*/7 \* \* \* \* .*cli\.py resume-write --active --throttle' "$tmp_cron" \
   || fail "resume cron schedule/command wrong: $(grep resume-cron "$tmp_cron")"
 n="$(grep -c 'nervepack-resume-cron' "$tmp_cron")"
 [[ "$n" == "1" ]] || fail "resume cron entry duplicated: $n"
@@ -142,7 +145,7 @@ export NP_RESUME_STAMP="$tmp/last-write-active"
 export NP_RESUME_LOG="$tmp/resume-active.log"
 export NP_TOGGLES_CONF="$tmp/toggles-empty.conf"; : > "$NP_TOGGLES_CONF"
 
-bash "$WRITER" --active
+python3 "$CLI" resume-write --active
 
 [[ -f "$NP_RESUME_POINTER" ]] || fail "--active did not write a pointer"
 jq -e '.session_id == "real-session-abc"' "$NP_RESUME_POINTER" >/dev/null \
@@ -158,7 +161,7 @@ cat > "$PROJECTS/proj1/agent-should-be-skipped.jsonl" <<EOF
 {"type":"user","promptSource":"typed","message":{"role":"user","content":"still wrong"},"cwd":"$REPO"}
 EOF
 date +%s > "$NP_RESUME_STAMP"
-bash "$WRITER" --active --throttle
+python3 "$CLI" resume-write --active --throttle
 jq -e '.session_id == "real-session-abc"' "$NP_RESUME_POINTER" >/dev/null \
   || fail "--active --throttle should not have rewritten the pointer within the interval"
 
@@ -168,7 +171,7 @@ echo "PASS: writer --active composes with --throttle"
 empty_projects="$tmp/empty-projects"; mkdir -p "$empty_projects"
 export CLAUDE_PROJECTS_DIR="$empty_projects"
 rm -f "$NP_RESUME_POINTER"
-rc=0; out="$(bash "$WRITER" --active 2>&1)" || rc=$?
+rc=0; out="$(python3 "$CLI" resume-write --active 2>&1)" || rc=$?
 [[ "$rc" == 0 ]] || fail "--active with no candidates should exit 0, got $rc"
 [[ -f "$NP_RESUME_POINTER" ]] && fail "--active with no candidates should not write a pointer"
 [[ -z "$out" ]] || fail "--active with no candidates should be silent, got: $out"
@@ -196,7 +199,7 @@ EOF
 touch_ago "$STALE_T" 99999   # ~27h old, well past the 900s default window
 export CLAUDE_PROJECTS_DIR="$stale_projects"
 rm -f "$NP_RESUME_POINTER"
-rc=0; out="$(bash "$WRITER" --active 2>&1)" || rc=$?
+rc=0; out="$(python3 "$CLI" resume-write --active 2>&1)" || rc=$?
 [[ "$rc" == 0 ]] || fail "--active with a stale sole candidate should exit 0, got $rc"
 [[ -f "$NP_RESUME_POINTER" ]] && fail "--active must NOT write a pointer for a stale (out-of-window) candidate"
 [[ -z "$out" ]] || fail "--active with a stale candidate should be silent, got: $out"
@@ -210,7 +213,7 @@ cat > "$FRESH_T" <<EOF
 {"type":"user","promptSource":"typed","message":{"role":"user","content":"right now"},"cwd":"$REPO"}
 EOF
 rm -f "$NP_RESUME_POINTER"
-bash "$WRITER" --active
+python3 "$CLI" resume-write --active
 [[ -f "$NP_RESUME_POINTER" ]] || fail "--active did not write a pointer for a fresh candidate"
 jq -e '.session_id == "fresh-session-live"' "$NP_RESUME_POINTER" >/dev/null \
   || fail "--active fresh-candidate session mismatch: $(jq -c . "$NP_RESUME_POINTER")"

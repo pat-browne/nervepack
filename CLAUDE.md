@@ -94,15 +94,22 @@ window was silently and permanently lost — no record it ever existed.
 ### Resume pointer (wiring)
 
 The deterministic "where we left off" pointer (`engine/setup/61-install-resume-hook.sh`,
-toggle family `resume`, default on). Two hooks: `SessionStart` runs
-`engine/setup/np-resume-sessionstart.sh` **backgrounded** (reconstructs the pointer for
-the most-recent *completed prior* session, so it never delays start), and
-`UserPromptSubmit` runs `engine/setup/np-resume-recall.sh` (surfaces a stale pointer and
-does a throttled live write for the current session via `np-resume-write.sh`).
-Params: `resume.interval` (live-write throttle, 300s), `max_age` (86400s — older
-pointers aren't surfaced), `active_window` (900s), and an opt-in cron backstop
-(`cron=off`, `cron_min=5`). The installer registers by basename, so re-running after a
-path change replaces the stale entry instead of duplicating it.
+toggle family `resume`, default on). Two hooks, both Python (dispatched via
+`engine/nervepack_engine/cli.py`): `SessionStart` runs
+`engine/nervepack_engine/hooks/resume_sessionstart.py` (`cli.py hook
+resume-sessionstart`) **backgrounded** (reconstructs the pointer for the
+most-recent *completed prior* session, so it never delays start), and
+`UserPromptSubmit` runs `engine/nervepack_engine/hooks/resume_recall.py`
+(`cli.py hook resume-recall`, surfaces a stale pointer and does a throttled
+live write for the current session via `resume_write.py`). The opt-in interval
+cron (`resume.cron`, default off) runs `cli.py resume-write --active
+--throttle` — its own top-level dispatch branch, not a `hook` subcommand,
+since the cron has no stdin/hook payload to source `--session`/`--transcript`/
+`--cwd` from. Params: `resume.interval` (live-write throttle, 300s), `max_age`
+(86400s — older pointers aren't surfaced), `active_window` (900s), and the
+cron backstop (`cron=off`, `cron_min=5`). The installer registers by basename,
+so re-running after a path change replaces the stale entry instead of
+duplicating it.
 
 ### Lessons layer (wiring)
 
