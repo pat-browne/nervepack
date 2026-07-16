@@ -28,6 +28,7 @@ from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
 from nervepack_engine.hooks import lesson_guard  # noqa: E402
 from nervepack_engine.hooks import lesson_recall  # noqa: E402
+from nervepack_engine.hooks import resume_write  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 
@@ -39,6 +40,26 @@ _HOOKS = {
     "skill-trigger-recall": skill_trigger_recall.run,
     "struggle-escalation": struggle_escalation.run,
 }
+
+
+def _parse_resume_write_args(argv):
+    kwargs = {}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--session" and i + 1 < len(argv):
+            kwargs["session"] = argv[i + 1]; i += 2
+        elif arg == "--transcript" and i + 1 < len(argv):
+            kwargs["transcript"] = argv[i + 1]; i += 2
+        elif arg == "--cwd" and i + 1 < len(argv):
+            kwargs["cwd"] = argv[i + 1]; i += 2
+        elif arg == "--throttle":
+            kwargs["throttle"] = True; i += 1
+        elif arg == "--active":
+            kwargs["active"] = True; i += 1
+        else:
+            i += 1
+    return kwargs
 
 
 def _log_path():
@@ -61,7 +82,20 @@ def _bail(context, msg):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
 
-    if not argv or argv[0] != "hook" or len(argv) < 2:
+    if not argv:
+        return 0
+
+    if argv[0] == "resume-write":
+        if os.environ.get("NERVEPACK_AGENT"):
+            return 0
+        try:
+            kwargs = _parse_resume_write_args(argv[1:])
+            resume_write.write(**kwargs)
+        except Exception as exc:
+            _bail("resume-write", "unhandled exception: %r" % exc)
+        return 0
+
+    if argv[0] != "hook" or len(argv) < 2:
         return 0
 
     name = argv[1]
