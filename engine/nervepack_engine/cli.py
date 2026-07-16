@@ -120,7 +120,7 @@ def main(argv=None):
         payload_text = ""
 
     try:
-        result = fn(payload_text)
+        result = fn(payload_text, *argv[2:])
         if result:
             sys.stdout.write(result)
     except Exception as exc:  # fail-open: invariant 1
