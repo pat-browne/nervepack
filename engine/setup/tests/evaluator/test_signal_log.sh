@@ -9,10 +9,10 @@ mkdir -p "$tmp/lessons"
 printf '| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n| r |  | warn | rename |\n' > "$tmp/lessons/INDEX.md"
 printf -- '---\nname: r\nkind: lesson\nprovenance: failure\n---\n**Do:** x\n' > "$tmp/lessons/r.md"
 # evaluator.signals ON -> firing lesson-recall logs a marker
-printf '%s' "$(jq -nc '{session_id:"s1",prompt:"rename stuff"}')" | EPISODIC_LESSON_DIR="$tmp/lessons" EPISODIC_STATE_DIR="$tmp/st" bash "$S/lesson-recall.sh" >/dev/null
+printf '%s' "$(jq -nc '{session_id:"s1",prompt:"rename stuff"}')" | EPISODIC_LESSON_DIR="$tmp/lessons" EPISODIC_STATE_DIR="$tmp/st" python3 "$S/../nervepack_engine/cli.py" hook lesson-recall >/dev/null
 grep -q '^lesson-recall' "$tmp/sig/s1.log" || { echo "FAIL: no signal marker written while on"; exit 1; }
 # evaluator.signals OFF -> no marker
 echo "evaluator.signals=off" > "$tmp/local"; rm -rf "$tmp/sig"
-printf '%s' "$(jq -nc '{session_id:"s2",prompt:"rename stuff"}')" | EPISODIC_LESSON_DIR="$tmp/lessons" EPISODIC_STATE_DIR="$tmp/st" bash "$S/lesson-recall.sh" >/dev/null
+printf '%s' "$(jq -nc '{session_id:"s2",prompt:"rename stuff"}')" | EPISODIC_LESSON_DIR="$tmp/lessons" EPISODIC_STATE_DIR="$tmp/st" python3 "$S/../nervepack_engine/cli.py" hook lesson-recall >/dev/null
 [[ -f "$tmp/sig/s2.log" ]] && { echo "FAIL: marker written while signals off"; exit 1; }
 echo "PASS test_signal_log"
