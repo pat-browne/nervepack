@@ -3,6 +3,9 @@ lesson-recall.sh. Ports all 4 scenarios from
 engine/setup/tests/lessons/test_lesson_recall.sh and all 4 from
 engine/setup/tests/lessons/test_lesson_recall_layers.sh (8 bash scenarios
 combined) plus 1 new case (fires-at-most-max-prompts-times)."""
+# NOTE: test_9 (team-only) is a bash-scenario port, not a "new case" — it was
+# missing from the original port and added later to complete the 4-scenario
+# team/personal merge-mode coverage (override, concatenate, team-only, no-team).
 import json
 import os
 import sys
@@ -184,6 +187,28 @@ class TestLessonRecall(unittest.TestCase):
         self.assertTrue(out1)
         self.assertTrue(out2)
         self.assertEqual(out3, "")
+
+    # --- ported from test_lesson_recall_layers.sh (team-only, previously missing) ---
+    def test_9_team_only_mode_only_team_shown(self):
+        personal_root = os.path.join(self.tmp, "personal")
+        team = os.path.join(self.tmp, "team")
+        with open(self.toggles_local, "w") as fh:
+            fh.write("team.merge=team-only\n")
+        for root, label in ((personal_root, "PERSONAL"), (team, "TEAM")):
+            layer = os.path.join(root, "memory", "lessons")
+            os.makedirs(layer, exist_ok=True)
+            with open(os.path.join(layer, "INDEX.md"), "w") as fh:
+                fh.write("| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+                          "| gitflow |  | warn | merge |\n")
+            with open(os.path.join(layer, "gitflow.md"), "w") as fh:
+                fh.write("---\nname: gitflow\nprovenance: failure\n---\n**Do:** %s lesson\n" % label)
+        with mock.patch.dict(os.environ, {"NP_CONTENT_DIR": personal_root, "NP_TEAM_DIR": team}):
+            os.environ.pop("EPISODIC_LESSON_DIR", None)
+            out = self._run("s10", "about to merge")
+            os.environ["EPISODIC_LESSON_DIR"] = self.lessons
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("TEAM lesson", ctx)
+        self.assertNotIn("PERSONAL lesson", ctx)
 
 
 if __name__ == "__main__":
