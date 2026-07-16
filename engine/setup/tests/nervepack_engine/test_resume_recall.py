@@ -109,24 +109,39 @@ class TestResumeRecall(unittest.TestCase):
             self.assertEqual(out, "")
 
     def test_5_stale_pointer_silent_with_non_vacuity_check(self):
-        pointer, env = self._case_env("case5")
-        with mock.patch.dict(os.environ, env):
+        from nervepack_engine.hooks import resume_recall
+
+        # Environment A: an isolated case dir used ONLY to demonstrate that a
+        # broken freshness check would wrongly offer. Its side effects (the
+        # pointer overwrite from resume_write.write(), the once-per-session
+        # marker file) must never leak into environment B's real check below
+        # -- that leakage is exactly the vacuity bug this test was rewritten
+        # to close.
+        pointer_a, env_a = self._case_env("case5-demo")
+        with mock.patch.dict(os.environ, env_a):
             stale_ts = int(time.time()) - 999999
-            _seed_pointer(pointer, "prior", stale_ts, "b", "h", False, "", "", "")
-            # non-vacuity: confirm a deliberately-broken freshness check WOULD offer
-            from nervepack_engine.hooks import resume_recall
+            _seed_pointer(pointer_a, "prior-a", stale_ts, "b", "h", False, "", "", "")
             with mock.patch.object(resume_recall, "_is_fresh", return_value=True):
-                broken_out = resume_recall.run(self._payload("distinct-sid"))
+                broken_out = resume_recall.run(self._payload("demo-sid"))
             self.assertTrue(broken_out, "non-vacuity: broken freshness check unexpectedly silent")
-            # real check: stale -> silent. Reuses the SAME sid as the demo call
-            # above (mirrors the bash original's "distinct-current-sid" reused
-            # for both invocations): the demo call's write step (always runs,
-            # per the surface-then-write order) already overwrote the shared
-            # pointer to describe this sid, so the real, unmocked freshness
-            # check is exercised on a pointer that (like the bash test) now
-            # also benefits from the same-session guard -- either way, silence
-            # is the correct, spec-mandated result.
-            out = self._run("distinct-sid")
+
+        # Environment B: a completely separate, freshly-created case dir --
+        # its own pointer file, state dir, and session id -- seeded with its
+        # own stale pointer. Nothing from environment A can leak in here.
+        pointer_b, env_b = self._case_env("case5-real")
+        with mock.patch.dict(os.environ, env_b):
+            stale_ts = int(time.time()) - 999999
+            _seed_pointer(pointer_b, "prior-b", stale_ts, "b", "h", False, "", "", "")
+            # Wrap (don't stub) the real _is_fresh so we can prove it was
+            # actually invoked on this path -- this is what makes the
+            # non-vacuity check genuine rather than trusted: silence here
+            # must come from the freshness gate itself, not from a
+            # same-session or once-guard side effect.
+            with mock.patch.object(resume_recall, "_is_fresh", wraps=resume_recall._is_fresh) as spy:
+                out = self._run("real-check-sid")
+                self.assertGreaterEqual(
+                    spy.call_count, 1,
+                    "non-vacuity: _is_fresh was never invoked on the real check path")
             self.assertEqual(out, "")
 
     def test_6_toggle_off_silent_and_no_write(self):
