@@ -16,7 +16,7 @@ map_fam() {  # $1=script basename ; echoes its toggle family ("" if unknown)
     40-sync-nervepack.sh) echo sync ;;
     episodic-capture.sh|episodic-recall.sh|71-run-memory-promote.sh|72-run-episodic-maintain.sh) echo memory ;;
     lesson-guard.sh|lesson-recall.sh) echo lessons ;;
-    np-evaluator.sh) echo evaluator ;;
+    np-evaluator.sh|73-aggregate-metrics.sh) echo evaluator ;;
     np-resume-sessionstart.sh|np-resume-recall.sh|np-resume-write.sh) echo resume ;;
     *) echo "" ;;
   esac
