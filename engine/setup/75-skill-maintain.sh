@@ -48,7 +48,7 @@ if command -v np_content_dir >/dev/null 2>&1 && np_content_is_explicit 2>/dev/nu
      && CONTENT="$(np_content_dir 2>/dev/null)"; then
   export GRADUATE_SEEN="$(np_param skills.graduate_seen 10)"
   export GRADUATE_KB="$(np_param skills.graduate_kb 6)"
-  grad_out="$(python3 "$HERE/np-graduation-detect.py" "$CONTENT/memory/lessons" 2>/dev/null)"
+  grad_out="$(python3 "$HERE/np_graduation_detect.py" "$CONTENT/memory/lessons" 2>/dev/null)"
   grad_n="$(printf '%s' "$grad_out" | jq -r '.candidates | length' 2>/dev/null || echo 0)"
   # Committed, content-routed data file the dashboard build reads (the local marker is
   # cache-only, so build.py — which may run from committed data in cloud/CI — can't see

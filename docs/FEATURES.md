@@ -239,7 +239,7 @@ over the skill budget) is overdue to become a curated, human-reviewed skill. Wit
 a trigger, entries accrete forever. That is exactly how the `security-review` lesson
 grew to 8 KB.
 
-**Workflow.** The daily `75-skill-maintain.sh` runs `np-graduation-detect.py`
+**Workflow.** The daily `75-skill-maintain.sh` runs `np_graduation_detect.py`
 (deterministic, no LLM) over the overlay's `memory/lessons/` (its candidate `kind` is
 the lesson's `provenance`). Any entry with `seen ≥ graduate_seen` (default 10) or
 `bytes > graduate_kb` (default 6 KB) that isn't already `graduated`/`promoted`/`archived`
@@ -248,7 +248,7 @@ auto-promoted (skills keep the human-review gate). You then graduate it by hand 
 `np-core-contribute`: distill the method into a `skills/np-*` skill and flip the
 source's `status: graduated`.
 
-**Assets.** `np-graduation-detect.py`, `75-skill-maintain.sh`,
+**Assets.** `np_graduation_detect.py`, `75-skill-maintain.sh`,
 `tests/skills/test_graduation_detect.py`. Toggle params: `skills.graduate_seen`,
 `skills.graduate_kb`. **Surfaced on the dashboard:** `75-skill-maintain.sh` also writes
 a committed, content-routed `graduation-candidates.json`; `build.py` `load_graduation()`
@@ -410,7 +410,7 @@ does a gated Sonnet pass move overflow into `references/`, validated-or-reverted
 ARCHITECTURE freshness check (both advisory).
 
 **Assets.** `75-skill-maintain.sh`, `np_skill_budget.py`, `np-skill-validate.py`,
-`np-graduation-detect.py`, `np-architecture-freshness.sh`,
+`np_graduation_detect.py`, `np-architecture-freshness.sh`,
 `agents/np-flow-skill-maintain.md`. Toggle: `skills` (`split_kb`, `soft_kb`,
 `catalog_tok`, `max_per_run`, `graduate_seen`, `graduate_kb`).
 

@@ -25,7 +25,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 NP="$tmp/engine"; mkdir -p "$NP/engine/setup" "$NP/skills" "$NP/agents"
 cp "$SETUP/75-skill-maintain.sh" "$SETUP/np_skill_budget.py" \
    "$SETUP/np-skill-validate.py" "$SETUP/np-toggle-lib.sh" "$SETUP/np-llm.sh" \
-   "$SETUP/np-content-lib.sh" "$SETUP/np-layer-lib.sh" "$SETUP/np-graduation-detect.py" \
+   "$SETUP/np-content-lib.sh" "$SETUP/np-layer-lib.sh" "$SETUP/np_graduation_detect.py" \
    "$NP/engine/setup/"
 printf 'skills|shared|runtime|on|split_kb=8,soft_kb=6,catalog_tok=4000,max_per_run=2,graduate_seen=10,graduate_kb=6\n' \
    > "$NP/engine/setup/toggles.conf"

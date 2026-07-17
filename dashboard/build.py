@@ -48,7 +48,7 @@ def default_graduation():
 
 def load_graduation(path):
     """Graduation candidates (lessons overdue to become skills), as written
-    by 75-skill-maintain.sh via np-graduation-detect.py. Shape:
+    by 75-skill-maintain.sh via np_graduation_detect.py. Shape:
     {candidates:[{kind,name,seen,bytes,reasons[]}], thresholds:{graduate_seen,graduate_kb}}.
     Fail-open: missing file (cloud/CI, or no candidates) or malformed JSON -> empty
     candidate list, so the panel renders its empty state and never crashes."""
