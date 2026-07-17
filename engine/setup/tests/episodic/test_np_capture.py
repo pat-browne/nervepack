@@ -1,10 +1,13 @@
 """Direct unit tests for np_capture.capture() -- the already-existing, in-process
-Python port of episodic-capture.sh's orchestration logic (consumed today by
-backcapture_sweep.py and the MCP server's bash-free fallback). Written as part
-of retiring episodic-capture.sh and its bash test suite (including
-tests/mcp/parity/test_capture_parity.sh, which can no longer run once the bash
-side is deleted) -- these tests replace the verification value the parity test
-provided, direct rather than by A/B comparison against bash."""
+Python port of episodic-capture.sh's orchestration logic. episodic-capture.sh has
+been retired (its logic lived here already); this module is now the sole
+implementation, called in-process both by the MCP server's `_tool_capture` and
+by the `cli.py`-dispatched `nervepack_engine.hooks.episodic_capture` SessionEnd/
+PreCompact hook wrapper. Written as part of retiring episodic-capture.sh and its
+bash test suite (including tests/mcp/parity/test_capture_parity.sh, which can no
+longer run once the bash side is deleted) -- these tests replace the
+verification value the parity test provided, direct rather than by A/B
+comparison against bash."""
 import json
 import os
 import sys
