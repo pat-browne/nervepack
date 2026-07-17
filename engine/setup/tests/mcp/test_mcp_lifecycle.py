@@ -256,12 +256,13 @@ class TestLifecycle(unittest.TestCase):
 
     # --- flush ----------------------------------------------------------
     def test_flush_writes_gate_passthrough(self):
-        # np-session-flush.sh routes all output to SESSION_FLUSH_LOG; the sub-steps
-        # (aggregate-metrics, episodic-maintain) are each gated by their own toggles
-        # (evaluator.aggregate, memory.maintain) and produce no further observable
-        # file side effect in isolation.  This test covers the writes-gate passthrough:
-        # when mcp.writes=on, the flush script is invoked, runs both sub-steps
-        # (idempotent no-ops with empty inboxes), and logs "flush start"/"flush done".
+        # session_flush.run() (called in-process by _tool_flush) routes all output to
+        # SESSION_FLUSH_LOG; the sub-steps (aggregate-metrics, episodic-maintain) are
+        # each gated by their own toggles (evaluator.aggregate, memory.maintain) and
+        # produce no further observable file side effect in isolation.  This test
+        # covers the writes-gate passthrough: when mcp.writes=on, session_flush.run()
+        # is invoked, runs both sub-steps (idempotent no-ops with empty inboxes), and
+        # logs "flush start"/"flush done".
         home = tempfile.mkdtemp()
         self._homes.append(home)
         flush_log = os.path.join(home, "session-flush.log")
@@ -273,10 +274,10 @@ class TestLifecycle(unittest.TestCase):
         c = self._client(env)
         r = c.tool("nervepack_flush", {})
         self.assertFalse(r["result"]["isError"])
-        # Real side effect: np-session-flush.sh logged its start and completion.
+        # Real side effect: session_flush.run() logged its start and completion.
         self.assertTrue(
             os.path.exists(flush_log),
-            "flush log was not created — np-session-flush.sh did not run",
+            "flush log was not created — session_flush.run() did not run",
         )
         with open(flush_log) as fh:
             log_content = fh.read()

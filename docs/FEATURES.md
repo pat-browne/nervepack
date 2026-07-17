@@ -342,7 +342,7 @@ evaluator shell itself — independent of the Haiku call — when
 **Purpose.** Turn the per-session records into a committed time series and a visual
 read on trends, wins, and struggles.
 
-**Workflow.** The on-exit flush (`np-session-flush.sh`) promotes the inbox; the daily
+**Workflow.** The on-exit flush (`cli.py hook session-flush`) promotes the inbox; the daily
 `73-aggregate-metrics.sh` drains records into committed `dashboard/data/metrics.jsonl`;
 `build.py` renders `metrics.js` for `dashboard/index.html`. A `74-open-dashboard.sh`
 SessionStart hook opens it once per boot (guarded against the reconnect loop).
