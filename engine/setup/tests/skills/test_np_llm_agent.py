@@ -81,6 +81,15 @@ class TestRunAgent(unittest.TestCase):
             log = fh.read()
         self.assertIn("CWD:%s" % os.path.realpath(cwd_before), log)
 
+    def test_5_subprocess_oserror_fails_open_returns_false(self):
+        """Directly exercises the `except OSError:` branch by making
+        subprocess.run itself raise, rather than relying on a subprocess
+        that merely exits nonzero (that's test_2/test_3's job)."""
+        with mock.patch.object(np_llm_agent.subprocess, "run",
+                                side_effect=OSError("simulated exec failure")):
+            ok = np_llm_agent.run_agent("do the thing", "Read Write Edit", cwd=self.tmp)
+        self.assertFalse(ok)
+
 
 if __name__ == "__main__":
     unittest.main()
