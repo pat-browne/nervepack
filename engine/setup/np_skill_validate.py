@@ -3,7 +3,7 @@
 pre-edit version; exit 0 = safe to keep, non-zero + reason on stderr = revert.
 Deterministic, no LLM.
 
-Usage: np-skill-validate.py <skill_dir> <original_skill_md>
+Usage: np_skill_validate.py <skill_dir> <original_skill_md>
   <skill_dir>          working-tree skill dir (edited SKILL.md + references/)
   <original_skill_md>  path to the pre-edit SKILL.md (cron writes HEAD version here)
 
@@ -95,7 +95,7 @@ def fail(msg):
 
 def main(argv):
     if len(argv) < 3:
-        return fail("usage: np-skill-validate.py <skill_dir> <original_skill_md>")
+        return fail("usage: np_skill_validate.py <skill_dir> <original_skill_md>")
     ok, reason = validate(argv[1], argv[2])
     if not ok:
         return fail(reason)

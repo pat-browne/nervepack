@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract test for np-skill-validate.py — the split safety gate. Builds a
+"""Contract test for np_skill_validate.py — the split safety gate. Builds a
 before/after skill pair and asserts exit 0 (safe) vs non-zero (revert)."""
 import os
 import subprocess
