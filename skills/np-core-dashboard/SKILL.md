@@ -22,8 +22,9 @@ SessionStart hook guards against — see below), so it opens every time you run 
 
 ## Why it doesn't auto-open every session
 
-The SessionStart hook `engine/setup/74-open-dashboard.sh` opens the dashboard **at most once
-per OS boot**, not once per session. It records the boot id in
+The SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard.py`, dispatched via
+`engine/nervepack_engine/cli.py` as `cli.py hook open-dashboard`) opens the dashboard **at
+most once per OS boot**, not once per session. It records the boot id in
 `~/.cache/nervepack/dashboard-open-boot`; every later session start this boot sees a
 matching marker and exits before opening. This is load-bearing: under remote-desktop,
 opening a GUI browser on every SessionStart triggers an auto-reconnect → new session →
