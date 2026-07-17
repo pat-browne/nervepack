@@ -344,8 +344,10 @@ read on trends, wins, and struggles.
 
 **Workflow.** The on-exit flush (`cli.py hook session-flush`) promotes the inbox; the daily
 `73-aggregate-metrics.sh` drains records into committed `dashboard/data/metrics.jsonl`;
-`build.py` renders `metrics.js` for `dashboard/index.html`. A `74-open-dashboard.sh`
-SessionStart hook opens it once per boot (guarded against the reconnect loop).
+`build.py` renders `metrics.js` for `dashboard/index.html`. The `cli.py hook
+open-dashboard` SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard.py`,
+backed by `engine/setup/np_dashboard.py`) opens it once per boot (guarded against
+the reconnect loop).
 
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
 into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
@@ -363,7 +365,9 @@ a diagram — the dashboard's no-external-fetch invariant holds), gated by
 (`metrics.js`); the engine carries only the build + render code.
 
 **Assets.** `73-aggregate-metrics.sh`, `dashboard/build.py` (`wiki_index()`),
-`dashboard/index.html`, `dashboard/vendor/mermaid.min.js`, `74-open-dashboard.sh`,
+`dashboard/index.html`, `dashboard/vendor/mermaid.min.js`,
+`engine/nervepack_engine/hooks/open_dashboard.py` (dispatched as `cli.py hook
+open-dashboard`, backed by `engine/setup/np_dashboard.py`),
 `open-dashboard.sh`, `np-core-dashboard`.
 Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`,
 `wiki_mermaid`, `dashboard_sessions`).
