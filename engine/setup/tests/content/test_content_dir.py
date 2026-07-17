@@ -213,8 +213,8 @@ class TestContentDir(unittest.TestCase):
                                             "NP_AGG_NO_COMMIT": "1",
                                             "NP_TOGGLES_CONF": u(conf),
                                             "NP_TOGGLES_LOCAL": "/dev/null"})
-            sh(_setup_script("73-aggregate-metrics.sh"),
-               capture_output=True, text=True, env=e)
+            subprocess.run([sys.executable, _setup_script("np_aggregate.py")],
+                           capture_output=True, text=True, env=e)
             out = os.path.join(ddir, "metrics.jsonl")
             self.assertTrue(os.path.exists(out))
             with open(out) as fh:
