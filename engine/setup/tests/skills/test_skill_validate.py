@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VAL = os.path.join(HERE, "..", "..", "np-skill-validate.py")
+VAL = os.path.join(HERE, "..", "..", "np_skill_validate.py")
 
 BEFORE = ("---\nname: demo\ndescription: a demo skill\n---\n"
           "Decision rule. See [[other-skill]] and [[np-core-sync]].\n" + "x" * 9000)
@@ -67,6 +67,44 @@ class TestValidate(unittest.TestCase):
               "---\nname: demo\ndescription: a demo skill\n---\n"
               "Rule only [[other-skill]] [[np-core-sync]]\n")  # no references/
         self.assertNotEqual(run(self.dir, self.orig).returncode, 0)
+
+
+import sys
+_ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
+if _ENGINE_SETUP not in sys.path:
+    sys.path.insert(0, _ENGINE_SETUP)
+
+import np_skill_validate  # noqa: E402
+
+
+class TestValidateDirectImport(unittest.TestCase):
+    """Mirrors TestValidate's scenarios but calls validate() directly in-process,
+    proving the extracted function preserves the CLI's exact pass/fail contract."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.orig = os.path.join(self.tmp, "orig.md")
+        write(self.orig, BEFORE)
+        self.dir = os.path.join(self.tmp, "demo")
+
+    def test_good_split_passes_in_process(self):
+        write(os.path.join(self.dir, "SKILL.md"),
+              "---\nname: demo\ndescription: a demo skill\n---\n"
+              "Decision rule. Detail in references/detail.md. See [[other-skill]].\n")
+        write(os.path.join(self.dir, "references", "detail.md"),
+              "Long detail. [[np-core-sync]]\n")
+        ok, reason = np_skill_validate.validate(self.dir, self.orig)
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, "")
+
+    def test_dropped_link_fails_in_process(self):
+        write(os.path.join(self.dir, "SKILL.md"),
+              "---\nname: demo\ndescription: a demo skill\n---\n"
+              "Rule. references/d.md [[other-skill]]\n")
+        write(os.path.join(self.dir, "references", "d.md"), "detail")
+        ok, reason = np_skill_validate.validate(self.dir, self.orig)
+        self.assertFalse(ok)
+        self.assertIn("np-core-sync", reason)
 
 
 if __name__ == "__main__":

@@ -149,7 +149,7 @@ Hard body budget: ${SKILL_SPLIT_KB}KB. Move overflow into skills/$skill/referenc
   # SessionEnd can't re-fire episodic-capture/np-evaluator into a self-recursion loop.
   ( cd "$repo_root" && printf '%s' "$prompt" | "$HERE/np-llm.sh" agent --tools "Read Write Edit" >/dev/null 2>&1 )
 
-  if python3 "$HERE/np-skill-validate.py" "$dir" "$orig" 2>>"$LOG"; then
+  if python3 "$HERE/np_skill_validate.py" "$dir" "$orig" 2>>"$LOG"; then
     git -C "$repo_root" add "skills/$skill" >/dev/null 2>&1
     # Path-limit the commit to this skill dir — a bare commit would sweep any other
     # session's staged work in the shared tree (issue #11 pattern).

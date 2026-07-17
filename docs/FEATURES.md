@@ -406,10 +406,10 @@ bloat the context window, and (see Graduation) flag overdue promotions.
 **Workflow.** Daily `75-skill-maintain.sh`: a deterministic detector
 (`np_skill_budget.py`) flags any SKILL.md over the hard `split_kb` (8 KB); only then
 does a gated Sonnet pass move overflow into `references/`, validated-or-reverted by
-`np-skill-validate.py`. The same routine runs the graduation detector and the
+`np_skill_validate.py`. The same routine runs the graduation detector and the
 ARCHITECTURE freshness check (both advisory).
 
-**Assets.** `75-skill-maintain.sh`, `np_skill_budget.py`, `np-skill-validate.py`,
+**Assets.** `75-skill-maintain.sh`, `np_skill_budget.py`, `np_skill_validate.py`,
 `np_graduation_detect.py`, `np-architecture-freshness.sh`,
 `agents/np-flow-skill-maintain.md`. Toggle: `skills` (`split_kb`, `soft_kb`,
 `catalog_tok`, `max_per_run`, `graduate_seen`, `graduate_kb`).
