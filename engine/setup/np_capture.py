@@ -4,12 +4,11 @@ ONE episodic note and append it (secret-scrubbed) to the local inbox.
 Orchestration only: the heavy lifting stays in the shared Python helpers
 (np-transcript-extract.py, np-json-extract.py) + the seams np_model.complete and
 np_scrub.scrub. Fail-open: any problem returns the "captured" fallback (never
-raises), mirroring the bash hook's `exit 0`. The MCP server's _tool_capture runs
-this as the bash-free fallback; the full episodic-capture.sh runs when bash is
-present. Slice 4 (step 2) of the git-for-windows-free MCP work (#38).
-
-The inbox record is built to match `jq -nc` (compact, raw-UTF-8, same key order)
-so it is A/B-comparable to the bash pipeline (tests/mcp/parity/test_capture_parity.sh).
+raises), mirroring the bash hook's `exit 0`. episodic-capture.sh has been retired
+(its logic lived here already); this module is now the sole implementation,
+called in-process both by the MCP server's `_tool_capture` and by the
+`cli.py`-dispatched `nervepack_engine.hooks.episodic_capture` SessionEnd/
+PreCompact hook wrapper. Direct unit tests: tests/episodic/test_np_capture.py.
 stdlib only.
 """
 import json

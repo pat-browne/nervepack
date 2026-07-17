@@ -48,8 +48,10 @@ silently no-op because the memory dir won't exist in the cloud sandbox.
 ### Episodic layer (wiring)
 
 - **Capture** (local): `SessionEnd` + `PreCompact` hooks
-  (`engine/setup/episodic-capture.sh`, registered by `engine/setup/52-install-episodic-hooks.sh`)
-  summarize the session via Haiku and append a note to
+  (`engine/nervepack_engine/hooks/episodic_capture.py`, dispatched via
+  `engine/nervepack_engine/cli.py` as `cli.py hook episodic-capture <mode>`,
+  registered by `engine/setup/52-install-episodic-hooks.sh`) summarize the
+  session via Haiku and append a note to
   `~/.cache/nervepack/episodic-inbox/` — local only, never committed in the hot path.
   The `SessionEnd` capture is **best-effort only** — Claude Code kills slow
   SessionEnd `claude -p` hooks and `/exit` doesn't fire SessionEnd at all, so the
@@ -115,7 +117,8 @@ duplicating it.
 
 ### Lessons layer (wiring)
 
-- **Capture:** `engine/setup/episodic-capture.sh` emits `struggles[]` (failures) and
+- **Capture:** `engine/nervepack_engine/hooks/episodic_capture.py` (via
+  `np_capture.capture()`) emits `struggles[]` (failures) and
   `strategies[]` (wins) on sessions with real signal.
 - **Distill:** `agents/np-flow-episodic-maintain.md` clusters both into
   `memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or

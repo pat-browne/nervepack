@@ -16,8 +16,8 @@ up="$(jq '[.hooks.UserPromptSubmit[].hooks[].command] | length' "$CLAUDE_SETTING
 [[ "$se" == "1" ]] || { echo "FAIL: SessionEnd count=$se (want 1)"; exit 1; }
 [[ "$pc" == "1" ]] || { echo "FAIL: PreCompact count=$pc (want 1)"; exit 1; }
 [[ "$up" == "1" ]] || { echo "FAIL: UserPromptSubmit count=$up (want 1)"; exit 1; }
-jq -e '.hooks.SessionEnd[0].hooks[0].command | test("episodic-capture.sh session-end")' "$CLAUDE_SETTINGS" >/dev/null \
+jq -e '.hooks.SessionEnd[0].hooks[0].command | test("cli.py hook episodic-capture session-end")' "$CLAUDE_SETTINGS" >/dev/null \
   || { echo "FAIL: SessionEnd command wrong"; exit 1; }
-jq -e '.hooks.PreCompact[0].hooks[0].command | test("episodic-capture.sh checkpoint")' "$CLAUDE_SETTINGS" >/dev/null \
+jq -e '.hooks.PreCompact[0].hooks[0].command | test("cli.py hook episodic-capture checkpoint")' "$CLAUDE_SETTINGS" >/dev/null \
   || { echo "FAIL: PreCompact command wrong"; exit 1; }
 echo "PASS test_install_hooks"

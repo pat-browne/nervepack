@@ -174,7 +174,9 @@ class TestLifecycle(unittest.TestCase):
     # --- capture --------------------------------------------------------
     def test_capture_happy_writes_on(self):
         # Install a CLAUDE_BIN stub that emits a valid canned capture summary so
-        # episodic-capture.sh completes its real pipeline and writes an inbox note.
+        # np_capture.capture() (episodic-capture.sh's retired logic, now the MCP
+        # server's only capture implementation) completes its real pipeline and
+        # writes an inbox note.
         inbox = tempfile.mkdtemp()
         self._homes.append(inbox)
         home = tempfile.mkdtemp()
@@ -195,7 +197,7 @@ class TestLifecycle(unittest.TestCase):
         tp = self._transcript(home)
         r = c.tool("nervepack_capture", {"transcript_path": tp, "cwd": home, "session_id": "s1"})
         self.assertFalse(r["result"]["isError"])
-        # Real side effect: episodic-capture.sh wrote at least one .jsonl note into inbox.
+        # Real side effect: np_capture.capture() wrote at least one .jsonl note into inbox.
         inbox_files = [f for f in os.listdir(inbox) if f.endswith(".jsonl")]
         self.assertTrue(
             len(inbox_files) > 0,

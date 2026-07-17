@@ -8,11 +8,11 @@
 engine/setup/tests/episodic/test_scrub.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
 engine/setup/tests/episodic/test_scrub.sh	gho_ABCDEFGHIJKLMNOPQRSTUVWX
 engine/setup/tests/episodic/test_scrub.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
-engine/setup/tests/episodic/test_capture.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
 engine/setup/tests/episodic/test_scrub_failure.sh	sk-ABCDEFGHIJKLMNOPQRSTUV
-# Fake gh-token strings embedded in playbook/evaluator test JSON payloads:
-engine/setup/tests/playbook/test_capture_struggles.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
-engine/setup/tests/playbook/test_capture_strategies.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
+# Fake secrets embedded in np_capture.capture()'s direct unit-test fixtures
+# (episodic-capture.sh's bash tests retired; these replace them, Phase 6):
+engine/setup/tests/episodic/test_np_capture.py	sk-ABCDEFGHIJKLMNOPQRSTUV
+engine/setup/tests/episodic/test_np_capture.py	ghp_ABCDEFGHIJKLMNOPQRSTU
 engine/setup/tests/evaluator/test_evaluator.sh	ghp_ABCDEFGHIJKLMNOPQRSTU
 # Fake private IPs and token in pii_filter implementation plan — documented examples of what the filter catches:
 docs/superpowers/plans/2026-07-06-pii-filter-implementation.md	192.168.1.100
