@@ -5,26 +5,23 @@ binary present. episodic-capture.sh / np-evaluator.sh historically gated on
 bail silently on a pure non-Claude host even though the local backend works. This
 drives each hook with NP_LLM_BACKEND=local, CLAUDE_BIN pointed at a nonexistent path,
 and a stub OpenAI-compatible server, asserting a note/record is still written.
-episodic-capture.sh is retired (Phase 6) -- its capture test now calls
-np_capture.capture() directly, in-process, same as the cli.py-dispatched hook
-wrapper and the MCP server do. np-evaluator.sh is untouched by that phase and is
-still driven as a bash subprocess.
+Both episodic-capture.sh and np-evaluator.sh are retired (Phase 6) -- both tests
+now call their in-process Python ports directly (np_capture.capture() /
+np_evaluator.evaluate()), same as the cli.py-dispatched hook wrappers and the MCP
+server do.
 Stdlib unittest (no pytest), per CLAUDE.md. Run: `python3 -m unittest`."""
-import json, os, subprocess, sys, tempfile, threading, unittest
+import json, os, sys, tempfile, threading, unittest
 from unittest import mock
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
-from nptest import sh  # bash-invoke the .sh hooks via the right (non-WSL) bash on Windows
-
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 SETUP = os.path.join(REPO, "engine", "setup")
-EVAL = os.path.join(SETUP, "np-evaluator.sh")
 NO_CLAUDE = "/nonexistent/np-no-claude-binary"
 
 if SETUP not in sys.path:
     sys.path.insert(0, SETUP)
 import np_capture  # noqa: E402
+import np_evaluator  # noqa: E402
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -92,12 +89,13 @@ class TestLocalBackendNoClaude(unittest.TestCase):
             "contribution_score": 55, "helped": ["x"], "shortfalls": [],
             "suggestions": [], "assets_used": []})
         inbox = os.path.join(self.tmp, "eval-inbox")
-        r = sh(EVAL, input=self._payload("nc-eval"),
-               capture_output=True, text=True,
-               env=self._env(EVAL_INBOX=inbox))
-        self.assertEqual(r.returncode, 0, r.stderr)
+        env = self._env(EVAL_INBOX=inbox)
+        with mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            status = np_evaluator.evaluate(json.loads(self._payload("nc-eval")))
+        self.assertEqual(status, "evaluated")
         files = os.listdir(inbox) if os.path.isdir(inbox) else []
-        self.assertTrue(files, f"no record written (inbox empty); stderr={r.stderr}")
+        self.assertTrue(files, "no record written (inbox empty)")
         rec = json.loads(open(os.path.join(inbox, files[0])).read().strip().splitlines()[-1])
         self.assertEqual(rec["contribution_score"], 55)
 

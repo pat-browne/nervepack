@@ -151,7 +151,9 @@ default **on**) — both flip off per-machine with
 
 ### Performance evaluator (wiring)
 
-At `SessionEnd`, `engine/setup/np-evaluator.sh` (toggle `evaluator.judge`) scores how much
+At `SessionEnd`, `engine/nervepack_engine/hooks/evaluator.py` (dispatched via
+`engine/nervepack_engine/cli.py` as `cli.py hook evaluator`, via the already-existing
+`np_evaluator.evaluate()`, toggle `evaluator.judge`) scores how much
 Nervepack helped: deterministic signals (`np-eval-signals.py`, fed by fire-time
 markers the hooks append to `~/.cache/nervepack/session-signals/`, toggle
 `evaluator.signals`) + a Haiku verdict (score, helped, shortfalls, suggestions with

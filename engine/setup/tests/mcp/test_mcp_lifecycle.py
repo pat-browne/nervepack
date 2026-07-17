@@ -119,9 +119,10 @@ def _fix(name):
 def _make_claude_stub(stub_dir, canned_json):
     """Write a CLAUDE_BIN stub that reads stdin, emits canned_json on stdout.
 
-    The stub ignores all CLI args — episodic-capture and np-evaluator pass the
-    prompt via stdin (np-llm.sh pipes it) so the stub just needs to drain stdin
-    and emit the canned response, exactly as test_capture_invocation.sh does.
+    The stub ignores all CLI args — np_capture / np_evaluator pass the prompt
+    via stdin (np_model.complete() pipes it) so the stub just needs to drain
+    stdin and emit the canned response, exactly as test_capture_invocation.sh
+    does.
     """
     stub = os.path.join(stub_dir, "claude")
     with open(stub, "w") as fh:
@@ -216,7 +217,9 @@ class TestLifecycle(unittest.TestCase):
     # --- evaluate -------------------------------------------------------
     def test_evaluate_happy_writes_on(self):
         # Install a CLAUDE_BIN stub that emits a valid canned evaluator verdict so
-        # np-evaluator.sh completes its real pipeline and writes an inbox record.
+        # np_evaluator.evaluate() (np-evaluator.sh's retired logic, now the MCP
+        # server's only evaluate implementation) completes its real pipeline and
+        # writes an inbox record.
         eval_inbox = tempfile.mkdtemp()
         self._homes.append(eval_inbox)
         home = tempfile.mkdtemp()
@@ -235,7 +238,7 @@ class TestLifecycle(unittest.TestCase):
         tp = self._transcript(home)
         r = c.tool("nervepack_evaluate", {"transcript_path": tp, "cwd": home, "session_id": "s1"})
         self.assertFalse(r["result"]["isError"])
-        # Real side effect: np-evaluator.sh wrote at least one .jsonl record into eval_inbox.
+        # Real side effect: np_evaluator.evaluate() wrote at least one .jsonl record into eval_inbox.
         inbox_files = [f for f in os.listdir(eval_inbox) if f.endswith(".jsonl")]
         self.assertTrue(
             len(inbox_files) > 0,
