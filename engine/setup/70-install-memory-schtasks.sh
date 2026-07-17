@@ -7,7 +7,7 @@
 # (mirrors the launchd installer's discipline). Matches the AUTHORITATIVE cron cadence:
 #   Daily 08:00 LOCAL — memory-promote    (71)
 #   Daily 08:30 LOCAL — episodic-maintain (72)
-#   Daily 09:00 LOCAL — aggregate-metrics (73)
+#   Daily 09:00 LOCAL — aggregate-metrics (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain    (75)
 #   Weekly Sun 09:30  — refine            (76)
 #   Weekly Wed 10:00  — compact           (77)
@@ -37,12 +37,19 @@ have_schtasks() { command -v schtasks >/dev/null 2>&1; }
 # cygpath is absent off-Windows (forced test runs) — fall back to the bare command.
 BASH_WIN="$(cygpath -w "$(command -v bash)" 2>/dev/null || command -v bash)"
 
-install_job() {  # $1=suffix  $2=schedule(DAILY|WEEKLY)  $3=weekday(- for daily)  $4=HH:MM  $5=script
+install_job() {  # $1=suffix  $2=schedule(DAILY|WEEKLY)  $3=weekday(- for daily)  $4=HH:MM
+                  # $5=script-basename OR a full command (e.g. a "python3 .../cli.py cron
+                  # <name>" dispatch, for jobs already ported off their bash original —
+                  # see aggregate-metrics's call site below)
   local suffix="$1" sc="$2" day="$3" time="$4" script="$5"
   local tn="nervepack\\$suffix"
-  local target="$SETUP_DIR/$script"
+  local exec_cmd
+  case "$script" in
+    *.sh) exec_cmd="exec '$SETUP_DIR/$script'" ;;  # bare .sh basename — join with setup dir
+    *) exec_cmd="exec $script" ;;                   # already a full command
+  esac
   # Task action: launch Git-bash and exec the .sh body (bash resolves the unix path).
-  local tr="\"$BASH_WIN\" -lc \"exec '$target'\""
+  local tr="\"$BASH_WIN\" -lc \"$exec_cmd\""
   if have_schtasks; then
     if [[ "$sc" == WEEKLY ]]; then
       schtasks //Create //TN "$tn" //TR "$tr" //SC WEEKLY //D "$day" //ST "$time" //F >/dev/null
@@ -55,7 +62,7 @@ install_job() {  # $1=suffix  $2=schedule(DAILY|WEEKLY)  $3=weekday(- for daily)
 
 install_job memory-promote    DAILY  -   08:00 71-run-memory-promote.sh
 install_job episodic-maintain DAILY  -   08:30 72-run-episodic-maintain.sh
-install_job aggregate-metrics DAILY  -   09:00 73-aggregate-metrics.sh
+install_job aggregate-metrics DAILY  -   09:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    DAILY  -   09:15 75-skill-maintain.sh
 install_job refine            WEEKLY SUN 09:30 76-run-refine.sh
 install_job compact           WEEKLY WED 10:00 77-run-compact.sh
