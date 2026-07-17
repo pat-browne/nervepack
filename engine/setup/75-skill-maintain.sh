@@ -87,7 +87,7 @@ if declare -f np_merge_roots >/dev/null 2>&1; then
   done < <(np_merge_roots 2>/dev/null)
 fi
 
-report="$(python3 "$HERE/np-skill-budget.py" "${ROOTS[@]}" 2>/dev/null)"
+report="$(python3 "$HERE/np_skill_budget.py" "${ROOTS[@]}" 2>/dev/null)"
 [[ -n "$report" ]] || { echo "$(date -u +%FT%TZ) detector produced no output" >>"$LOG"; exit 0; }
 
 if [[ "$(printf '%s' "$report" | jq -r '.catalog_over')" == "true" ]]; then

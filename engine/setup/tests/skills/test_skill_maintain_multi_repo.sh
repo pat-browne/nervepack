@@ -3,7 +3,7 @@
 # two REAL, separate git repos: a fake "engine" repo (the scripts under test,
 # mirroring how test_skill_maintain.sh stages them) and a separate "overlay"
 # content repo (resolved via NP_CONTENT_DIR) holding the skills/ that need
-# maintenance. test_skill_maintain_roots.sh only exercises np-skill-budget.py's
+# maintenance. test_skill_maintain_roots.sh only exercises np_skill_budget.py's
 # scan/report step directly; it never runs 75-skill-maintain.sh, so the
 # find_skill_root / repo_root / commit_repos-and-push loop (75-skill-maintain.sh
 # ~121-173) — the part that decides WHICH repo receives the split commit — had no
@@ -23,7 +23,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # skills/ of its own is needed to exercise the bug class — routing correctness
 # is proven by asserting the engine's commit count never moves off 1 (init).
 NP="$tmp/engine"; mkdir -p "$NP/engine/setup" "$NP/skills" "$NP/agents"
-cp "$SETUP/75-skill-maintain.sh" "$SETUP/np-skill-budget.py" \
+cp "$SETUP/75-skill-maintain.sh" "$SETUP/np_skill_budget.py" \
    "$SETUP/np-skill-validate.py" "$SETUP/np-toggle-lib.sh" "$SETUP/np-llm.sh" \
    "$SETUP/np-content-lib.sh" "$SETUP/np-layer-lib.sh" "$SETUP/np-graduation-detect.py" \
    "$NP/engine/setup/"
