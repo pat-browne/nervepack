@@ -311,6 +311,7 @@ class TestCronDispatch(unittest.TestCase):
         mock_maintain = mock.Mock(return_value="no-op: test")
         with mock.patch.dict(cli._CRONS, {"skill-maintain": mock_maintain}), \
              mock.patch.object(sys, "stdout", io.StringIO()) as out:
+            os.environ.pop("NERVEPACK_AGENT", None)
             rc = cli.main(["cron", "skill-maintain"])
             printed = out.getvalue()
         self.assertEqual(rc, 0)
