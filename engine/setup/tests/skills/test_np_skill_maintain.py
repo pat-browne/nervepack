@@ -113,5 +113,42 @@ class BudgetAndGateTest(unittest.TestCase):
             self.assertIn("skills.split disabled; detected: big", fh.read())
 
 
+class ArchitectureFreshnessTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.log = os.path.join(self.tmp, "log")
+        self.cache = os.path.join(self.tmp, ".cache", "nervepack")
+        self.marker = os.path.join(self.cache, "architecture-stale")
+        self.env = mock.patch.dict(os.environ, {
+            "SKILL_MAINTAIN_LOG": self.log, "HOME": self.tmp})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+
+    def _stub_freshness(self, body):
+        """Point _HERE at a temp dir holding a stub np-architecture-freshness.sh."""
+        stub_dir = os.path.join(self.tmp, "setup")
+        os.makedirs(stub_dir, exist_ok=True)
+        path = os.path.join(stub_dir, "np-architecture-freshness.sh")
+        _write(path, "#!/usr/bin/env bash\n%s\n" % body)
+        os.chmod(path, 0o755)
+        return mock.patch.object(np_skill_maintain, "_HERE", stub_dir)
+
+    def test_stale_writes_marker(self):
+        with self._stub_freshness('echo "STALE: docs/foo.md not in map"'):
+            np_skill_maintain._architecture_freshness()
+        self.assertTrue(os.path.isfile(self.marker))
+        with open(self.marker, encoding="utf-8") as fh:
+            self.assertIn("STALE:", fh.read())
+
+    def test_clean_removes_stale_marker(self):
+        os.makedirs(self.cache, exist_ok=True)
+        _write(self.marker, "old drift\n")
+        with self._stub_freshness('echo "OK: map fresh"'):
+            np_skill_maintain._architecture_freshness()
+        self.assertFalse(os.path.exists(self.marker))
+
+
 if __name__ == "__main__":
     unittest.main()

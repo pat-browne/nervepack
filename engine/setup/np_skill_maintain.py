@@ -82,12 +82,42 @@ def _skill_roots():
     return roots
 
 
+def _architecture_freshness():
+    """Advisory, deterministic: run np-architecture-freshness.sh, log its last
+    line, and mirror its STALE verdict into ~/.cache/nervepack/architecture-stale
+    (written on drift, removed when clean). Never blocks. Bash subprocess -- this
+    separate script keeps its own future port slot; skill-maintain is an agent
+    cron that already requires bash for np-llm.sh."""
+    script = os.path.join(_HERE, "np-architecture-freshness.sh")
+    try:
+        out = subprocess.run(
+            ["bash", script], stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True).stdout or ""
+    except OSError:
+        out = ""
+    lines = out.splitlines()
+    _log(lines[-1] if lines else "")
+    stale = [ln for ln in lines if ln.startswith("STALE:")]
+    marker = os.path.join(_home(), ".cache", "nervepack", "architecture-stale")
+    if stale:
+        for ln in stale:
+            _log(ln)
+        _write(marker, out if out.endswith("\n") else out + "\n")
+    else:
+        try:
+            os.remove(marker)
+        except OSError:
+            pass
+
+
 def maintain():
     """Cron entrypoint. Returns a short status string; never raises."""
     if not np_toggle.enabled("skills"):
         return "skipped: skills disabled"
 
-    # (Task 2 inserts _architecture_freshness() here.)
+    # Advisories first (deterministic, no model call).
+    _architecture_freshness()
+
     # (Task 3 inserts _graduation_scan() here.)
 
     # Resolve tunable thresholds -> env for the in-process budget helper.
