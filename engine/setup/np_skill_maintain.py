@@ -92,7 +92,7 @@ def _architecture_freshness():
     try:
         out = subprocess.run(
             ["bash", script], stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True).stdout or ""
+            stderr=subprocess.DEVNULL, text=True, errors="replace").stdout or ""
     except OSError:
         out = ""
     lines = out.splitlines()
