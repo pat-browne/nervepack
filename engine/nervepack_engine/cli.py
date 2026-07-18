@@ -62,6 +62,7 @@ _CRONS = {
     "aggregate-metrics": np_aggregate.aggregate,
     "skill-maintain": np_skill_maintain.maintain,
     "memory-promote": np_agentic_cron.memory_promote,
+    "episodic-maintain": np_agentic_cron.episodic_maintain,
 }
 
 

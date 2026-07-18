@@ -22,6 +22,7 @@ entrypoint built on it) returns a short status string and never raises.
 import dataclasses
 import datetime
 import os
+import sys
 
 import np_content
 import np_llm_agent
@@ -163,7 +164,7 @@ def _run(cfg):
         if not explicit:
             _log(cfg, "skipped: content dir is the implicit engine-root fallback -- "
                        "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to enable "
-                       "memory promotion")
+                       "%s" % cfg.name)
             return "skipped: content dir is the implicit engine-root fallback"
 
     # 4. Backend pre-flight (ARCHITECTURE invariant 13).
@@ -224,3 +225,42 @@ def memory_promote():
     """Cron entrypoint (dispatched by cli.py as `cron memory-promote`).
     Returns a short status string; never raises."""
     return _run(_MEMORY_PROMOTE)
+
+
+# --- episodic-maintain (Task 1) ----------------------------------------------
+_EPISODIC_MAINTAIN = CronConfig(
+    name="episodic-maintain",
+    toggle="memory.maintain",
+    prompt_rel_path=os.path.join("agents", "np-flow-episodic-maintain.md"),
+    log_env="EPISODIC_MAINTAIN_LOG",
+    log_basename="episodic-maintain.log",
+    commit_target="content",
+    content_gated=True,
+    extra_roots=False,
+)
+
+
+def episodic_maintain():
+    """Cron entrypoint (dispatched by cli.py as `cron episodic-maintain`).
+    Returns a short status string; never raises."""
+    return _run(_EPISODIC_MAINTAIN)
+
+
+# Standalone-script entrypoint -- lets a caller that can only exec a bare .py file
+# (session_flush.py's substep runner, mirroring how it already runs np_aggregate.py
+# via `[sys.executable, path]`) invoke one of this module's named crons without a
+# `cli.py cron <name>` dispatch. `cli.py`'s own `_CRONS` table is the primary
+# dispatch path; this mirrors it minimally for that one caller.
+_STANDALONE_ENTRYPOINTS = {
+    "memory-promote": memory_promote,
+    "episodic-maintain": episodic_maintain,
+}
+
+if __name__ == "__main__":
+    _name = sys.argv[1] if len(sys.argv) > 1 else ""
+    _fn = _STANDALONE_ENTRYPOINTS.get(_name)
+    if _fn is None:
+        print("usage: np_agentic_cron.py <%s>" % "|".join(_STANDALONE_ENTRYPOINTS),
+              file=sys.stderr)
+        sys.exit(2)
+    print(_fn())

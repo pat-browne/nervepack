@@ -100,8 +100,11 @@ class GatingAndPreflightTest(unittest.TestCase):
         result = np_agentic_cron.memory_promote()
         self.assertEqual(
             result, "skipped: content dir is the implicit engine-root fallback")
-        self.assertIn("skipped: content dir is the implicit engine-root fallback",
-                       self._log_text())
+        log = self._log_text()
+        self.assertIn("skipped: content dir is the implicit engine-root fallback", log)
+        # Task 0 review Minor #1: this log detail is now derived from cfg.name
+        # (cron-neutral), not hardcoded to "memory promotion" wording.
+        self.assertIn("to enable memory-promote", log)
 
     # -- Section 3: backend pre-flight ---------------------------------------
     def test_backend_claude_missing_binary_bails(self):

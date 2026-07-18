@@ -84,7 +84,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | When | Job |
 |---|---|
 | Daily 08:00 | `cli.py cron memory-promote` (backed by `np_agentic_cron.py`) |
-| Daily 08:30 | `72-run-episodic-maintain.sh` |
+| Daily 08:30 | `cli.py cron episodic-maintain` (backed by `np_agentic_cron.py`) |
 | Daily 09:00 | `cli.py cron aggregate-metrics` (backed by `np_aggregate.py`) |
 | Daily 09:15 | `cli.py cron skill-maintain` (backed by `np_skill_maintain.py`) |
 | Weekly Sun 09:30 | `76-run-refine.sh` (maintain.refine toggle, default on) |

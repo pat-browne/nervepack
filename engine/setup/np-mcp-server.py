@@ -54,7 +54,7 @@ import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; 
 import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
 import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
 import np_skill_maintain  # noqa: E402  skill-maintenance orchestrator (75-skill-maintain.sh retired; this is now the only implementation)
-import np_agentic_cron  # noqa: E402  shared agentic-cron helper (71-run-memory-promote.sh retired; memory_promote() is now the only implementation)
+import np_agentic_cron  # noqa: E402  shared agentic-cron helper (71/72-run-*.sh retired; memory_promote()/episodic_maintain() are now the only implementations)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -334,13 +334,15 @@ def _tool_evaluate(args):
 
 def _require_bash(tool):
     # nervepack_flush's own glue is bash-free (nervepack_engine.hooks.session_flush,
-    # called in-process below) -- this gate now covers only the one remaining
-    # SUBSTEP it shells out to (72-run-episodic-maintain.sh, driving the agent-mode
-    # maintenance cron: claude -p with tools / bypass-permissions) — out of scope
-    # for the git-for-windows-free milestone (73-aggregate-metrics.sh is retired;
-    # its np_aggregate.py replacement is called in-process and needs no bash). On a
-    # bash-free host, refuse cleanly (like the toggle shared-write path) instead of
-    # emitting a raw subprocess error.
+    # called in-process below) -- this gate now covers the agentic maintenance crons
+    # (memory_promote()/episodic_maintain(), both np_agentic_cron.py -- their bash
+    # originals, 71/72-run-*.sh, are retired) and skill-maintain: each still shells
+    # out to np-llm.sh internally (claude -p with tools / bypass-permissions), so
+    # bash stays a real dependency even though the driver logic itself is in-process
+    # Python (73-aggregate-metrics.sh is retired; its np_aggregate.py replacement is
+    # called in-process and needs no bash at all). On a bash-free host, refuse
+    # cleanly (like the toggle shared-write path) instead of emitting a raw
+    # subprocess error.
     if USE_PY and not _bash_available():
         raise Disabled("%s needs bash — not supported on a bash-free host yet "
                        "(it runs the agent-mode maintenance crons)" % tool)
@@ -463,10 +465,14 @@ def _tool_maintain(args):
         # gated by _require_bash rather than going fully bash-free.
         _require_bash("nervepack_maintain")
         return np_agentic_cron.memory_promote()
-    _require_bash("nervepack_maintain")
-    script = {"maintain": "72-run-episodic-maintain.sh"}[job]
-    rc, out, err = run(["bash", os.path.join(SETUP, script)])
-    return (out + err).strip() or f"{job} done"
+    if job == "maintain":
+        # 72-run-episodic-maintain.sh (the bash original) is retired -- np_agentic_cron
+        # .episodic_maintain() is now the only implementation. Like promote, it still
+        # shells to bash internally (the agent call runs np-llm.sh), so it stays
+        # gated by _require_bash rather than going fully bash-free.
+        _require_bash("nervepack_maintain")
+        return np_agentic_cron.episodic_maintain()
+    raise ValueError(f"unknown maintain job: {job}")
 
 
 def _tool_onboard(args):
