@@ -150,5 +150,50 @@ class ArchitectureFreshnessTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.marker))
 
 
+class GraduationScanTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.content = os.path.join(self.tmp, "content")
+        os.makedirs(os.path.join(self.content, "memory", "lessons"))
+        _write(os.path.join(self.content, "memory", "lessons", "proven.md"),
+               "---\nname: proven\nkind: lesson\nprovenance: failure\n"
+               "status: candidate\nseen: 20\n---\nbody\n")
+        self.log = os.path.join(self.tmp, "log")
+        self.grad = os.path.join(self.tmp, "grad")
+        self.env = mock.patch.dict(os.environ, {
+            "SKILL_MAINTAIN_LOG": self.log, "GRADUATION_MARKER": self.grad,
+            "GRADUATE_SEEN": "10", "GRADUATE_KB": "6"})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_explicit_content_surfaces_candidate(self):
+        with mock.patch.object(np_skill_maintain.np_content, "content_is_explicit",
+                               return_value=True), \
+             mock.patch.object(np_skill_maintain.np_content, "content_dir",
+                               return_value=self.content), \
+             mock.patch.object(np_skill_maintain.np_toggle, "param",
+                               side_effect=lambda k, d: d):
+            np_skill_maintain._graduation_scan()
+        with open(self.log, encoding="utf-8") as fh:
+            self.assertIn("GRADUATE: failure proven", fh.read())
+        self.assertTrue(os.path.isfile(self.grad))
+        with open(self.grad, encoding="utf-8") as fh:
+            self.assertIn('"name":"proven"', fh.read())
+        data = os.path.join(self.content, "dashboard", "data", "graduation-candidates.json")
+        self.assertTrue(os.path.isfile(data))
+        with open(data, encoding="utf-8") as fh:
+            self.assertIn('"name":"proven"', fh.read())
+
+    def test_implicit_fallback_skips(self):
+        with mock.patch.object(np_skill_maintain.np_content, "content_is_explicit",
+                               return_value=False):
+            np_skill_maintain._graduation_scan()
+        data = os.path.join(self.content, "dashboard", "data", "graduation-candidates.json")
+        self.assertFalse(os.path.exists(data))
+        self.assertFalse(os.path.exists(self.grad))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -110,6 +110,47 @@ def _architecture_freshness():
             pass
 
 
+def _graduation_scan():
+    """Advisory, deterministic: surface lessons overdue to GRADUATE into a
+    human-reviewed skill (seen >= graduate_seen or bytes > graduate_kb KB). Only
+    SURFACES (marker + content-routed data file + log); never auto-promotes.
+    Skipped on the implicit engine-root content fallback (issue #12: would write
+    personal-content data into the PII-clean engine repo)."""
+    try:
+        if not np_content.content_is_explicit():
+            return
+        content = np_content.content_dir()
+        if not content:
+            return
+        os.environ["GRADUATE_SEEN"] = np_toggle.param("skills.graduate_seen", "10")
+        os.environ["GRADUATE_KB"] = np_toggle.param("skills.graduate_kb", "6")
+        result = np_graduation_detect.scan(os.path.join(content, "memory", "lessons"))
+    except Exception:
+        return
+    cands = result.get("candidates", [])
+    marker = os.environ.get("GRADUATION_MARKER") or os.path.join(
+        _home(), ".cache", "nervepack", "graduation-candidates")
+    data = os.path.join(content, "dashboard", "data", "graduation-candidates.json")
+    blob = json.dumps(result, separators=(",", ":"))
+    if cands:
+        for c in cands:
+            _log("GRADUATE: %s %s (seen=%s, bytes=%s) [%s] -> promote to a skill" % (
+                c.get("kind"), c.get("name"), c.get("seen"), c.get("bytes"),
+                "+".join(c.get("reasons", []))))
+        _write(marker, blob + "\n")
+        _write(data, blob + "\n")
+        _log("graduation: %d candidate(s) -- see %s" % (len(cands), marker))
+    else:
+        try:
+            os.remove(marker)
+        except OSError:
+            pass
+        # Only refresh an existing panel dir (don't create it on hosts that don't
+        # dashboard) -- mirrors the bash `[[ -d ... ]]` guard.
+        if os.path.isdir(os.path.dirname(data)):
+            _write(data, blob + "\n")
+
+
 def maintain():
     """Cron entrypoint. Returns a short status string; never raises."""
     if not np_toggle.enabled("skills"):
@@ -118,7 +159,7 @@ def maintain():
     # Advisories first (deterministic, no model call).
     _architecture_freshness()
 
-    # (Task 3 inserts _graduation_scan() here.)
+    _graduation_scan()
 
     # Resolve tunable thresholds -> env for the in-process budget helper.
     os.environ["SKILL_SPLIT_KB"] = np_toggle.param("skills.split_kb", "8")
