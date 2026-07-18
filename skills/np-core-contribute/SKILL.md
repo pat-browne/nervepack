@@ -123,7 +123,7 @@ If the push is rejected as non-fast-forward:
 ## Size budget — keep skills lean
 
 Soft cap: **~6 KB per `SKILL.md`**. Hard limit: 8 KB (enforced daily by
-`engine/setup/75-skill-maintain.sh`). Body carries the *decision*;
+`engine/setup/np_skill_maintain.py`, dispatched via `cli.py cron skill-maintain`). Body carries the *decision*;
 `references/*.md` carries the detail (read on demand).
 Full guidance: references/size-budget.md
 

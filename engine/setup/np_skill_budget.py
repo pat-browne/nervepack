@@ -16,7 +16,7 @@ Usage: np_skill_budget.py [skills_dir ...]   (default: <repo>/skills)
 Multiple roots are merged into one report; the JSON shape is unchanged
 (skills keyed by directory name under `skill`). On a duplicate skill-dir name
 across roots, the FIRST root listed wins (dedup is first-root-wins, not
-tier-aware) — 75-skill-maintain.sh always passes the engine's skills/ dir as
+tier-aware) — np_skill_maintain.py always passes the engine's skills/ dir as
 the first root, so the engine copy takes precedence over any team/personal
 overlay skill of the same name. This should never actually trigger: skill
 namespaces are disjoint by tier (engine ships `np-core-*`/`np-kb-*`/
@@ -64,7 +64,7 @@ def scan(skills_dirs):
 
     split_candidates, soft_over, desc_chars = [], [], 0
     # Dedup by skill dir name across roots: first-root-wins (see module docstring).
-    # The caller controls precedence via argument order — 75-skill-maintain.sh puts
+    # The caller controls precedence via argument order — np_skill_maintain.py puts
     # the engine root first, so the engine copy wins on any same-name collision.
     seen = set()
     for skills_dir in skills_dirs:

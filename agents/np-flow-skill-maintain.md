@@ -1,6 +1,7 @@
 # np-flow-skill-maintain
 
-Agent prompt for the daily skill-split pass (`engine/setup/75-skill-maintain.sh`). The
+Agent prompt for the daily skill-split pass (`engine/setup/np_skill_maintain.py`,
+dispatched via `cli.py cron skill-maintain`). The
 cron appends the TARGET SKILL lines below and pipes the whole thing to
 `claude -p --model claude-sonnet-4-6` via stdin.
 

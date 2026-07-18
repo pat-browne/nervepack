@@ -280,7 +280,8 @@ separate future feature. For wiring details see `docs/ARCHITECTURE.md`.
 
 ### Skill maintenance (what it is)
 
-`engine/setup/75-skill-maintain.sh` (daily cron, 09:15) keeps skill bodies within budget,
+`engine/setup/np_skill_maintain.py` (dispatched via `engine/nervepack_engine/cli.py` as
+`cli.py cron skill-maintain`, daily cron, 09:15) keeps skill bodies within budget,
 deterministic-first. A detector flags any `SKILL.md` over the hard `split_kb` limit;
 only then does a Sonnet model pass (via `np-llm.sh`) move overflow detail into
 `skills/<name>/references/`. A deterministic gate enforces: body now under budget,
