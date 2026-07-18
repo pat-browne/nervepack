@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Shared sandbox + stub-agent helper for the "agentic job" driver tests —
-# 71-run-memory-promote.sh, 72-run-episodic-maintain.sh, 76-run-refine.sh,
-# 77-run-compact.sh. SOURCE this; do not execute directly.
+# 72-run-episodic-maintain.sh, 76-run-refine.sh, 77-run-compact.sh (memory-promote's
+# bash original, 71-run-memory-promote.sh, is retired -- ported to
+# engine/setup/np_agentic_cron.py's memory_promote(), whose own Python test sandbox
+# lives in tests/memory/test_np_memory_promote.py). SOURCE this; do not execute
+# directly.
 #
-# All four drivers share the same shape: read a prompt from agents/np-flow-*.md,
-# pipe it to np-llm.sh (which shells out to $CLAUDE_BIN), and expect the agent to
-# edit + commit files IN WHICHEVER REPO IT WAS INVOKED FROM (71/72 cd into the
-# content overlay first via np_content_dir; 76/77 stay in the engine repo, naming
-# any extra overlay roots as text in the prompt). This helper stands up that
-# two-repo shape once and gives each driver test a stub agent + git-state
+# The remaining three drivers share the same shape: read a prompt from
+# agents/np-flow-*.md, pipe it to np-llm.sh (which shells out to $CLAUDE_BIN), and
+# expect the agent to edit + commit files IN WHICHEVER REPO IT WAS INVOKED FROM (72
+# cd's into the content overlay first via np_content_dir; 76/77 stay in the engine
+# repo, naming any extra overlay roots as text in the prompt). This helper stands up
+# that two-repo shape once and gives each driver test a stub agent + git-state
 # assertions, so per-test files only need the bespoke bits (fixture content,
 # prompt tweaks).
 #
@@ -49,8 +52,7 @@ make_agent_sandbox() {
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
   # Driver + the libs it sources, mirroring test_skill_maintain.sh's sandbox build.
-  cp "$_AGENTJOB_SETUP/71-run-memory-promote.sh" \
-     "$_AGENTJOB_SETUP/72-run-episodic-maintain.sh" \
+  cp "$_AGENTJOB_SETUP/72-run-episodic-maintain.sh" \
      "$_AGENTJOB_SETUP/76-run-refine.sh" \
      "$_AGENTJOB_SETUP/77-run-compact.sh" \
      "$_AGENTJOB_SETUP/np-toggle-lib.sh" \

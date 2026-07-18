@@ -49,7 +49,7 @@ launchctl list | grep com.nervepack
 
 ### memory-promote (local)
 ```bash
-~/Code/nervepack/engine/setup/71-run-memory-promote.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote
 tail -50 ~/.cache/nervepack/memory-promote.log
 ```
 

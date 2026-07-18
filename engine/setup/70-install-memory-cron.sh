@@ -36,7 +36,7 @@ remove_line() {  # $1=marker — drop any crontab line containing marker; no-op 
 }
 
 install_line "nervepack-memory-promote" \
-  "0 8 * * * $HOME/Code/nervepack/engine/setup/71-run-memory-promote.sh # nervepack-memory-promote"
+  "0 8 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote # nervepack-memory-promote"
 install_line "nervepack-episodic-maintain" \
   "30 8 * * * $HOME/Code/nervepack/engine/setup/72-run-episodic-maintain.sh # nervepack-episodic-maintain"
 install_line "nervepack-aggregate-metrics" \

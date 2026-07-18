@@ -5,7 +5,7 @@
 # Git-for-Windows bash and shells out to schtasks.exe — keeping the backbone bash, the
 # job logic in the 7x .sh bodies, and the test runnable on Linux CI with a stub
 # (mirrors the launchd installer's discipline). Matches the AUTHORITATIVE cron cadence:
-#   Daily 08:00 LOCAL — memory-promote    (71)
+#   Daily 08:00 LOCAL — memory-promote    (cli.py cron memory-promote)
 #   Daily 08:30 LOCAL — episodic-maintain (72)
 #   Daily 09:00 LOCAL — aggregate-metrics (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain    (cli.py cron skill-maintain)
@@ -60,7 +60,7 @@ install_job() {  # $1=suffix  $2=schedule(DAILY|WEEKLY)  $3=weekday(- for daily)
   echo "Installed scheduled task: $tn ($sc${day:+ $day} $time -> $script)"
 }
 
-install_job memory-promote    DAILY  -   08:00 71-run-memory-promote.sh
+install_job memory-promote    DAILY  -   08:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron memory-promote"
 install_job episodic-maintain DAILY  -   08:30 72-run-episodic-maintain.sh
 install_job aggregate-metrics DAILY  -   09:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    DAILY  -   09:15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"

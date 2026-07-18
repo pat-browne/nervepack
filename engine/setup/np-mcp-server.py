@@ -54,6 +54,7 @@ import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; 
 import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
 import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
 import np_skill_maintain  # noqa: E402  skill-maintenance orchestrator (75-skill-maintain.sh retired; this is now the only implementation)
+import np_agentic_cron  # noqa: E402  shared agentic-cron helper (71-run-memory-promote.sh retired; memory_promote() is now the only implementation)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -455,8 +456,15 @@ def _tool_maintain(args):
         # _require_bash like promote/maintain below rather than going fully bash-free.
         _require_bash("nervepack_maintain")
         return np_skill_maintain.maintain()
+    if job == "promote":
+        # 71-run-memory-promote.sh (the bash original) is retired -- np_agentic_cron
+        # .memory_promote() is now the only implementation. Like skills, it still
+        # shells to bash internally (the agent call runs np-llm.sh), so it stays
+        # gated by _require_bash rather than going fully bash-free.
+        _require_bash("nervepack_maintain")
+        return np_agentic_cron.memory_promote()
     _require_bash("nervepack_maintain")
-    script = {"promote": "71-run-memory-promote.sh", "maintain": "72-run-episodic-maintain.sh"}[job]
+    script = {"maintain": "72-run-episodic-maintain.sh"}[job]
     rc, out, err = run(["bash", os.path.join(SETUP, script)])
     return (out + err).strip() or f"{job} done"
 

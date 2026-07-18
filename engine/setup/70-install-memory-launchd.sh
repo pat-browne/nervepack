@@ -3,7 +3,7 @@
 # maintenance jobs as per-user LaunchAgents (cron isn't the native scheduler on
 # macOS; user crontab works but launchd is the supported path and survives reboots
 # cleanly):
-#   Daily 08:00 LOCAL — memory-promote      (71)
+#   Daily 08:00 LOCAL — memory-promote      (cli.py cron memory-promote)
 #   Daily 08:30 LOCAL — episodic-maintain   (72)
 #   Daily 09:00 LOCAL — aggregate-metrics   (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain      (cli.py cron skill-maintain)
@@ -72,7 +72,7 @@ PLIST
   echo "Installed launchd agent: $label ($hour:$minute -> $script)"
 }
 
-install_job memory-promote    8  0 71-run-memory-promote.sh
+install_job memory-promote    8  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron memory-promote"
 install_job episodic-maintain 8 30 72-run-episodic-maintain.sh
 install_job aggregate-metrics 9  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    9 15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"
