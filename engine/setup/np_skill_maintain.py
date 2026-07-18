@@ -151,6 +151,89 @@ def _graduation_scan():
             _write(data, blob + "\n")
 
 
+def _base_prompt(prompt_file):
+    """The prompt body after the `## Prompt` heading line. Mirrors the bash
+    `awk '/^## Prompt$/{p=1; next} p'`."""
+    try:
+        with open(prompt_file, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return ""
+    out, started = [], False
+    for ln in lines:
+        if started:
+            out.append(ln)
+        elif ln == "## Prompt":
+            started = True
+    return "\n".join(out)
+
+
+def _find_skill_root(skill, roots):
+    """The roots entry whose <root>/<skill>/SKILL.md exists, or None."""
+    for r in roots:
+        if os.path.isfile(os.path.join(r, skill, "SKILL.md")):
+            return r
+    return None
+
+
+def _snapshot(repo_root, skill, md_path):
+    """Original SKILL.md bytes at HEAD (or the working copy if untracked),
+    written to a temp file whose path is returned. Mirrors the bash
+    `git show HEAD:skills/<skill>/SKILL.md > orig || cp md orig`."""
+    fd, orig = tempfile.mkstemp()
+    try:
+        with os.fdopen(fd, "wb") as out:
+            rc = subprocess.run(
+                ["git", "-C", repo_root, "show", "HEAD:skills/%s/SKILL.md" % skill],
+                stdout=out, stderr=subprocess.DEVNULL).returncode
+        if rc != 0:
+            with open(md_path, "rb") as src, open(orig, "wb") as dst:
+                dst.write(src.read())
+    except OSError:
+        pass
+    return orig
+
+
+def _split_one(skill, roots, base_prompt, split_kb):
+    """Run one skill's split: locate its owning root, snapshot, agent-split,
+    validate; commit path-limited into the OWNING repo on success, else revert.
+    Returns the repo root that received a commit, or None."""
+    skill_root = _find_skill_root(skill, roots)
+    if not skill_root:
+        return None
+    repo_root = os.path.dirname(skill_root)   # <repo>/skills -> <repo>
+    skill_dir = os.path.join(skill_root, skill)
+    md = os.path.join(skill_dir, "SKILL.md")
+    if not os.path.isfile(md):
+        return None
+    orig = _snapshot(repo_root, skill, md)
+    try:
+        prompt = ("%s\n\nTARGET SKILL DIRECTORY: skills/%s\n"
+                  "TARGET SKILL FILE: skills/%s/SKILL.md\n"
+                  "Hard body budget: %sKB. Move overflow into skills/%s/references/."
+                  % (base_prompt, skill, skill, split_kb, skill))
+        np_llm_agent.run_agent(prompt, "Read Write Edit", cwd=repo_root)
+        ok, reason = np_skill_validate.validate(skill_dir, orig)
+        if ok:
+            _git(repo_root, "add", "skills/%s" % skill)
+            rc = _git(repo_root, "commit", "-q", "-m",
+                      "skill(maintain): split %s into body+references (auto)" % skill,
+                      "--", "skills/%s" % skill)
+            if rc == 0:
+                _log("split OK: %s (%s)" % (skill, repo_root))
+                return repo_root
+            return None
+        _git(repo_root, "checkout", "--", "skills/%s" % skill)
+        _git(repo_root, "clean", "-fdq", "skills/%s" % skill)
+        _log("split ABORTED (reverted): %s -- %s" % (skill, reason))
+        return None
+    finally:
+        try:
+            os.remove(orig)
+        except OSError:
+            pass
+
+
 def maintain():
     """Cron entrypoint. Returns a short status string; never raises."""
     if not np_toggle.enabled("skills"):
@@ -189,5 +272,35 @@ def maintain():
         _log("skills.split disabled; detected: %s" % " ".join(cands))
         return "detected %d, skills.split disabled" % len(cands)
 
-    # (Task 4 replaces the line below with the prompt/backend guards + split loop.)
-    return "no-op: split loop not yet implemented"
+    prompt_file = os.path.join(_NP, "agents", "np-flow-skill-maintain.md")
+    if not os.path.isfile(prompt_file):
+        _log("ERROR: prompt missing")
+        return "skipped: prompt missing"
+
+    # Backend availability (mirror bash): claude backend needs the binary; a
+    # non-claude backend needs NP_LLM_AGENT_CMD.
+    backend = os.environ.get("NP_LLM_BACKEND", "claude")
+    claude = os.environ.get("CLAUDE_BIN") or os.path.join(
+        _home(), ".local", "bin", "claude")
+    ok_backend = ((backend == "claude" and os.access(claude, os.X_OK))
+                  or (backend != "claude" and os.environ.get("NP_LLM_AGENT_CMD")))
+    if not ok_backend:
+        _log("ERROR: agent backend unavailable (backend=%s)" % backend)
+        return "skipped: agent backend unavailable"
+
+    base_prompt = _base_prompt(prompt_file)
+    split_kb = os.environ["SKILL_SPLIT_KB"]
+    commit_repos = []
+    committed = 0
+    for skill in cands[:max_per_run]:
+        repo = _split_one(skill, roots, base_prompt, split_kb)
+        if repo:
+            committed += 1
+            if repo not in commit_repos:
+                commit_repos.append(repo)
+
+    if os.environ.get("SKILL_MAINTAIN_NO_PUSH") != "1":
+        for repo in commit_repos:
+            _git(repo, "push", "-q", "origin", "HEAD:main")
+
+    return "split %d skill(s) across %d repo(s)" % (committed, len(commit_repos))

@@ -195,5 +195,168 @@ class GraduationScanTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.grad))
 
 
+class SplitLoopTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.np = os.path.join(self.tmp, "np")
+        os.makedirs(os.path.join(self.np, "engine", "setup"))
+        os.makedirs(os.path.join(self.np, "agents"))
+        _oversized_skill(self.np, "big")
+        _write(os.path.join(self.np, "agents", "np-flow-skill-maintain.md"),
+               "## Prompt\nsplit it\n")
+        # A real "claude" so the backend-availability check passes.
+        self.claude = os.path.join(self.tmp, "claude")
+        _write(self.claude, "#!/usr/bin/env bash\ntrue\n")
+        os.chmod(self.claude, 0o755)
+        _git(self.np, "init", "-q")
+        _git(self.np, "config", "user.email", "t@t")
+        _git(self.np, "config", "user.name", "t")
+        _git(self.np, "add", "-A")
+        _git(self.np, "commit", "-qm", "init")
+        self.log = os.path.join(self.tmp, "log")
+        self.env = mock.patch.dict(os.environ, {
+            "SKILL_MAINTAIN_LOG": self.log, "NP_CONTENT_DIR": self.np,
+            "SKILL_MAINTAIN_NO_PUSH": "1", "CLAUDE_BIN": self.claude,
+            "GRADUATION_MARKER": os.path.join(self.tmp, "grad")})
+        self.env.start()
+        self.np_patch = mock.patch.object(np_skill_maintain, "_NP", self.np)
+        self.np_patch.start()
+        # Thresholds deterministic; both skills toggles on.
+        self.param = mock.patch.object(np_skill_maintain.np_toggle, "param",
+                                       side_effect=lambda k, d: d)
+        self.param.start()
+        self.enabled = mock.patch.object(np_skill_maintain.np_toggle, "enabled",
+                                         return_value=True)
+        self.enabled.start()
+
+    def tearDown(self):
+        for p in (self.enabled, self.param, self.np_patch, self.env):
+            p.stop()
+
+    def _good_split(self, repo):
+        """A fake agent that performs a valid split under <repo>/skills/big."""
+        def _run(prompt, tools, cwd=None):
+            base = cwd or repo
+            refs = os.path.join(base, "skills", "big", "references")
+            os.makedirs(refs, exist_ok=True)
+            _write(os.path.join(base, "skills", "big", "SKILL.md"),
+                   "---\nname: big\ndescription: a big skill\n---\n"
+                   "Rule. Detail: references/d.md\n[[np-core-sync]]\n")
+            _write(os.path.join(refs, "d.md"), "long detail\n")
+            return True
+        return _run
+
+    def _bad_split(self, repo):
+        """A fake agent that changes the description -> validator must reject."""
+        def _run(prompt, tools, cwd=None):
+            base = cwd or repo
+            refs = os.path.join(base, "skills", "big", "references")
+            os.makedirs(refs, exist_ok=True)
+            _write(os.path.join(base, "skills", "big", "SKILL.md"),
+                   "---\nname: big\ndescription: CHANGED\n---\n"
+                   "Rule references/d.md [[np-core-sync]]\n")
+            _write(os.path.join(refs, "d.md"), "d\n")
+            return True
+        return _run
+
+    def _head(self, repo):
+        return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+
+    def _log_oneline(self, repo):
+        return subprocess.run(["git", "-C", repo, "log", "--oneline"],
+                              capture_output=True, text=True).stdout
+
+    def _count(self, repo):
+        return subprocess.run(["git", "-C", repo, "rev-list", "--count", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+
+    def test_good_split_commits(self):
+        with mock.patch.object(np_skill_maintain.np_llm_agent, "run_agent",
+                               side_effect=self._good_split(self.np)):
+            result = np_skill_maintain.maintain()
+        self.assertTrue(os.path.isfile(
+            os.path.join(self.np, "skills", "big", "references", "d.md")))
+        self.assertIn("skill(maintain)", self._log_oneline(self.np))
+        self.assertIn("split 1", result)
+
+    def test_bad_split_reverts(self):
+        before = self._head(self.np)
+        with mock.patch.object(np_skill_maintain.np_llm_agent, "run_agent",
+                               side_effect=self._bad_split(self.np)):
+            np_skill_maintain.maintain()
+        self.assertEqual(before, self._head(self.np))
+        self.assertFalse(os.path.exists(
+            os.path.join(self.np, "skills", "big", "references")))
+        with open(os.path.join(self.np, "skills", "big", "SKILL.md"),
+                  encoding="utf-8") as fh:
+            self.assertNotIn("CHANGED", fh.read())
+
+    def test_multi_repo_routing(self):
+        # Over-budget skill lives in the OVERLAY only; commit must land there and
+        # NOT leak into the engine.
+        overlay = os.path.join(self.tmp, "overlay")
+        os.makedirs(os.path.join(overlay, "skills"))
+        _oversized_skill(overlay, "big")
+        _git(overlay, "init", "-q")
+        _git(overlay, "config", "user.email", "o@o")
+        _git(overlay, "config", "user.name", "o")
+        _git(overlay, "add", "-A")
+        _git(overlay, "commit", "-qm", "init")
+        # Remove the engine's own big skill so only the overlay's is a candidate.
+        import shutil
+        shutil.rmtree(os.path.join(self.np, "skills", "big"))
+        _git(self.np, "add", "-A")
+        _git(self.np, "commit", "-qm", "drop big")
+        engine_count = self._count(self.np)
+        with mock.patch.object(np_skill_maintain.np_content, "merge_roots",
+                               return_value=[overlay, self.np]), \
+             mock.patch.object(np_skill_maintain.np_content, "content_dir",
+                               return_value=overlay), \
+             mock.patch.object(np_skill_maintain.np_content, "content_is_explicit",
+                               return_value=True), \
+             mock.patch.object(np_skill_maintain.np_llm_agent, "run_agent",
+                               side_effect=self._good_split(overlay)):
+            np_skill_maintain.maintain()
+        self.assertIn("skill(maintain)", self._log_oneline(overlay))
+        self.assertIn("skills/big", subprocess.run(
+            ["git", "-C", overlay, "show", "--stat", "HEAD"],
+            capture_output=True, text=True).stdout)
+        # Engine history unchanged.
+        self.assertEqual(engine_count, self._count(self.np))
+        self.assertNotIn("skill(maintain)", self._log_oneline(self.np))
+
+    def test_max_per_run_cap(self):
+        # Three over-budget skills, cap 1 -> exactly one split commit.
+        for n in ("a1", "a2", "a3"):
+            _oversized_skill(self.np, n)
+        import shutil
+        shutil.rmtree(os.path.join(self.np, "skills", "big"))
+        _git(self.np, "add", "-A")
+        _git(self.np, "commit", "-qm", "seed")
+        base = self._count(self.np)
+        def _run(prompt, tools, cwd=None):
+            # split whichever skill the prompt targets
+            import re
+            m = re.search(r"TARGET SKILL DIRECTORY: skills/(\S+)", prompt)
+            name = m.group(1)
+            root = cwd or self.np
+            refs = os.path.join(root, "skills", name, "references")
+            os.makedirs(refs, exist_ok=True)
+            _write(os.path.join(root, "skills", name, "SKILL.md"),
+                   "---\nname: %s\ndescription: a big skill\n---\n"
+                   "Rule. Detail: references/d.md\n[[np-core-sync]]\n" % name)
+            _write(os.path.join(refs, "d.md"), "long detail\n")
+            return True
+        def _param(k, d):
+            return "1" if k == "skills.max_per_run" else d
+        with mock.patch.object(np_skill_maintain.np_toggle, "param",
+                               side_effect=_param), \
+             mock.patch.object(np_skill_maintain.np_llm_agent, "run_agent",
+                               side_effect=_run):
+            np_skill_maintain.maintain()
+        self.assertEqual(int(self._count(self.np)), int(base) + 1)
+
+
 if __name__ == "__main__":
     unittest.main()
