@@ -44,7 +44,7 @@ install_line "nervepack-aggregate-metrics" \
 install_line "nervepack-skill-maintain" \
   "15 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron skill-maintain # nervepack-skill-maintain"
 install_line "nervepack-refine" \
-  "30 9 * * 0 $HOME/Code/nervepack/engine/setup/76-run-refine.sh # nervepack-refine"
+  "30 9 * * 0 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron refine # nervepack-refine"
 install_line "nervepack-compact" \
   "0 10 * * 3 $HOME/Code/nervepack/engine/setup/77-run-compact.sh # nervepack-compact"
 

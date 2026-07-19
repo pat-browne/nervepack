@@ -102,7 +102,7 @@ def _base_prompt(prompt_file):
 
 def _extra_roots_note():
     """The '### Additional skill roots' overlay note appended for extra_roots
-    configs (refine/compact). Mirrors 76-run-refine.sh's EXTRA_ROOTS
+    configs (refine/compact). Mirrors the retired 76-run-refine.sh's EXTRA_ROOTS
     construction (also np_skill_maintain._skill_roots()'s pattern): each merge
     root's skills/ that resolves to a real dir other than the engine itself.
     Returns "" when there's nothing to add (fail-open on any resolution error)."""
@@ -246,6 +246,25 @@ def episodic_maintain():
     return _run(_EPISODIC_MAINTAIN)
 
 
+# --- refine (Task 2) ----------------------------------------------------------
+_REFINE = CronConfig(
+    name="refine",
+    toggle="maintain.refine",
+    prompt_rel_path=os.path.join("agents", "np-flow-scheduled-refine.md"),
+    log_env="REFINE_LOG",
+    log_basename="refine.log",
+    commit_target="engine",
+    content_gated=False,
+    extra_roots=True,
+)
+
+
+def refine():
+    """Cron entrypoint (dispatched by cli.py as `cron refine`).
+    Returns a short status string; never raises."""
+    return _run(_REFINE)
+
+
 # Standalone-script entrypoint -- lets a caller that can only exec a bare .py file
 # (session_flush.py's substep runner, mirroring how it already runs np_aggregate.py
 # via `[sys.executable, path]`) invoke one of this module's named crons without a
@@ -254,6 +273,7 @@ def episodic_maintain():
 _STANDALONE_ENTRYPOINTS = {
     "memory-promote": memory_promote,
     "episodic-maintain": episodic_maintain,
+    "refine": refine,
 }
 
 if __name__ == "__main__":

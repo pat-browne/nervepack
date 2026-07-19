@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Shared sandbox + stub-agent helper for the "agentic job" driver tests —
-# 76-run-refine.sh, 77-run-compact.sh (the memory-promote and episodic-maintain
-# bash originals, 71-run-memory-promote.sh and 72-run-episodic-maintain.sh, are
-# retired -- ported to engine/setup/np_agentic_cron.py's memory_promote() and
-# episodic_maintain(), whose Python test sandboxes live in
-# tests/memory/test_np_memory_promote.py and tests/episodic/test_np_episodic_maintain.py).
+# now just 77-run-compact.sh (memory-promote, episodic-maintain, and refine have
+# been ported to engine/setup/np_agentic_cron.py's memory_promote(),
+# episodic_maintain(), and refine(); their bash originals 71/72/76-run-*.sh are
+# retired, with Python test sandboxes in tests/memory/test_np_memory_promote.py,
+# tests/episodic/test_np_episodic_maintain.py, and tests/maintain/test_np_refine.py).
 # SOURCE this; do not execute
 # directly.
 #
@@ -54,8 +54,7 @@ make_agent_sandbox() {
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
   # Driver + the libs it sources, mirroring test_skill_maintain.sh's sandbox build.
-  cp "$_AGENTJOB_SETUP/76-run-refine.sh" \
-     "$_AGENTJOB_SETUP/77-run-compact.sh" \
+  cp "$_AGENTJOB_SETUP/77-run-compact.sh" \
      "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
      "$_AGENTJOB_SETUP/np-content-lib.sh" \
      "$_AGENTJOB_SETUP/np-layer-lib.sh" \

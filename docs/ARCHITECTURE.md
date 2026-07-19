@@ -54,7 +54,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Skill trigger recall** (prompt-pattern skill routing) | `skills` (`.trigger_recall`) | `engine/nervepack_engine/hooks/skill_trigger_recall.py` (Python port via `cli.py` dispatcher; UserPromptSubmit, once/session), `59-install-skill-trigger-hook.sh` | — |
 | **Skill maintenance** (daily auto-split + advisory checks) | `skills` (`graduate_seen`/`graduate_kb` params) | `engine/setup/np_skill_maintain.py` (Python port; dispatched via `cli.py cron skill-maintain`), `np_skill_budget.py`, `np_skill_validate.py`, `np_graduation_detect.py` (flags proven/over-budget lessons to graduate→skill; surfaces to log + `graduation-candidates` marker, never auto-promotes), `np-architecture-freshness.sh` (advisory map-drift — retained bash subprocess, invoked from `np_skill_maintain.py`), `agents/np-flow-skill-maintain.md` | `specs/2026-06-05-skill-maintenance-routine-design.md` |
 | **LLM agent seam** | — | `engine/setup/np_llm_agent.py` (`run_agent` — the shared seam for multi-turn agent loops via `np-llm.sh agent` calls; dispatched from orchestrators; consumed by `np_skill_maintain.py`'s split loop since Phase 10) | — |
-| **Engine maintenance — refine** (weekly lint + cross-ref audit) | `maintain.refine` (sub of `maintain`, default on) | `76-run-refine.sh`, `agents/np-flow-scheduled-refine.md` | `specs/2026-06-19-provider-agnostic-scheduled-agents-phase1-design.md` |
+| **Engine maintenance — refine** (weekly lint + cross-ref audit) | `maintain.refine` (sub of `maintain`, default on) | `cli.py cron refine` (backed by `np_agentic_cron.py`), `agents/np-flow-scheduled-refine.md` | `specs/2026-06-19-provider-agnostic-scheduled-agents-phase1-design.md` |
 | **Engine maintenance — compact** (weekly skill dedup + split proposals) | `maintain.compact` (sub of `maintain`, default on) | `77-run-compact.sh`, `agents/np-flow-weekly-compact.md` | `specs/2026-06-19-provider-agnostic-scheduled-agents-phase1-design.md` |
 | **Cross-machine sync** | `sync` | `40-sync-nervepack.sh` | CLAUDE.md §"sync nervepack" |
 | **Feature toggles** | (self) | `np-toggle-lib.sh`, `nervepack-toggle*.sh`, `toggles.conf` | `specs/2026-06-03-feature-toggles-design.md` |
@@ -87,7 +87,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Daily 08:30 | `cli.py cron episodic-maintain` (backed by `np_agentic_cron.py`) |
 | Daily 09:00 | `cli.py cron aggregate-metrics` (backed by `np_aggregate.py`) |
 | Daily 09:15 | `cli.py cron skill-maintain` (backed by `np_skill_maintain.py`) |
-| Weekly Sun 09:30 | `76-run-refine.sh` (maintain.refine toggle, default on) |
+| Weekly Sun 09:30 | `cli.py cron refine` (backed by `np_agentic_cron.py`; maintain.refine toggle, default on) |
 | Weekly Wed 10:00 | `77-run-compact.sh` (maintain.compact toggle, default on) |
 | Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `cli.py resume-write --active --throttle` |
 

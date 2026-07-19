@@ -6,13 +6,13 @@
 # ...; exit 0` so that a logging I/O failure degrades instead of crashing.
 #
 # Originally this drove episodic-capture.sh (retired to Python in this same
-# migration phase) down a real bail branch. Retargeted at 76-run-refine.sh —
-# a still-bash weekly cron (not scheduled for retirement this phase) whose
+# migration phase) down a real bail branch. Retargeted at 77-run-compact.sh —
+# a still-bash weekly cron (not scheduled for retirement until Task 3) whose
 # `bail()` uses the exact same env-var-overridable LOG path + "make LOG's
-# parent a file so mkdir -p can't create it" shape. 77-run-compact.sh is a
-# byte-for-byte twin of this bail() shape; either would do.
+# parent a file so mkdir -p can't create it" shape. (76-run-refine.sh was a
+# byte-for-byte twin of this bail() shape but is now retired to Python.)
 #
-# One real difference from episodic-capture.sh's bail(): 76-run-refine.sh's
+# One real difference from episodic-capture.sh's bail(): 77-run-compact.sh's
 # `mkdir -p "$(dirname "$LOG")"` and the `bail()` log-append are NOT
 # `2>/dev/null`-suppressed, so an unwritable log dir does print a couple of
 # diagnostic lines to STDERR (confirmed by hand: "mkdir: ... Not a directory"
@@ -25,22 +25,22 @@
 # success).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-W="$HERE/../../76-run-refine.sh"
+W="$HERE/../../77-run-compact.sh"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local"
 : > "$tmp/toggles.conf"
-echo "maintain.refine=on" > "$tmp/local"   # make the toggle explicit/hermetic
+echo "maintain.compact=on" > "$tmp/local"   # make the toggle explicit/hermetic
 
 # Make the log's parent a FILE so `mkdir -p "$(dirname "$LOG")"` cannot succeed.
 printf 'i am a file, not a dir\n' > "$tmp/blocker"
-LOG="$tmp/blocker/refine.log"   # parent is a file -> unwritable
+LOG="$tmp/blocker/compact.log"   # parent is a file -> unwritable
 
 # Force a real bail() call deterministically: point CLAUDE_BIN at a path that
 # doesn't exist so the backend pre-flight check bails with "claude CLI not
 # found" before any agent/network call is attempted.
 rc=0
-stdout="$(REFINE_LOG="$LOG" CLAUDE_BIN="$tmp/no-such-claude" NP_LLM_BACKEND=claude \
+stdout="$(COMPACT_LOG="$LOG" CLAUDE_BIN="$tmp/no-such-claude" NP_LLM_BACKEND=claude \
   bash "$W" 2>/dev/null)" || rc=$?
 
 [[ "$rc" == 0 ]] || { echo "FAIL: bail with unwritable log exited $rc (want 0)"; exit 1; }

@@ -9,7 +9,7 @@
 #   Daily 08:30 LOCAL — episodic-maintain (cli.py cron episodic-maintain)
 #   Daily 09:00 LOCAL — aggregate-metrics (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain    (cli.py cron skill-maintain)
-#   Weekly Sun 09:30  — refine            (76)
+#   Weekly Sun 09:30  — refine            (cli.py cron refine)
 #   Weekly Wed 10:00  — compact           (77)
 # All run idempotently (empty inbox / nothing-to-do = clean no-op). Each 7x body
 # self-logs to ~/.cache/nervepack/<job>.log. Re-running REPLACES each task (schtasks
@@ -64,7 +64,7 @@ install_job memory-promote    DAILY  -   08:00 "python3 $(dirname "$SETUP_DIR")/
 install_job episodic-maintain DAILY  -   08:30 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron episodic-maintain"
 install_job aggregate-metrics DAILY  -   09:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    DAILY  -   09:15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"
-install_job refine            WEEKLY SUN 09:30 76-run-refine.sh
+install_job refine            WEEKLY SUN 09:30 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron refine"
 install_job compact           WEEKLY WED 10:00 77-run-compact.sh
 
 echo

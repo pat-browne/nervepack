@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # np-test: maintain-fail-open | fail-open
 # With the model backend unavailable (claude binary missing, NP_LLM_BACKEND=claude),
-# 76-run-refine.sh and 77-run-compact.sh must bail (log a message) and exit 0.
+# 77-run-compact.sh must bail (log a message) and exit 0. (refine's fail-open is
+# covered in Python by tests/maintain/test_np_refine.py since 76-run-refine.sh
+# was retired.)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REFINE="$HERE/../../76-run-refine.sh"
 COMPACT="$HERE/../../77-run-compact.sh"
 NP="$(cd "$HERE/../../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
@@ -22,16 +23,7 @@ printf 'maintain|shared|runtime|on|\nmaintain.refine|shared|runtime|on|\nmaintai
 # Point at a non-existent claude binary → backend unavailable.
 MISSING_CLAUDE="$tmp/no-such-claude"
 
-refine_log="$tmp/refine.log"
 compact_log="$tmp/compact.log"
-
-# --- 76-run-refine.sh fail-open ---
-rc=0
-HOME="$fake_home" CLAUDE_BIN="$MISSING_CLAUDE" NP_LLM_BACKEND=claude \
-  REFINE_LOG="$refine_log" bash "$REFINE" 2>&1 || rc=$?
-[[ "$rc" -eq 0 ]] || { echo "FAIL (refine): must exit 0 when backend unavailable, got $rc"; exit 1; }
-[[ -s "$refine_log" ]] || { echo "FAIL (refine): no bail log written"; exit 1; }
-grep -qi 'ERROR' "$refine_log" || { echo "FAIL (refine): bail log has no ERROR line: $(cat "$refine_log")"; exit 1; }
 
 # --- 77-run-compact.sh fail-open ---
 rc=0

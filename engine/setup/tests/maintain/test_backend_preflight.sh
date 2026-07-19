@@ -3,10 +3,10 @@
 # Backend-aware pre-flight (ARCHITECTURE invariant 13):
 #   - claude backend without the binary → bail + exit 0
 #   - local backend without NP_LLM_AGENT_CMD → bail + exit 0
-# Tests both 76 and 77.
+# Tests 77 (refine's backend pre-flight is covered in Python by
+# tests/maintain/test_np_refine.py since 76-run-refine.sh was retired).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REFINE="$HERE/../../76-run-refine.sh"
 COMPACT="$HERE/../../77-run-compact.sh"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
@@ -18,7 +18,6 @@ printf 'maintain|shared|runtime|on|\nmaintain.refine|shared|runtime|on|\nmaintai
   > "$tmp/toggles.conf"
 : > "$tmp/local"
 
-refine_log="$tmp/refine.log"
 compact_log="$tmp/compact.log"
 
 check_bail() {   # $1=label  $2=logfile  $3=expected-fragment
@@ -29,13 +28,6 @@ check_bail() {   # $1=label  $2=logfile  $3=expected-fragment
 }
 
 # --- claude backend, no binary ---
-: > "$refine_log"; : > "$compact_log"
-rc=0
-HOME="$fake_home" CLAUDE_BIN="$tmp/no-such-claude" NP_LLM_BACKEND=claude \
-  REFINE_LOG="$refine_log" bash "$REFINE" 2>&1 || rc=$?
-[[ "$rc" -eq 0 ]] || { echo "FAIL (refine/claude-no-bin): must exit 0, got $rc"; exit 1; }
-check_bail "refine/claude-no-bin" "$refine_log" "claude CLI not found"
-
 : > "$compact_log"
 rc=0
 HOME="$fake_home" CLAUDE_BIN="$tmp/no-such-claude" NP_LLM_BACKEND=claude \
@@ -44,13 +36,6 @@ HOME="$fake_home" CLAUDE_BIN="$tmp/no-such-claude" NP_LLM_BACKEND=claude \
 check_bail "compact/claude-no-bin" "$compact_log" "claude CLI not found"
 
 # --- local backend, no NP_LLM_AGENT_CMD ---
-: > "$refine_log"
-rc=0
-HOME="$fake_home" NP_LLM_BACKEND=local \
-  REFINE_LOG="$refine_log" bash "$REFINE" 2>&1 || rc=$?
-[[ "$rc" -eq 0 ]] || { echo "FAIL (refine/local-no-cmd): must exit 0, got $rc"; exit 1; }
-check_bail "refine/local-no-cmd" "$refine_log" "NP_LLM_AGENT_CMD"
-
 : > "$compact_log"
 rc=0
 HOME="$fake_home" NP_LLM_BACKEND=local \

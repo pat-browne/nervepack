@@ -55,7 +55,7 @@ tail -50 ~/.cache/nervepack/memory-promote.log
 
 ### nervepack-refine (local cron)
 ```bash
-~/Code/nervepack/engine/setup/76-run-refine.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron refine
 tail -50 ~/.cache/nervepack/refine.log
 ```
 
