@@ -77,7 +77,7 @@ install_job episodic-maintain 8 30 "python3 $(dirname "$SETUP_DIR")/nervepack_en
 install_job aggregate-metrics 9  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    9 15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"
 install_job refine            9 30 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron refine"
-install_job compact          10  0 77-run-compact.sh
+install_job compact          10  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron compact"
 
 echo
 echo "Logs:   $LOG_DIR/{memory-promote,episodic-maintain,aggregate-metrics,skill-maintain,refine,compact}.log"

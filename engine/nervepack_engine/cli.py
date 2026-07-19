@@ -64,6 +64,7 @@ _CRONS = {
     "memory-promote": np_agentic_cron.memory_promote,
     "episodic-maintain": np_agentic_cron.episodic_maintain,
     "refine": np_agentic_cron.refine,
+    "compact": np_agentic_cron.compact,
 }
 
 

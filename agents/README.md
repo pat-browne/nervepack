@@ -61,7 +61,7 @@ tail -50 ~/.cache/nervepack/refine.log
 
 ### nervepack-compact (local cron)
 ```bash
-~/Code/nervepack/engine/setup/77-run-compact.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron compact
 tail -50 ~/.cache/nervepack/compact.log
 ```
 

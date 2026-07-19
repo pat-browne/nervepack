@@ -46,7 +46,7 @@ install_line "nervepack-skill-maintain" \
 install_line "nervepack-refine" \
   "30 9 * * 0 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron refine # nervepack-refine"
 install_line "nervepack-compact" \
-  "0 10 * * 3 $HOME/Code/nervepack/engine/setup/77-run-compact.sh # nervepack-compact"
+  "0 10 * * 3 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron compact # nervepack-compact"
 
 # --- Opt-in resume-pointer interval cron (default off; toggle: resume.cron) ---
 # When on, runs the writer for the ACTIVE session (--active discovery, since cron

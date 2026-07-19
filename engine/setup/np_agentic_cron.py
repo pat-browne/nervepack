@@ -55,6 +55,13 @@ class CronConfig:
                        is False. Only memory-promote/episodic-maintain set this.
     extra_roots     -- True: append the "Additional skill roots" overlay note to
                        the prompt. Only refine/compact set this.
+    extra_roots_steps        -- the numbered prompt steps the overlay note tells
+                       the agent to also apply to each extra root ("2-3" for
+                       refine, "2-5" for compact -- matches each prompt's own
+                       step numbering).
+    extra_roots_repo_detail  -- extra clause inserted after "rooted at `<path>`"
+                       in each per-root bullet ("" for refine; compact names its
+                       own archive/compact-proposals/plugin.json layout).
     """
     name: str
     toggle: str
@@ -64,6 +71,8 @@ class CronConfig:
     commit_target: str = "content"
     content_gated: bool = False
     extra_roots: bool = False
+    extra_roots_steps: str = "2-3"
+    extra_roots_repo_detail: str = ""
 
 
 def _log_path(cfg):
@@ -100,12 +109,14 @@ def _base_prompt(prompt_file):
     return "\n".join(out)
 
 
-def _extra_roots_note():
+def _extra_roots_note(cfg):
     """The '### Additional skill roots' overlay note appended for extra_roots
-    configs (refine/compact). Mirrors the retired 76-run-refine.sh's EXTRA_ROOTS
-    construction (also np_skill_maintain._skill_roots()'s pattern): each merge
-    root's skills/ that resolves to a real dir other than the engine itself.
-    Returns "" when there's nothing to add (fail-open on any resolution error)."""
+    configs (refine/compact). Mirrors the retired 76-run-refine.sh /
+    77-run-compact.sh EXTRA_ROOTS construction (also
+    np_skill_maintain._skill_roots()'s pattern): each merge root's skills/ that
+    resolves to a real dir other than the engine itself. The step range and the
+    per-root detail clause are cron-specific (see CronConfig). Returns "" when
+    there's nothing to add (fail-open on any resolution error)."""
     roots = []
     try:
         for r in np_content.merge_roots():
@@ -120,18 +131,18 @@ def _extra_roots_note():
         "",
         "### Additional skill roots (content overlay)",
         "",
-        "Besides `skills/` in this working directory, also apply steps 2-3 to "
+        "Besides `skills/` in this working directory, also apply steps %s to "
         "the `skills/` directory under EACH of these paths -- content-overlay "
         "(and/or team) repos that hold the personal/knowledge skills relocated "
-        "out of the engine:",
+        "out of the engine:" % cfg.extra_roots_steps,
     ]
     for r in roots:
         lines.append(
-            "- `%s/skills/` -- a SEPARATE git repo rooted at `%s`. Stage and "
+            "- `%s/skills/` -- a SEPARATE git repo rooted at `%s`%s. Stage and "
             "commit ONLY the paths you changed there via `git -C \"%s\" add "
             "<paths> && git -C \"%s\" commit -m ... -- <paths>`, then "
             "`git -C \"%s\" push`. Never combine its commit with this repo's "
-            "commit." % (r, r, r, r, r))
+            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, r))
     return "\n".join(lines) + "\n"
 
 
@@ -189,7 +200,7 @@ def _run(cfg):
 
     # 6. EXTRA_ROOTS overlay note -- extra_roots crons only.
     if cfg.extra_roots:
-        note = _extra_roots_note()
+        note = _extra_roots_note(cfg)
         if note:
             prompt += note
 
@@ -265,6 +276,30 @@ def refine():
     return _run(_REFINE)
 
 
+# --- compact (Task 3) ---------------------------------------------------------
+_COMPACT = CronConfig(
+    name="compact",
+    toggle="maintain.compact",
+    prompt_rel_path=os.path.join("agents", "np-flow-weekly-compact.md"),
+    log_env="COMPACT_LOG",
+    log_basename="compact.log",
+    commit_target="engine",
+    content_gated=False,
+    extra_roots=True,
+    extra_roots_steps="2-5",
+    extra_roots_repo_detail=(
+        ", with its own `archive/`, `compact-proposals/`, and "
+        "`.claude-plugin/plugin.json` (or none, if it doesn't ship a plugin "
+        "manifest)"),
+)
+
+
+def compact():
+    """Cron entrypoint (dispatched by cli.py as `cron compact`).
+    Returns a short status string; never raises."""
+    return _run(_COMPACT)
+
+
 # Standalone-script entrypoint -- lets a caller that can only exec a bare .py file
 # (session_flush.py's substep runner, mirroring how it already runs np_aggregate.py
 # via `[sys.executable, path]`) invoke one of this module's named crons without a
@@ -274,6 +309,7 @@ _STANDALONE_ENTRYPOINTS = {
     "memory-promote": memory_promote,
     "episodic-maintain": episodic_maintain,
     "refine": refine,
+    "compact": compact,
 }
 
 if __name__ == "__main__":

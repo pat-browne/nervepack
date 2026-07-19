@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Shared sandbox + stub-agent helper for the "agentic job" driver tests —
-# now just 77-run-compact.sh (memory-promote, episodic-maintain, and refine have
-# been ported to engine/setup/np_agentic_cron.py's memory_promote(),
-# episodic_maintain(), and refine(); their bash originals 71/72/76-run-*.sh are
-# retired, with Python test sandboxes in tests/memory/test_np_memory_promote.py,
-# tests/episodic/test_np_episodic_maintain.py, and tests/maintain/test_np_refine.py).
-# SOURCE this; do not execute
+# Shared sandbox + stub-agent helper. All four agentic-job crons
+# (memory-promote, episodic-maintain, refine, compact) have been ported to
+# engine/setup/np_agentic_cron.py; their bash originals 71/72/76/77-run-*.sh are
+# retired, each with a Python test sandbox (tests/memory/test_np_memory_promote.py,
+# tests/episodic/test_np_episodic_maintain.py, tests/maintain/test_np_refine.py,
+# tests/maintain/test_np_compact.py). No bash cron drivers remain to copy; this
+# helper now only provides make_agent_sandbox + stub_agent, used by
+# tests/_lib/test_agentjob_selftest.sh. SOURCE this; do not execute
 # directly.
 #
 # The remaining three drivers share the same shape: read a prompt from
@@ -53,9 +54,10 @@ make_agent_sandbox() {
   # whichever of these dirs it actually needs at mutation time.
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
-  # Driver + the libs it sources, mirroring test_skill_maintain.sh's sandbox build.
-  cp "$_AGENTJOB_SETUP/77-run-compact.sh" \
-     "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
+  # The libs a sandboxed agentic job sources (no bash cron drivers remain — all
+  # four were ported to np_agentic_cron.py, whose Python tests build their own
+  # sandboxes; these libs still back make_agent_sandbox + stub_agent).
+  cp "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
      "$_AGENTJOB_SETUP/np-content-lib.sh" \
      "$_AGENTJOB_SETUP/np-layer-lib.sh" \
      "$_AGENTJOB_SETUP/np-llm.sh" \

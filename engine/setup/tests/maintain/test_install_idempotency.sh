@@ -29,7 +29,7 @@ n_compact=$(grep -c 'nervepack-compact' "$store" || true)
 # Check the schedule and script references.
 grep -q '30 9 \* \* 0 .*cli\.py cron refine # nervepack-refine' "$store" \
   || { echo "FAIL: refine cron line wrong: $(grep refine "$store" || true)"; exit 1; }
-grep -q '0 10 \* \* 3 .*77-run-compact\.sh # nervepack-compact' "$store" \
+grep -q '0 10 \* \* 3 .*cli\.py cron compact # nervepack-compact' "$store" \
   || { echo "FAIL: compact cron line wrong: $(grep compact "$store" || true)"; exit 1; }
 
 # Simulate the documented remove command and verify entries are gone.
