@@ -41,7 +41,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Episodic memory** (auto working-memory) | `memory` | `episodic-capture.sh`, `engine/nervepack_engine/hooks/episodic_recall.py` (Python port via `cli.py` dispatcher), `episodic-match.sh`, `episodic-scrub.sh`, `np-transcript-extract.py`, `agents/np-flow-episodic-maintain.md` | `specs/2026-06-02-episodic-memory-layer-design.md` |
 | **Back-capture sweep** (reliable capture path) | `memory` (`.backcapture`; `backcapture_days` = max discovery window default 7, `backcapture_max` = per-sweep cap default 5) | `engine/nervepack_engine/cli.py` (dispatcher) + `engine/nervepack_engine/hooks/backcapture_sweep.py` (Python port, first script migrated per the bash-to-python CLI consolidation — content overlay `docs/superpowers/specs/2026-07-15-nervepack-python-cli-consolidation-design.md`); registered via `56-install-backcapture-hook.sh` (SessionStart, backgrounded); persistent queue `~/.cache/nervepack/backcapture-queue/<sid>` tracks pending work independent of the current mtime window — enqueued once, processed oldest-first, survives aging past `backcapture_days` | CLAUDE.md §"Back-capture sweep"; see invariant 12 |
 | **Local memory promotion** | `memory` | `71-run-memory-promote.sh` | CLAUDE.md §"Memory-store promotion" |
-| **Resume pointer** (deterministic where-we-left-off) | `resume` (`.interval`, `.max_age`, `.cron`, `.cron_min`, `.active_window`) | `np-resume-write.sh` (writer, no LLM calls), `np-resume-sessionstart.sh` (SessionStart, backgrounded — reliable trigger), `np-resume-recall.sh` (UserPromptSubmit — surface + throttled write), `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh` | `plans/2026-07-09-resume-pointer.md` |
+| **Resume pointer** (deterministic where-we-left-off) | `resume` (`.interval`, `.max_age`, `.cron`, `.cron_min`, `.active_window`) | `engine/nervepack_engine/hooks/resume_write.py` (writer, no LLM calls; dispatched as `cli.py resume-write`), `engine/nervepack_engine/hooks/resume_sessionstart.py` (SessionStart, backgrounded — reliable trigger; dispatched as `cli.py hook resume-sessionstart`), `engine/nervepack_engine/hooks/resume_recall.py` (UserPromptSubmit — surface + throttled write; dispatched as `cli.py hook resume-recall`), `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh` | `plans/2026-07-09-resume-pointer.md` |
 | **Lessons** (auto-distilled, provenance-tagged, optionally enforced) | `lessons` (`.enforce`, default on) | `engine/nervepack_engine/hooks/lesson_recall.py`, `engine/nervepack_engine/hooks/lesson_guard.py` (both Python ports via `cli.py` dispatcher), `memory/lessons/`, `agents/np-flow-episodic-maintain.md` (distills capture `struggles[]`→`provenance: failure` and `strategies[]`→`provenance: success`) | `specs/2026-07-02-lessons-layer-merge-design.md` (was: `specs/2026-06-03-playbook-layer-design.md` + `specs/2026-06-05-nervepack-vs-sota-evaluation.md`) |
 | **Performance evaluator** | `evaluator` | `np-evaluator.sh`, `np-eval-signals.py` | `specs/2026-06-03-performance-evaluator-design.md` |
 | **Metrics aggregation** | `evaluator` (`.aggregate`; `retain_days=90` TTL prune, 0 = unlimited) | `73-aggregate-metrics.sh` | ↑ same |
@@ -72,8 +72,8 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 
 | Event | Scripts (in order) |
 |---|---|
-| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `cli.py hook backcapture-sweep &` · `np-resume-sessionstart.sh &` |
-| `UserPromptSubmit` | `cli.py hook episodic-recall` · `cli.py hook lesson-recall` · `cli.py hook struggle-escalation` · `engine/nervepack_engine/cli.py hook skill-trigger-recall` · `np-resume-recall.sh` |
+| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `cli.py hook backcapture-sweep &` · `cli.py hook resume-sessionstart &` |
+| `UserPromptSubmit` | `cli.py hook episodic-recall` · `cli.py hook lesson-recall` · `cli.py hook struggle-escalation` · `engine/nervepack_engine/cli.py hook skill-trigger-recall` · `cli.py hook resume-recall` |
 | `PreToolUse` | `cli.py hook lesson-guard` (matchers: `Bash`, `Read`) |
 | `PreCompact` | `episodic-capture.sh checkpoint` |
 | `SessionEnd` | `40-sync-nervepack.sh exit &` · `episodic-capture.sh session-end &` · `np-evaluator.sh &` · `np-session-flush.sh` (promotes both inboxes on exit; crons = backup) — the three `&` entries are backgrounded so Claude Code's hook-runner returns before it would otherwise report them "Hook cancelled" (invariant 12) |
@@ -88,7 +88,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Daily 09:15 | `75-skill-maintain.sh` |
 | Weekly Sun 09:30 | `76-run-refine.sh` (maintain.refine toggle, default on) |
 | Weekly Wed 10:00 | `77-run-compact.sh` (maintain.compact toggle, default on) |
-| Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `np-resume-write.sh --active --throttle` |
+| Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `cli.py resume-write --active --throttle` |
 
 **Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `35` link-dashboard-data (content bridge) · `40`
 sync · `50–56` install hooks · `61` install-resume-hook · `70` install crons / `71–77` cron bodies · `80–91`

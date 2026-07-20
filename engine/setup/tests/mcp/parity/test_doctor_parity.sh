@@ -41,15 +41,14 @@ export NP_DIR="$tmp/repo" NP_CONTENT_DIR="$tmp/content" NP_CAPABILITIES="$CAPS"
 export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$HOME/.config/nervepack/toggles.local"
 export NP_TEAM_DIR="$tmp/team,$tmp/team2"
 
-# resume-pointer fixture: an executable writer stub under the throwaway NP_DIR
-# (both doctors resolve the writer at $NP_DIR/engine/setup/np-resume-write.sh) plus
+# resume-pointer fixture: a writer stub under the throwaway NP_DIR (both doctors
+# resolve the writer at $NP_DIR/engine/nervepack_engine/hooks/resume_write.py) plus
 # a CLAUDE_SETTINGS registering BOTH hooks (SessionStart -> np-resume-sessionstart.sh,
 # UserPromptSubmit -> np-resume-recall.sh). This drives the check's real logic so both
 # bash and python emit the PASS line — proving they agree on a non-trivial input, not
 # just the no-settings WARN both sides would emit vacuously.
-mkdir -p "$tmp/repo/engine/setup"
-printf '#!/usr/bin/env bash\n' > "$tmp/repo/engine/setup/np-resume-write.sh"
-chmod +x "$tmp/repo/engine/setup/np-resume-write.sh"
+mkdir -p "$tmp/repo/engine/nervepack_engine/hooks"
+printf '# stub\n' > "$tmp/repo/engine/nervepack_engine/hooks/resume_write.py"
 cat > "$tmp/settings.json" <<'JSON'
 {"hooks":{
   "SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"~/Code/nervepack/engine/setup/np-resume-sessionstart.sh &"}]}],

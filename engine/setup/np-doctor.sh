@@ -116,9 +116,9 @@ core_check() {
         printf 'FAIL (%d missing script(s): %s)\n' "${#broken[@]}" "${broken[*]}"
       fi ;;
     resume-pointer)
-      local writer="$NP/engine/setup/np-resume-write.sh"
-      if [[ ! -x "$writer" ]]; then
-        echo "WARN (np-resume-write.sh not executable — run engine/setup/61-install-resume-hook.sh)"
+      local writer="$NP/engine/nervepack_engine/hooks/resume_write.py"
+      if [[ ! -f "$writer" ]]; then
+        echo "WARN (resume_write.py missing — run engine/setup/61-install-resume-hook.sh)"
         return
       fi
       local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
@@ -129,7 +129,8 @@ core_check() {
       command -v jq >/dev/null || { echo "SKIP (jq unavailable)"; return; }
       local cmds
       cmds="$(jq -r '(.hooks // {}) | .. | objects | select(.type? == "command") | .command' "$settings" 2>/dev/null)"
-      if grep -q 'np-resume-sessionstart\.sh' <<<"$cmds" && grep -q 'np-resume-recall\.sh' <<<"$cmds"; then
+      if grep -qE 'np-resume-sessionstart\.sh|cli\.py hook resume-sessionstart' <<<"$cmds" \
+        && grep -qE 'np-resume-recall\.sh|cli\.py hook resume-recall' <<<"$cmds"; then
         echo PASS
       else
         echo "WARN (resume-pointer hooks not registered in $settings — run engine/setup/61-install-resume-hook.sh)"

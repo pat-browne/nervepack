@@ -95,9 +95,9 @@ def _core_check(cap_id, np):
                 "create the symlink into the content overlay; the dashboard will show no "
                 "metrics until then)")
     if cap_id == "resume-pointer":
-        writer = os.path.join(np, "engine", "setup", "np-resume-write.sh")
-        if not (os.path.isfile(writer) and os.access(writer, os.X_OK)):
-            return ("WARN (np-resume-write.sh not executable — run "
+        writer = os.path.join(np, "engine", "nervepack_engine", "hooks", "resume_write.py")
+        if not os.path.isfile(writer):
+            return ("WARN (resume_write.py missing — run "
                     "engine/setup/61-install-resume-hook.sh)")
         settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
             os.path.expanduser("~"), ".claude", "settings.json")
@@ -120,8 +120,8 @@ def _core_check(cap_id, np):
                 for v in node:
                     _walk(v)
         _walk(settings.get("hooks") or {})
-        has_session = any("np-resume-sessionstart.sh" in c for c in cmds)
-        has_recall = any("np-resume-recall.sh" in c for c in cmds)
+        has_session = any("np-resume-sessionstart.sh" in c or "cli.py hook resume-sessionstart" in c for c in cmds)
+        has_recall = any("np-resume-recall.sh" in c or "cli.py hook resume-recall" in c for c in cmds)
         if has_session and has_recall:
             return "PASS"
         return ("WARN (resume-pointer hooks not registered in %s — run "

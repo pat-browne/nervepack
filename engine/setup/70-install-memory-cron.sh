@@ -59,7 +59,7 @@ if [[ "$(np_param resume.cron off)" == "on" ]]; then
   cron_min="$(np_param resume.cron_min 5)"
   [[ "$cron_min" =~ ^[0-9]+$ ]] || cron_min=5
   install_line "$RESUME_MARKER" \
-    "*/$cron_min * * * * $HOME/Code/nervepack/engine/setup/np-resume-write.sh --active --throttle # $RESUME_MARKER"
+    "*/$cron_min * * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py resume-write --active --throttle # $RESUME_MARKER"
 else
   remove_line "$RESUME_MARKER"
 fi
