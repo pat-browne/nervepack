@@ -183,8 +183,11 @@ class TestContentDir(unittest.TestCase):
                 fh.write("| topic | last_updated | keywords |\n|---|---|---|\n| widget | 2026-01-01 | frobnicate |\n")
             with open(os.path.join(ep, "widget.md"), "w") as fh:
                 fh.write("# widget notes\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
-                                            "EPISODIC_STATE_DIR": u(os.path.join(content, "_state"))})
+            # NOT u()-converted: cli.py is invoked as a native subprocess.executable
+            # child (not through bash), so it needs a native-form path, unlike the
+            # bash-invoked scripts elsewhere in this file.
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
+                                            "EPISODIC_STATE_DIR": os.path.join(content, "_state")})
             payload = '{"session_id":"t","prompt":"please frobnicate the widget"}'
             cli_path = os.path.join(REPO, "engine", "nervepack_engine", "cli.py")
             r = subprocess.run([sys.executable, cli_path, "hook", "episodic-recall"],
