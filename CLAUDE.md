@@ -65,7 +65,8 @@ silently no-op because the memory dir won't exist in the cloud sandbox.
 Claude Code does **not** run slow `SessionEnd` `claude -p` hooks to completion (it
 exits without awaiting them) and **`/exit` doesn't fire `SessionEnd` at all** — so
 the SessionEnd capture + evaluator are best-effort and, on their own, lose almost
-every session. `engine/setup/np-backcapture-sweep.sh` (registered on `SessionStart`,
+every session. `engine/nervepack_engine/hooks/backcapture_sweep.py` (dispatched via
+`engine/nervepack_engine/cli.py` as `nervepack hook backcapture-sweep`, registered on `SessionStart`,
 backgrounded, by `engine/setup/56-install-backcapture-hook.sh`; toggle `memory.backcapture`)
 is the guaranteed path: it scans `~/.claude/projects/*/*.jsonl`, and for each
 **completed** prior session with no record yet, re-runs the same capture + evaluator

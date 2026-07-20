@@ -17,6 +17,14 @@ NP_SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 # Extract the nervepack script filename (the dedup key) from a hook command string, e.g.
 #   "~/Code/nervepack/engine/setup/episodic-capture.sh session-end" -> "episodic-capture.sh"
 _np_hook_basename() {
+  # A CLI-dispatched hook ("... nervepack_engine/cli.py <group> <name> ...")
+  # dedups on the full "cli.py <group> <name>" tail — every CLI-dispatched hook
+  # shares the literal file cli.py, so keying on the filename alone would let
+  # two distinct hooks collide on re-registration.
+  if [[ "$1" =~ (nervepack_engine/cli\.py[[:space:]]+[a-zA-Z0-9_-]+[[:space:]]+[a-zA-Z0-9_-]+) ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return
+  fi
   printf '%s\n' "$1" | grep -oE '[A-Za-z0-9._-]+\.(sh|py)' | head -n1
 }
 
