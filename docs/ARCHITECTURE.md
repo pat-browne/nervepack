@@ -39,7 +39,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 |---|---|---|---|
 | **Session directive** ("consult nervepack first") | `directive` | `engine/setup/nervepack-session-directive.{sh,md}` | CLAUDE.md §"Why every session…" |
 | **Episodic memory** (auto working-memory) | `memory` | `episodic-capture.sh`, `episodic-recall.sh`, `episodic-match.sh`, `episodic-scrub.sh`, `np-transcript-extract.py`, `agents/np-flow-episodic-maintain.md` | `specs/2026-06-02-episodic-memory-layer-design.md` |
-| **Back-capture sweep** (reliable capture path) | `memory` (`.backcapture`; `backcapture_days` = max discovery window default 7, `backcapture_max` = per-sweep cap default 5) | `np-backcapture-sweep.sh` (SessionStart, backgrounded; persistent queue `~/.cache/nervepack/backcapture-queue/<sid>` tracks pending work independent of the current mtime window — enqueued once, processed oldest-first, survives aging past `backcapture_days`) | CLAUDE.md §"Back-capture sweep"; see invariant 12 |
+| **Back-capture sweep** (reliable capture path) | `memory` (`.backcapture`; `backcapture_days` = max discovery window default 7, `backcapture_max` = per-sweep cap default 5) | `engine/nervepack_engine/cli.py` (dispatcher) + `engine/nervepack_engine/hooks/backcapture_sweep.py` (Python port, first script migrated per the bash-to-python CLI consolidation — content overlay `docs/superpowers/specs/2026-07-15-nervepack-python-cli-consolidation-design.md`); registered via `56-install-backcapture-hook.sh` (SessionStart, backgrounded); persistent queue `~/.cache/nervepack/backcapture-queue/<sid>` tracks pending work independent of the current mtime window — enqueued once, processed oldest-first, survives aging past `backcapture_days` | CLAUDE.md §"Back-capture sweep"; see invariant 12 |
 | **Local memory promotion** | `memory` | `71-run-memory-promote.sh` | CLAUDE.md §"Memory-store promotion" |
 | **Resume pointer** (deterministic where-we-left-off) | `resume` (`.interval`, `.max_age`, `.cron`, `.cron_min`, `.active_window`) | `np-resume-write.sh` (writer, no LLM calls), `np-resume-sessionstart.sh` (SessionStart, backgrounded — reliable trigger), `np-resume-recall.sh` (UserPromptSubmit — surface + throttled write), `np-transcript-extract.py --last-user`, `61-install-resume-hook.sh` | `plans/2026-07-09-resume-pointer.md` |
 | **Lessons** (auto-distilled, provenance-tagged, optionally enforced) | `lessons` (`.enforce`, default on) | `lesson-recall.sh`, `lesson-guard.sh`, `memory/lessons/`, `agents/np-flow-episodic-maintain.md` (distills capture `struggles[]`→`provenance: failure` and `strategies[]`→`provenance: success`) | `specs/2026-07-02-lessons-layer-merge-design.md` (was: `specs/2026-06-03-playbook-layer-design.md` + `specs/2026-06-05-nervepack-vs-sota-evaluation.md`) |
@@ -72,7 +72,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 
 | Event | Scripts (in order) |
 |---|---|
-| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `np-backcapture-sweep.sh &` · `np-resume-sessionstart.sh &` |
+| `SessionStart` | `40-sync-nervepack.sh &` · `nervepack-session-directive.sh` · `74-open-dashboard.sh &` · `cli.py hook backcapture-sweep &` · `np-resume-sessionstart.sh &` |
 | `UserPromptSubmit` | `episodic-recall.sh` · `lesson-recall.sh` · `struggle-escalation.sh` · `skill-trigger-recall.sh` · `np-resume-recall.sh` |
 | `PreToolUse` | `lesson-guard.sh` (matchers: `Bash`, `Read`) |
 | `PreCompact` | `episodic-capture.sh checkpoint` |
@@ -104,7 +104,8 @@ crons are an **idempotent backup** (empty inbox = no-op).
 **The reliable capture trigger is SessionStart, not SessionEnd** (invariant 12).
 Claude Code kills slow SessionEnd `claude -p` hooks before they finish and `/exit`
 doesn't fire SessionEnd at all, so the SessionEnd capture/evaluator are
-**best-effort**; the `np-backcapture-sweep.sh` SessionStart hook is what actually
+**best-effort**; the `engine/nervepack_engine/hooks/backcapture_sweep.py` SessionStart
+hook (dispatched via `cli.py hook backcapture-sweep`) is what actually
 back-captures the previous session (from its now-complete on-disk transcript) by
 re-running the same capture + evaluator. Same inboxes, same readers. Only the
 trigger differs. Both SessionEnd entries are registered with a trailing `&`
@@ -175,7 +176,8 @@ Record shapes (keep these stable; readers depend on them):
     Claude Code exits without awaiting slow SessionEnd hooks and `/exit` doesn't fire
     SessionEnd at all (GH #35892/#41577), so any SessionEnd step that calls `claude -p`
     (capture, evaluator) is **best-effort**. The guaranteed path is the SessionStart
-    `np-backcapture-sweep.sh`, which back-captures the previous session from its
+    `engine/nervepack_engine/hooks/backcapture_sweep.py` (dispatched via `cli.py hook
+    backcapture-sweep`), which back-captures the previous session from its
     complete on-disk transcript. New per-session capture/scoring work must ride the
     sweep (or another awaited trigger), never depend on SessionEnd completing.
 13. **Pre-flight gates check the backend, not the `claude` binary.** A hook/cron that
@@ -242,7 +244,7 @@ Record shapes (keep these stable; readers depend on them):
 | **`np-llm.sh`** (the LLM-CLI seam) | every runtime caller (capture, evaluator, 71/72/75); BOTH backend branches (`claude`, and `local` → `engine/setup/np-llm-local.py` for any OpenAI-compatible endpoint via `NP_LLM_BASE_URL`/`_API_KEY`/`_MODEL_CHEAP`); the `complete`/`agent` contract (`agent` on `local` needs `NP_LLM_AGENT_CMD`); `engine/setup/tests/llm/` |
 | **`engine/onboard/capabilities.json`** (the contract) | `np-doctor.sh` (reads it), `ONBOARD.md`, the `np-core-onboard` skill, and host `adapter.json` manifests |
 | **`np-session-flush.sh`** (on-exit promotion) | its `NERVEPACK_AGENT` guard (the maintain step calls `claude -p`; without it SessionEnd recurses), that it stays LAST in SessionEnd (after capture+evaluator write the inboxes), that the crons remain idempotent backups, and that the **detach has a non-`setsid` fallback** (macOS has no `setsid` → `nohup`+`disown`, else the slow maintain step runs synchronously and Claude Code cancels the SessionEnd hook) |
-| **`np-backcapture-sweep.sh`** (the reliable capture trigger) | it reuses `episodic-capture.sh` + `np-evaluator.sh` (keep their stdin payload contract `{session_id,transcript_path,cwd}` stable — Phase B reconstructs it from the queue file, not from a fresh `find`); its `56-install-*` registration (SessionStart, `&`); the `memory.backcapture` toggle + `backcapture_days` (max discovery window)/`backcapture_max` (per-sweep processing cap) params; the two-phase design — Phase A discovery/enqueue into `BACKCAPTURE_QUEUE_DIR` (one-way ratchet, survives the item's mtime aging past `backcapture_days`) vs Phase B processing oldest-enqueued-first out of the queue; dedup vs `metrics.jsonl` sids + the per-sid claim marker (`BACKCAPTURE_SEEN_DIR`); invariant 12; its test (`tests/episodic/test_backcapture.sh`, incl. the oldest-first-ordering and tracked-past-window cases) |
+| **`engine/nervepack_engine/hooks/backcapture_sweep.py`** (the reliable capture trigger) | it reuses the ported `episodic-capture` + `np-evaluator` paths (keep their stdin payload contract `{session_id,transcript_path,cwd}` stable — Phase B reconstructs it from the queue file, not from a fresh `find`); its `56-install-*` registration (SessionStart, `&`); the `memory.backcapture` toggle + `backcapture_days` (max discovery window)/`backcapture_max` (per-sweep processing cap) params; the two-phase design — Phase A discovery/enqueue into `BACKCAPTURE_QUEUE_DIR` (one-way ratchet, survives the item's mtime aging past `backcapture_days`) vs Phase B processing oldest-enqueued-first out of the queue; dedup vs `metrics.jsonl` sids + the per-sid claim marker (`BACKCAPTURE_SEEN_DIR`); invariant 12; its test (`engine/setup/tests/nervepack_engine/test_backcapture_sweep.py`, incl. the oldest-first-ordering and tracked-past-window cases) |
 | **`np-mcp-server.py`** (the dispatcher) | the stdin/arg contracts of every wrapped script (`np-doctor.sh`, `episodic-match.sh`, `nervepack-toggle.sh`, `dashboard/build.py`, and the Phase-6 scripts); the `mcp`/`mcp.writes`/`mcp.contribute` toggles; the protocol method allowlist; `engine/setup/tests/mcp/` |
 | **a wrapped script's CLI/stdin contract** | `np-mcp-server.py` is now a second caller alongside the hooks — update its call site |
 | **`np-mcp-install.sh`** (the guided installer) | it writes `~/.config/nervepack/{content-dir,team-dir}` (must match `np-content-lib.sh`'s resolver paths — `$HOME/.config`, not XDG), calls `58-install-mcp.sh` for registration and `np-doctor.sh` for verification, and **must never flip the shared `team` toggle** (that commits to the engine repo — the overlay is on by default); keep the non-interactive default-on-empty-stdin behavior; `engine/bin/nervepack-install` is the one-line wrapper; `engine/setup/tests/onboard/test_mcp_install.sh`; `engine/onboard/MCP.md` documents it |

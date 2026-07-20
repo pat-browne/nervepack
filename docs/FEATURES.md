@@ -263,11 +263,12 @@ catch: `SessionEnd` is unreliable (Claude Code kills slow `claude -p` hooks; `/e
 doesn't fire it at all), so the reliable trigger is `SessionStart`.
 
 **Workflow.** `SessionEnd`/`PreCompact` capture is best-effort (Haiku summary → inbox).
-The guaranteed path is `np-backcapture-sweep.sh` on `SessionStart` (backgrounded):
+The guaranteed path is `engine/nervepack_engine/hooks/backcapture_sweep.py` (dispatched
+via `cli.py hook backcapture-sweep`) on `SessionStart` (backgrounded):
 it re-runs capture + evaluator against the *previous* session's now-complete on-disk
 transcript, deduped per `session_id`.
 
-**Assets.** `episodic-capture.sh`, `np-backcapture-sweep.sh`,
+**Assets.** `episodic-capture.sh`, `engine/nervepack_engine/hooks/backcapture_sweep.py`,
 `np-transcript-extract.py`. Toggle: `memory` (`memory.backcapture`).
 
 **Situational example.** You finish a session and type `/exit`. No SessionEnd fires.

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nervepack"
+version = "0.1.0"
+description = "nervepack engine CLI (bash-free hook/cron/setup dispatcher)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+nervepack = "nervepack_engine.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nervepack_engine"]
