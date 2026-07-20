@@ -11,8 +11,10 @@
 # demo.md carries BOTH provenances back to back (failure = former playbook,
 # success = former strategy), matching how np-migrate-lessons.py folds a topic
 # that existed in both old layers into one file. Readers under test: lesson-
-# recall.sh (merge of playbook-recall.sh + strategy-recall.sh) and lesson-
-# guard.sh (renamed from playbook-guard.sh).
+# recall (merge of playbook-recall.sh + strategy-recall.sh, now the Python
+# module hooks/lesson_recall.py) and lesson-guard (renamed from playbook-
+# guard.sh, now the Python module hooks/lesson_guard.py) -- both dispatched
+# via engine/nervepack_engine/cli.py.
 #
 # The fixture mirrors nervepack-content-example's shape and MUST be updated in
 # lockstep if the canonical layout changes.
@@ -37,7 +39,7 @@ out="$(bash -c 'source "'"$SETUP/np-layer-lib.sh"'"; np_layer_roots lessons')"
 #    strategy) with its "worked" framing -- one hook, one call, both blocks.
 st="$(mktemp -d)"
 lr="$(printf '{"session_id":"t1","prompt":"please handle demoword now"}' \
-      | EPISODIC_STATE_DIR="$st" bash "$SETUP/lesson-recall.sh" 2>/dev/null || true)"
+      | EPISODIC_STATE_DIR="$st" python3 "$REPO/engine/nervepack_engine/cli.py" hook lesson-recall 2>/dev/null || true)"
 printf '%s' "$lr" | grep -q 'demo' || fail "lesson-recall did not surface memory/lessons (out=[$lr])"
 printf '%s' "$lr" | grep -qi 'past failure' || fail "lesson-recall missing failure-provenance framing (out=[$lr])"
 printf '%s' "$lr" | grep -qi 'worked' || fail "lesson-recall missing success-provenance framing (out=[$lr])"
@@ -53,7 +55,7 @@ printf '%s' "$er" | grep -q 'demo' || fail "episodic-recall did not surface memo
 #    the guard read <content>/memory/lessons/INDEX.md, not just "didn't crash").
 st4="$(mktemp -d)"
 gr="$(printf '{"session_id":"t4","tool_name":"Bash","tool_input":{"command":"run demoword now"}}' \
-      | EPISODIC_STATE_DIR="$st4" bash "$SETUP/lesson-guard.sh" 2>/dev/null || true)"
+      | EPISODIC_STATE_DIR="$st4" python3 "$REPO/engine/nervepack_engine/cli.py" hook lesson-guard 2>/dev/null || true)"
 printf '%s' "$gr" | grep -q 'demo' || fail "lesson-guard did not resolve+fire from memory/lessons (out=[$gr])"
 
 # 5. wiki_index indexes topic AND concept as folders, each with co-located sources
