@@ -150,7 +150,7 @@ python3 "$CLI" resume-write --active
 [[ -f "$NP_RESUME_POINTER" ]] || fail "--active did not write a pointer"
 jq -e '.session_id == "real-session-abc"' "$NP_RESUME_POINTER" >/dev/null \
   || fail "--active picked the wrong session: $(jq -c . "$NP_RESUME_POINTER")"
-jq -e --arg v "$REPO" '.cwd == $v' "$NP_RESUME_POINTER" >/dev/null \
+MSYS_NO_PATHCONV=1 jq -e --arg v "$REPO" '.cwd == $v' "$NP_RESUME_POINTER" >/dev/null \
   || fail "--active cwd mismatch: $(jq -c . "$NP_RESUME_POINTER")"
 
 echo "PASS: writer --active discovers the newest non-agent-* transcript"
