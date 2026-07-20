@@ -106,6 +106,58 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(buf.getvalue(), "")
 
 
+class TestResumeWriteDispatch(unittest.TestCase):
+    """Covers cli.py's `resume-write` dispatch branch itself. All 10
+    scenarios in test_resume_write.py call resume_write.write() directly,
+    bypassing cli.py entirely -- these tests exercise the dispatch shape
+    (argv parsing, the NERVEPACK_AGENT guard, and the fail-open exception
+    wrapper) that only cli.main() implements."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.pointer = os.path.join(self.tmp_dir, "pointer.json")
+        self.stamp = os.path.join(self.tmp_dir, "last-write")
+        self.toggles_conf = os.path.join(self.tmp_dir, "toggles.conf")
+        open(self.toggles_conf, "w").close()
+        self._env = mock.patch.dict(os.environ, {
+            "NP_TOGGLES_CONF": self.toggles_conf,
+            "NP_TOGGLES_LOCAL": os.path.join(self.tmp_dir, "local-none"),
+            "NP_RESUME_POINTER": self.pointer,
+            "NP_RESUME_STAMP": self.stamp,
+            "NP_RESUME_LOG": os.path.join(self.tmp_dir, "resume.log"),
+        })
+        self._env.start()
+        self.addCleanup(self._env.stop)
+        import shutil
+        self.addCleanup(shutil.rmtree, self.tmp_dir, True)
+
+    def test_successful_dispatch_writes_a_real_pointer_file(self):
+        from nervepack_engine import cli
+        os.environ.pop("NERVEPACK_AGENT", None)
+        rc = cli.main(["resume-write", "--session", "s1", "--cwd", self.tmp_dir])
+        self.assertEqual(rc, 0)
+        self.assertTrue(os.path.isfile(self.pointer))
+        with open(self.pointer, encoding="utf-8") as fh:
+            record = json.load(fh)
+        self.assertEqual(record["session_id"], "s1")
+        self.assertEqual(record["cwd"], self.tmp_dir)
+
+    def test_nervepack_agent_guard_skips_dispatch_no_pointer_written(self):
+        from nervepack_engine import cli
+        with mock.patch.dict(os.environ, {"NERVEPACK_AGENT": "1"}):
+            rc = cli.main(["resume-write", "--session", "s1", "--cwd", self.tmp_dir])
+        self.assertEqual(rc, 0)
+        self.assertFalse(os.path.isfile(self.pointer))
+
+    def test_write_exception_is_caught_and_does_not_propagate(self):
+        from nervepack_engine import cli
+        os.environ.pop("NERVEPACK_AGENT", None)
+        with mock.patch.object(cli.resume_write, "write", side_effect=RuntimeError("boom")):
+            rc = cli.main(["resume-write", "--session", "s1", "--cwd", self.tmp_dir])
+        self.assertEqual(rc, 0)
+        self.assertFalse(os.path.isfile(self.pointer))
+
+
 class TestBackcaptureSweepEndToEnd(unittest.TestCase):
     """Real subprocess invocation of cli.py — proves the full settings.json
     dispatch shape (`python3 cli.py hook backcapture-sweep` with a JSON stdin
