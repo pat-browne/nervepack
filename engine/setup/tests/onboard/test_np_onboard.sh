@@ -44,14 +44,14 @@ echo "  OK: onboard ran skills-link + 5x hooks + doctor (rc=$rc)"
 # --- the lifecycle hooks actually landed in settings.json (real side effect) ---
 command -v jq >/dev/null || { echo "PASS test_np_onboard (jq missing — skipped hook assertions)"; exit 0; }
 reg() { jq -r "[.. | .command? // empty | select(test(\"$1\"))] | length" "$CLAUDE_SETTINGS"; }
-[[ "$(reg 'lesson-recall.sh')" -ge 1 ]] || fail "lesson-recall not registered after onboard"
-[[ "$(reg 'lesson-guard.sh')"  -ge 1 ]] || fail "lesson-guard not registered after onboard"
+[[ "$(reg 'cli.py hook lesson-recall')" -ge 1 ]] || fail "lesson-recall not registered after onboard"
+[[ "$(reg 'cli.py hook lesson-guard')"  -ge 1 ]] || fail "lesson-guard not registered after onboard"
 [[ "$(reg 'nervepack-session-directive.sh')" -ge 1 ]] || fail "session directive not registered after onboard"
 echo "  OK: lesson-recall + lesson-guard + directive registered in settings.json"
 
 # --- idempotent: a second run doesn't duplicate the recall hook ---
 bash "$ONBOARD" >/dev/null 2>&1 || true
-[[ "$(reg 'lesson-recall.sh')" == "1" ]] || fail "onboard not idempotent: lesson-recall count = $(reg 'lesson-recall.sh')"
+[[ "$(reg 'cli.py hook lesson-recall')" == "1" ]] || fail "onboard not idempotent: lesson-recall count = $(reg 'cli.py hook lesson-recall')"
 echo "  OK: re-run is idempotent"
 
 echo "PASS test_np_onboard"

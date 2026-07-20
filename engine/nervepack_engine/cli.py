@@ -26,12 +26,16 @@ for _p in (_ENGINE_DIR, _ENGINE_SETUP):
 
 from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
+from nervepack_engine.hooks import lesson_guard  # noqa: E402
+from nervepack_engine.hooks import lesson_recall  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
     "episodic-recall": episodic_recall.run,
+    "lesson-guard": lesson_guard.run,
+    "lesson-recall": lesson_recall.run,
     "skill-trigger-recall": skill_trigger_recall.run,
     "struggle-escalation": struggle_escalation.run,
 }

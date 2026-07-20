@@ -112,13 +112,16 @@ path change replaces the stale entry instead of duplicating it.
   `memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or
   `provenance: success`, adding an `enforce` block only when a tool-call gate is
   warranted (independent of provenance), and regenerates `memory/lessons/INDEX.md`.
-- **Enforce:** `engine/setup/lesson-guard.sh` (`PreToolUse`, matchers `Bash`/`Read`,
-  installed by `engine/setup/53-install-lesson-hooks.sh`) gates `ask` entries and
-  injects `warn` ones at the tool call for any lesson carrying a non-empty
-  `enforce.tool_match`, skipping advisory-only entries; `engine/setup/lesson-recall.sh`
-  (`UserPromptSubmit`, the merge of the former `playbook-recall.sh` +
-  `strategy-recall.sh`) injects topic-matched lessons, framing by provenance —
-  imperative wording for `failure`, "the approach that worked" wording for `success`.
+- **Enforce:** `engine/nervepack_engine/hooks/lesson_guard.py` (dispatched via
+  `engine/nervepack_engine/cli.py` as `cli.py hook lesson-guard`, registered on
+  `PreToolUse` with matchers `Bash`/`Read` by `engine/setup/53-install-lesson-hooks.sh`)
+  gates `ask` entries and injects `warn` ones at the tool call for any lesson
+  carrying a non-empty `enforce.tool_match`, skipping advisory-only entries;
+  `engine/nervepack_engine/hooks/lesson_recall.py` (dispatched as
+  `cli.py hook lesson-recall`, registered on `UserPromptSubmit` — the merge of the
+  former `playbook-recall.sh` + `strategy-recall.sh`) injects topic-matched
+  lessons, framing by provenance — imperative wording for `failure`, "the approach
+  that worked" wording for `success`.
 - **Graduate:** a proven lesson is promoted to a `skills/np-kb-*` rule via the
   human-reviewed `np-core-contribute` gate, then marked `promoted`/archived.
 

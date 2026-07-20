@@ -119,13 +119,13 @@ enforcement gates the tool call — the two are decoupled).
    (matches common safe commands), leave it empty and rely on `topic_triggers` injection.
    Entries with no `enforce` (or an empty `tool_match`) are advisory-only.
 4. Set top-level `topic_triggers` from the items' topic_triggers (drives
-   `engine/setup/lesson-recall.sh` injection; for enforced entries it also drives
-   `engine/setup/lesson-guard.sh`). Increment `seen` when a cluster matches an existing
-   lesson.
+   `engine/nervepack_engine/hooks/lesson_recall.py` injection; for enforced entries it
+   also drives `engine/nervepack_engine/hooks/lesson_guard.py`). Increment `seen` when a
+   cluster matches an existing lesson.
 5. Regenerate `memory/lessons/INDEX.md` — a Markdown table whose data rows are
    `| <topic> | <tool_match> | <gate> | <topic_triggers> |` (empty `tool_match`/`gate`
-   cells for advisory entries), so `engine/setup/lesson-guard.sh`'s parser reads it
-   unchanged.
+   cells for advisory entries), so `engine/nervepack_engine/hooks/lesson_guard.py`'s
+   parser reads it unchanged.
 6. In your final report, FLAG lessons with high `seen` (≥3) as **promotion candidates**
    for a human to graduate into a `skills/np-kb-*` rule via `np-core-contribute`. Prune
    stale/disproven lessons to `archive/lessons/`.

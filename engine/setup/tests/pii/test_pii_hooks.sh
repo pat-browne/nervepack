@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Integration tests: episodic-recall (Python port, dispatched via cli.py) and
-# lesson-recall.sh filter PII from injected context when pii_filter toggle is
-# on; pass through unchanged when off.
+# Integration tests: episodic-recall and lesson-recall (both Python ports,
+# dispatched via cli.py) filter PII from injected context when pii_filter
+# toggle is on; pass through unchanged when off.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$HERE/../.."
@@ -73,7 +73,7 @@ ls_payload="$(jq -nc '{session_id:"s2", prompt:"fix pii auth issue"}')"
 ls_run() {
   printf '%s' "$ls_payload" | \
     NP_TOGGLES_CONF="$1" EPISODIC_LESSON_DIR="$tmp/lessons" EPISODIC_STATE_DIR="$tmp/ls-state-$2" \
-    bash "$S/lesson-recall.sh"
+    python3 "$CLI" hook lesson-recall
 }
 
 # --- lesson: pii_filter ON -> email and IP scrubbed ---

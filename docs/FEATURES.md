@@ -196,17 +196,20 @@ be worth enforcing.
 and `strategies[]` on sessions with wins. `episodic-maintain` distills both into
 `memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or
 `provenance: success` and adding an `enforce` block only when a tool-call gate is
-warranted. `lesson-guard.sh` (`PreToolUse`) gates `ask` entries / injects `warn` ones
-at the tool call for any entry that carries a non-empty `enforce.tool_match` —
-skipping advisory entries regardless of provenance. `lesson-recall.sh`
-(`UserPromptSubmit`, the merge of the former `playbook-recall.sh` +
-`strategy-recall.sh`) injects topic-matched entries on a session's first prompts,
-framing by provenance: imperative "avoid X" wording for `failure`, advisory "the
-approach that worked is Y" wording for `success`.
+warranted. `lesson_guard.py` (`PreToolUse`, dispatched via `cli.py hook lesson-guard`)
+gates `ask` entries / injects `warn` ones at the tool call for any entry that carries
+a non-empty `enforce.tool_match` — skipping advisory entries regardless of provenance.
+`lesson_recall.py` (`UserPromptSubmit`, dispatched via `cli.py hook lesson-recall`,
+the merge of the former `playbook-recall.sh` + `strategy-recall.sh`) injects
+topic-matched entries on a session's first prompts, framing by provenance:
+imperative "avoid X" wording for `failure`, advisory "the approach that worked is
+Y" wording for `success`.
 
-**Assets.** `lesson-recall.sh`, `lesson-guard.sh`, `agents/np-flow-episodic-maintain.md`,
-`memory/lessons/` (overlay). Toggle: `lessons` (param `lessons.enforce`, default on,
-disables the guard while advisory recall stays on).
+**Assets.** `engine/nervepack_engine/hooks/lesson_recall.py`,
+`engine/nervepack_engine/hooks/lesson_guard.py` (both Python ports via `cli.py`
+dispatcher), `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
+Toggle: `lessons` (param `lessons.enforce`, default on, disables the guard while
+advisory recall stays on).
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into a `provenance: failure`
@@ -585,8 +588,9 @@ learned-counts, and MCP recall all merge across layers).
 `np_layer_roots`) and its Python mirror `np_content.py` (`merge_roots`/`merge_mode`),
 `np_team_dirs`/`np_team_dir` (the comma-list parse/validate/cap
 resolver, and its highest-precedence first entry) in `np-content-lib.sh`, the two recall hooks
-(`engine/nervepack_engine/hooks/episodic_recall.py` — Python port via `cli.py` dispatcher,
-`lesson-recall.sh`), `dashboard/build.py` (`wiki_index`,
+(`engine/nervepack_engine/hooks/episodic_recall.py`,
+`engine/nervepack_engine/hooks/lesson_recall.py` — both Python ports via `cli.py`
+dispatcher), `dashboard/build.py` (`wiki_index`,
 `learned_counts`), `np-mcp-server.py` (`_tool_recall`), `np-core-contribute`.
 Toggle: `team` (`team.merge`).
 
