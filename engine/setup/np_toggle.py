@@ -129,6 +129,23 @@ def param(key, default):
     return v
 
 
+def signal(sid, message):
+    """np_signal: append a fire-marker line to the session signal log, gated
+    on evaluator.signals. Fail-open (any OSError -> no-op), mirroring the
+    bash original in np-toggle-lib.sh."""
+    if not enabled("evaluator.signals"):
+        return
+    d = os.environ.get("NP_SIGNAL_DIR") or os.path.join(
+        os.environ.get("HOME") or os.path.expanduser("~"),
+        ".cache", "nervepack", "session-signals")
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, sid.replace("/", "_") + ".log"), "a", encoding="utf-8") as fh:
+            fh.write(message + "\n")
+    except OSError:
+        pass
+
+
 # --- write + status surface (ported from nervepack-toggle.sh) ---------------
 # Only the LOCAL-file write (_set_local) and the status table are ported here.
 # Shared-feature writes (toggles.conf + git commit/push) and managed-permission

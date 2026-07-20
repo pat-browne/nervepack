@@ -6,7 +6,8 @@ description: Pull episodic working-memory themes ("what we did / decided / where
 # recall
 
 The on-demand counterpart to the automatic `UserPromptSubmit` injection
-(`engine/setup/episodic-recall.sh`). Auto-injection only fires on a session's first
+(`engine/nervepack_engine/hooks/episodic_recall.py`, dispatched via `cli.py hook
+episodic-recall`). Auto-injection only fires on a session's first
 couple of prompts and only on keyword hits; `/recall` lets you pull any theme,
 any time.
 
