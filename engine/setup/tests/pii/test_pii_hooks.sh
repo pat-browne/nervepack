@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Integration tests: episodic-recall.sh and lesson-recall.sh filter PII from
-# injected context when pii_filter toggle is on; pass through unchanged when off.
+# Integration tests: episodic-recall (Python port, dispatched via cli.py) and
+# lesson-recall.sh filter PII from injected context when pii_filter toggle is
+# on; pass through unchanged when off.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$HERE/../.."
+CLI="$S/../nervepack_engine/cli.py"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 # --- shared toggle env ---
@@ -32,7 +34,7 @@ ep_payload="$(jq -nc '{session_id:"s1", prompt:"fix the pii auth bug"}')"
 ep_run() {
   printf '%s' "$ep_payload" | \
     NP_TOGGLES_CONF="$1" EPISODIC_DIR="$tmp/episodic" EPISODIC_STATE_DIR="$tmp/state-$2" \
-    bash "$S/episodic-recall.sh"
+    python3 "$CLI" hook episodic-recall
 }
 
 # --- episodic: pii_filter ON -> email and IP scrubbed ---

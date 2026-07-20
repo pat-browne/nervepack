@@ -19,6 +19,6 @@ source "$HERE/np-hook-lib.sh"
 
 np_register_hook SessionEnd       '~/Code/nervepack/engine/setup/episodic-capture.sh session-end &'
 np_register_hook PreCompact       '~/Code/nervepack/engine/setup/episodic-capture.sh checkpoint'
-np_register_hook UserPromptSubmit '~/Code/nervepack/engine/setup/episodic-recall.sh'
+np_register_hook UserPromptSubmit 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-recall'
 
 echo "To remove: edit $NP_SETTINGS and drop the matching entries."

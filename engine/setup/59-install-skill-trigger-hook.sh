@@ -7,5 +7,5 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-hook-lib.sh"
 
-np_register_hook UserPromptSubmit '~/Code/nervepack/engine/setup/skill-trigger-recall.sh'
+np_register_hook UserPromptSubmit 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook skill-trigger-recall'
 echo "To remove: edit $NP_SETTINGS and drop the matching entry."
