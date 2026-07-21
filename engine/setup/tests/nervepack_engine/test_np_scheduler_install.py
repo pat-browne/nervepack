@@ -35,6 +35,14 @@ _JOB_NAMES = ["memory-promote", "episodic-maintain", "aggregate-metrics",
               "skill-maintain", "refine", "compact"]
 
 
+@unittest.skipIf(os.name == "nt",
+                  "dual-exec bash comparison needs MSYS path conversion for a "
+                  "file path passed via an env var (bash-side), which "
+                  "np_bashlib.argv() doesn't do (it only converts argv "
+                  "elements) -- same class of Windows-only limitation as "
+                  "test_model_parity.sh/test_agent_parity.sh's analogous skip; "
+                  "production np_token_lib.py never shells to bash at all, so "
+                  "this is a cross-check gap, not a functional one")
 class TestTokenLibParity(unittest.TestCase):
     """np_token_lib.claude_token_env_prefix isn't byte-identical to np-token-lib.sh's
     np_claude_token_env_prefix (shlex.quote vs bash's printf %q use different, both
