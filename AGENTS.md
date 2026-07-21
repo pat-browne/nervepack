@@ -193,6 +193,15 @@ Dashboard e2e is informational) → if the branch is behind, `gh pr update-branc
 and re-wait → `gh pr merge --squash --delete-branch` once green. Keep engine commit
 messages and PR bodies **company-neutral** (feature + tech only).
 
+**Gotcha:** `gh pr merge --squash --delete-branch` run from inside a git worktree
+(rather than the primary checkout) reliably fails locally with `fatal: 'main' is
+already used by worktree at ...` — this is only the local post-merge branch-delete
+step tripping over the worktree holding `main` elsewhere; the squash-merge itself
+already succeeded via the GitHub API. Confirm with `gh pr view <n> --json
+state,mergedAt` before treating the error as a real failure, then clean up the
+worktree/branch manually (`git worktree remove` + `git branch -D`, run from the
+primary checkout) instead of retrying the merge.
+
 **Exempt (still direct-push, bounded):** the auto-committing crons
 (episodic-maintain, metrics aggregator, memory-promote, skill-maintain) — they
 cannot open PRs; and the **private content overlay** (`nervepack-content`), which
