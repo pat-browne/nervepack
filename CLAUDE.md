@@ -18,7 +18,9 @@ Read `docs/ROADMAP.md` and re-evaluate any deferred item whose trigger now appli
 
 ## Why every session is told to consult nervepack first
 A second `SessionStart` hook (installed via
-`engine/setup/51-install-nervepack-directive-hook.sh`) runs `engine/setup/nervepack-session-directive.sh`
+`engine/setup/51-install-nervepack-directive-hook.sh`) runs
+`engine/nervepack_engine/hooks/session_directive.py` (dispatched via
+`engine/nervepack_engine/cli.py` as `cli.py hook session-directive`)
 **synchronously** and injects `engine/setup/nervepack-session-directive.md` as session
 context. This is nervepack's forcing function: skill *descriptions* load passively,
 but a passive list does not get used — sessions otherwise ignore nervepack's domain

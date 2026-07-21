@@ -58,7 +58,7 @@ the brand guide, design language, and source stay in the overlay.
 | `engine/setup/toggles.conf` | Committed feature-toggle manifest (declares every feature; holds shared-feature state). | Yes — add a row per new feature |
 | `~/.config/nervepack/toggles.local` | Per-machine toggle state for local/tool-specific features + overrides (NOT in repo). | N/A (local) |
 | `engine/setup/NN-name.sh` | Idempotent bootstrap step | Yes |
-| `engine/setup/nervepack-session-directive.{md,sh}` | The "consult nervepack first" directive injected into every session by a `SessionStart` hook, and the script that emits it. Edit the `.md` to change what every session is told. | Yes |
+| `engine/setup/nervepack-session-directive.md` | The "consult nervepack first" directive injected into every session by a `SessionStart` hook; the script that emits it is `engine/nervepack_engine/hooks/session_directive.py` (dispatched via `engine/nervepack_engine/cli.py` as `cli.py hook session-directive`). Edit the `.md` to change what every session is told. | Yes |
 | `publish/np-publish-scan.py`, `publish/scan-allowlist.txt` | The secret/PII guard run by the `pii-guard` CI job on every push/PR — blocks personal data from landing in the (public-to-be) engine. | Yes — engine machinery |
 | `agents/<name>.md` | Prompts for `/schedule` or `/loop` agents | Yes |
 | _(no `docs/` tree)_ | Design specs + plans (superpowers brainstorm output) are **content, not engine** — they live in the overlay at `$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/`, never in this repo. Promote durable lessons into skills/ via [[np-core-contribute]]. The `nervepack-content-example` repo shows where they go (`docs/specs/`). | N/A — write specs to the overlay |
@@ -108,11 +108,9 @@ they mark something worth writing later.
 The harness is deliberately **bilingual**, split on one question: *is there real
 logic here, or is this just glue?*
 
-- **Bash** — for latency-critical, low-logic glue: hooks that run on the hot path
-  (`lesson-guard` fires before *every* Bash tool call; `episodic-recall` /
-  `lesson-recall` fire on *every* prompt; `nervepack-session-directive` at session
-  start), and any script that's mostly sequencing other CLIs (git, jq, `np-llm.sh`,
-  crontab). Bash's ~5–10ms cold start matters on these; Python's ~30–80ms does not.
+- **Bash** — for latency-critical, low-logic glue: any script that's mostly
+  sequencing other CLIs (git, jq, `np-llm.sh`, crontab). Bash's ~5–10ms cold
+  start matters on these; Python's ~30–80ms does not.
 - **Python (stdlib-only)** — for parsing and data-structure assembly that runs
   off the hot path (SessionEnd, cron): the evaluator's signal extraction, record
   assembly, episodic distillation, aggregation. This is where bash's footguns
