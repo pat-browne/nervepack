@@ -93,6 +93,7 @@ README.md          # You are here.
 INDEX.md           # Auto-generated skill index. Read before adding a skill.
 docs/
   GETTING-STARTED.md # First-time-user walkthrough: clone → onboard → verify.
+  CONTENT-OVERLAY.md # How to configure a personal (and optional team) content overlay.
   ARCHITECTURE.md  # The cheap high-level map. Read before any code change.
   FEATURES.md      # Feature guide: purpose, enforcing workflow, worked example per flow.
   ROADMAP.md       # Deferred work + the trigger to revisit each item.
