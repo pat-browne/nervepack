@@ -40,6 +40,7 @@ import sys
 import tempfile
 import time
 
+import np_bashlib
 import np_content
 import np_model
 import np_toggle
@@ -268,11 +269,15 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
 def _default_agent_fn(prompt, tools, cwd, timeout):
     """Default agent seam: IMPLEMENT_LLM (if set) shells out to that script's
     `agent --tools <tools>` (test/override seam, matching np-llm.sh's own
-    contract exactly); otherwise calls np_model.agent() in-process."""
+    contract exactly -- every real IMPLEMENT_LLM value, default or test-set,
+    is a bash script, so it's always invoked via `bash <script> ...` routed
+    through np_bashlib.argv() for the right interpreter on Windows -- a bare
+    native-Windows subprocess.run([override, ...]) can't exec a shebang script
+    with no .exe/.bat extension); otherwise calls np_model.agent() in-process."""
     override = os.environ.get("IMPLEMENT_LLM")
     if override:
-        r = subprocess.run([override, "agent", "--tools", tools], input=prompt,
-                           cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(np_bashlib.argv(["bash", override, "agent", "--tools", tools]),
+                           input=prompt, cwd=cwd, capture_output=True, text=True, timeout=timeout)
         return r.returncode, r.stdout, r.stderr
     return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
 
@@ -420,7 +425,7 @@ def _default_resolve(text):
     which may not be `repo` (a split layout's dashboard/data is only a symlink
     into the content overlay)."""
     resolve_script = os.path.join(_HERE, "np-suggestion-resolve.sh")
-    subprocess.run(["bash", resolve_script, text], stdout=subprocess.DEVNULL,
+    subprocess.run(np_bashlib.argv(["bash", resolve_script, text]), stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL)
     ledger = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
         np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
