@@ -173,7 +173,7 @@
       "why": "Enables name/org/location scrubbing at storage time. Without it, pii_filter falls back to regex-only (structural PII only).",
       "accept": "python3 -c 'import presidio_analyzer' succeeds.",
       "hints": {
-        "generic": "Run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy en_core_web_lg."
+        "generic": "Run cli.py setup install-pii-deps to install Presidio + spaCy en_core_web_lg."
       }
     }
   ]
