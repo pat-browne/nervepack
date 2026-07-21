@@ -40,6 +40,9 @@ this skill is the entry point.
   `NERVEPACK_AGENT` is set, or the model call's own session-end re-fires the hook forever
   → see [[np-kb-claude-headless-scripting]] §7.
 - A non-agentic host (plain chat) can't self-wire; it can only consume `skills/` as context.
+- The `scheduled-auth-token` capability has a genuinely manual step — point the user
+  at `engine/setup/62-install-scheduled-auth-token.sh`; you cannot run `claude
+  setup-token`'s browser approval on their behalf.
 
 See [[np-core-toggle]] to tune features after onboarding, [[np-core-sync]] to keep the
 repo current.

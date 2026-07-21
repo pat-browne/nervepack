@@ -14,6 +14,7 @@ fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/np-toggle-lib.sh"
+source "$HERE/np-token-lib.sh"
 
 install_line() {  # $1=marker  $2=full crontab line
   local marker="$1" line="$2"
@@ -35,18 +36,23 @@ remove_line() {  # $1=marker — drop any crontab line containing marker; no-op 
   echo "Removed cron entry matching: $marker"
 }
 
+# Each job's command is prefixed with the scheduled-auth token export (no-op/
+# fail-open if not yet provisioned — see np-token-lib.sh and
+# [nervepack-scheduled-auth]).
+TOKEN_PREFIX="$(np_claude_token_env_prefix)"
+
 install_line "nervepack-memory-promote" \
-  "0 8 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote # nervepack-memory-promote"
+  "0 8 * * * ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote # nervepack-memory-promote"
 install_line "nervepack-episodic-maintain" \
-  "30 8 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron episodic-maintain # nervepack-episodic-maintain"
+  "30 8 * * * ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron episodic-maintain # nervepack-episodic-maintain"
 install_line "nervepack-aggregate-metrics" \
-  "0 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron aggregate-metrics # nervepack-aggregate-metrics"
+  "0 9 * * * ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron aggregate-metrics # nervepack-aggregate-metrics"
 install_line "nervepack-skill-maintain" \
-  "15 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron skill-maintain # nervepack-skill-maintain"
+  "15 9 * * * ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron skill-maintain # nervepack-skill-maintain"
 install_line "nervepack-refine" \
-  "30 9 * * 0 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron refine # nervepack-refine"
+  "30 9 * * 0 ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron refine # nervepack-refine"
 install_line "nervepack-compact" \
-  "0 10 * * 3 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron compact # nervepack-compact"
+  "0 10 * * 3 ${TOKEN_PREFIX}python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron compact # nervepack-compact"
 
 # --- Opt-in resume-pointer interval cron (default off; toggle: resume.cron) ---
 # When on, runs the writer for the ACTIVE session (--active discovery, since cron

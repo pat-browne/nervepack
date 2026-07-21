@@ -24,9 +24,14 @@ if [[ "$(uname -s)" != Darwin && -z "${NP_LAUNCHD_FORCE:-}" ]]; then
 fi
 
 mkdir -p "$LA_DIR" "$LOG_DIR"
+source "$SETUP_DIR/np-token-lib.sh"
 
 # launchctl is the loader; absent under NP_LAUNCHD_FORCE on non-mac, so guard each call.
 have_launchctl() { command -v launchctl >/dev/null 2>&1; }
+
+# plist content is XML — the token-export prefix's `&&` (and any future `<`/`>`)
+# must be entity-escaped or the plist is malformed. `&` first, then `<`/`>`.
+xml_escape() { local s="$1"; s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"; printf '%s' "$s"; }
 
 install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename OR a full command
                   # (e.g. a "python3 .../cli.py cron <name>" dispatch, for jobs already
@@ -40,6 +45,9 @@ install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename OR a fu
     *.sh) exec_cmd="exec \"$SETUP_DIR/$script\"" ;;  # bare .sh basename — join with setup dir
     *) exec_cmd="exec $script" ;;                     # already a full command
   esac
+  # Prepend the scheduled-auth token export (no-op/fail-open if not yet
+  # provisioned — see np-token-lib.sh and [nervepack-scheduled-auth]).
+  exec_cmd="$(np_claude_token_env_prefix)${exec_cmd}"
   # `/bin/bash -lc` gives the job a login-shell PATH (launchd's env is otherwise
   # minimal — git/jq/claude/node would be missing, exactly as with cron).
   cat > "$plist" <<PLIST
@@ -52,7 +60,7 @@ install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename OR a fu
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>$exec_cmd</string>
+    <string>$(xml_escape "$exec_cmd")</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
