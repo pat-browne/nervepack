@@ -282,7 +282,9 @@ via `cli.py hook backcapture-sweep`) on `SessionStart` (backgrounded):
 it re-runs capture + evaluator against the *previous* session's now-complete on-disk
 transcript, deduped per `session_id`.
 
-**Assets.** `episodic-capture.sh`, `engine/nervepack_engine/hooks/backcapture_sweep.py`,
+**Assets.** `engine/nervepack_engine/hooks/episodic_capture.py` (Python port; dispatched
+as `cli.py hook episodic-capture <mode>`, backed by `np_capture.py`),
+`engine/nervepack_engine/hooks/backcapture_sweep.py`,
 `np-transcript-extract.py`. Toggle: `memory` (`memory.backcapture`).
 
 **Situational example.** You finish a session and type `/exit`. No SessionEnd fires.
@@ -302,7 +304,8 @@ directive present, struggles, tokens) from fire-time markers the hooks dropped, 
 a Haiku verdict adds score + helped/shortfalls/suggestions. Records land in a local
 inbox.
 
-**Assets.** `np-evaluator.sh`, `np-eval-signals.py`. Toggle: `evaluator`.
+**Assets.** `engine/nervepack_engine/hooks/evaluator.py` (Python port; dispatched as
+`cli.py hook evaluator`, backed by `np_evaluator.py`), `np-eval-signals.py`. Toggle: `evaluator`.
 
 **Situational example.** A session where you invoked three skills and heeded an
 enforced lesson scores higher on "nervepack helped" than one where the directive was

@@ -105,6 +105,28 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(buf.getvalue(), "")
 
+    def test_dispatch_forwards_extra_argv_to_hook(self):
+        from nervepack_engine import cli
+        calls = []
+        with mock.patch.dict(cli._HOOKS, {"fake": lambda text, mode=None: calls.append((text, mode))}), \
+             mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(sys, "stdin", io.StringIO('{"a":1}')):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            rc = cli.main(["hook", "fake", "checkpoint"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, [('{"a":1}', "checkpoint")])
+
+    def test_dispatch_with_no_extra_argv_unchanged(self):
+        from nervepack_engine import cli
+        calls = []
+        with mock.patch.dict(cli._HOOKS, {"fake": lambda text: calls.append(text)}), \
+             mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(sys, "stdin", io.StringIO("{}")):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            rc = cli.main(["hook", "fake"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, ["{}"])
+
 
 class TestResumeWriteDispatch(unittest.TestCase):
     """Covers cli.py's `resume-write` dispatch branch itself. All 10

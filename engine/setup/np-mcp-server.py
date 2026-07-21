@@ -50,8 +50,8 @@ import np_content   # noqa: E402  in-process content/team/merge resolver (bash-f
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
 import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no bash)
 import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
-import np_capture  # noqa: E402  bash-free capture pipeline (fallback when no bash)
-import np_evaluator  # noqa: E402  bash-free evaluator pipeline (fallback when no bash)
+import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; this is now the only implementation)
+import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
 
@@ -307,11 +307,9 @@ def _tool_capture(args):
     payload = {"transcript_path": args.get("transcript_path", ""),
                "cwd": args.get("cwd", REPO),
                "session_id": args.get("session_id", "mcp")}
-    if USE_PY and not _bash_available():
-        return np_capture.capture(payload)     # bash-free pipeline fallback
-    rc, out, err = run(["bash", os.path.join(SETUP, "episodic-capture.sh"), "session-end"],
-                       stdin=json.dumps(payload))
-    return (out + err).strip() or "captured"
+    # episodic-capture.sh (the bash original) is retired -- np_capture.capture()
+    # is now the only implementation, called in-process (no subprocess/bash).
+    return np_capture.capture(payload)
 
 
 def _tool_evaluate(args):
@@ -319,10 +317,9 @@ def _tool_evaluate(args):
     payload = {"transcript_path": args.get("transcript_path", ""),
                "cwd": args.get("cwd", REPO),
                "session_id": args.get("session_id", "mcp")}
-    if USE_PY and not _bash_available():
-        return np_evaluator.evaluate(payload)   # bash-free pipeline fallback
-    rc, out, err = run(["bash", os.path.join(SETUP, "np-evaluator.sh")], stdin=json.dumps(payload))
-    return (out + err).strip() or "evaluated"
+    # np-evaluator.sh (the bash original) is retired -- np_evaluator.evaluate()
+    # is now the only implementation, called in-process (no subprocess/bash).
+    return np_evaluator.evaluate(payload)
 
 
 def _require_bash(tool):

@@ -269,7 +269,8 @@ or managed config:
 
 ### Evaluator (what it is)
 
-At session end, `engine/setup/np-evaluator.sh` (toggle `evaluator.judge`) scores how much
+At session end, `engine/nervepack_engine/hooks/evaluator.py` (via `np_evaluator.evaluate()`,
+toggle `evaluator.judge`) scores how much
 Nervepack helped: deterministic signals (`np-eval-signals.py`) + a Haiku verdict
 (score, helped, shortfalls, suggestions with confidence/auto_safe, assets_used). Records
 drain into committed `dashboard/data/metrics.jsonl` via a daily aggregator. All under
