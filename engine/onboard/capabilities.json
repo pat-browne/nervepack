@@ -155,6 +155,17 @@
       }
     },
     {
+      "id": "scheduled-auth-token",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "a long-lived claude auth token is provisioned for scheduled jobs, and not near expiry",
+      "why": "Scheduler-spawned processes (launchd/cron/schtasks) don't inherit the interactive session's OAuth/keychain auth, so the agentic crons (memory-promote, refine, compact) fail 'Not logged in' without CLAUDE_CODE_OAUTH_TOKEN. The token is subscription-based (claude setup-token) and valid ~1 year, so it also needs periodic rotation.",
+      "accept": "engine/setup/62-install-scheduled-auth-token.sh --status reports 'ok <days_left>'.",
+      "hints": {
+        "generic": "run engine/setup/62-install-scheduled-auth-token.sh — an interactive one-time walkthrough (requires a real terminal + browser approval for `claude setup-token`, which cannot be scripted). Re-run with --rotate ~30 days before the 1-year token expires; the doctor's WARN is the reminder. Every scheduled job re-reads the stored file at run time, so rotating never needs a plist/crontab/task reinstall."
+      }
+    },
+    {
       "id": "pii_filter_full",
       "tier": "SHOULD",
       "check": "core",
