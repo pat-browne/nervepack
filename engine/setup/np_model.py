@@ -83,11 +83,14 @@ def complete(prompt, system=None, timeout=None):
     return r.stdout
 
 
-def agent(prompt, tools, cwd=None):
+def agent(prompt, tools, cwd=None, timeout=None):
     """Run an agentic task (file edits, commits): tools-enabled, permissions
     bypassed, agent-tier model. Mirrors np-llm.sh `agent` for both backends.
     Returns (returncode, stdout, stderr) -- callers need the exit code
-    (np_llm_agent.run_agent()'s pass/fail contract), unlike complete()."""
+    (np_llm_agent.run_agent()'s pass/fail contract), unlike complete(). `timeout`
+    (seconds, None = no limit) lets a caller (np_implement_suggestion.py) bound
+    a hung agent; raises subprocess.TimeoutExpired on expiry, same as any
+    subprocess.run timeout would -- callers decide how to fail open."""
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
     env = _base_env()
     if backend == "claude":
@@ -106,7 +109,8 @@ def agent(prompt, tools, cwd=None):
         env["NP_LLM_TOOLS"] = tools
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
-    r = subprocess.run(np_bashlib.argv(argv), input=prompt, cwd=cwd, capture_output=True, text=True, env=env)
+    r = subprocess.run(np_bashlib.argv(argv), input=prompt, cwd=cwd, capture_output=True,
+                       text=True, env=env, timeout=timeout)
     return r.returncode, r.stdout, r.stderr
 
 

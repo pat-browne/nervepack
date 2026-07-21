@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# np-implement-suggestion.sh: implement ONE suggestion via an agentic pass (stubbed),
-# then resolve it. Covers pr/direct modes, not-implementable, dirty-tree isolation, lock.
+# np_implement_suggestion.py (phase 10 port of np-implement-suggestion.sh, dispatched
+# as `cli.py implement-suggestion <text>`): implement ONE suggestion via an agentic
+# pass (stubbed), then resolve it. Covers pr/direct modes, not-implementable,
+# dirty-tree isolation, lock, prompt-injection hardening, content-overlay fallback,
+# and timeout/fail-open (both the fast simulated-exit-code path AND a genuine
+# subprocess.TimeoutExpired, which the bash original couldn't test directly).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$HERE/../../np-implement-suggestion.sh"
+NP="$(cd "$HERE/../../../.." && pwd)"
+CLI="$NP/engine/nervepack_engine/cli.py"
+MODULE="$NP/engine/setup/np_implement_suggestion.py"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 # toggles: evaluator on (implement inherits via param default), mode set per-test via local
@@ -34,21 +40,22 @@ echo "NOT_IMPLEMENTABLE: behavioral advice, nothing to change"
 EOF
 chmod +x "$tmp/llm-ok" "$tmp/llm-noimpl"
 
-run() {  # $1=mode-local(optional)  reads stdin? no — args: $2=text, env IMPLEMENT_LLM
+run() {  # $1=text, reads MODE_OVERRIDE/LLM/CONTENT_OVERRIDE/RESOLVED/AGENT_TIMEOUT
   local localfile="$tmp/local"; : > "$localfile"
   [[ -n "${MODE_OVERRIDE:-}" ]] && echo "evaluator.implement_mode=$MODE_OVERRIDE" > "$localfile"
-  # NP_CONTENT_DIR defaults to a path that doesn't exist so np_content_dir() errors
-  # loudly and the content-overlay fallback stays OFF for tests that don't set
+  # NP_CONTENT_DIR defaults to a path that doesn't exist so np_content.content_dir()
+  # returns "" and the content-overlay fallback stays OFF for tests that don't set
   # CONTENT_OVERRIDE — otherwise it would silently default to this machine's real
-  # engine checkout (np-content-lib.sh's own ../.. ), and a "not implementable"/
-  # "no commit" test case would spawn a real second agentic attempt against it.
+  # engine checkout, and a "not implementable"/"no commit" test case would spawn a
+  # real second agentic attempt against it.
   NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$localfile" \
   IMPLEMENT_REPO="$repo" IMPLEMENT_LLM="${LLM:-$tmp/llm-ok}" \
   IMPLEMENT_LOG="$tmp/impl.log" IMPLEMENT_LOCK="$tmp/lock" \
   IMPLEMENT_STATUS_DIR="$tmp/status" \
+  IMPLEMENT_AGENT_TIMEOUT="${AGENT_TIMEOUT:-600}" \
   NP_CONTENT_DIR="${CONTENT_OVERRIDE:-$tmp/no-content-dir}" \
   NP_RESOLVED_SUGGESTIONS="${RESOLVED:-$tmp/resolved.txt}" NP_RESOLVE_NO_BUILD=1 \
-  bash "$SCRIPT" "$1"
+  python3 "$CLI" implement-suggestion "$1"
 }
 resolved() { grep -qiF "$1" "$tmp/resolved.txt" 2>/dev/null; }
 has_branch() { git -C "$repo" rev-parse --verify -q "refs/heads/np-suggest/$1" >/dev/null 2>&1; }
@@ -144,21 +151,14 @@ RESOLVED="$repo/dashboard/data/resolved-suggestions.txt" MODE_OVERRIDE="direct" 
 [[ -z "$(git -C "$repo" status --porcelain)" ]] || { echo "FAIL: tree left dirty after implement: $(git -C "$repo" status --porcelain)"; exit 1; }
 git -C "$repo" log -1 --format='%s' | grep -qi 'resolve' || { echo "FAIL: resolution not committed (top commit: $(git -C "$repo" log -1 --format='%s'))"; exit 1; }
 
-# 9. timeout/fail-open: a hung agent (killed by the 600s timeout guard) leaves the job
-#    in 'failed' state and releases the lock — the feature is left retryable, not wedged.
-#    We stub the LLM to sleep longer than timeout's cap; we override the cap via the
-#    IMPLEMENT_LLM wrapper so the test completes in <1s.
-# Structural guard: verify the timeout mechanic is actually wired in the script.
-grep -q 'timeout 600' "$SCRIPT" || { echo "FAIL: timeout 600 guard not found in $SCRIPT — mechanic missing"; exit 1; }
+# 9. timeout/fail-open (simulated exit code): a hung agent (as if killed by the
+#    timeout guard) leaves the job in 'failed' state and releases the lock — the
+#    feature is left retryable, not wedged.
+# Structural guard: verify the timeout mechanic is actually wired in the port.
+grep -q '_agent_timeout' "$MODULE" || { echo "FAIL: agent-timeout guard not found in $MODULE — mechanic missing"; exit 1; }
 : > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
-# Inject a wrapper that replaces the timeout duration so the test doesn't actually wait 600s.
-# The wrapper intercepts "timeout 600 <llm> ..." and uses "timeout 1" instead so the test
-# completes quickly while still exercising the timeout+fail-open code path.
 cat > "$tmp/llm-timeout-wrap" <<EOF
 #!/usr/bin/env bash
-# Called as: timeout 600 <this-script> agent ...  BUT via the IMPLEMENT_LLM override the
-# implement script calls "\$LLM agent ..." directly, so we wrap at the LLM level instead:
-# pretend to be the LLM, honour the same argv, but exit 124 (what timeout would do).
 cat >/dev/null
 exit 124
 EOF
@@ -166,6 +166,25 @@ chmod +x "$tmp/llm-timeout-wrap"
 MODE_OVERRIDE="" LLM="$tmp/llm-timeout-wrap" run "hang forever"
 [[ "$(status_of "hang forever")" == "failed" ]] || { echo "FAIL: timeout/fail-open should write 'failed' status, got: $(status_of "hang forever")"; exit 1; }
 [[ ! -e "$tmp/lock" ]] || { echo "FAIL: lock not released after timeout/fail-open"; exit 1; }
+
+# 9b. GENUINE subprocess timeout: unlike the bash original (which could only
+#     simulate the timeout's exit code, since bash's own `timeout 600` isn't
+#     practically overridable in a fast test), the Python port's
+#     IMPLEMENT_AGENT_TIMEOUT override lets this test trigger a REAL
+#     subprocess.TimeoutExpired in well under a second and confirm the exact
+#     same fail-open contract (failed status, lock released, no commit/branch).
+: > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+cat > "$tmp/llm-really-hangs" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+sleep 5
+echo "should never get here"
+EOF
+chmod +x "$tmp/llm-really-hangs"
+AGENT_TIMEOUT="1" MODE_OVERRIDE="" LLM="$tmp/llm-really-hangs" run "genuinely hangs"
+[[ "$(status_of "genuinely hangs")" == "failed" ]] || { echo "FAIL: genuine timeout should write 'failed' status, got: $(status_of "genuinely hangs")"; exit 1; }
+[[ ! -e "$tmp/lock" ]] || { echo "FAIL: lock not released after a genuine timeout"; exit 1; }
+has_branch "genuinely-hangs" && { echo "FAIL: a branch was left after a genuine timeout"; exit 1; }
 
 # --- content-overlay fallback (a suggestion whose target file only exists outside
 #     the engine repo, e.g. a memory/lessons/*.md entry in the personal overlay) ---
