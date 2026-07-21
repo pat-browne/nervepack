@@ -14,6 +14,7 @@ import os
 import subprocess
 import tempfile
 
+import np_bashlib
 import np_content
 import np_graduation_detect
 import np_llm_agent
@@ -91,7 +92,7 @@ def _architecture_freshness():
     script = os.path.join(_HERE, "np-architecture-freshness.sh")
     try:
         out = subprocess.run(
-            ["bash", script], stdout=subprocess.PIPE,
+            np_bashlib.argv(["bash", script]), stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, errors="replace").stdout or ""
     except OSError:
         out = ""
