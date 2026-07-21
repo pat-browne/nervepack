@@ -169,11 +169,11 @@ mode) and Reject — consume this record. See
 ### Skill maintenance (wiring)
 
 `engine/setup/75-skill-maintain.sh` (daily cron, 09:15) keeps skill bodies within budget,
-deterministic-first. A detector (`engine/setup/np-skill-budget.py`, no LLM) flags any
+deterministic-first. A detector (`engine/setup/np_skill_budget.py`, no LLM) flags any
 `SKILL.md` over the hard `split_kb` (default 8 KB); only then does a Sonnet
 `claude -p` pass (`agents/np-flow-skill-maintain.md`) move overflow detail into
 `skills/<name>/references/`, leaving the decision in the body. A deterministic gate
-(`engine/setup/np-skill-validate.py`) then enforces: body now under budget, frontmatter
+(`engine/setup/np_skill_validate.py`) then enforces: body now under budget, frontmatter
 `name`+`description` unchanged, no `[[link]]` dropped, `references/` non-empty.
 Pass → commit (+push); fail → revert, skill left untouched. Idempotent; capped at
 `skills.max_per_run` (2) per run. The detector also flags when the always-loaded

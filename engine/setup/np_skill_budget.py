@@ -12,7 +12,7 @@ built-in defaults:
     SKILL_SOFT_KB     (default 6)     advisory authoring target
     SKILL_CATALOG_TOK (default 4000)  flat->tree restructure budget
 
-Usage: np-skill-budget.py [skills_dir ...]   (default: <repo>/skills)
+Usage: np_skill_budget.py [skills_dir ...]   (default: <repo>/skills)
 Multiple roots are merged into one report; the JSON shape is unchanged
 (skills keyed by directory name under `skill`). On a duplicate skill-dir name
 across roots, the FIRST root listed wins (dedup is first-root-wins, not

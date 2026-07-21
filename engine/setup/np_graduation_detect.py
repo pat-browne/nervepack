@@ -19,7 +19,7 @@ them directly), with built-in defaults:
     GRADUATE_SEEN  (default 10)  recurrence count that proves the pattern
     GRADUATE_KB    (default 6)   bytes over this (= skill soft budget) is overdue
 
-Usage: np-graduation-detect.py <lessons_dir>
+Usage: np_graduation_detect.py <lessons_dir>
 Emits one JSON object to stdout. Fail-open: on error, an empty report.
 """
 import json
