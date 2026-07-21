@@ -52,13 +52,19 @@ class TestRunAgent(unittest.TestCase):
         with self._patch_np_llm_path():
             ok = np_llm_agent.run_agent("do the thing", "Read Write Edit", cwd=target)
         self.assertTrue(ok)
+        # The isfile check is the real cross-platform proof of correct cwd (a
+        # real file landed exactly where Python's own path resolution expects).
+        # We deliberately do NOT string-match the stub's self-reported
+        # "CWD:$(pwd)" against os.path.realpath(target): on Windows, bash
+        # reports its cwd in MSYS/mount-aliased form (e.g. "/tmp/...", not
+        # "C:\Users\...\Temp\..."), so the two can never match even when the
+        # subprocess ran in the exact right directory.
         self.assertTrue(os.path.isfile(os.path.join(target, "agent-ran-here")),
                          "agent subprocess did not run with the requested cwd")
         with open(os.path.join(self.tmp, "invocation.log")) as fh:
             log = fh.read()
         self.assertIn("ARGS:agent --tools Read Write Edit", log)
         self.assertIn("do the thing", log)
-        self.assertIn("CWD:%s" % os.path.realpath(target), log)
 
     def test_2_failure_returns_false(self):
         _write_stub_np_llm(self.stub, "fail")
@@ -74,12 +80,18 @@ class TestRunAgent(unittest.TestCase):
     def test_4_cwd_none_defaults_to_current_directory(self):
         _write_stub_np_llm(self.stub, "success")
         cwd_before = os.getcwd()
+        # cwd=None means the stub's "success" behavior (touch agent-ran-here)
+        # lands in the REAL current directory -- clean it up unconditionally,
+        # win or fail, so this test never leaks a stray file into the repo.
+        marker = os.path.join(cwd_before, "agent-ran-here")
+        self.addCleanup(lambda: os.remove(marker) if os.path.exists(marker) else None)
         with self._patch_np_llm_path():
             ok = np_llm_agent.run_agent("do the thing", "Read Write Edit", cwd=None)
         self.assertTrue(ok)
-        with open(os.path.join(self.tmp, "invocation.log")) as fh:
-            log = fh.read()
-        self.assertIn("CWD:%s" % os.path.realpath(cwd_before), log)
+        # See test_1's comment: isfile is the robust cross-platform proof of
+        # correct cwd, not a string-match against bash's self-reported pwd.
+        self.assertTrue(os.path.isfile(marker),
+                         "agent subprocess did not run in the caller's cwd")
 
     def test_5_subprocess_oserror_fails_open_returns_false(self):
         """Directly exercises the `except OSError:` branch by making

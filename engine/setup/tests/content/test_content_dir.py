@@ -183,8 +183,11 @@ class TestContentDir(unittest.TestCase):
                 fh.write("| topic | last_updated | keywords |\n|---|---|---|\n| widget | 2026-01-01 | frobnicate |\n")
             with open(os.path.join(ep, "widget.md"), "w") as fh:
                 fh.write("# widget notes\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
-                                            "EPISODIC_STATE_DIR": u(os.path.join(content, "_state"))})
+            # NOT u()-converted: cli.py is invoked as a native subprocess.executable
+            # child (not through bash), so it needs a native-form path, unlike the
+            # bash-invoked scripts elsewhere in this file.
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
+                                            "EPISODIC_STATE_DIR": os.path.join(content, "_state")})
             payload = '{"session_id":"t","prompt":"please frobnicate the widget"}'
             cli_path = os.path.join(REPO, "engine", "nervepack_engine", "cli.py")
             r = subprocess.run([sys.executable, cli_path, "hook", "episodic-recall"],
@@ -208,10 +211,15 @@ class TestContentDir(unittest.TestCase):
             conf = os.path.join(conf_dir, "toggles.conf")
             with open(conf, "w") as fh:
                 fh.write("evaluator|shared|runtime|on|retain_days=0\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
-                                            "EVAL_INBOX": u(inbox),
+            # NOT u()-converted: np_aggregate.py is invoked as a native
+            # subprocess.executable child (not through bash), and it reads
+            # NP_TOGGLES_CONF/np_toggle.py directly in-process too -- both need
+            # native-form paths, unlike the bash-invoked scripts elsewhere in
+            # this file.
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
+                                            "EVAL_INBOX": inbox,
                                             "NP_AGG_NO_COMMIT": "1",
-                                            "NP_TOGGLES_CONF": u(conf),
+                                            "NP_TOGGLES_CONF": conf,
                                             "NP_TOGGLES_LOCAL": "/dev/null"})
             subprocess.run([sys.executable, _setup_script("np_aggregate.py")],
                            capture_output=True, text=True, env=e)

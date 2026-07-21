@@ -11,6 +11,8 @@ engine root. Fail-open: any subprocess/OS error returns False, never raises.
 import os
 import subprocess
 
+import np_bashlib
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP_LLM_PATH = os.path.join(_HERE, "np-llm.sh")
 
@@ -21,7 +23,7 @@ def run_agent(prompt, tools, cwd=None):
     the subprocess exited 0; never raises."""
     try:
         result = subprocess.run(
-            ["bash", _NP_LLM_PATH, "agent", "--tools", tools],
+            np_bashlib.argv(["bash", _NP_LLM_PATH, "agent", "--tools", tools]),
             input=prompt, cwd=cwd, text=True,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return result.returncode == 0

@@ -44,7 +44,10 @@ def _extract_cwd(path):
             for line in fh:
                 m = _CWD_RE.search(line)
                 if m:
-                    return m.group(1)
+                    try:
+                        return json.loads('"' + m.group(1) + '"')
+                    except ValueError:
+                        return m.group(1)
     except OSError:
         pass
     return None
