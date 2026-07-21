@@ -39,6 +39,7 @@ from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
+import np_skill_maintain  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -58,6 +59,7 @@ _HOOKS = {
 
 _CRONS = {
     "aggregate-metrics": np_aggregate.aggregate,
+    "skill-maintain": np_skill_maintain.maintain,
 }
 
 

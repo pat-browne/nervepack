@@ -5,7 +5,7 @@
 # is the structural half of "keep the map honest"; semantic drift still needs a
 # human. Deterministic, no LLM. Exit 0 always (advisory): prints one `STALE:` line
 # per gap and a final `architecture-freshness: N gap(s)` summary. Run standalone
-# after editing the map, or daily from 75-skill-maintain.sh.
+# after editing the map, or daily from np_skill_maintain.py (cli.py cron skill-maintain).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../.." && pwd)"

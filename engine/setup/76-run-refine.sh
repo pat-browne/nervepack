@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Weekly cron: run the refine agent (lint frontmatter, audit cross-refs).
 # Gated by maintain.refine toggle. Fails open — always exits 0.
-# Mirrors 72-run-episodic-maintain.sh / 75-skill-maintain.sh.
+# Mirrors 72-run-episodic-maintain.sh / the retired 75-skill-maintain.sh (now np_skill_maintain.py).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../.." && pwd)"

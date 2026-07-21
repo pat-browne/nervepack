@@ -239,7 +239,7 @@ over the skill budget) is overdue to become a curated, human-reviewed skill. Wit
 a trigger, entries accrete forever. That is exactly how the `security-review` lesson
 grew to 8 KB.
 
-**Workflow.** The daily `75-skill-maintain.sh` runs `np_graduation_detect.py`
+**Workflow.** The daily `nervepack cron skill-maintain` (`np_skill_maintain.py`) runs `np_graduation_detect.py`
 (deterministic, no LLM) over the overlay's `memory/lessons/` (its candidate `kind` is
 the lesson's `provenance`). Any entry with `seen ≥ graduate_seen` (default 10) or
 `bytes > graduate_kb` (default 6 KB) that isn't already `graduated`/`promoted`/`archived`
@@ -248,9 +248,9 @@ auto-promoted (skills keep the human-review gate). You then graduate it by hand 
 `np-core-contribute`: distill the method into a `skills/np-*` skill and flip the
 source's `status: graduated`.
 
-**Assets.** `np_graduation_detect.py`, `75-skill-maintain.sh`,
+**Assets.** `np_graduation_detect.py`, `np_skill_maintain.py` (dispatched via `cli.py cron skill-maintain`),
 `tests/skills/test_graduation_detect.py`. Toggle params: `skills.graduate_seen`,
-`skills.graduate_kb`. **Surfaced on the dashboard:** `75-skill-maintain.sh` also writes
+`skills.graduate_kb`. **Surfaced on the dashboard:** `np_skill_maintain.py` also writes
 a committed, content-routed `graduation-candidates.json`; `build.py` `load_graduation()`
 emits `window.GRADUATION` and `index.html` renders a Graduation-candidates panel
 (fail-open empty state). Keeps the engine PII-clean. The data lives in the overlay.
@@ -403,14 +403,14 @@ untouched.
 **Purpose.** Keep skill bodies within budget so the always-loaded catalog doesn't
 bloat the context window, and (see Graduation) flag overdue promotions.
 
-**Workflow.** Daily `75-skill-maintain.sh`: a deterministic detector
+**Workflow.** Daily `nervepack cron skill-maintain` (`np_skill_maintain.py`): a deterministic detector
 (`np_skill_budget.py`) flags any SKILL.md over the hard `split_kb` (8 KB); only then
 does a gated Sonnet pass move overflow into `references/`, validated-or-reverted by
 `np_skill_validate.py`. The same routine runs the graduation detector and the
 ARCHITECTURE freshness check (both advisory).
 
-**Assets.** `75-skill-maintain.sh`, `np_skill_budget.py`, `np_skill_validate.py`,
-`np_graduation_detect.py`, `np-architecture-freshness.sh`,
+**Assets.** `np_skill_maintain.py` (dispatched via `cli.py cron skill-maintain`), `np_skill_budget.py`, `np_skill_validate.py`,
+`np_graduation_detect.py`, `np-architecture-freshness.sh` (retained bash advisory subprocess),
 `agents/np-flow-skill-maintain.md`. Toggle: `skills` (`split_kb`, `soft_kb`,
 `catalog_tok`, `max_per_run`, `graduate_seen`, `graduate_kb`).
 

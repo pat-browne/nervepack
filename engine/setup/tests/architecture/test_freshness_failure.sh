@@ -7,7 +7,7 @@
 # and exits 0 — it must NOT crash, and must NOT emit any STALE drift lines (it
 # cannot reason about drift with no map). Black-box via the ARCH_* env overrides
 # so the real repo map is never touched. Guards against a regression that lets a
-# missing map abort the daily 75-skill-maintain run it is invoked from.
+# missing map abort the daily skill-maintain run (np_skill_maintain.py) it is invoked from.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$HERE/../../np-architecture-freshness.sh"

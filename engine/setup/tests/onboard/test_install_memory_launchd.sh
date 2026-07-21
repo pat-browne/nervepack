@@ -56,7 +56,7 @@ grep -q '<key>Hour</key><integer>9</integer>' "$la/com.nervepack.skill-maintain.
   || { echo "FAIL: skill-maintain hour wrong"; exit 1; }
 grep -q '<key>Minute</key><integer>15</integer>' "$la/com.nervepack.skill-maintain.plist" \
   || { echo "FAIL: skill-maintain minute wrong"; exit 1; }
-grep -q "75-skill-maintain.sh" "$la/com.nervepack.skill-maintain.plist" \
+grep -q "cli.py cron skill-maintain" "$la/com.nervepack.skill-maintain.plist" \
   || { echo "FAIL: skill-maintain target wrong"; exit 1; }
 grep -q '<key>Hour</key><integer>8</integer>' "$la/com.nervepack.memory-promote.plist" \
   || { echo "FAIL: memory-promote hour wrong"; exit 1; }

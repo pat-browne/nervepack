@@ -6,8 +6,8 @@ overweight skill is a recurring token tax on every session that touches it.
 ## Targets
 
 - **Soft cap:** ~6 KB (~1.5k tokens) per `SKILL.md` — the authoring target you write to.
-- **Hard limit:** 8 KB — enforced daily by `engine/setup/75-skill-maintain.sh`
-  (auto-splits bodies over the limit into `references/` behind a validate-or-abort gate).
+- **Hard limit:** 8 KB — enforced daily by `engine/setup/np_skill_maintain.py`
+  (dispatched via `cli.py cron skill-maintain`; auto-splits bodies over the limit into `references/` behind a validate-or-abort gate).
 
 ## When the body exceeds the soft cap
 

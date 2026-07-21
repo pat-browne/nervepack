@@ -42,13 +42,13 @@ def default_graduation():
     """Default path for graduation-candidates.json: resolved through _content_dir() so a
     bare build.py invocation reads from the overlay root, not the engine tree (candidates
     derive from the personal content overlay — the engine stays PII-clean). The producer
-    (75-skill-maintain.sh) writes it there. NP_GRADUATION_CANDIDATES env var overrides."""
+    (np_skill_maintain.py) writes it there. NP_GRADUATION_CANDIDATES env var overrides."""
     return os.path.join(_content_dir(), "dashboard", "data", "graduation-candidates.json")
 
 
 def load_graduation(path):
     """Graduation candidates (lessons overdue to become skills), as written
-    by 75-skill-maintain.sh via np_graduation_detect.py. Shape:
+    by np_skill_maintain.py via np_graduation_detect.py. Shape:
     {candidates:[{kind,name,seen,bytes,reasons[]}], thresholds:{graduate_seen,graduate_kb}}.
     Fail-open: missing file (cloud/CI, or no candidates) or malformed JSON -> empty
     candidate list, so the panel renders its empty state and never crashes."""

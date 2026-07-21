@@ -6,7 +6,7 @@
 #   Daily 08:00 LOCAL — memory-promote      (71)
 #   Daily 08:30 LOCAL — episodic-maintain   (72)
 #   Daily 09:00 LOCAL — aggregate-metrics   (cli.py cron aggregate-metrics)
-#   Daily 09:15 LOCAL — skill-maintain      (75)
+#   Daily 09:15 LOCAL — skill-maintain      (cli.py cron skill-maintain)
 # All run daily and are idempotent (empty inbox / nothing-to-do = clean no-op), so
 # the cadence just shortens latency to a committed layer. Re-running this installer
 # REPLACES each agent (rewrite plist + reload), never duplicates.
@@ -75,7 +75,7 @@ PLIST
 install_job memory-promote    8  0 71-run-memory-promote.sh
 install_job episodic-maintain 8 30 72-run-episodic-maintain.sh
 install_job aggregate-metrics 9  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
-install_job skill-maintain    9 15 75-skill-maintain.sh
+install_job skill-maintain    9 15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"
 install_job refine            9 30 76-run-refine.sh
 install_job compact          10  0 77-run-compact.sh
 

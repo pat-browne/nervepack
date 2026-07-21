@@ -308,6 +308,24 @@ class TestCronDispatch(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("aggregated", printed)
 
+    def test_cron_skill_maintain_dispatches(self):
+        from nervepack_engine import cli
+        # Wiring check: _CRONS["skill-maintain"] is the real np_skill_maintain.maintain
+        # (not invoked here -- patch.dict(cli._CRONS, ...) below, mirroring this file's
+        # existing dispatch idiom, is what safely exercises the dispatch path; a
+        # mock.patch on the np_skill_maintain module attribute would NOT intercept this
+        # call since _CRONS already holds the function object by value from import time).
+        self.assertIs(cli._CRONS.get("skill-maintain"), cli.np_skill_maintain.maintain)
+        mock_maintain = mock.Mock(return_value="no-op: test")
+        with mock.patch.dict(cli._CRONS, {"skill-maintain": mock_maintain}), \
+             mock.patch.object(sys, "stdout", io.StringIO()) as out:
+            os.environ.pop("NERVEPACK_AGENT", None)
+            rc = cli.main(["cron", "skill-maintain"])
+            printed = out.getvalue()
+        self.assertEqual(rc, 0)
+        mock_maintain.assert_called_once_with()
+        self.assertIn("no-op: test", printed)
+
 
 if __name__ == "__main__":
     unittest.main()
