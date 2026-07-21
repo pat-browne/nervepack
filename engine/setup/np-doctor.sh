@@ -28,7 +28,7 @@ core_check() {
   case "$1" in
     llm-cli)
       local out rc
-      out="$(printf 'ping' | "$HERE/np-llm.sh" complete 2>/dev/null)"
+      out="$(printf 'ping' | python3 "$HERE/np_model.py" complete 2>/dev/null)"
       rc=$?
       [[ $rc -eq 0 && -n "$out" ]] && echo PASS || echo FAIL ;;
     git-sync)

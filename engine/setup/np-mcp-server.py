@@ -336,11 +336,16 @@ def _require_bash(tool):
     # nervepack_flush's own glue is bash-free (nervepack_engine.hooks.session_flush,
     # called in-process below) -- this gate now covers the agentic maintenance crons
     # (memory_promote()/episodic_maintain(), both np_agentic_cron.py -- their bash
-    # originals, 71/72-run-*.sh, are retired) and skill-maintain: each still shells
-    # out to np-llm.sh internally (claude -p with tools / bypass-permissions), so
-    # bash stays a real dependency even though the driver logic itself is in-process
-    # Python (73-aggregate-metrics.sh is retired; its np_aggregate.py replacement is
-    # called in-process and needs no bash at all). On a bash-free host, refuse
+    # originals, 71/72-run-*.sh, are retired) and skill-maintain: each calls
+    # np_llm_agent.run_agent() -> np_model.agent() for its Sonnet pass. As of phase 9
+    # of the bash->Python migration, np_model.agent()'s DEFAULT (claude) backend is
+    # itself bash-free (calls the `claude` binary directly, no `bash -c` wrapper) --
+    # this gate is conservative on purpose: NP_LLM_BACKEND=local with NP_LLM_AGENT_CMD
+    # still shells via `bash -c`, and that combination hasn't been verified safe to
+    # allow through on a bash-free host. Revisit narrowing this to the actual
+    # configured backend once that path is tested (73-aggregate-metrics.sh is
+    # retired; its np_aggregate.py replacement is called in-process and needs no
+    # bash at all, hence its own tool has no gate). On a bash-free host, refuse
     # cleanly (like the toggle shared-write path) instead of emitting a raw
     # subprocess error.
     if USE_PY and not _bash_available():
@@ -453,23 +458,24 @@ def _tool_maintain(args):
         return np_aggregate.aggregate()
     if job == "skills":
         # 75-skill-maintain.sh (the bash original) is retired -- np_skill_maintain.maintain()
-        # is now the only implementation. Unlike aggregate, it still shells to bash
-        # internally (the split pass runs np-llm.sh), so it stays gated by
-        # _require_bash like promote/maintain below rather than going fully bash-free.
+        # is now the only implementation. Its split pass calls np_llm_agent.run_agent()
+        # (np_model.agent(), phase 9 -- bash-free for the default claude backend), but
+        # it stays gated by _require_bash like promote/maintain below (see that
+        # function's docstring for why the gate isn't narrowed to the backend yet).
         _require_bash("nervepack_maintain")
         return np_skill_maintain.maintain()
     if job == "promote":
         # 71-run-memory-promote.sh (the bash original) is retired -- np_agentic_cron
-        # .memory_promote() is now the only implementation. Like skills, it still
-        # shells to bash internally (the agent call runs np-llm.sh), so it stays
-        # gated by _require_bash rather than going fully bash-free.
+        # .memory_promote() is now the only implementation. Like skills, its agent
+        # call runs through np_model.agent() (phase 9), but stays gated by
+        # _require_bash (see that function's docstring).
         _require_bash("nervepack_maintain")
         return np_agentic_cron.memory_promote()
     if job == "maintain":
         # 72-run-episodic-maintain.sh (the bash original) is retired -- np_agentic_cron
-        # .episodic_maintain() is now the only implementation. Like promote, it still
-        # shells to bash internally (the agent call runs np-llm.sh), so it stays
-        # gated by _require_bash rather than going fully bash-free.
+        # .episodic_maintain() is now the only implementation. Like promote, its agent
+        # call runs through np_model.agent() (phase 9), but stays gated by
+        # _require_bash (see that function's docstring).
         _require_bash("nervepack_maintain")
         return np_agentic_cron.episodic_maintain()
     raise ValueError(f"unknown maintain job: {job}")
