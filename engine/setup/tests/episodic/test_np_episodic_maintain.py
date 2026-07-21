@@ -360,6 +360,13 @@ exit 0
         with open(self.log, encoding="utf-8") as fh:
             self.assertIn("episodic-maintain run", fh.read())
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the claude stub below is a shebang script exec'd directly as a "
+        "subprocess argv[0]; native Windows Python can't CreateProcess a "
+        "shebang script (WinError 193) — same constraint documented in "
+        "tests/mcp/parity/test_model_parity.sh.",
+    )
     def test_regresses_if_prompt_were_lost_to_a_positional_arg(self):
         # Sanity-check the stub itself: force an empty-stdin call directly
         # (bypassing np_llm_agent, which always pipes stdin) to prove the stub
