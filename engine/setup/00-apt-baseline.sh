@@ -21,7 +21,7 @@ sudo apt install -y \
 # Why each addition beyond the obvious:
 #   gh   — GitHub auth flow for first-time clone/push from a fresh machine
 #   jq   — required by 50-install-session-hook.sh (atomic settings.json edit)
-#   cron — required by 70-install-memory-cron.sh; usually present but force it
+#   cron — required by cli.py setup install-memory-cron; usually present but force it
 
 echo
 echo "Installed versions:"
