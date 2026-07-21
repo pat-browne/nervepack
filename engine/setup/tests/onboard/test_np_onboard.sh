@@ -46,7 +46,7 @@ command -v jq >/dev/null || { echo "PASS test_np_onboard (jq missing — skipped
 reg() { jq -r "[.. | .command? // empty | select(test(\"$1\"))] | length" "$CLAUDE_SETTINGS"; }
 [[ "$(reg 'cli.py hook lesson-recall')" -ge 1 ]] || fail "lesson-recall not registered after onboard"
 [[ "$(reg 'cli.py hook lesson-guard')"  -ge 1 ]] || fail "lesson-guard not registered after onboard"
-[[ "$(reg 'nervepack-session-directive.sh')" -ge 1 ]] || fail "session directive not registered after onboard"
+[[ "$(reg 'cli.py hook session-directive')" -ge 1 ]] || fail "session directive not registered after onboard"
 echo "  OK: lesson-recall + lesson-guard + directive registered in settings.json"
 
 # --- idempotent: a second run doesn't duplicate the recall hook ---

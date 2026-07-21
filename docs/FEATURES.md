@@ -428,7 +428,8 @@ domain defaults, and a trigger→skill routing table. It's a **byte-stable prefi
 (no timestamps) so the KV-cache survives; variable context is injected later via
 `UserPromptSubmit`.
 
-**Assets.** `nervepack-session-directive.{sh,md}`,
+**Assets.** `engine/nervepack_engine/hooks/session_directive.py` (dispatched as
+`cli.py hook session-directive`), `engine/setup/nervepack-session-directive.md`,
 `51-install-nervepack-directive-hook.sh`. Toggle: `directive`.
 
 **Situational example.** You open a session and ask to "build a settings page." The
