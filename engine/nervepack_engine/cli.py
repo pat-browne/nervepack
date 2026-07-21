@@ -30,10 +30,12 @@ from nervepack_engine.hooks import episodic_recall  # noqa: E402
 from nervepack_engine.hooks import evaluator  # noqa: E402
 from nervepack_engine.hooks import lesson_guard  # noqa: E402
 from nervepack_engine.hooks import lesson_recall  # noqa: E402
+from nervepack_engine.hooks import open_dashboard  # noqa: E402
 from nervepack_engine.hooks import resume_recall  # noqa: E402
 from nervepack_engine.hooks import resume_sessionstart  # noqa: E402
 from nervepack_engine.hooks import resume_write  # noqa: E402
 from nervepack_engine.hooks import session_directive  # noqa: E402
+from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 
@@ -44,9 +46,11 @@ _HOOKS = {
     "evaluator": evaluator.run,
     "lesson-guard": lesson_guard.run,
     "lesson-recall": lesson_recall.run,
+    "open-dashboard": open_dashboard.run,
     "resume-recall": resume_recall.run,
     "resume-sessionstart": resume_sessionstart.run,
     "session-directive": session_directive.run,
+    "session-flush": session_flush.run,
     "skill-trigger-recall": skill_trigger_recall.run,
     "struggle-escalation": struggle_escalation.run,
 }

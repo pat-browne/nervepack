@@ -22,8 +22,9 @@ SessionStart hook guards against — see below), so it opens every time you run 
 
 ## Why it doesn't auto-open every session
 
-The SessionStart hook `engine/setup/74-open-dashboard.sh` opens the dashboard **at most once
-per OS boot**, not once per session. It records the boot id in
+The SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard.py`, dispatched via
+`engine/nervepack_engine/cli.py` as `cli.py hook open-dashboard`) opens the dashboard **at
+most once per OS boot**, not once per session. It records the boot id in
 `~/.cache/nervepack/dashboard-open-boot`; every later session start this boot sees a
 matching marker and exits before opening. This is load-bearing: under remote-desktop,
 opening a GUI browser on every SessionStart triggers an auto-reconnect → new session →
@@ -31,12 +32,25 @@ re-fire → reopen feedback loop (~150 sessions in seconds). The boot marker sev
 (Full rationale: [[np-kb-claude-headless-scripting]] §4.)
 
 So "it didn't launch on session start" is almost always **expected** — it already
-launched on the first session after the last reboot. To diagnose:
+launched on the first session after the last reboot. To diagnose, compare the
+marker against the current boot id — computed the same way
+`engine/setup/np_dashboard.py`'s `boot_id()` does (Linux path checked first, macOS
+fallback second):
 
 ```bash
 cat ~/.cache/nervepack/dashboard-open-boot   # last boot it opened for
-cat /proc/sys/kernel/random/boot_id          # current boot — equal ⇒ already opened
+
+# current boot id — Linux:
+cat /proc/sys/kernel/random/boot_id
+# current boot id — macOS (no /proc/sys; this is the fallback boot_id() uses):
+sysctl -n kern.boottime
 ```
+
+Equal to the marker ⇒ already opened this boot. (On macOS, an older nervepack
+build fell back to a permanent `"unknown"` here instead of `sysctl`, which
+silently disabled auto-open after the first session on every Mac — fixed by
+switching the fallback to `sysctl -n kern.boottime`, which is real and
+reboot-sensitive.)
 
 **Re-arm the per-boot auto-open** (next session start will open it again):
 
