@@ -187,6 +187,14 @@ class TestBackcaptureSweepEndToEnd(unittest.TestCase):
     using the real np_capture/np_evaluator (stubbed CLAUDE_BIN, matching the
     bash test's fake-claude approach for this one true integration check)."""
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the claude_stub below is a shebang script exec'd directly as a "
+        "subprocess argv[0]; native Windows Python can't CreateProcess a "
+        "shebang script (WinError 193) — same constraint documented in "
+        "tests/mcp/parity/test_model_parity.sh. Windows gets functional "
+        "coverage once capture/evaluate land their own Windows-safe stub.",
+    )
     def test_full_dispatch_captures_a_settled_session(self):
         cli_path = os.path.join(_ENGINE_DIR, "engine", "nervepack_engine", "cli.py")
         with tempfile.TemporaryDirectory() as tmp:

@@ -150,7 +150,14 @@ python3 "$CLI" resume-write --active
 [[ -f "$NP_RESUME_POINTER" ]] || fail "--active did not write a pointer"
 jq -e '.session_id == "real-session-abc"' "$NP_RESUME_POINTER" >/dev/null \
   || fail "--active picked the wrong session: $(jq -c . "$NP_RESUME_POINTER")"
-jq -e --arg v "$REPO" '.cwd == $v' "$NP_RESUME_POINTER" >/dev/null \
+# MSYS_NO_PATHCONV=1 stops Git-bash from rewriting the POSIX-looking --arg
+# value before native jq.exe sees it (it would otherwise no longer match the
+# literal string python wrote into the JSON) -- but that same env var also
+# disables conversion for the FILE argument on this line, so convert that one
+# explicitly first (cygpath is a no-op / absent off Windows).
+POINTER_FOR_JQ="$NP_RESUME_POINTER"
+command -v cygpath >/dev/null 2>&1 && POINTER_FOR_JQ="$(cygpath -m "$NP_RESUME_POINTER")"
+MSYS_NO_PATHCONV=1 jq -e --arg v "$REPO" '.cwd == $v' "$POINTER_FOR_JQ" >/dev/null \
   || fail "--active cwd mismatch: $(jq -c . "$NP_RESUME_POINTER")"
 
 echo "PASS: writer --active discovers the newest non-agent-* transcript"
