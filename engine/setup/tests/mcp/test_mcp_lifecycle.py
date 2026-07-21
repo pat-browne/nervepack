@@ -173,6 +173,15 @@ class TestLifecycle(unittest.TestCase):
         return tp
 
     # --- capture --------------------------------------------------------
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the CLAUDE_BIN stub is a shebang script exec'd directly as a "
+        "subprocess argv[0]; native Windows Python can't CreateProcess a "
+        "shebang script (WinError 193) — same constraint documented in "
+        "tests/mcp/parity/test_model_parity.sh. This path was previously "
+        "masked on Windows CI by the bash-preferred hybrid fallback in "
+        "_tool_capture, which retiring episodic-capture.sh removed.",
+    )
     def test_capture_happy_writes_on(self):
         # Install a CLAUDE_BIN stub that emits a valid canned capture summary so
         # np_capture.capture() (episodic-capture.sh's retired logic, now the MCP
@@ -215,6 +224,15 @@ class TestLifecycle(unittest.TestCase):
         self.assertIn("disabled", r["result"]["content"][0]["text"].lower())
 
     # --- evaluate -------------------------------------------------------
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the CLAUDE_BIN stub is a shebang script exec'd directly as a "
+        "subprocess argv[0]; native Windows Python can't CreateProcess a "
+        "shebang script (WinError 193) — same constraint documented in "
+        "tests/mcp/parity/test_model_parity.sh. This path was previously "
+        "masked on Windows CI by the bash-preferred hybrid fallback in "
+        "_tool_evaluate, which retiring np-evaluator.sh removed.",
+    )
     def test_evaluate_happy_writes_on(self):
         # Install a CLAUDE_BIN stub that emits a valid canned evaluator verdict so
         # np_evaluator.evaluate() (np-evaluator.sh's retired logic, now the MCP
