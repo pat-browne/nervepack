@@ -156,8 +156,9 @@ The split mirrors the language policy:
   bigger model to chew through more tokens.
 - **Sonnet** (`claude-sonnet-4-6`) — only for **agentic** passes that read/edit
   files over multiple steps and need real judgment: the episodic-maintain
-  distillation (`72-`) and memory-promote (`71-`) crons. They run daily but no-op
-  (no model call) on an empty inbox, so the cost lands only on days with real work.
+  distillation and memory-promote crons (dispatched via `cli.py cron`, backed by
+  `np_agentic_cron.py`). They run daily but no-op (no model call) on an empty
+  inbox, so the cost lands only on days with real work.
 - **Opus — not used by any nervepack feature, by policy.** No feature's quality
   ceiling justifies Opus token spend. If a task feels like it needs Opus, that's a
   signal to **decompose** it (cheap extract → cheap act), not to upgrade the model.

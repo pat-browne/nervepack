@@ -5,12 +5,12 @@
 # Git-for-Windows bash and shells out to schtasks.exe — keeping the backbone bash, the
 # job logic in the 7x .sh bodies, and the test runnable on Linux CI with a stub
 # (mirrors the launchd installer's discipline). Matches the AUTHORITATIVE cron cadence:
-#   Daily 08:00 LOCAL — memory-promote    (71)
-#   Daily 08:30 LOCAL — episodic-maintain (72)
+#   Daily 08:00 LOCAL — memory-promote    (cli.py cron memory-promote)
+#   Daily 08:30 LOCAL — episodic-maintain (cli.py cron episodic-maintain)
 #   Daily 09:00 LOCAL — aggregate-metrics (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain    (cli.py cron skill-maintain)
-#   Weekly Sun 09:30  — refine            (76)
-#   Weekly Wed 10:00  — compact           (77)
+#   Weekly Sun 09:30  — refine            (cli.py cron refine)
+#   Weekly Wed 10:00  — compact           (cli.py cron compact)
 # All run idempotently (empty inbox / nothing-to-do = clean no-op). Each 7x body
 # self-logs to ~/.cache/nervepack/<job>.log. Re-running REPLACES each task (schtasks
 # /F overwrite), never duplicates.
@@ -60,12 +60,12 @@ install_job() {  # $1=suffix  $2=schedule(DAILY|WEEKLY)  $3=weekday(- for daily)
   echo "Installed scheduled task: $tn ($sc${day:+ $day} $time -> $script)"
 }
 
-install_job memory-promote    DAILY  -   08:00 71-run-memory-promote.sh
-install_job episodic-maintain DAILY  -   08:30 72-run-episodic-maintain.sh
+install_job memory-promote    DAILY  -   08:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron memory-promote"
+install_job episodic-maintain DAILY  -   08:30 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron episodic-maintain"
 install_job aggregate-metrics DAILY  -   09:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    DAILY  -   09:15 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron skill-maintain"
-install_job refine            WEEKLY SUN 09:30 76-run-refine.sh
-install_job compact           WEEKLY WED 10:00 77-run-compact.sh
+install_job refine            WEEKLY SUN 09:30 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron refine"
+install_job compact           WEEKLY WED 10:00 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron compact"
 
 echo
 echo "Requires: Git for Windows (provides the bash that runs the 7x job bodies)."

@@ -39,6 +39,7 @@ from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
+import np_agentic_cron  # noqa: E402
 import np_skill_maintain  # noqa: E402
 
 _HOOKS = {
@@ -60,6 +61,10 @@ _HOOKS = {
 _CRONS = {
     "aggregate-metrics": np_aggregate.aggregate,
     "skill-maintain": np_skill_maintain.maintain,
+    "memory-promote": np_agentic_cron.memory_promote,
+    "episodic-maintain": np_agentic_cron.episodic_maintain,
+    "refine": np_agentic_cron.refine,
+    "compact": np_agentic_cron.compact,
 }
 
 

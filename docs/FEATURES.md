@@ -495,8 +495,9 @@ be promoted into a real skill, not stranded.
 memory store, promote durable entries into the right skill, drop stale ones, commit +
 push. Local-only because the cloud can't reach the memory dir.
 
-**Assets.** `71-run-memory-promote.sh`, `agents/np-flow-memory-promote.md`. Toggle:
-`memory`.
+**Assets.** `engine/setup/np_agentic_cron.py` (Python port; `memory_promote()`,
+dispatched via `cli.py cron memory-promote`), `agents/np-flow-memory-promote.md`.
+Toggle: `memory.promote`.
 
 **Situational example.** You told a session to "remember" a new AWS profile name and it
 went to local memory. The next morning's cron recognizes it as durable and folds it

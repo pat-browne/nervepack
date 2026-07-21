@@ -49,19 +49,19 @@ launchctl list | grep com.nervepack
 
 ### memory-promote (local)
 ```bash
-~/Code/nervepack/engine/setup/71-run-memory-promote.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote
 tail -50 ~/.cache/nervepack/memory-promote.log
 ```
 
 ### nervepack-refine (local cron)
 ```bash
-~/Code/nervepack/engine/setup/76-run-refine.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron refine
 tail -50 ~/.cache/nervepack/refine.log
 ```
 
 ### nervepack-compact (local cron)
 ```bash
-~/Code/nervepack/engine/setup/77-run-compact.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron compact
 tail -50 ~/.cache/nervepack/compact.log
 ```
 

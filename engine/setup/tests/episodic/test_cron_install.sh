@@ -19,5 +19,5 @@ PATH="$tmp:$PATH" bash "$INSTALL" >/dev/null   # idempotent second run
 grep -q 'nervepack-memory-promote'   "$tmp/crontab.txt" || { echo "FAIL: memory cron line missing"; exit 1; }
 grep -q 'nervepack-episodic-maintain' "$tmp/crontab.txt" || { echo "FAIL: episodic cron line missing"; exit 1; }
 [[ "$(grep -c 'nervepack-episodic-maintain' "$tmp/crontab.txt")" == "1" ]] || { echo "FAIL: episodic line duplicated"; exit 1; }
-grep -q '30 8 \* \* \* .*72-run-episodic-maintain.sh' "$tmp/crontab.txt" || { echo "FAIL: episodic schedule wrong"; exit 1; }
+grep -q '30 8 \* \* \* .*cli.py cron episodic-maintain' "$tmp/crontab.txt" || { echo "FAIL: episodic schedule wrong"; exit 1; }
 echo "PASS test_cron_install"

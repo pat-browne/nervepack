@@ -9,8 +9,9 @@ stay local.
 fires at 09:00 — order matters because anything promoted here might be
 something `nervepack-refine` lints next).
 
-**Invoked by:** `engine/setup/71-run-memory-promote.sh` (wraps `claude -p` and
-appends to `~/.cache/nervepack/memory-promote.log`).
+**Invoked by:** `engine/setup/np_agentic_cron.py` (`memory_promote()`, dispatched
+via `cli.py cron memory-promote`; wraps `claude -p` and appends to
+`~/.cache/nervepack/memory-promote.log`).
 
 **Standing mandate:** pre-authorized to commit + push for the scope below.
 

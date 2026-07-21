@@ -12,14 +12,15 @@ from the bash original:
     single cross-platform path (see this phase's plan for why the bash
     original's Linux-setsid-vs-macOS-nohup+disown branch collapses to one).
 
-The first substep, aggregate-metrics, is now the Python np_aggregate.py (invoked
-via [sys.executable, path]); the second, 72-run-episodic-maintain.sh, stays bash
--- explicitly out of scope for this migration phase -- so this module still
-shells out to it via np_bashlib.argv() for Windows-safety, exactly as the bash
-original invoked it directly.
+Both substeps are now Python: aggregate-metrics is np_aggregate.py, invoked via
+[sys.executable, path]; episodic-maintain is np_agentic_cron.py's
+episodic_maintain(), invoked the same way with its cron name appended (that
+module's __main__ dispatches by name, mirroring cli.py's own _CRONS table) --
+its bash original, 72-run-episodic-maintain.sh, is retired. Each still runs
+out-of-process (not imported and called in-line) so a substep crash/hang can't
+take down the detached flush process itself.
 
-step_fns is injectable for tests (defaults to the two real substeps: one Python,
-one bash).
+step_fns is injectable for tests (defaults to the two real substeps, both Python).
 NP_FLUSH_NODETACH keeps it foreground for tests, matching the bash original's
 env var name exactly. NP_FLUSH_DETACHED is the internal re-entry marker set on
 the detached re-exec (also unchanged from the bash original's name/meaning).
@@ -38,9 +39,12 @@ _ENGINE_SETUP_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "setup"))
 _CLI_PATH = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cli.py"))
+_ARG_SEP = "\x1c"  # embeds a standalone-entrypoint arg in a _STEP_PATHS entry
+                    # without colliding with os.pathsep (see NP_FLUSH_STEP_PATHS
+                    # round-trip below) or any real filesystem path character.
 _STEP_PATHS = [
     os.path.join(_ENGINE_SETUP_DIR, "np_aggregate.py"),
-    os.path.join(_ENGINE_SETUP_DIR, "72-run-episodic-maintain.sh"),
+    os.path.join(_ENGINE_SETUP_DIR, "np_agentic_cron.py") + _ARG_SEP + "episodic-maintain",
 ]
 
 
@@ -62,11 +66,18 @@ def _log(msg):
 
 def _default_step_fn(path):
     def _call():
-        # np_aggregate.py (the retired 73-aggregate-metrics.sh's replacement) runs
-        # in its own interpreter here rather than in-process, so a substep failure
-        # still can't take down the detached flush process; 72-run-episodic-
-        # maintain.sh stays bash, invoked via np_bashlib.argv() for Windows-safety.
-        argv = [sys.executable, path] if path.endswith(".py") else np_bashlib.argv(["bash", path])
+        # Both real substeps (np_aggregate.py, np_agentic_cron.py) run in their own
+        # interpreter here rather than in-process, so a substep failure/crash still
+        # can't take down the detached flush process. A `path` may carry an extra
+        # standalone-entrypoint arg after _ARG_SEP (e.g. "np_agentic_cron.py\x1c
+        # episodic-maintain") -- harmless no-op split for a bare path. Any remaining
+        # non-.py entry (none by default; kept for a future bash substep) still
+        # shells out via np_bashlib.argv() for Windows-safety.
+        target, _, arg = path.partition(_ARG_SEP)
+        if target.endswith(".py"):
+            argv = [sys.executable, target] + ([arg] if arg else [])
+        else:
+            argv = np_bashlib.argv(["bash", target])
         subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     return _call
 
