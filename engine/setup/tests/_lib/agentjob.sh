@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Shared sandbox + stub-agent helper for the "agentic job" driver tests —
-# 71-run-memory-promote.sh, 72-run-episodic-maintain.sh, 76-run-refine.sh,
-# 77-run-compact.sh. SOURCE this; do not execute directly.
+# Shared sandbox + stub-agent helper. All four agentic-job crons
+# (memory-promote, episodic-maintain, refine, compact) have been ported to
+# engine/setup/np_agentic_cron.py; their bash originals 71/72/76/77-run-*.sh are
+# retired, each with a Python test sandbox (tests/memory/test_np_memory_promote.py,
+# tests/episodic/test_np_episodic_maintain.py, tests/maintain/test_np_refine.py,
+# tests/maintain/test_np_compact.py). No bash cron drivers remain to copy; this
+# helper now only provides make_agent_sandbox + stub_agent, used by
+# tests/_lib/test_agentjob_selftest.sh. SOURCE this; do not execute
+# directly.
 #
-# All four drivers share the same shape: read a prompt from agents/np-flow-*.md,
-# pipe it to np-llm.sh (which shells out to $CLAUDE_BIN), and expect the agent to
-# edit + commit files IN WHICHEVER REPO IT WAS INVOKED FROM (71/72 cd into the
-# content overlay first via np_content_dir; 76/77 stay in the engine repo, naming
-# any extra overlay roots as text in the prompt). This helper stands up that
-# two-repo shape once and gives each driver test a stub agent + git-state
+# The remaining three drivers share the same shape: read a prompt from
+# agents/np-flow-*.md, pipe it to np-llm.sh (which shells out to $CLAUDE_BIN), and
+# expect the agent to edit + commit files IN WHICHEVER REPO IT WAS INVOKED FROM (72
+# cd's into the content overlay first via np_content_dir; 76/77 stay in the engine
+# repo, naming any extra overlay roots as text in the prompt). This helper stands up
+# that two-repo shape once and gives each driver test a stub agent + git-state
 # assertions, so per-test files only need the bespoke bits (fixture content,
 # prompt tweaks).
 #
@@ -48,12 +54,10 @@ make_agent_sandbox() {
   # whichever of these dirs it actually needs at mutation time.
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
-  # Driver + the libs it sources, mirroring test_skill_maintain.sh's sandbox build.
-  cp "$_AGENTJOB_SETUP/71-run-memory-promote.sh" \
-     "$_AGENTJOB_SETUP/72-run-episodic-maintain.sh" \
-     "$_AGENTJOB_SETUP/76-run-refine.sh" \
-     "$_AGENTJOB_SETUP/77-run-compact.sh" \
-     "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
+  # The libs a sandboxed agentic job sources (no bash cron drivers remain — all
+  # four were ported to np_agentic_cron.py, whose Python tests build their own
+  # sandboxes; these libs still back make_agent_sandbox + stub_agent).
+  cp "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
      "$_AGENTJOB_SETUP/np-content-lib.sh" \
      "$_AGENTJOB_SETUP/np-layer-lib.sh" \
      "$_AGENTJOB_SETUP/np-llm.sh" \

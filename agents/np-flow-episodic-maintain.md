@@ -9,8 +9,9 @@ local inbox, so this has to stay local.
 **Cadence:** Sunday 08:30 local — 30 min after `memory-promote` (08:00), same
 spacing pattern the other nervepack agents use so no two push at once.
 
-**Invoked by:** `engine/setup/72-run-episodic-maintain.sh` (wraps `claude -p`, logs to
-`~/.cache/nervepack/episodic-maintain.log`).
+**Invoked by:** the `episodic-maintain` cron — `cli.py cron episodic-maintain`
+(backed by `engine/setup/np_agentic_cron.py`, which invokes the agent via
+`np-llm.sh`), logs to `~/.cache/nervepack/episodic-maintain.log`.
 
 **Standing mandate:** pre-authorized to commit + push to the `memory/episodic/`
 subtree only. This is the one subtree where the human-review gate is waived

@@ -1,0 +1,322 @@
+"""Shared agentic-cron helper -- in-process Python port of the near-identical
+71/72/76/77-run-*.sh bash bodies (memory-promote, episodic-maintain, refine,
+compact). All four do, in order: (1) toggle gate -> skip; (2) re-entrancy --
+bail if NERVEPACK_AGENT is already set; (3) for content-committing crons only:
+content-dir-explicit gate (issue #12 -- never write personal memory into the
+PII-clean engine repo on the implicit engine-root fallback); (4) backend
+pre-flight (claude backend needs the binary; a non-claude backend needs
+NP_LLM_AGENT_CMD); (5) extract the `## Prompt` section from the prompt file;
+(6) for extra-roots crons only: append an "Additional skill roots" overlay
+note; (7) a dated log header; (8) cd into the commit target and run the
+agent there.
+
+This module builds ONE shared private `_run(cfg)` body plus a small
+`CronConfig` per cron, so a later cron is a thin config addition, not a
+re-derivation of the shared logic. Only `memory-promote` is wired here so
+far; `episodic-maintain`/`refine`/`compact` each add a CronConfig + entrypoint
+in their own port.
+
+Fail-open throughout (ARCHITECTURE invariant 1): `_run` (and every
+entrypoint built on it) returns a short status string and never raises.
+"""
+import dataclasses
+import datetime
+import os
+import sys
+
+import np_content
+import np_llm_agent
+import np_toggle
+
+_HERE = os.path.dirname(os.path.abspath(__file__))       # engine/setup/
+_NP = os.path.abspath(os.path.join(_HERE, "..", ".."))    # engine repo root
+
+
+def _ts():
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _home():
+    return os.environ.get("HOME") or os.path.expanduser("~")
+
+
+@dataclasses.dataclass(frozen=True)
+class CronConfig:
+    """One cron's shape -- the shared `_run` body only ever reads these fields.
+
+    name            -- dispatch name; also the log run-header ("=== <name> run ===").
+    toggle          -- toggle key gating the run (e.g. "memory.promote").
+    prompt_rel_path -- prompt file, relative to the engine root (_NP).
+    log_env         -- env var overriding the log path (e.g. "MEMORY_PROMOTE_LOG").
+    log_basename    -- default log basename under ~/.cache/nervepack/.
+    commit_target   -- "content" (content overlay, via np_content.content_dir())
+                       or "engine" (the engine repo, _NP).
+    content_gated   -- True: skip (issue #12) when np_content.content_is_explicit()
+                       is False. Only memory-promote/episodic-maintain set this.
+    extra_roots     -- True: append the "Additional skill roots" overlay note to
+                       the prompt. Only refine/compact set this.
+    extra_roots_steps        -- the numbered prompt steps the overlay note tells
+                       the agent to also apply to each extra root ("2-3" for
+                       refine, "2-5" for compact -- matches each prompt's own
+                       step numbering).
+    extra_roots_repo_detail  -- extra clause inserted after "rooted at `<path>`"
+                       in each per-root bullet ("" for refine; compact names its
+                       own archive/compact-proposals/plugin.json layout).
+    """
+    name: str
+    toggle: str
+    prompt_rel_path: str
+    log_env: str
+    log_basename: str
+    commit_target: str = "content"
+    content_gated: bool = False
+    extra_roots: bool = False
+    extra_roots_steps: str = "2-3"
+    extra_roots_repo_detail: str = ""
+
+
+def _log_path(cfg):
+    override = os.environ.get(cfg.log_env)
+    if override:
+        return override
+    return os.path.join(_home(), ".cache", "nervepack", cfg.log_basename)
+
+
+def _log(cfg, msg):
+    try:
+        path = _log_path(cfg)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s %s\n" % (_ts(), msg))
+    except OSError:
+        pass
+
+
+def _base_prompt(prompt_file):
+    """The prompt body after the `## Prompt` heading line. Mirrors the bash
+    `awk '/^## Prompt$/{p=1; next} p'`."""
+    try:
+        with open(prompt_file, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return ""
+    out, started = [], False
+    for ln in lines:
+        if started:
+            out.append(ln)
+        elif ln == "## Prompt":
+            started = True
+    return "\n".join(out)
+
+
+def _extra_roots_note(cfg):
+    """The '### Additional skill roots' overlay note appended for extra_roots
+    configs (refine/compact). Mirrors the retired 76-run-refine.sh /
+    77-run-compact.sh EXTRA_ROOTS construction (also
+    np_skill_maintain._skill_roots()'s pattern): each merge root's skills/ that
+    resolves to a real dir other than the engine itself. The step range and the
+    per-root detail clause are cron-specific (see CronConfig). Returns "" when
+    there's nothing to add (fail-open on any resolution error)."""
+    roots = []
+    try:
+        for r in np_content.merge_roots():
+            if r and r != _NP and os.path.isdir(os.path.join(r, "skills")):
+                roots.append(r)
+    except Exception:
+        return ""
+    if not roots:
+        return ""
+    lines = [
+        "",
+        "",
+        "### Additional skill roots (content overlay)",
+        "",
+        "Besides `skills/` in this working directory, also apply steps %s to "
+        "the `skills/` directory under EACH of these paths -- content-overlay "
+        "(and/or team) repos that hold the personal/knowledge skills relocated "
+        "out of the engine:" % cfg.extra_roots_steps,
+    ]
+    for r in roots:
+        lines.append(
+            "- `%s/skills/` -- a SEPARATE git repo rooted at `%s`%s. Stage and "
+            "commit ONLY the paths you changed there via `git -C \"%s\" add "
+            "<paths> && git -C \"%s\" commit -m ... -- <paths>`, then "
+            "`git -C \"%s\" push`. Never combine its commit with this repo's "
+            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, r))
+    return "\n".join(lines) + "\n"
+
+
+def _resolve_commit_dir(cfg):
+    if cfg.commit_target == "engine":
+        return _NP
+    return np_content.content_dir()
+
+
+def _run(cfg):
+    """Shared 8-step agentic-cron body. Returns a short status string; never
+    raises (ARCHITECTURE invariant 1 -- fail-open)."""
+    # 1. Toggle gate.
+    if not np_toggle.enabled(cfg.toggle):
+        return "skipped: %s disabled" % cfg.toggle
+
+    # 2. Re-entrancy: bail if already running inside a nervepack agent context.
+    # np-llm.sh's own agent call sets NERVEPACK_AGENT=1; this explicit check
+    # mirrors the bash bodies' belt-and-suspenders guard, and matters when this
+    # entrypoint is invoked directly (bypassing cli.py's own cron-dispatch guard).
+    if os.environ.get("NERVEPACK_AGENT"):
+        return "skipped: NERVEPACK_AGENT already set (re-entrant)"
+
+    # 3. Content-dir-explicit gate (issue #12) -- content-gated crons only.
+    if cfg.content_gated:
+        try:
+            explicit = np_content.content_is_explicit()
+        except Exception:
+            explicit = False
+        if not explicit:
+            _log(cfg, "skipped: content dir is the implicit engine-root fallback -- "
+                       "set NP_CONTENT_DIR or ~/.config/nervepack/content-dir to enable "
+                       "%s" % cfg.name)
+            return "skipped: content dir is the implicit engine-root fallback"
+
+    # 4. Backend pre-flight (ARCHITECTURE invariant 13).
+    backend = os.environ.get("NP_LLM_BACKEND", "claude")
+    claude = os.environ.get("CLAUDE_BIN") or os.path.join(_home(), ".local", "bin", "claude")
+    if backend == "claude" and not os.access(claude, os.X_OK):
+        _log(cfg, "ERROR: claude CLI not found at %s" % claude)
+        return "skipped: claude CLI not found"
+    if backend != "claude" and not os.environ.get("NP_LLM_AGENT_CMD"):
+        _log(cfg, "ERROR: local backend agent mode needs NP_LLM_AGENT_CMD")
+        return "skipped: NP_LLM_AGENT_CMD unset"
+
+    # 5. Extract the "## Prompt" section onward.
+    prompt_file = os.path.join(_NP, cfg.prompt_rel_path)
+    if not os.path.isfile(prompt_file):
+        _log(cfg, "ERROR: prompt file missing at %s" % prompt_file)
+        return "skipped: prompt missing"
+    prompt = _base_prompt(prompt_file)
+    if not prompt:
+        _log(cfg, "ERROR: empty prompt extracted from %s" % prompt_file)
+        return "skipped: empty prompt"
+
+    # 6. EXTRA_ROOTS overlay note -- extra_roots crons only.
+    if cfg.extra_roots:
+        note = _extra_roots_note(cfg)
+        if note:
+            prompt += note
+
+    # 7. Dated log header.
+    _log(cfg, "=== %s run ===" % cfg.name)
+
+    # 8. Resolve the commit target and run the agent there.
+    target = _resolve_commit_dir(cfg)
+    if not target:
+        _log(cfg, "ERROR: commit target could not be resolved")
+        return "skipped: commit target unresolved"
+    ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target)
+    if not ok:
+        _log(cfg, "ERROR: agent run exited non-zero")
+        return "agent run failed"
+    return "ok: agent run completed"
+
+
+# --- memory-promote (Task 0) -------------------------------------------------
+_MEMORY_PROMOTE = CronConfig(
+    name="memory-promote",
+    toggle="memory.promote",
+    prompt_rel_path=os.path.join("agents", "np-flow-memory-promote.md"),
+    log_env="MEMORY_PROMOTE_LOG",
+    log_basename="memory-promote.log",
+    commit_target="content",
+    content_gated=True,
+    extra_roots=False,
+)
+
+
+def memory_promote():
+    """Cron entrypoint (dispatched by cli.py as `cron memory-promote`).
+    Returns a short status string; never raises."""
+    return _run(_MEMORY_PROMOTE)
+
+
+# --- episodic-maintain (Task 1) ----------------------------------------------
+_EPISODIC_MAINTAIN = CronConfig(
+    name="episodic-maintain",
+    toggle="memory.maintain",
+    prompt_rel_path=os.path.join("agents", "np-flow-episodic-maintain.md"),
+    log_env="EPISODIC_MAINTAIN_LOG",
+    log_basename="episodic-maintain.log",
+    commit_target="content",
+    content_gated=True,
+    extra_roots=False,
+)
+
+
+def episodic_maintain():
+    """Cron entrypoint (dispatched by cli.py as `cron episodic-maintain`).
+    Returns a short status string; never raises."""
+    return _run(_EPISODIC_MAINTAIN)
+
+
+# --- refine (Task 2) ----------------------------------------------------------
+_REFINE = CronConfig(
+    name="refine",
+    toggle="maintain.refine",
+    prompt_rel_path=os.path.join("agents", "np-flow-scheduled-refine.md"),
+    log_env="REFINE_LOG",
+    log_basename="refine.log",
+    commit_target="engine",
+    content_gated=False,
+    extra_roots=True,
+)
+
+
+def refine():
+    """Cron entrypoint (dispatched by cli.py as `cron refine`).
+    Returns a short status string; never raises."""
+    return _run(_REFINE)
+
+
+# --- compact (Task 3) ---------------------------------------------------------
+_COMPACT = CronConfig(
+    name="compact",
+    toggle="maintain.compact",
+    prompt_rel_path=os.path.join("agents", "np-flow-weekly-compact.md"),
+    log_env="COMPACT_LOG",
+    log_basename="compact.log",
+    commit_target="engine",
+    content_gated=False,
+    extra_roots=True,
+    extra_roots_steps="2-5",
+    extra_roots_repo_detail=(
+        ", with its own `archive/`, `compact-proposals/`, and "
+        "`.claude-plugin/plugin.json` (or none, if it doesn't ship a plugin "
+        "manifest)"),
+)
+
+
+def compact():
+    """Cron entrypoint (dispatched by cli.py as `cron compact`).
+    Returns a short status string; never raises."""
+    return _run(_COMPACT)
+
+
+# Standalone-script entrypoint -- lets a caller that can only exec a bare .py file
+# (session_flush.py's substep runner, mirroring how it already runs np_aggregate.py
+# via `[sys.executable, path]`) invoke one of this module's named crons without a
+# `cli.py cron <name>` dispatch. `cli.py`'s own `_CRONS` table is the primary
+# dispatch path; this mirrors it minimally for that one caller.
+_STANDALONE_ENTRYPOINTS = {
+    "memory-promote": memory_promote,
+    "episodic-maintain": episodic_maintain,
+    "refine": refine,
+    "compact": compact,
+}
+
+if __name__ == "__main__":
+    _name = sys.argv[1] if len(sys.argv) > 1 else ""
+    _fn = _STANDALONE_ENTRYPOINTS.get(_name)
+    if _fn is None:
+        print("usage: np_agentic_cron.py <%s>" % "|".join(_STANDALONE_ENTRYPOINTS),
+              file=sys.stderr)
+        sys.exit(2)
+    print(_fn())

@@ -57,8 +57,8 @@ grep -E "nervepack\\\\compact.*//SC WEEKLY.*//D WED.*//ST 10:00" "$calls" >/dev/
   || { echo "FAIL: compact not WEEKLY WED 10:00"; cat "$calls"; exit 1; }
 
 # 4. the task action runs the .sh body through bash (Git-for-Windows) and forces replace
-grep -E "71-run-memory-promote.sh" "$calls" >/dev/null \
-  || { echo "FAIL: memory-promote action does not reference its script"; exit 1; }
+grep -E "cli.py cron memory-promote" "$calls" >/dev/null \
+  || { echo "FAIL: memory-promote action does not reference its cli.py dispatch"; exit 1; }
 grep -E "//TR .*bash" "$calls" >/dev/null \
   || { echo "FAIL: task action does not invoke bash"; exit 1; }
 [[ "$(grep -c '//F' "$calls")" == 6 ]] || { echo "FAIL: not every task uses //F (idempotent replace)"; exit 1; }

@@ -36,17 +36,17 @@ remove_line() {  # $1=marker — drop any crontab line containing marker; no-op 
 }
 
 install_line "nervepack-memory-promote" \
-  "0 8 * * * $HOME/Code/nervepack/engine/setup/71-run-memory-promote.sh # nervepack-memory-promote"
+  "0 8 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote # nervepack-memory-promote"
 install_line "nervepack-episodic-maintain" \
-  "30 8 * * * $HOME/Code/nervepack/engine/setup/72-run-episodic-maintain.sh # nervepack-episodic-maintain"
+  "30 8 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron episodic-maintain # nervepack-episodic-maintain"
 install_line "nervepack-aggregate-metrics" \
   "0 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron aggregate-metrics # nervepack-aggregate-metrics"
 install_line "nervepack-skill-maintain" \
   "15 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron skill-maintain # nervepack-skill-maintain"
 install_line "nervepack-refine" \
-  "30 9 * * 0 $HOME/Code/nervepack/engine/setup/76-run-refine.sh # nervepack-refine"
+  "30 9 * * 0 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron refine # nervepack-refine"
 install_line "nervepack-compact" \
-  "0 10 * * 3 $HOME/Code/nervepack/engine/setup/77-run-compact.sh # nervepack-compact"
+  "0 10 * * 3 python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron compact # nervepack-compact"
 
 # --- Opt-in resume-pointer interval cron (default off; toggle: resume.cron) ---
 # When on, runs the writer for the ACTIVE session (--active discovery, since cron
