@@ -27,6 +27,7 @@ for _p in (_ENGINE_DIR, _ENGINE_SETUP):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import np_bashlib  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_token_lib  # noqa: E402
 
@@ -50,14 +51,14 @@ class TestTokenLibParity(unittest.TestCase):
     def _bash_prefix(self, token_file):
         lib = os.path.join(_ENGINE_SETUP, "np-token-lib.sh")
         result = subprocess.run(
-            ["bash", "-c", 'source "%s"; np_claude_token_env_prefix' % lib],
+            np_bashlib.argv(["bash", "-c", 'source "%s"; np_claude_token_env_prefix' % lib]),
             env=dict(os.environ, NP_CLAUDE_TOKEN_FILE=token_file),
             capture_output=True, text=True, check=True)
         return result.stdout
 
     def _eval_and_get_token(self, prefix_snippet):
         result = subprocess.run(
-            ["bash", "-c", "%secho \"$CLAUDE_CODE_OAUTH_TOKEN\"" % prefix_snippet],
+            np_bashlib.argv(["bash", "-c", "%secho \"$CLAUDE_CODE_OAUTH_TOKEN\"" % prefix_snippet]),
             capture_output=True, text=True, check=True)
         return result.stdout.strip()
 
@@ -93,7 +94,7 @@ class TestInstallCron(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
-        with open(self.toggles_conf, "w") as fh:
+        with open(self.toggles_conf, "w", newline="") as fh:
             fh.write("resume|shared|runtime|on|cron=off,cron_min=5\n")
         self._env = mock.patch.dict(os.environ, {
             "NP_TOGGLES_CONF": self.toggles_conf,
@@ -164,18 +165,18 @@ class TestInstallCron(unittest.TestCase):
         self.assertNotIn("nervepack-resume-cron", self._list())
 
     def test_8_resume_cron_on_adds_entry_with_configured_interval(self):
-        with open(self.toggles_conf, "w") as fh:
+        with open(self.toggles_conf, "w", newline="") as fh:
             fh.write("resume|shared|runtime|on|cron=on,cron_min=7\n")
         self._run()
         self.assertIn("*/7 * * * *", self._list())
         self.assertIn("nervepack-resume-cron", self._list())
 
     def test_9_resume_cron_flipped_off_removes_stale_entry(self):
-        with open(self.toggles_conf, "w") as fh:
+        with open(self.toggles_conf, "w", newline="") as fh:
             fh.write("resume|shared|runtime|on|cron=on,cron_min=5\n")
         self._run()
         self.assertIn("nervepack-resume-cron", self._list())
-        with open(self.toggles_conf, "w") as fh:
+        with open(self.toggles_conf, "w", newline="") as fh:
             fh.write("resume|shared|runtime|on|cron=off,cron_min=5\n")
         self._run()
         self.assertNotIn("nervepack-resume-cron", self._list())

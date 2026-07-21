@@ -141,7 +141,10 @@ def install_cron(nervepack_root=None, crontab_list_fn=None, crontab_set_fn=None,
 
     resume_marker = "nervepack-resume-cron"
     if np_toggle.param("resume.cron", "off") == "on":
-        cron_min = np_toggle.param("resume.cron_min", "5")
+        # .strip(): a conf value can carry a stray trailing \r (e.g. a toggles.conf
+        # written/edited on Windows with universal-newline translation on) that
+        # would otherwise fail .isdigit() and silently fall back to the default.
+        cron_min = np_toggle.param("resume.cron_min", "5").strip()
         if not cron_min.isdigit():
             cron_min = "5"
         line = "*/%s * * * * python3 %s resume-write --active --throttle # %s" % (cron_min, cli, resume_marker)
