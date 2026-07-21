@@ -256,7 +256,7 @@ class TestBuild(unittest.TestCase):
 
     def test_graduation_emitted_from_fixture(self):
         """build.py emits window.GRADUATION from a committed graduation-candidates.json
-        (written by 75-skill-maintain.sh, content-routed) so the dashboard can surface
+        (written by np_skill_maintain.py, content-routed) so the dashboard can surface
         strategies/playbooks overdue to graduate into a skill. The candidate list and
         thresholds pass through verbatim."""
         fixture = {

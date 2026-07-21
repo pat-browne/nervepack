@@ -53,6 +53,7 @@ import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
 import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; this is now the only implementation)
 import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
 import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
+import np_skill_maintain  # noqa: E402  skill-maintenance orchestrator (75-skill-maintain.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -447,9 +448,15 @@ def _tool_maintain(args):
         # 73-aggregate-metrics.sh (the bash original) is retired -- np_aggregate.aggregate()
         # is now the only implementation, called in-process (no subprocess/bash).
         return np_aggregate.aggregate()
+    if job == "skills":
+        # 75-skill-maintain.sh (the bash original) is retired -- np_skill_maintain.maintain()
+        # is now the only implementation. Unlike aggregate, it still shells to bash
+        # internally (the split pass runs np-llm.sh), so it stays gated by
+        # _require_bash like promote/maintain below rather than going fully bash-free.
+        _require_bash("nervepack_maintain")
+        return np_skill_maintain.maintain()
     _require_bash("nervepack_maintain")
-    script = {"promote": "71-run-memory-promote.sh", "maintain": "72-run-episodic-maintain.sh",
-              "skills": "75-skill-maintain.sh"}[job]
+    script = {"promote": "71-run-memory-promote.sh", "maintain": "72-run-episodic-maintain.sh"}[job]
     rc, out, err = run(["bash", os.path.join(SETUP, script)])
     return (out + err).strip() or f"{job} done"
 

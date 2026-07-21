@@ -17,6 +17,6 @@ bash "$INSTALLER" >/dev/null
 bash "$INSTALLER" >/dev/null   # run twice — must stay idempotent
 n=$(grep -c 'nervepack-skill-maintain' "$store" || true)
 [[ "$n" == "1" ]] || { echo "FAIL: expected 1 skill-maintain entry, got $n"; exit 1; }
-grep -q '15 9 \* \* \* .*75-skill-maintain.sh # nervepack-skill-maintain' "$store" \
+grep -q '15 9 \* \* \* .*cli\.py cron skill-maintain # nervepack-skill-maintain' "$store" \
   || { echo "FAIL: cron line wrong: $(grep skill-maintain "$store")"; exit 1; }
 echo "PASS test_skill_cron_install"

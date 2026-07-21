@@ -168,7 +168,8 @@ mode) and Reject — consume this record. See
 
 ### Skill maintenance (wiring)
 
-`engine/setup/75-skill-maintain.sh` (daily cron, 09:15) keeps skill bodies within budget,
+`engine/setup/np_skill_maintain.py` (dispatched via `engine/nervepack_engine/cli.py` as
+`cli.py cron skill-maintain`, daily cron, 09:15) keeps skill bodies within budget,
 deterministic-first. A detector (`engine/setup/np_skill_budget.py`, no LLM) flags any
 `SKILL.md` over the hard `split_kb` (default 8 KB); only then does a Sonnet
 `claude -p` pass (`agents/np-flow-skill-maintain.md`) move overflow detail into
