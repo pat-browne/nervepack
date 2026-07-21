@@ -22,6 +22,7 @@ import os
 import subprocess
 import sys
 
+import np_bashlib
 import np_scheduler_install
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +39,11 @@ def _cli_path():
 
 def _default_run(cmd, **kwargs):
     kwargs.setdefault("check", False)
-    return subprocess.run(cmd, **kwargs)
+    # np_bashlib.argv(): every step here is either a bash script or already a
+    # python3/sys.executable invocation -- on native Windows a bare `bash`
+    # resolves to the WSL stub (System32), not Git-bash, so this normalization
+    # is load-bearing, not cosmetic.
+    return subprocess.run(np_bashlib.argv(cmd), **kwargs)
 
 
 def _step_script(setup_dir, basename, run_fn):
