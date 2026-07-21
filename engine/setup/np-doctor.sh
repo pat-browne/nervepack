@@ -135,6 +135,16 @@ core_check() {
       else
         echo "WARN (resume-pointer hooks not registered in $settings — run engine/setup/61-install-resume-hook.sh)"
       fi ;;
+    scheduled-auth-token)
+      source "$HERE/np-token-lib.sh" 2>/dev/null || { echo SKIP; return; }
+      local st word
+      st="$(np_claude_token_status)"
+      word="${st%% *}"
+      case "$word" in
+        ok)   echo "PASS ($st)" ;;
+        warn) echo "WARN (rotation window — run engine/setup/62-install-scheduled-auth-token.sh --rotate; $st)" ;;
+        *)    echo "WARN (no scheduled-auth token — run engine/setup/62-install-scheduled-auth-token.sh; scheduled memory-promote/refine/compact crons fail 'Not logged in' without it)" ;;
+      esac ;;
     pii_filter_full)
       python3 -c "import presidio_analyzer" >/dev/null 2>&1 \
         && echo PASS \

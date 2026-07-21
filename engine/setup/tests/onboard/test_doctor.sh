@@ -113,4 +113,14 @@ echo "$outG" | grep -qi 'hook-scripts.*FAIL' || { echo "FAIL: missing hook scrip
 echo "$outG" | grep -qi 'missing-guard' || { echo "FAIL: report should name missing-guard.sh"; echo "$outG"; exit 1; }
 echo "$outG" | grep -qi 'another-gone' || { echo "FAIL: report should name another-gone.sh"; echo "$outG"; exit 1; }
 
+# Case H: scheduled-auth-token core check — WARN when no token file, PASS once stored.
+tokfile="$tmp/claude-oauth-token"
+set +e; outH="$(NP_CLAUDE_TOKEN_FILE="$tokfile" doctor "$tmp/ok.json" 2>&1)"; rcH=$?; set -e
+[[ $rcH -eq 0 ]] || { echo "FAIL: missing scheduled-auth-token (SHOULD) must not fail doctor; got $rcH"; echo "$outH"; exit 1; }
+echo "$outH" | grep -qi 'scheduled-auth-token.*WARN' || { echo "FAIL: expected scheduled-auth-token WARN when unset"; echo "$outH"; exit 1; }
+printf 'dummy' > "$tokfile"; date -u +%Y-%m-%d > "$tokfile.issued"
+set +e; outH2="$(NP_CLAUDE_TOKEN_FILE="$tokfile" doctor "$tmp/ok.json" 2>&1)"; rcH2=$?; set -e
+[[ $rcH2 -eq 0 ]] || { echo "FAIL: fresh scheduled-auth-token should exit 0; got $rcH2"; echo "$outH2"; exit 1; }
+echo "$outH2" | grep -qi 'scheduled-auth-token.*PASS' || { echo "FAIL: expected scheduled-auth-token PASS once stored"; echo "$outH2"; exit 1; }
+
 echo "PASS test_doctor"
