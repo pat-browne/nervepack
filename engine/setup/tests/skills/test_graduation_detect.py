@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract test for np-graduation-detect.py (stdlib unittest, per language policy).
+"""Contract test for np_graduation_detect.py (stdlib unittest, per language policy).
 Black-box: builds a fake memory/lessons/ tree and asserts the emitted JSON.
 The detector flags auto-distilled lessons that have proven themselves (high `seen`)
 or outgrown a skill's body budget (bytes) as candidates to graduate into a
@@ -12,7 +12,16 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DET = os.path.join(HERE, "..", "..", "np-graduation-detect.py")
+DET = os.path.join(HERE, "..", "..", "np_graduation_detect.py")
+
+import sys
+from unittest import mock
+
+_ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
+if _ENGINE_SETUP not in sys.path:
+    sys.path.insert(0, _ENGINE_SETUP)
+
+import np_graduation_detect  # noqa: E402
 
 
 def make_entry(root, name, *, seen=1, body_bytes=900, status="candidate", provenance="failure"):
@@ -84,6 +93,32 @@ class TestGraduationDetect(unittest.TestCase):
     def test_missing_dir_fail_open(self):
         r = run("/nonexistent/lessons")
         self.assertEqual(r["candidates"], [])
+
+
+class TestGraduationDetectDirectImport(unittest.TestCase):
+    """Same scenarios as TestGraduationDetect, but calling scan() directly in-process
+    rather than via subprocess -- proves the module is cleanly importable, which
+    is the whole point of this phase's rename (Phase 10's orchestrator will call
+    scan() this way, not shell out to a subprocess)."""
+
+    def test_flags_high_seen_in_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_entry(tmp, "proven", seen=30)
+            make_entry(tmp, "fresh", seen=2)
+            with mock.patch.dict(os.environ, {"GRADUATE_SEEN": "10", "GRADUATE_KB": "6"}):
+                r = np_graduation_detect.scan(tmp)
+            names = [c["name"] for c in r["candidates"]]
+            self.assertEqual(names, ["proven"])
+            self.assertIn("seen", r["candidates"][0]["reasons"])
+
+    def test_skips_already_graduated_in_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_entry(tmp, "done", seen=99, status="graduated")
+            make_entry(tmp, "qualifies", seen=99)
+            with mock.patch.dict(os.environ, {"GRADUATE_SEEN": "10"}):
+                r = np_graduation_detect.scan(tmp)
+            names = [c["name"] for c in r["candidates"]]
+            self.assertEqual(names, ["qualifies"])
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ if command -v np_content_dir >/dev/null 2>&1 && np_content_is_explicit 2>/dev/nu
      && CONTENT="$(np_content_dir 2>/dev/null)"; then
   export GRADUATE_SEEN="$(np_param skills.graduate_seen 10)"
   export GRADUATE_KB="$(np_param skills.graduate_kb 6)"
-  grad_out="$(python3 "$HERE/np-graduation-detect.py" "$CONTENT/memory/lessons" 2>/dev/null)"
+  grad_out="$(python3 "$HERE/np_graduation_detect.py" "$CONTENT/memory/lessons" 2>/dev/null)"
   grad_n="$(printf '%s' "$grad_out" | jq -r '.candidates | length' 2>/dev/null || echo 0)"
   # Committed, content-routed data file the dashboard build reads (the local marker is
   # cache-only, so build.py — which may run from committed data in cloud/CI — can't see
@@ -87,7 +87,7 @@ if declare -f np_merge_roots >/dev/null 2>&1; then
   done < <(np_merge_roots 2>/dev/null)
 fi
 
-report="$(python3 "$HERE/np-skill-budget.py" "${ROOTS[@]}" 2>/dev/null)"
+report="$(python3 "$HERE/np_skill_budget.py" "${ROOTS[@]}" 2>/dev/null)"
 [[ -n "$report" ]] || { echo "$(date -u +%FT%TZ) detector produced no output" >>"$LOG"; exit 0; }
 
 if [[ "$(printf '%s' "$report" | jq -r '.catalog_over')" == "true" ]]; then
@@ -149,7 +149,7 @@ Hard body budget: ${SKILL_SPLIT_KB}KB. Move overflow into skills/$skill/referenc
   # SessionEnd can't re-fire episodic-capture/np-evaluator into a self-recursion loop.
   ( cd "$repo_root" && printf '%s' "$prompt" | "$HERE/np-llm.sh" agent --tools "Read Write Edit" >/dev/null 2>&1 )
 
-  if python3 "$HERE/np-skill-validate.py" "$dir" "$orig" 2>>"$LOG"; then
+  if python3 "$HERE/np_skill_validate.py" "$dir" "$orig" 2>>"$LOG"; then
     git -C "$repo_root" add "skills/$skill" >/dev/null 2>&1
     # Path-limit the commit to this skill dir — a bare commit would sweep any other
     # session's staged work in the shared tree (issue #11 pattern).

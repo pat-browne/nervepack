@@ -81,7 +81,7 @@ printf '%s' "$py" | grep -q WIKI_OK || fail "wiki_index did not index topic+conc
 #    provenance scan (tracked separately) -- pointing it at memory/lessons still
 #    exercises "the engine can read this merged layer" without depending on the
 #    now-removed memory/{strategies,playbooks} dirs.
-gd="$(python3 "$SETUP/np-graduation-detect.py" "$FIX/memory/lessons" 2>/dev/null || true)"
+gd="$(python3 "$SETUP/np_graduation_detect.py" "$FIX/memory/lessons" 2>/dev/null || true)"
 printf '%s' "$gd" | jq -e 'has("candidates")' >/dev/null 2>&1 \
   || fail "graduation-detect did not read memory/lessons (out=[$gd])"
 
