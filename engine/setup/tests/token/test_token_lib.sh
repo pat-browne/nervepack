@@ -16,7 +16,11 @@ source "$LIB"
 # 1. store() writes the file with 0600 perms and a same-day issued sidecar.
 np_claude_token_store "dummy-token-value"
 [[ -f "$NP_CLAUDE_TOKEN_FILE" ]] || { echo "FAIL: token file not written"; exit 1; }
-perm="$(stat -f '%Lp' "$NP_CLAUDE_TOKEN_FILE" 2>/dev/null || stat -c '%a' "$NP_CLAUDE_TOKEN_FILE")"
+# stat's format flag differs (BSD -f vs GNU -c) and, worse, GNU stat's -f means
+# "filesystem status" — it exits 0 with unrelated output instead of erroring, so
+# a `stat -f ... || stat -c ...` fallback silently never fires on Linux. Use
+# Python (stdlib, already a hard dependency) for a portable permission check.
+perm="$(python3 -c "import os,sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o777)[2:])" "$NP_CLAUDE_TOKEN_FILE")"
 [[ "$perm" == 600 ]] || { echo "FAIL: token file perms are $perm, expected 600"; exit 1; }
 [[ -f "$NP_CLAUDE_TOKEN_FILE.issued" ]] || { echo "FAIL: issued sidecar not written"; exit 1; }
 content="$(cat "$NP_CLAUDE_TOKEN_FILE")"
