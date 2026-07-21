@@ -4,9 +4,10 @@ Bash-to-python migration (content overlay design spec
 2026-07-15-nervepack-python-cli-consolidation-design.md): `hook`, `cron`, and
 `resume-write` shipped in phases 1-5; `setup` (phase 6, OS-scheduler installers,
 joined by phase 7's toolchain-baseline steps) and `onboard` (phase 7, the
-full-onboard orchestrator) join them here. Remaining groups (toggle/doctor/sync/
-dashboard/mcp) are added as later phases port their scripts — see the spec's
-"Sequenced phases".
+full-onboard orchestrator) followed; `implement-suggestion` (phase 10, the
+last and most security-sensitive script) joins them here. Remaining groups
+(toggle/doctor/sync/dashboard/mcp) are added as later phases port their
+scripts — see the spec's "Sequenced phases".
 
 Invoked today as a direct script path (no install step required):
     python3 engine/nervepack_engine/cli.py hook backcapture-sweep
@@ -43,6 +44,7 @@ from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
+import np_implement_suggestion  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
@@ -182,6 +184,18 @@ def main(argv=None):
         except Exception as exc:
             _bail("onboard", "unhandled exception: %r" % exc)
             return 1
+
+    if argv[0] == "implement-suggestion":
+        # np_implement_suggestion.implement() is fail-open by design (every
+        # problem logs one line and returns 0, releasing the lock so the
+        # suggestion stays retryable) -- its own NERVEPACK_AGENT guard covers
+        # the re-entrancy case, so no extra check needed here.
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            return np_implement_suggestion.implement(text)
+        except Exception as exc:
+            _bail("implement-suggestion", "unhandled exception: %r" % exc)
+            return 0
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0

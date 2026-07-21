@@ -404,7 +404,10 @@ def _tool_suggestions(args):
         require_contribute()
         # async, detached — mirrors the dashboard server's /api/implement route.
         # mode is governed by the evaluator.implement_mode param (set via nervepack_toggle).
-        subprocess.Popen(np_bashlib.argv(["bash", os.path.join(SETUP, "np-implement-suggestion.sh"), args["text"]]),
+        # np_implement_suggestion.py (phase 10 -- the last script ported): dispatched
+        # via cli.py, no more bash np-implement-suggestion.sh.
+        cli = os.path.join(_ENGINE_DIR, "nervepack_engine", "cli.py")
+        subprocess.Popen([sys.executable, cli, "implement-suggestion", args["text"]],
                          cwd=REPO, start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return "implement job started (async; mode from evaluator.implement_mode)"
