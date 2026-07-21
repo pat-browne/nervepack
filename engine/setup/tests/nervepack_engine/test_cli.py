@@ -257,5 +257,57 @@ class TestBackcaptureSweepEndToEnd(unittest.TestCase):
             self.assertIn(sid, lines[0])
 
 
+class TestCronDispatch(unittest.TestCase):
+    def test_unknown_cron_name_fails_open(self):
+        from nervepack_engine import cli
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.dict(os.environ, {"NERVEPACK_CLI_LOG": os.path.join(tmp_dir, "cli.log")}):
+                rc = cli.main(["cron", "does-not-exist"])
+        self.assertEqual(rc, 0)
+
+    def test_nervepack_agent_guard_skips_cron_dispatch(self):
+        from nervepack_engine import cli
+        calls = []
+        with mock.patch.dict(cli._CRONS, {"fake": lambda: calls.append(1)}), \
+             mock.patch.dict(os.environ, {"NERVEPACK_AGENT": "1"}):
+            rc = cli.main(["cron", "fake"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, [])
+
+    def test_dispatch_calls_cron_with_no_args(self):
+        from nervepack_engine import cli
+        calls = []
+        with mock.patch.dict(cli._CRONS, {"fake": lambda: calls.append("ran")}), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NERVEPACK_AGENT", None)
+            rc = cli.main(["cron", "fake"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, ["ran"])
+
+    def test_cron_exception_fails_open(self):
+        from nervepack_engine import cli
+
+        def _boom():
+            raise RuntimeError("boom")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.dict(cli._CRONS, {"fake": _boom}), \
+                 mock.patch.dict(os.environ, {"NERVEPACK_CLI_LOG": os.path.join(tmp_dir, "cli.log")}, clear=False):
+                os.environ.pop("NERVEPACK_AGENT", None)
+                rc = cli.main(["cron", "fake"])
+        self.assertEqual(rc, 0)
+
+    def test_cron_return_value_printed_to_stdout(self):
+        from nervepack_engine import cli
+        with mock.patch.dict(cli._CRONS, {"fake": lambda: "aggregated"}), \
+             mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(sys, "stdout", io.StringIO()) as out:
+            os.environ.pop("NERVEPACK_AGENT", None)
+            rc = cli.main(["cron", "fake"])
+            printed = out.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("aggregated", printed)
+
+
 if __name__ == "__main__":
     unittest.main()

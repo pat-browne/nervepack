@@ -52,6 +52,7 @@ import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no ba
 import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
 import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; this is now the only implementation)
 import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
+import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -331,10 +332,11 @@ def _tool_evaluate(args):
 
 def _require_bash(tool):
     # nervepack_flush's own glue is bash-free (nervepack_engine.hooks.session_flush,
-    # called in-process below) -- this gate now covers only the two SUBSTEPS it
-    # shells out to (73-aggregate-metrics.sh, 72-run-episodic-maintain.sh, the
-    # latter driving the agent-mode maintenance cron: claude -p with tools /
-    # bypass-permissions) — out of scope for the git-for-windows-free milestone. On a
+    # called in-process below) -- this gate now covers only the one remaining
+    # SUBSTEP it shells out to (72-run-episodic-maintain.sh, driving the agent-mode
+    # maintenance cron: claude -p with tools / bypass-permissions) — out of scope
+    # for the git-for-windows-free milestone (73-aggregate-metrics.sh is retired;
+    # its np_aggregate.py replacement is called in-process and needs no bash). On a
     # bash-free host, refuse cleanly (like the toggle shared-write path) instead of
     # emitting a raw subprocess error.
     if USE_PY and not _bash_available():
@@ -440,10 +442,14 @@ def _tool_contribute(args):
 
 def _tool_maintain(args):
     require_writes()
-    _require_bash("nervepack_maintain")
     job = args.get("job", "aggregate")
+    if job == "aggregate":
+        # 73-aggregate-metrics.sh (the bash original) is retired -- np_aggregate.aggregate()
+        # is now the only implementation, called in-process (no subprocess/bash).
+        return np_aggregate.aggregate()
+    _require_bash("nervepack_maintain")
     script = {"promote": "71-run-memory-promote.sh", "maintain": "72-run-episodic-maintain.sh",
-              "aggregate": "73-aggregate-metrics.sh", "skills": "75-skill-maintain.sh"}[job]
+              "skills": "75-skill-maintain.sh"}[job]
     rc, out, err = run(["bash", os.path.join(SETUP, script)])
     return (out + err).strip() or f"{job} done"
 
