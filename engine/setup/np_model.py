@@ -1,9 +1,12 @@
 """Bash-free model-completion + agent seam — the in-process equivalent of
 `np-llm.sh` (both `complete` and, as of phase 9 of the bash->Python CLI
 consolidation, `agent` mode). The `claude` CLI and the `local` backend's
-`np-llm-local.py`/`NP_LLM_AGENT_CMD` both run natively (no bash). Slice 4
-(step 2) of the git-for-windows-free MCP work (#38) ported `complete`;
-phase 9 (content overlay spec
+`np-llm-local.py` (`complete` mode) both run natively (no bash); `agent`
+mode's `local` backend still shells `NP_LLM_AGENT_CMD` via `bash -c` (that's
+an arbitrary user-supplied shell command, not something to natively
+reimplement), routed through np_bashlib.argv() for the right interpreter on
+Windows. Slice 4 (step 2) of the git-for-windows-free MCP work (#38) ported
+`complete`; phase 9 (content overlay spec
 2026-07-15-nervepack-python-cli-consolidation-design.md) ports `agent` --
 np_llm_agent.py's run_agent() now calls agent() here directly instead of
 shelling to bash `np-llm.sh agent`. np-llm.sh itself stays on disk (bash)
@@ -16,6 +19,8 @@ tests/mcp/parity/test_model_parity.sh and test_agent_parity.sh. stdlib only.
 import os
 import subprocess
 import sys
+
+import np_bashlib
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -101,7 +106,7 @@ def agent(prompt, tools, cwd=None):
         env["NP_LLM_TOOLS"] = tools
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
-    r = subprocess.run(argv, input=prompt, cwd=cwd, capture_output=True, text=True, env=env)
+    r = subprocess.run(np_bashlib.argv(argv), input=prompt, cwd=cwd, capture_output=True, text=True, env=env)
     return r.returncode, r.stdout, r.stderr
 
 
