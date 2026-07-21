@@ -67,6 +67,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Content seam** (engine/overlay split) | — (config: `NP_CONTENT_DIR`) | `engine/setup/np-content-lib.sh` (`np_content_dir` resolver + `np_content_dir_origin`/`np_content_is_explicit` — the single explicit-vs-implicit detector, issue #12; consumed across recall/guard hooks, skill link+index, metrics, MCP, doctor). Personal-content writers (memory-promote, episodic-maintain, skill-maintain, `np_aggregate.py`) **skip their commit** when the dir is the *implicit* engine-root fallback (NP_CONTENT_DIR unset AND no `~/.config/nervepack/content-dir`), so they never pollute the PII-clean engine; the doctor `content` check warns. A deliberate single-repo user opts in via the config file (origin `config`). Example overlay: the public `nervepack-content-example` repo. Optional **team** overlay (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, toggle `team`) overrides personal skills + merged INDEX (Phase 1); resolved by `np_team_dir`/`np_team_dir_origin`. The team value may be a **comma-separated list of up to 4 dirs** (first = highest precedence), stacking `team[0] > … > team[n] > personal > engine`; `np_team_dirs` is the single parse/validate/cap point and `np_team_dir` is its highest-precedence first entry. Phase 2a: recall hooks (`lesson`/`episodic`) read across layers via `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`); mode = `team.merge` param (`override`\|`concatenate`\|`team-only`). Phase 2b: `wiki_index()` merges team+personal wiki overlays. Phase 3: `dashboard/build.py` `learned_counts()` and `engine/setup/np-mcp-server.py` `_tool_recall` merged — **team content layer complete through Phase 3** (metrics remain personal-only by design). | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
 | **CI PII guard** (secret/PII gate) | — (always-on CI job) | `publish/np-publish-scan.py` (secret/PII scanner; LAN-IP/RFC1918 rule, never loopback) + `scan-allowlist.txt`; CI job `pii-guard` in `.github/workflows/ci.yml`; pre-publish gate `publish/np-publish-snapshot.sh` (+ `publish/PUBLISH.md`); tests `engine/setup/tests/publish/` | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
 | **PII filter** (context-window and storage-time scrub) | `pii_filter` (default off) | `np-pii-filter.py`, `episodic-scrub.sh` (extended), `episodic_recall.py` (extended — shells to `np-pii-filter.py` via a `sys.executable` subprocess, `pii_filter_fn` injectable for tests), `lesson_recall.py` (extended, same pattern), `np_scrub.py` (extended, `NP_PII_FILTER=1`), `25-install-pii-deps.sh` | `specs/2026-07-06-pii-filter-design.md` |
+| **Open artifact on write** (auto-open a spec/plan doc so a human reads it) | `focus` | `engine/nervepack_engine/hooks/open_artifact.py` (PostToolUse, matcher `Write`; dispatched as `cli.py hook open-artifact`; reuses `np_dashboard.resolve_opener()`), `63-install-open-artifact-hook.sh` | `specs/2026-07-21-open-artifact-on-write-design.md` |
 
 ## Runtime wiring — what fires what
 
@@ -77,6 +78,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | `SessionStart` | `40-sync-nervepack.sh &` · `cli.py hook session-directive` · `cli.py hook open-dashboard &` · `cli.py hook backcapture-sweep &` · `cli.py hook resume-sessionstart &` |
 | `UserPromptSubmit` | `cli.py hook episodic-recall` · `cli.py hook lesson-recall` · `cli.py hook struggle-escalation` · `engine/nervepack_engine/cli.py hook skill-trigger-recall` · `cli.py hook resume-recall` |
 | `PreToolUse` | `cli.py hook lesson-guard` (matchers: `Bash`, `Read`) |
+| `PostToolUse` | `cli.py hook open-artifact` (matcher: `Write`) |
 | `PreCompact` | `cli.py hook episodic-capture checkpoint` |
 | `SessionEnd` | `40-sync-nervepack.sh exit &` · `cli.py hook episodic-capture session-end &` · `cli.py hook evaluator &` · `cli.py hook session-flush` (promotes both inboxes on exit; crons = backup) — the three `&` entries are backgrounded so Claude Code's hook-runner returns before it would otherwise report them "Hook cancelled" (invariant 12); `session-flush` backgrounds itself internally (`subprocess.Popen(start_new_session=True)`), not via a settings.json `&` |
 
@@ -93,7 +95,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `cli.py resume-write --active --throttle` |
 
 **Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `35` link-dashboard-data (content bridge) · `40`
-sync · `50–56` install hooks · `61` install-resume-hook · `62` install-scheduled-auth-token · `70` install crons / `71–77` cron bodies · `80–91`
+sync · `50–56` install hooks · `61` install-resume-hook · `62` install-scheduled-auth-token · `63` install-open-artifact-hook · `70` install crons / `71–77` cron bodies · `80–91`
 vscode + permissions. Scripts are idempotent and run in order on a fresh box.
 
 ## The two data pipelines (the heart of the system)

@@ -192,6 +192,39 @@ writer. Resume from the SDD ledger (.superpowers/sdd/progress.md) / plan
 resume-pointer / the branch, or start fresh."* You say "resume" and are back on
 the exact branch, head, and task — no re-deriving state from a stale summary.
 
+## Open artifact on write — auto-open a spec/plan doc so a human reads it
+
+**Purpose.** `superpowers:brainstorming` writes specs to
+`docs/superpowers/specs/*.md`; `superpowers:writing-plans` writes plans to
+`docs/superpowers/plans/*.md`. Both exist to be read and approved by the human
+before implementation proceeds, but a chat line saying "written to ..." is
+easy to skim past. This feature closes that gap deterministically: the moment
+either file is created, it's opened with the OS default handler so attention
+actually lands on it.
+
+**Workflow.** A single `PostToolUse` hook, matcher `Write`:
+`cli.py hook open-artifact` → `engine/nervepack_engine/hooks/open_artifact.py`.
+It checks the written `file_path` against `docs/superpowers/(specs|plans)/*.md`
+(matched against the resolved absolute path, so it works whether the tool
+reported an absolute or cwd-relative path); a non-matching write, a non-`Write`
+tool, or a missing file on disk are all silent no-ops. On a match it calls
+`np_dashboard.resolve_opener()` (the same `xdg-open`/`open` resolution the
+dashboard hook uses — a local file path opens just as well as a URL) and shells
+out to it. Fires only on creation (`Write`), not every subsequent `Edit` — the
+ask is "when a plan or spec is *made*", not on every revision.
+
+**Assets.** `engine/nervepack_engine/hooks/open_artifact.py`,
+`63-install-open-artifact-hook.sh`. Toggle: `focus` (no params). No dedicated
+doctor capability — the generic hook-registration check already covers "is
+this wired".
+
+**Situational example.** You ask for a new feature; the session runs
+`superpowers:brainstorming`, writes
+`docs/superpowers/specs/2026-07-21-thing-design.md`, and — before it even
+finishes typing the "spec written, please review" message — the file pops
+open in your editor/default `.md` handler, already in focus. You read it right
+there instead of trusting a chat summary.
+
 ## Lessons — auto-distilled, provenance-tagged, optionally enforced ("in situation X, do/avoid Y — or the approach that worked is Z")
 
 **Purpose.** Auto-distilled patterns from past sessions, both failure→recovery and
