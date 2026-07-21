@@ -343,7 +343,8 @@ evaluator shell itself — independent of the Haiku call — when
 read on trends, wins, and struggles.
 
 **Workflow.** The on-exit flush (`cli.py hook session-flush`) promotes the inbox; the daily
-`73-aggregate-metrics.sh` drains records into committed `dashboard/data/metrics.jsonl`;
+`cli.py cron aggregate-metrics` (backed by `engine/setup/np_aggregate.py`) drains records
+into committed `dashboard/data/metrics.jsonl`;
 `build.py` renders `metrics.js` for `dashboard/index.html`. The `cli.py hook
 open-dashboard` SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard.py`,
 backed by `engine/setup/np_dashboard.py`) opens it once per boot (guarded against
@@ -364,7 +365,8 @@ a diagram — the dashboard's no-external-fetch invariant holds), gated by
 `evaluator.wiki_mermaid` (default on). The wiki **data stays in the content overlay**
 (`metrics.js`); the engine carries only the build + render code.
 
-**Assets.** `73-aggregate-metrics.sh`, `dashboard/build.py` (`wiki_index()`),
+**Assets.** `engine/setup/np_aggregate.py` (dispatched via `cli.py cron aggregate-metrics`),
+`dashboard/build.py` (`wiki_index()`),
 `dashboard/index.html`, `dashboard/vendor/mermaid.min.js`,
 `engine/nervepack_engine/hooks/open_dashboard.py` (dispatched as `cli.py hook
 open-dashboard`, backed by `engine/setup/np_dashboard.py`),

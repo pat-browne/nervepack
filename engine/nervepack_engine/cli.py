@@ -38,6 +38,7 @@ from nervepack_engine.hooks import session_directive  # noqa: E402
 from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
+import np_aggregate  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -53,6 +54,10 @@ _HOOKS = {
     "session-flush": session_flush.run,
     "skill-trigger-recall": skill_trigger_recall.run,
     "struggle-escalation": struggle_escalation.run,
+}
+
+_CRONS = {
+    "aggregate-metrics": np_aggregate.aggregate,
 }
 
 
@@ -107,6 +112,24 @@ def main(argv=None):
             resume_write.write(**kwargs)
         except Exception as exc:
             _bail("resume-write", "unhandled exception: %r" % exc)
+        return 0
+
+    if argv[0] == "cron":
+        if len(argv) < 2:
+            return 0
+        name = argv[1]
+        if os.environ.get("NERVEPACK_AGENT"):
+            return 0
+        fn = _CRONS.get(name)
+        if fn is None:
+            _bail("cron", "unknown cron: %s" % name)
+            return 0
+        try:
+            result = fn()
+            if result:
+                sys.stdout.write(str(result) + "\n")
+        except Exception as exc:
+            _bail(name, "unhandled exception: %r" % exc)
         return 0
 
     if argv[0] != "hook" or len(argv) < 2:

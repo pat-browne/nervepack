@@ -2,25 +2,25 @@
 metrics then opens the dashboard, ONCE per OS boot (see np_dashboard.boot_id()
 for the deliberate macOS behavior-change note). Fail-open throughout: this must
 never block or break session startup. aggregate_fn/opener_fn are injectable
-for tests (aggregate_fn defaults to shelling to the still-bash
-73-aggregate-metrics.sh via np_bashlib for Windows-safety; opener_fn defaults
+for tests (aggregate_fn defaults to a subprocess call to np_aggregate.py, the
+retired 73-aggregate-metrics.sh's Python replacement; opener_fn defaults
 to a real subprocess call to the resolved opener).
 """
 import os
 import subprocess
+import sys
 
-import np_bashlib
 import np_dashboard
 import np_toggle
 
 _ENGINE_SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP_DIR = os.path.normpath(os.path.join(_ENGINE_SETUP_DIR, "..", "..", "setup"))
-_AGGREGATE_SCRIPT = os.path.join(_ENGINE_SETUP_DIR, "73-aggregate-metrics.sh")
+_AGGREGATE_SCRIPT = os.path.join(_ENGINE_SETUP_DIR, "np_aggregate.py")
 
 
 def _default_aggregate():
     try:
-        subprocess.run(np_bashlib.argv(["bash", _AGGREGATE_SCRIPT]),
+        subprocess.run([sys.executable, _AGGREGATE_SCRIPT],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     except OSError:
         pass

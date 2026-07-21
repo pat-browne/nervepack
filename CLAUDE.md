@@ -158,7 +158,8 @@ Nervepack helped: deterministic signals (`np-eval-signals.py`, fed by fire-time
 markers the hooks append to `~/.cache/nervepack/session-signals/`, toggle
 `evaluator.signals`) + a Haiku verdict (score, helped, shortfalls, suggestions with
 confidence/auto_safe, assets_used). Records land in a local inbox; the **daily**
-`engine/setup/73-aggregate-metrics.sh` (toggle `evaluator.aggregate`) drains them into
+`engine/setup/np_aggregate.py` (dispatched via `engine/nervepack_engine/cli.py` as
+`cli.py cron aggregate-metrics`, toggle `evaluator.aggregate`) drains them into
 committed `dashboard/data/metrics.jsonl`. All under the `evaluator` toggle family;
 all fail-open. The dashboard (P2) and **suggestion implement/reject (P3)** —
 per-row Implement (async agentic job via `np-implement-suggestion.sh`, `pr`/`direct`

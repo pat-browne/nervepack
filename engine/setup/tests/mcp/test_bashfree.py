@@ -17,6 +17,7 @@ here — porting them is a later slice.
 Runs on every lane as a portable proof; the dedicated windows-no-bash CI lane runs
 this same test with Git-bash stripped from PATH for the real-world proof.
 """
+import json
 import os
 import shutil
 import sys
@@ -178,13 +179,43 @@ class BashFreeReadSurface(unittest.TestCase):
 
     def test_flush_maintain_refuse_cleanly_bashfree(self):
         # flush/maintain drive agent-mode crons (out of scope) — on a bash-free host
-        # they must refuse cleanly, not emit a raw subprocess error.
+        # they must refuse cleanly, not emit a raw subprocess error. job="promote"
+        # (not "aggregate") -- aggregate is now np_aggregate.py, called in-process,
+        # so it no longer needs bash and must NOT be refused on a bash-free host;
+        # "promote" still shells to the (still-bash) 71-run-memory-promote.sh, so
+        # it's the representative job left in this refuse-cleanly gate.
         c = self.client()
         c.initialize()
-        for tool, arg in (("nervepack_flush", {}), ("nervepack_maintain", {"job": "aggregate"})):
+        for tool, arg in (("nervepack_flush", {}), ("nervepack_maintain", {"job": "promote"})):
             r = c.tool(tool, arg)
             self.assertTrue(r["result"]["isError"], (tool, r["result"]))
             self.assertIn("needs bash", r["result"]["content"][0]["text"], (tool, r["result"]))
+
+    def test_maintain_aggregate_is_bashfree(self):
+        # np_aggregate.py (73-aggregate-metrics.sh's replacement) is called
+        # in-process by _tool_maintain's "aggregate" job -- unlike the other
+        # maintain jobs (see test_flush_maintain_refuse_cleanly_bashfree above),
+        # it must succeed with bash unreachable, and really drain a planted
+        # EVAL_INBOX record into METRICS_FILE (a real side effect, not a
+        # tautological "no error" check).
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        inbox = os.path.join(d, "inbox")
+        os.makedirs(inbox)
+        with open(os.path.join(inbox, "rec.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"session_id": "s1", "contribution_score": 50}) + "\n")
+        metrics = os.path.join(d, "metrics.jsonl")
+        c = self.client({
+            "EVAL_INBOX": inbox,
+            "METRICS_FILE": metrics,
+            "NP_CONTENT_DIR": d,
+            "NP_AGG_NO_COMMIT": "1",
+        })
+        c.initialize()
+        r = c.tool("nervepack_maintain", {"job": "aggregate"})
+        self.assertFalse(r["result"]["isError"], r["result"])
+        with open(metrics, encoding="utf-8") as f:
+            self.assertIn('"session_id": "s1"', f.read())
 
     def test_recall_is_bashfree(self):
         # Full recall path — keyword match (np_episodic_match) + topic-file read —

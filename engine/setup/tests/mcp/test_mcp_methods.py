@@ -5,7 +5,7 @@
 Covered:
   - nervepack_toggle set (happy): writes=on + set memory=off -> the temp
     toggles.conf state column for `memory` really flips to off.
-  - nervepack_maintain (happy): writes=on + job=aggregate -> 73-aggregate-metrics.sh
+  - nervepack_maintain (happy): writes=on + job=aggregate -> np_aggregate.aggregate()
     really drains a planted EVAL_INBOX record into a temp METRICS file.
   - nervepack_maintain (failure): writes=off -> isError "disabled";
     unknown job value -> isError (KeyError surfaced as a tool error result).
@@ -195,7 +195,7 @@ class TestMethods(unittest.TestCase):
         r = c.tool("nervepack_maintain", {"job": "aggregate"})
         self.assertFalse(r["result"]["isError"], r["result"])
         # Real side effects: record appended to METRICS, inbox file removed.
-        self.assertTrue(os.path.exists(metrics), "73-aggregate did not create metrics file")
+        self.assertTrue(os.path.exists(metrics), "np_aggregate did not create metrics file")
         with open(metrics) as fh:
             body = fh.read()
         self.assertIn('"session_id": "s1"', body, f"record not appended to metrics: {body!r}")

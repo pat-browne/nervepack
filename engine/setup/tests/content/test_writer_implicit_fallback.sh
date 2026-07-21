@@ -9,10 +9,11 @@
 # fallback — while a DELIBERATE single-repo user (config file present, even pointing at
 # the engine root) still commits normally.
 #
-# 73-aggregate-metrics.sh is the deterministic, no-LLM writer, so it's the one we can
-# drive end-to-end without stubbing a model. The guard it gains lives in the shared
-# resolver (np-content-lib.sh), so proving it here proves the shared mechanism the
-# agentic writers (71/72/75) gate on too.
+# np_aggregate.py (the retired 73-aggregate-metrics.sh's Python replacement) is the
+# deterministic, no-LLM writer, so it's the one we can drive end-to-end without
+# stubbing a model. The guard it gains lives in the shared resolver (np_content.py,
+# the Python port of np-content-lib.sh), so proving it here proves the shared
+# mechanism the agentic writers (71/72/75) gate on too.
 #
 # Properties enforced:
 #   (A) IMPLICIT fallback (env unset + no config) => NO commit (engine stays clean).
@@ -27,8 +28,8 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 # Minimal nervepack-shaped repo (mirrors test_aggregate_commit_scope.sh's shape).
 NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/dashboard/data"
-cp "$SETUP/73-aggregate-metrics.sh" "$SETUP/np-toggle-lib.sh" \
-   "$SETUP/np-content-lib.sh" "$NP/engine/setup/"
+cp "$SETUP/np_aggregate.py" "$SETUP/np_toggle.py" \
+   "$SETUP/np_content.py" "$NP/engine/setup/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
 printf 'evaluator.dashboard=off\n' > "$tmp/local"   # no build.py in this minimal repo
 ORIGIN="$tmp/origin.git"; git init -q --bare "$ORIGIN"
@@ -49,7 +50,7 @@ run_agg() {  # $@ = extra `KEY=VALUE` env entries passed to `env`
   local rc=0
   ( cd "$NP" && env "$@" EVAL_INBOX="$INBOX" \
       NP_TOGGLES_CONF="$NP/engine/setup/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local" \
-      bash engine/setup/73-aggregate-metrics.sh ) >/dev/null 2>&1 || rc=$?
+      python3 engine/setup/np_aggregate.py ) >/dev/null 2>&1 || rc=$?
   [[ $rc -eq 0 ]] || { echo "FAIL: cron exited non-zero ($rc) — fail-open violated"; exit 1; }
 }
 
@@ -80,7 +81,7 @@ after="$(cd "$NP" && git rev-parse HEAD)"
 # (B) EXPLICIT overlay via NP_CONTENT_DIR (== engine root, set explicitly): commit.
 # ---------------------------------------------------------------------------
 # Reset ONLY the committed metrics paths (a plain `git clean -fdq` would also delete the
-# untracked engine/setup/*.sh we copied in, leaving bash with nothing to run).
+# untracked engine/setup/*.py we copied in, leaving python3 with nothing to run).
 ( cd "$NP" && git checkout -q -- dashboard/data/metrics.jsonl dashboard/data/metrics.js )
 seed_record b
 before="$(cd "$NP" && git rev-parse HEAD)"

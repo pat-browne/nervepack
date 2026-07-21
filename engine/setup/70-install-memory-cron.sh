@@ -40,7 +40,7 @@ install_line "nervepack-memory-promote" \
 install_line "nervepack-episodic-maintain" \
   "30 8 * * * $HOME/Code/nervepack/engine/setup/72-run-episodic-maintain.sh # nervepack-episodic-maintain"
 install_line "nervepack-aggregate-metrics" \
-  "0 9 * * * $HOME/Code/nervepack/engine/setup/73-aggregate-metrics.sh # nervepack-aggregate-metrics"
+  "0 9 * * * python3 $HOME/Code/nervepack/engine/nervepack_engine/cli.py cron aggregate-metrics # nervepack-aggregate-metrics"
 install_line "nervepack-skill-maintain" \
   "15 9 * * * $HOME/Code/nervepack/engine/setup/75-skill-maintain.sh # nervepack-skill-maintain"
 install_line "nervepack-refine" \

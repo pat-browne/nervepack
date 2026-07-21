@@ -211,13 +211,18 @@ class TestContentDir(unittest.TestCase):
             conf = os.path.join(conf_dir, "toggles.conf")
             with open(conf, "w") as fh:
                 fh.write("evaluator|shared|runtime|on|retain_days=0\n")
-            e = dict(os.environ); e.update({"NP_CONTENT_DIR": u(content),
-                                            "EVAL_INBOX": u(inbox),
+            # NOT u()-converted: np_aggregate.py is invoked as a native
+            # subprocess.executable child (not through bash), and it reads
+            # NP_TOGGLES_CONF/np_toggle.py directly in-process too -- both need
+            # native-form paths, unlike the bash-invoked scripts elsewhere in
+            # this file.
+            e = dict(os.environ); e.update({"NP_CONTENT_DIR": content,
+                                            "EVAL_INBOX": inbox,
                                             "NP_AGG_NO_COMMIT": "1",
-                                            "NP_TOGGLES_CONF": u(conf),
+                                            "NP_TOGGLES_CONF": conf,
                                             "NP_TOGGLES_LOCAL": "/dev/null"})
-            sh(_setup_script("73-aggregate-metrics.sh"),
-               capture_output=True, text=True, env=e)
+            subprocess.run([sys.executable, _setup_script("np_aggregate.py")],
+                           capture_output=True, text=True, env=e)
             out = os.path.join(ddir, "metrics.jsonl")
             self.assertTrue(os.path.exists(out))
             with open(out) as fh:

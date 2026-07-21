@@ -5,7 +5,7 @@
 # cleanly):
 #   Daily 08:00 LOCAL — memory-promote      (71)
 #   Daily 08:30 LOCAL — episodic-maintain   (72)
-#   Daily 09:00 LOCAL — aggregate-metrics   (73)
+#   Daily 09:00 LOCAL — aggregate-metrics   (cli.py cron aggregate-metrics)
 #   Daily 09:15 LOCAL — skill-maintain      (75)
 # All run daily and are idempotent (empty inbox / nothing-to-do = clean no-op), so
 # the cadence just shortens latency to a committed layer. Re-running this installer
@@ -28,12 +28,18 @@ mkdir -p "$LA_DIR" "$LOG_DIR"
 # launchctl is the loader; absent under NP_LAUNCHD_FORCE on non-mac, so guard each call.
 have_launchctl() { command -v launchctl >/dev/null 2>&1; }
 
-install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename
+install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename OR a full command
+                  # (e.g. a "python3 .../cli.py cron <name>" dispatch, for jobs already
+                  # ported off their bash original — see aggregate-metrics's call site below)
   local suffix="$1" hour="$2" minute="$3" script="$4"
   local label="com.nervepack.$suffix"
   local plist="$LA_DIR/$label.plist"
-  local target="$SETUP_DIR/$script"
   local log="$LOG_DIR/$suffix.log"
+  local exec_cmd
+  case "$script" in
+    *.sh) exec_cmd="exec \"$SETUP_DIR/$script\"" ;;  # bare .sh basename — join with setup dir
+    *) exec_cmd="exec $script" ;;                     # already a full command
+  esac
   # `/bin/bash -lc` gives the job a login-shell PATH (launchd's env is otherwise
   # minimal — git/jq/claude/node would be missing, exactly as with cron).
   cat > "$plist" <<PLIST
@@ -46,7 +52,7 @@ install_job() {  # $1=job-suffix  $2=hour  $3=minute  $4=script-basename
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>exec "$target"</string>
+    <string>$exec_cmd</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -68,7 +74,7 @@ PLIST
 
 install_job memory-promote    8  0 71-run-memory-promote.sh
 install_job episodic-maintain 8 30 72-run-episodic-maintain.sh
-install_job aggregate-metrics 9  0 73-aggregate-metrics.sh
+install_job aggregate-metrics 9  0 "python3 $(dirname "$SETUP_DIR")/nervepack_engine/cli.py cron aggregate-metrics"
 install_job skill-maintain    9 15 75-skill-maintain.sh
 install_job refine            9 30 76-run-refine.sh
 install_job compact          10  0 77-run-compact.sh

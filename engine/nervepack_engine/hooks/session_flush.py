@@ -12,12 +12,14 @@ from the bash original:
     single cross-platform path (see this phase's plan for why the bash
     original's Linux-setsid-vs-macOS-nohup+disown branch collapses to one).
 
-The two substeps this drains into (73-aggregate-metrics.sh, 72-run-episodic-
-maintain.sh) stay bash -- explicitly out of scope for this migration phase --
-so this module shells out to them via np_bashlib.argv() for Windows-safety,
-exactly as the bash original invoked them directly.
+The first substep, aggregate-metrics, is now the Python np_aggregate.py (invoked
+via [sys.executable, path]); the second, 72-run-episodic-maintain.sh, stays bash
+-- explicitly out of scope for this migration phase -- so this module still
+shells out to it via np_bashlib.argv() for Windows-safety, exactly as the bash
+original invoked it directly.
 
-step_fns is injectable for tests (defaults to the two real bash substeps).
+step_fns is injectable for tests (defaults to the two real substeps: one Python,
+one bash).
 NP_FLUSH_NODETACH keeps it foreground for tests, matching the bash original's
 env var name exactly. NP_FLUSH_DETACHED is the internal re-entry marker set on
 the detached re-exec (also unchanged from the bash original's name/meaning).
@@ -37,7 +39,7 @@ _ENGINE_SETUP_DIR = os.path.normpath(
 _CLI_PATH = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cli.py"))
 _STEP_PATHS = [
-    os.path.join(_ENGINE_SETUP_DIR, "73-aggregate-metrics.sh"),
+    os.path.join(_ENGINE_SETUP_DIR, "np_aggregate.py"),
     os.path.join(_ENGINE_SETUP_DIR, "72-run-episodic-maintain.sh"),
 ]
 
@@ -60,8 +62,12 @@ def _log(msg):
 
 def _default_step_fn(path):
     def _call():
-        subprocess.run(np_bashlib.argv(["bash", path]),
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        # np_aggregate.py (the retired 73-aggregate-metrics.sh's replacement) runs
+        # in its own interpreter here rather than in-process, so a substep failure
+        # still can't take down the detached flush process; 72-run-episodic-
+        # maintain.sh stays bash, invoked via np_bashlib.argv() for Windows-safety.
+        argv = [sys.executable, path] if path.endswith(".py") else np_bashlib.argv(["bash", path])
+        subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     return _call
 
 
