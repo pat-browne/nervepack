@@ -91,7 +91,10 @@ def _extract_cwd(path):
             for line in fh:
                 m = pat.search(line)
                 if m:
-                    return m.group(1)
+                    try:
+                        return json.loads('"' + m.group(1) + '"')
+                    except ValueError:
+                        return m.group(1)
     except OSError:
         pass
     return None
@@ -174,7 +177,10 @@ def write(session=None, transcript=None, cwd=None, throttle=False, active=False)
 
     sdd_ledger = sdd_plan = ""
     if repo_root:
-        ledger = os.path.join(repo_root, ".superpowers", "sdd", "progress.md")
+        # `git rev-parse --show-toplevel` always yields forward slashes, even on
+        # Windows -- os.path.join would mix separators (repo_root's "/" plus
+        # backslash-joined suffix). Build with "/" throughout for a consistent path.
+        ledger = repo_root.rstrip("/") + "/.superpowers/sdd/progress.md"
         if os.path.isfile(ledger):
             sdd_ledger = ledger
             try:
