@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Register a SessionStart hook in ~/.claude/settings.json that auto-pulls
-# ~/Code/nervepack in the background at the start of every Claude Code session.
+# Register the SessionStart/SessionEnd hooks in ~/.claude/settings.json that
+# auto-pull ~/Code/nervepack in the background and refresh + open the
+# performance dashboard (cli.py-dispatched) at the start of every Claude Code
+# session.
 #
 # Idempotent: re-running after a script path change REPLACES the stale entry
 # instead of duplicating it (handled by np-hook-lib.sh register-by-basename).
@@ -18,5 +20,5 @@ source "$HERE/np-hook-lib.sh"
 np_register_hook SessionStart '~/Code/nervepack/engine/setup/40-sync-nervepack.sh >/dev/null 2>&1 &'
 np_register_hook SessionEnd   '~/Code/nervepack/engine/setup/40-sync-nervepack.sh exit >/dev/null 2>&1 &'
 # SessionStart = refresh metrics + open the performance dashboard (gated by evaluator.dashboard).
-np_register_hook SessionStart '~/Code/nervepack/engine/setup/74-open-dashboard.sh >/dev/null 2>&1 &'
+np_register_hook SessionStart 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &'
 echo "To remove: edit $NP_SETTINGS and drop the matching SessionStart/SessionEnd entries."

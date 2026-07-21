@@ -134,9 +134,9 @@
       "check": "adapter",
       "title": "evaluator + promotion run on exit",
       "why": "Scores the session and promotes inbox -> episodic themes + metrics immediately; crons become backup.",
-      "accept": "Ending a session runs np-evaluator.sh and np-session-flush.sh.",
+      "accept": "Ending a session runs cli.py hook evaluator and cli.py hook session-flush.",
       "hints": {
-        "claude-code": "SessionEnd hooks -> np-evaluator.sh and np-session-flush.sh (reference: 54/55 install scripts).",
+        "claude-code": "SessionEnd hooks -> cli.py hook evaluator and cli.py hook session-flush (reference: 54/55 install scripts).",
         "generic": "same trigger as capture; the flush carries the NERVEPACK_AGENT guard so it won't recurse. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs."
       }
     },

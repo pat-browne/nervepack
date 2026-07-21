@@ -29,8 +29,8 @@ chk "no stale old-path entry remains" "[ \"\$(jq '[.hooks.SessionStart[].hooks[]
 chk "idempotent re-run keeps exactly one" "[ \"\$(count_cmd '40-sync-nervepack.sh')\" = 1 ]"
 
 # A different script in the same event is independent (not removed).
-( source "$LIB"; np_register_hook SessionStart '~/Code/nervepack/engine/setup/74-open-dashboard.sh &' ) >/dev/null
-chk "different script coexists" "[ \"\$(count_cmd '74-open-dashboard.sh')\" = 1 ] && [ \"\$(count_cmd '40-sync-nervepack.sh')\" = 1 ]"
+( source "$LIB"; np_register_hook SessionStart 'python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-dashboard &' ) >/dev/null
+chk "different script coexists" "[ \"\$(count_cmd 'hook open-dashboard')\" = 1 ] && [ \"\$(count_cmd '40-sync-nervepack.sh')\" = 1 ]"
 
 # matcher is preserved (PreToolUse Bash guard).
 ( source "$LIB"; np_register_hook PreToolUse '~/Code/nervepack/engine/setup/playbook-guard.sh' 'Bash' ) >/dev/null

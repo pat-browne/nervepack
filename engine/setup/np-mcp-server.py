@@ -54,6 +54,13 @@ import np_capture  # noqa: E402  capture pipeline (episodic-capture.sh retired; 
 import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
+# nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
+# of this SETUP dir, not on sys.path by default the way SETUP itself is (this
+# runs as a script) -- add it explicitly, mirroring cli.py's own sys.path insert.
+_ENGINE_DIR = os.path.dirname(HERE)
+if _ENGINE_DIR not in sys.path:
+    sys.path.insert(0, _ENGINE_DIR)
+
 
 def run(cmd, stdin=None, env=None):
     e = dict(os.environ)
@@ -323,7 +330,10 @@ def _tool_evaluate(args):
 
 
 def _require_bash(tool):
-    # flush/maintain drive the agent-mode maintenance crons (claude -p with tools /
+    # nervepack_flush's own glue is bash-free (nervepack_engine.hooks.session_flush,
+    # called in-process below) -- this gate now covers only the two SUBSTEPS it
+    # shells out to (73-aggregate-metrics.sh, 72-run-episodic-maintain.sh, the
+    # latter driving the agent-mode maintenance cron: claude -p with tools /
     # bypass-permissions) — out of scope for the git-for-windows-free milestone. On a
     # bash-free host, refuse cleanly (like the toggle shared-write path) instead of
     # emitting a raw subprocess error.
@@ -335,8 +345,13 @@ def _require_bash(tool):
 def _tool_flush(args):
     require_writes()
     _require_bash("nervepack_flush")
-    rc, out, err = run(["bash", os.path.join(SETUP, "np-session-flush.sh")])
-    return (out + err).strip() or "flushed"
+    # np-session-flush.sh (the bash original) is retired -- session_flush.run()
+    # is now the only implementation, called in-process (no subprocess/bash); it
+    # itself handles the detach-and-return-quickly behavior, so no special-casing
+    # is needed for the MCP path.
+    from nervepack_engine.hooks import session_flush
+    session_flush.run("")
+    return "flushed"
 
 
 TOOLS += [
