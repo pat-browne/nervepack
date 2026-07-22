@@ -223,7 +223,14 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
     _git(repo, "worktree", "prune")
     _git(repo, "branch", "-D", branch)
 
-    wtbase = tempfile.mkdtemp(prefix="np-implement-", dir=os.environ.get("TMPDIR", "/tmp"))
+    # Only pass dir= when TMPDIR is explicitly set (respecting an override, same
+    # as the bash original's "${TMPDIR:-/tmp}"); otherwise let tempfile pick its
+    # own platform-correct default. Hardcoding "/tmp" as the fallback broke on
+    # native Windows Python, where a leading "/" resolves to "<current drive>:\tmp"
+    # (not the MSYS /tmp bash sees), which usually doesn't exist -- mkdtemp raised
+    # FileNotFoundError, silently caught by cli.py's fail-open Exception handler,
+    # so a real Windows implement run never got past this line.
+    wtbase = tempfile.mkdtemp(prefix="np-implement-", dir=os.environ.get("TMPDIR"))
     wt = os.path.join(wtbase, "wt")
     add = _git(repo, "worktree", "add", "-q", "-b", branch, wt, base_sha)
     if add.returncode != 0:
