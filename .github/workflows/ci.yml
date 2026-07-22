@@ -135,6 +135,20 @@ jobs:
           MSYS: winsymlinks:nativestrict
         run: bash engine/setup/tests/run-all.sh --report regression-report-win.md
 
+      # run-all.sh only echoes a test's captured stdout when it FAILS, so
+      # test_pid_alive_diag.sh's evidence (raw OpenProcess/GetLastError, ps
+      # WINPID cross-check) never reaches the log on a PASS -- it mirrors its
+      # own output to this fixed path specifically so it's visible either way.
+      - name: Publish pid diagnostic evidence
+        if: always()
+        run: |
+          if [[ -f .ci-debug-pid-diag.log ]]; then
+            echo "## PID liveness diagnostic evidence" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat .ci-debug-pid-diag.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish report to job summary
         if: always()
         run: cat regression-report-win.md >> "$GITHUB_STEP_SUMMARY" || true
