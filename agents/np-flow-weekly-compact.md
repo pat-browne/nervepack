@@ -2,7 +2,7 @@
 
 Recurring agent prompt for *dreaming* — the consolidation pass that keeps this
 nervepack repo from accumulating duplicate or bloated skills. Installed as a
-weekly local cron (Wednesday) via `70-install-memory-cron.sh` — default-on,
+weekly local cron (Wednesday) via `cli.py setup install-memory-cron` — default-on,
 toggle `maintain.compact` to disable. May also be run as an optional cloud
 routine or OSS runner; see `agents/README.md` for the optional offload setup.
 

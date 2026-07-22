@@ -26,6 +26,13 @@ step() {  # $1 = script basename (relative to HERE), $2.. = args
   fi
 }
 
+step_cli() {  # $1 = cli.py dispatch args, e.g. "setup install-memory-cron"
+  echo "── cli.py $1"
+  if ! python3 "$(dirname "$HERE")/nervepack_engine/cli.py" $1; then
+    echo "  ! cli.py $1 exited non-zero — continuing (the doctor will report the gap)" >&2
+  fi
+}
+
 # 1. Knowledge + the dashboard data bridge.
 step 30-link-skills.sh
 step 35-link-dashboard-data.sh
@@ -33,17 +40,19 @@ step 35-link-dashboard-data.sh
 # 2. Every lifecycle hook installer (50–69). Globbed + numeric-sorted so a newly
 #    added hook is picked up automatically, in order. The range spans both the 5x
 #    and 6x bands: 6x installers (e.g. 61-install-resume-hook.sh) register real
-#    lifecycle hooks too and MUST be run. Stops before 70 — the 70-install-memory-*
-#    installers are platform-specific and dispatched individually below.
+#    lifecycle hooks too and MUST be run. Stops at 69 — the scheduler installer
+#    is platform-specific and dispatched individually below (Python, no
+#    numbered file, so it's outside this glob's range entirely).
 for f in "$HERE"/[56][0-9]-install-*.sh; do
   [[ -e "$f" ]] && step "$(basename "$f")"
 done
 
-# 3. The scheduler, by OS.
+# 3. The scheduler, by OS (Python now — np_scheduler_install.py, phase 6 of the
+#    bash->Python migration; no bash script here to check -e for).
 case "$(uname -s 2>/dev/null || echo unknown)" in
-  Darwin)               step 70-install-memory-launchd.sh ;;
-  MINGW*|MSYS*|CYGWIN*) step 70-install-memory-schtasks.sh ;;
-  *)                    step 70-install-memory-cron.sh ;;
+  Darwin)               step_cli "setup install-memory-launchd" ;;
+  MINGW*|MSYS*|CYGWIN*) step_cli "setup install-memory-schtasks" ;;
+  *)                    step_cli "setup install-memory-cron" ;;
 esac
 
 # 4. Verify. The doctor's exit status is this script's status.

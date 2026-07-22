@@ -32,7 +32,7 @@ principles. When you add a domain skill whose triggers are high-frequency, add a
 to that routing table so future sessions reach for it.
 
 ## Memory-store promotion (local-only)
-A user cron entry (installed by `engine/setup/70-install-memory-cron.sh`) runs
+A user cron entry (installed by `cli.py setup install-memory-cron`) runs
 `agents/np-flow-memory-promote.md` daily at 08:00 local (idempotent — a no-op when
 the memory store has nothing new to promote). It triages
 `~/.claude/projects/<your-project>/memory/`, promotes durable entries into

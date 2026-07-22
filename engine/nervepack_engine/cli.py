@@ -1,8 +1,9 @@
 """nervepack CLI dispatcher — bash-free entrypoint for hooks/crons/setup.
 
-Phase 1 of the bash-to-python migration (content overlay design spec
-2026-07-15-nervepack-python-cli-consolidation-design.md): only `nervepack hook
-<name>` is wired so far. Other groups (cron/setup/onboard/toggle/doctor/sync/
+Bash-to-python migration (content overlay design spec
+2026-07-15-nervepack-python-cli-consolidation-design.md): `hook`, `cron`, and
+`resume-write` shipped in phases 1-5; `setup` (phase 6, OS-scheduler installers
+only so far) joins them here. Remaining groups (onboard/toggle/doctor/sync/
 dashboard/mcp) are added as later phases port their scripts — see the spec's
 "Sequenced phases".
 
@@ -40,6 +41,7 @@ from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
+import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
 
 _HOOKS = {
@@ -65,6 +67,12 @@ _CRONS = {
     "episodic-maintain": np_agentic_cron.episodic_maintain,
     "refine": np_agentic_cron.refine,
     "compact": np_agentic_cron.compact,
+}
+
+_SETUP = {
+    "install-memory-cron": np_scheduler_install.install_cron,
+    "install-memory-launchd": np_scheduler_install.install_launchd,
+    "install-memory-schtasks": np_scheduler_install.install_schtasks,
 }
 
 
@@ -138,6 +146,23 @@ def main(argv=None):
         except Exception as exc:
             _bail(name, "unhandled exception: %r" % exc)
         return 0
+
+    if argv[0] == "setup":
+        if len(argv) < 2:
+            return 0
+        name = argv[1]
+        fn = _SETUP.get(name)
+        if fn is None:
+            _bail("setup", "unknown setup step: %s" % name)
+            return 0
+        # Unlike hook/cron, a setup step has a real, intentional non-zero exit
+        # (wrong-OS refusal) that np-onboard.sh's step_cli() logs and continues
+        # past -- not the hook/cron fail-open-to-0 contract.
+        try:
+            return fn()
+        except Exception as exc:
+            _bail(name, "unhandled exception: %r" % exc)
+            return 1
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0

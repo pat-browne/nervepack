@@ -22,7 +22,7 @@ accumulated state).
 ### All scheduled jobs (cron: Linux / macOS fallback)
 
 ```bash
-~/Code/nervepack/engine/setup/70-install-memory-cron.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-memory-cron
 ```
 
 Idempotent. Installs `memory-promote`, `episodic-maintain`, `aggregate-metrics`,
@@ -36,7 +36,7 @@ crontab -l | grep nervepack-
 ### All scheduled jobs (launchd: macOS preferred)
 
 ```bash
-~/Code/nervepack/engine/setup/70-install-memory-launchd.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-memory-launchd
 ```
 
 Installs the same jobs as LaunchAgents. Verify:

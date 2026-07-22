@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # np-test: resume|install
 # Task 5: the toggle row, hook installer (61-install-resume-hook.sh), the opt-in
-# interval cron (70-install-memory-cron.sh gated on resume.cron), and the writer's
+# interval cron (cli.py setup install-memory-cron, gated on resume.cron), and the writer's
 # --active discovery mode (dispatched via engine/nervepack_engine/cli.py as
 # `cli.py resume-write --active` — its own top-level dispatch branch, not a
 # `hook` subcommand, since the writer isn't in _HOOKS). Hermetic: temp
@@ -12,7 +12,6 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"   # tests/resume -> setup -> engine -> repo root
 INSTALL_HOOK="$NP/engine/setup/61-install-resume-hook.sh"
-INSTALL_CRON="$NP/engine/setup/70-install-memory-cron.sh"
 TOGGLE="$NP/engine/setup/nervepack-toggle.sh"
 CLI="$NP/engine/nervepack_engine/cli.py"
 
@@ -80,41 +79,55 @@ unset NP_TOGGLES_CONF CLAUDE_SETTINGS
 
 # === 3. Cron: resume entry present only when resume.cron=on; gated, idempotent,
 #        and a flip back to off removes the stale entry. ===
-tmp_cron="$tmp/cron.txt"; : > "$tmp_cron"
-cat > "$tmp/crontab" <<CRONSHIM
+# Skipped on native Windows: install-memory-cron is the Linux/generic path (Windows
+# uses install-memory-schtasks), and the PATH-stubbed `crontab` this section relies
+# on is a bare-shebang script with no .exe/.bat extension -- bash's own exec happily
+# runs that (POSIX shebang support), but shutil.which()/subprocess on a NATIVE
+# Windows Python interpreter don't recognize it as executable at all, so
+# have_crontab_fn() sees "no crontab" and install_cron() no-ops silently. Same
+# precedent as test_cron_install_failure.sh's Windows skip.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    echo "PASS: cron section skipped on Windows — install-memory-cron is the Linux/generic path"
+    ;;
+  *)
+    tmp_cron="$tmp/cron.txt"; : > "$tmp_cron"
+    cat > "$tmp/crontab" <<CRONSHIM
 #!/usr/bin/env bash
 if [[ "\${1:-}" == "-l" ]]; then cat "$tmp_cron"; else cat > "$tmp_cron"; fi
 CRONSHIM
-chmod +x "$tmp/crontab"
+    chmod +x "$tmp/crontab"
 
-export NP_TOGGLES_CONF="$tmp/toggles-cron-off.conf"
-printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=off,cron_min=5\n' > "$NP_TOGGLES_CONF"
-PATH="$tmp:$PATH" bash "$INSTALL_CRON" >/dev/null
-grep -q 'nervepack-resume-cron' "$tmp_cron" && fail "resume cron entry present while resume.cron=off"
+    export NP_TOGGLES_CONF="$tmp/toggles-cron-off.conf"
+    printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=off,cron_min=5\n' > "$NP_TOGGLES_CONF"
+    PATH="$tmp:$PATH" python3 "$CLI" setup install-memory-cron >/dev/null
+    grep -q 'nervepack-resume-cron' "$tmp_cron" && fail "resume cron entry present while resume.cron=off"
 
-echo "PASS: no resume cron entry while cron=off (default)"
+    echo "PASS: no resume cron entry while cron=off (default)"
 
-export NP_TOGGLES_CONF="$tmp/toggles-cron-on.conf"
-printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=on,cron_min=7\n' > "$NP_TOGGLES_CONF"
-PATH="$tmp:$PATH" bash "$INSTALL_CRON" >/dev/null
-grep -q 'nervepack-resume-cron' "$tmp_cron" || fail "resume cron entry missing while resume.cron=on"
-grep -qE '\*/7 \* \* \* \* .*cli\.py resume-write --active --throttle' "$tmp_cron" \
-  || fail "resume cron schedule/command wrong: $(grep resume-cron "$tmp_cron")"
-n="$(grep -c 'nervepack-resume-cron' "$tmp_cron")"
-[[ "$n" == "1" ]] || fail "resume cron entry duplicated: $n"
+    export NP_TOGGLES_CONF="$tmp/toggles-cron-on.conf"
+    printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=on,cron_min=7\n' > "$NP_TOGGLES_CONF"
+    PATH="$tmp:$PATH" python3 "$CLI" setup install-memory-cron >/dev/null
+    grep -q 'nervepack-resume-cron' "$tmp_cron" || fail "resume cron entry missing while resume.cron=on"
+    grep -qE '\*/7 \* \* \* \* .*cli\.py resume-write --active --throttle' "$tmp_cron" \
+      || fail "resume cron schedule/command wrong: $(grep resume-cron "$tmp_cron")"
+    n="$(grep -c 'nervepack-resume-cron' "$tmp_cron")"
+    [[ "$n" == "1" ]] || fail "resume cron entry duplicated: $n"
 
-PATH="$tmp:$PATH" bash "$INSTALL_CRON" >/dev/null   # idempotent re-run while still on
-n="$(grep -c 'nervepack-resume-cron' "$tmp_cron")"
-[[ "$n" == "1" ]] || fail "resume cron entry duplicated on idempotent re-run: $n"
+    PATH="$tmp:$PATH" python3 "$CLI" setup install-memory-cron >/dev/null   # idempotent re-run while still on
+    n="$(grep -c 'nervepack-resume-cron' "$tmp_cron")"
+    [[ "$n" == "1" ]] || fail "resume cron entry duplicated on idempotent re-run: $n"
 
-echo "PASS: resume cron entry present, correctly scheduled, and idempotent while on"
+    echo "PASS: resume cron entry present, correctly scheduled, and idempotent while on"
 
-export NP_TOGGLES_CONF="$tmp/toggles-cron-off2.conf"
-printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=off,cron_min=5\n' > "$NP_TOGGLES_CONF"
-PATH="$tmp:$PATH" bash "$INSTALL_CRON" >/dev/null
-grep -q 'nervepack-resume-cron' "$tmp_cron" && fail "stale resume cron entry not removed after flipping to off"
+    export NP_TOGGLES_CONF="$tmp/toggles-cron-off2.conf"
+    printf 'resume|shared|runtime|on|interval=300,max_age=86400,cron=off,cron_min=5\n' > "$NP_TOGGLES_CONF"
+    PATH="$tmp:$PATH" python3 "$CLI" setup install-memory-cron >/dev/null
+    grep -q 'nervepack-resume-cron' "$tmp_cron" && fail "stale resume cron entry not removed after flipping to off"
 
-echo "PASS: flipping resume.cron back to off removes the stale entry"
+    echo "PASS: flipping resume.cron back to off removes the stale entry"
+    ;;
+esac
 unset NP_TOGGLES_CONF
 
 # === 4. Writer --active: discovers the newest non-agent-* transcript and writes

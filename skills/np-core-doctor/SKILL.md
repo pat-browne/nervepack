@@ -46,7 +46,7 @@ Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI).
 | `session-start` | Re-run `51-install-nervepack-directive-hook.sh` (+ `52/53/56` for other hooks) |
 | `session-end-capture` | Re-run `52-install-episodic-hooks.sh` |
 | `session-end-flush` | Re-run `54-install-session-flush-hook.sh` |
-| `scheduled-maint` | Re-run `70-install-memory-cron.sh` (Linux/macOS) or `70-install-memory-schtasks.sh` (Windows) |
+| `scheduled-maint` | Re-run `cli.py setup install-memory-cron` (Linux), `install-memory-launchd` (macOS), or `install-memory-schtasks` (Windows) |
 | `scheduled-auth-token` | Missing or in its rotation window: `bash engine/setup/62-install-scheduled-auth-token.sh` (`--rotate` to force). Fixes "Not logged in" failures in memory-promote/refine/compact logs — those crons run under launchd/cron, which don't inherit the interactive session's OAuth. |
 | `pii_filter_full` | `bash ~/Code/nervepack/engine/setup/25-install-pii-deps.sh` |
 

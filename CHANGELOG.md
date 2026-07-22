@@ -21,6 +21,21 @@ It does not track any individual user's personal content overlay.
   `engine/setup/tests/setup/test_link_dashboard_data.sh`.
 
 ### Added
+- **OS-scheduler installers ported to Python** (phase 6 of the bash→Python CLI
+  consolidation, content-overlay spec
+  `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_scheduler_install.py`
+  replaces `70-install-memory-{cron,launchd,schtasks}.sh`, dispatched as
+  `cli.py setup install-memory-{cron,launchd,schtasks}`. Same six authoritative jobs,
+  same schedule, same idempotent-replace semantics on all three backends; the opt-in
+  resume-pointer cron (`resume.cron`) moves with it. `np_token_lib.py` is a small new
+  standalone port of `np_claude_token_env_prefix` for the cron/launchd installers —
+  `install_schtasks` deliberately stays unwired to the token prefix (unverified
+  Windows quote-nesting risk, unchanged from the bash original). `np-onboard.sh`'s
+  scheduler-install step now dispatches through the CLI instead of running the
+  retired `.sh` files. Tests: `engine/setup/tests/nervepack_engine/test_np_scheduler_install.py`
+  (32 cases — every case the five retired bash tests covered, plus new coverage for
+  `install_cron`'s happy path, which had none before).
+
 - **Critical-path guard** (`engine/setup/np-path-check.py`). Scans docs and skills for
   references to nervepack's `setup/`/`onboard/` scripts and fails on a stale pre-split
   path (`setup/x` where the file now lives at `engine/setup/x`) or an `engine/…` path to

@@ -15,7 +15,7 @@ fi
 
 # git + a C toolchain ship with the Xcode Command Line Tools on macOS (the
 # build-essential analogue); curl/ca-certificates are in the base system, and
-# launchd replaces cron (70-install-memory-launchd.sh). So brew only owns the rest.
+# launchd replaces cron (cli.py setup install-memory-launchd). So brew only owns the rest.
 command -v git >/dev/null 2>&1 || xcode-select --install || true
 
 # Python is NOT brewed: the workspace convention is uv for everything Python

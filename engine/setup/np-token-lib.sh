@@ -6,9 +6,12 @@
 # compact) fail "Not logged in" without this (nervepack lesson
 # [nervepack-scheduled-auth]).
 #
-# Sourced by: 62-install-scheduled-auth-token.sh, the 70-install-memory-*.sh
-# family (all three scheduler backends), and np-doctor.sh's
-# scheduled-auth-token check.
+# Sourced by: 62-install-scheduled-auth-token.sh and np-doctor.sh's
+# scheduled-auth-token check. The Python scheduler installers
+# (np_scheduler_install.py's install_cron/install_launchd) do NOT source this
+# file -- they use the small standalone port in np_token_lib.py instead
+# (claude_token_env_prefix only; store()/status() stay bash-only here until
+# phase 8 of the bash->Python migration retires this file's remaining callers).
 #
 # Design: the token lives in ONE file. Every scheduled job's generated command
 # re-reads that file at RUN TIME (np_claude_token_env_prefix, below) rather
