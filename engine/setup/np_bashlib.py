@@ -118,6 +118,14 @@ def run_killtree(cmd, input=None, stdin=None, cwd=None, env=None, timeout=None, 
         stdin = subprocess.DEVNULL  # never inherit our own stdin -- see np_implement_suggestion._git()
     popen_kwargs = dict(stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                         cwd=cwd, env=env, text=text)
+    if text:
+        # Text-mode Popen defaults to the locale's ANSI codepage on Windows
+        # (cp1252), not UTF-8 -- any non-Latin-1 character written to the
+        # child's stdin (input=) or read from its stdout/stderr raises
+        # UnicodeEncodeError/DecodeError. Force UTF-8 explicitly so callers
+        # can pass real prompt text (this module's own agent prompts include
+        # non-ASCII characters like "≤") without caring about the host locale.
+        popen_kwargs["encoding"] = "utf-8"
     if os.name == "nt":
         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:

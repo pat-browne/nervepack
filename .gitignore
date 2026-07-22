@@ -9,6 +9,3 @@ __pycache__/
 # Subagent worktree scratch (transient)
 .claude/
 .worktrees/
-
-# Temporary CI debug artifact (see test_implement.sh) -- remove alongside it
-/.ci-debug-implement-progress.log
