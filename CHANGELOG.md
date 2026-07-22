@@ -31,6 +31,27 @@ It does not track any individual user's personal content overlay.
   `engine/setup/tests/setup/test_link_dashboard_data.sh`.
 
 ### Added
+- **`np-implement-suggestion.sh` ported to Python (phase 10 — the last and most
+  security-sensitive script in the bash→Python CLI consolidation)**.
+  `np_implement_suggestion.py` (`cli.py implement-suggestion <text>`) faithfully
+  replicates every behavior of the bash original: the `NERVEPACK_AGENT` recursion
+  guard, the self-healing mkdir-lock (reclaims a stale lock once its owner pid is
+  confirmed dead), git-worktree isolation of the agentic pass (the user's
+  uncommitted work is never touched, never swept), the engine-repo-first /
+  content-overlay-fallback landing logic, `pr`/`direct` mode semantics, and —
+  unweakened — the nonce-delimited prompt-injection defense around the untrusted
+  suggestion text (2026-06-08 review). Uses `np_model.agent()` (phase 9) as its
+  LLM seam, now with a `timeout` parameter added to `np_model.agent()` itself so
+  a hung agent still can't wedge the job. `np-mcp-server.py`'s `implement` action
+  and `np-dashboard-server.py`'s `/api/implement` route both dispatch to it via
+  `cli.py` instead of spawning the retired bash script; `NP_IMPLEMENT`'s
+  single-script override contract (used by e2e/unit test stubs) is preserved.
+  `test_implement.sh` retargeted to the new entrypoint — 13 scenarios ported
+  1:1 (pr/direct modes, dirty-tree isolation, live/stale lock, prompt-injection
+  hardening x2, content-overlay fallback, both-repos-miss/not-implementable) plus
+  a new genuine-`subprocess.TimeoutExpired` case the bash original could only
+  simulate (via a fast-exiting stub), now exercised for real in well under a
+  second via an `IMPLEMENT_AGENT_TIMEOUT` test override.
 - **`np-llm.sh` `agent` mode ported to Python (phase 9)**, joining `complete` mode
   (already bash-free). `np_model.agent()` mirrors `np-llm.sh agent` for both
   backends — the `claude` backend calls the `claude` binary directly (no `bash -c`

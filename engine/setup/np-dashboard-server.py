@@ -53,7 +53,13 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 DATA = os.path.realpath(os.path.join(DASH, "data"))
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 RESOLVE = os.path.join(HERE, "np-suggestion-resolve.sh")
-IMPLEMENT = os.environ.get("NP_IMPLEMENT") or os.path.join(HERE, "np-implement-suggestion.sh")
+# NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
+# this); the real default is np_implement_suggestion.py (phase 10) dispatched via
+# cli.py, not the retired bash np-implement-suggestion.sh.
+_IMPLEMENT_OVERRIDE = os.environ.get("NP_IMPLEMENT")
+IMPLEMENT_ARGV = ([_IMPLEMENT_OVERRIDE] if _IMPLEMENT_OVERRIDE else
+                  [sys.executable, os.path.join(os.path.dirname(HERE), "nervepack_engine", "cli.py"),
+                   "implement-suggestion"])
 TOGGLES_LIB = os.path.join(HERE, "np-toggle-lib.sh")
 TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
@@ -99,7 +105,7 @@ def log(msg):
 
 def implement_status(text):
     """The job's per-suggestion status (busy|running|done|not_implementable|failed),
-    keyed by a hash of the exact text — the same key np-implement-suggestion.sh writes.
+    keyed by a hash of the exact text — the same key np_implement_suggestion.py writes.
     Missing -> {'state':'none'}. Lets the dashboard poll a row to completion."""
     if not text:
         return {"state": "none"}
@@ -298,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
-                subprocess.Popen(np_bashlib.argv([IMPLEMENT, text]), cwd=NP, start_new_session=True,
+                subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text]), cwd=NP, start_new_session=True,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
                 return self._json({"ok": True, "started": True})
