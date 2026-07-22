@@ -162,7 +162,7 @@ confidence/auto_safe, assets_used). Records land in a local inbox; the **daily**
 `cli.py cron aggregate-metrics`, toggle `evaluator.aggregate`) drains them into
 committed `dashboard/data/metrics.jsonl`. All under the `evaluator` toggle family;
 all fail-open. The dashboard (P2) and **suggestion implement/reject (P3)** —
-per-row Implement (async agentic job via `np-implement-suggestion.sh`, `pr`/`direct`
+per-row Implement (async agentic job via `cli.py implement-suggestion`, `pr`/`direct`
 mode) and Reject — consume this record. See
 `docs/superpowers/specs/2026-06-08-suggestion-implement-reject-design.md`.
 

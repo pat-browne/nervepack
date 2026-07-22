@@ -385,12 +385,13 @@ and the good ones can be built by an agent without leaving the dashboard.
 
 **Workflow.** `np-suggestions-review.py` ranks/clears suggestions (the served
 dashboard exposes it as buttons via the localhost-only `np-dashboard-server.py`).
-Per-row **Implement** spawns an async agentic job (`np-implement-suggestion.sh`) in an
-isolated git worktree off the committed base, in `pr` or `direct` mode; **Reject**
-resolves it. `np-core-suggestions-review` drives the same flow from any host.
+Per-row **Implement** spawns an async agentic job (`np_implement_suggestion.py`,
+dispatched as `cli.py implement-suggestion`) in an isolated git worktree off the
+committed base, in `pr` or `direct` mode; **Reject** resolves it.
+`np-core-suggestions-review` drives the same flow from any host.
 
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
-`np-implement-suggestion.sh`, `agents/np-flow-implement-suggestion.md`,
+`np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.

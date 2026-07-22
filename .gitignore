@@ -9,3 +9,6 @@ __pycache__/
 # Subagent worktree scratch (transient)
 .claude/
 .worktrees/
+
+# CI diagnostic evidence mirrors (regenerated per-run, published via job summary)
+.ci-debug-pid-diag.log

@@ -1,7 +1,7 @@
 # np-flow: implement one evaluator suggestion
 
 You are running headless (`np-llm.sh agent`), invoked by
-`engine/setup/np-implement-suggestion.sh` to implement **one** dashboard suggestion. The
+`engine/setup/np_implement_suggestion.py` (dispatched via `cli.py implement-suggestion`) to implement **one** dashboard suggestion. The
 wrapper has put you in an **isolated git worktree** — a clean checkout of a repo on
 a fresh branch off its committed base — and is holding a lock. **Work in your current
 directory; do NOT `cd` elsewhere** (the live source tree may be mid-edit — editing it
