@@ -30,6 +30,7 @@ See docs/superpowers/specs/2026-06-08-suggestion-implement-reject-design.md and
 [[np-kb-coding-rules]] SS10 (the server that triggers this stays locked down).
 """
 import binascii
+import ctypes
 import hashlib
 import json
 import os
@@ -91,6 +92,8 @@ def _status_key(text):
 
 
 def _pid_alive(pid):
+    if os.name == "nt":
+        return _pid_alive_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -100,6 +103,33 @@ def _pid_alive(pid):
     except OSError:
         return False
     return True
+
+
+def _pid_alive_windows(pid):
+    """Windows-safe liveness check. os.kill(pid, 0) is NOT a safe existence
+    probe on Windows the way it is on POSIX: per the os.kill docs, any signal
+    value other than CTRL_C_EVENT/CTRL_BREAK_EVENT makes Windows call
+    TerminateProcess -- signal 0 can actually KILL the target process instead
+    of merely checking it exists. (Found on real Windows CI: this stale-lock
+    reclaim path treated a genuinely live lock owner as dead, because
+    OpenProcess failed for that pid with a WinError Python doesn't map to
+    ProcessLookupError, falling through to the generic `except OSError:
+    return False` branch -- "looks dead" rather than "verified dead".)
+    Uses a QUERY-only OpenProcess (no TERMINATE right requested) plus
+    GetExitCodeProcess, so this can never terminate anything it inspects."""
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    kernel32 = ctypes.windll.kernel32  # noqa: attr-defined (Windows-only attribute)
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _acquire_lock(lock_path):
