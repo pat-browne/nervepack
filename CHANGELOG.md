@@ -10,6 +10,16 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Fixed
+- **`np_model.py complete()` missed the 2026-07-13 stale-session env-strip fix.**
+  `np-llm.sh` strips `CLAUDECODE`/`CLAUDE_CODE_SESSION_ID`/etc. before every
+  backend call so a long-lived process (the dashboard server, a backgrounded
+  hook) inheriting a stale Claude Code session doesn't get its nested `claude -p`
+  calls mistaken for a child of that session ("Not logged in · Please run
+  /login"). The bash-free `complete()` port (git-for-windows-free MCP work,
+  #38) never carried that strip over — found and fixed while porting `agent()`
+  mode in phase 9 of the bash→Python migration. `test_model_parity.sh`
+  strengthened to assert non-leakage for both drivers.
+
 - **Dashboard shows no metrics on a fresh clone (split layout).** Root cause: the
   `<engine>/dashboard/data` → `<content>/dashboard/data` symlink bridge had no
   bootstrap step — it was created once by hand during the engine/content split
@@ -21,6 +31,30 @@ It does not track any individual user's personal content overlay.
   `engine/setup/tests/setup/test_link_dashboard_data.sh`.
 
 ### Added
+- **`np-llm.sh` `agent` mode ported to Python (phase 9)**, joining `complete` mode
+  (already bash-free). `np_model.agent()` mirrors `np-llm.sh agent` for both
+  backends — the `claude` backend calls the `claude` binary directly (no `bash -c`
+  wrapper, unlike `complete`+`agent` before this), the `local` backend still
+  shells `NP_LLM_AGENT_CMD` via `bash -c` when configured. `np_llm_agent.py`'s
+  `run_agent()` now calls `np_model.agent()` in-process instead of shelling to
+  bash `np-llm.sh agent`; `np-dashboard-server.py`'s suggestion-review pass and
+  `np-doctor.sh`'s `llm-cli` smoke check both switched to the Python `complete()`
+  path too. `np-llm.sh` stays on disk — its last direct caller,
+  `np-implement-suggestion.sh`, isn't ported until phase 10. New parity test
+  `test_agent_parity.sh` (byte-identical argv/stdin across both drivers, plus a
+  stale-session non-leakage check); `test_np_llm_agent.py` rewritten to mock
+  `np_model.agent()` directly instead of stubbing a subprocess.
+- **Phase 8 (sourced-lib resolvers) audited and documented as already complete
+  on the Python side** — `np_toggle.py`/`np_content.py` (the latter already a
+  port of both `np-content-lib.sh` *and* `np-layer-lib.sh`) were built during
+  earlier bash-free-MCP work and are parity-locked
+  (`test_toggle_parity.sh`/`test_content_parity.sh`), but this wasn't previously
+  recorded against the migration's phase numbering. The bash lib files
+  themselves remain — retirement is blocked on ~10 other bash scripts (the
+  toggle CLI, `open-dashboard.sh`, `np-doctor.sh`, the hook/mcp/skill
+  installers, `40-sync-nervepack.sh`) that aren't sequenced in any phase.
+  ARCHITECTURE.md now states this explicitly rather than leaving phase 8
+  looking silently incomplete.
 - **Toolchain bootstrap + the onboard orchestrator ported to Python** (phase 7 of the
   bash→Python CLI consolidation, content-overlay spec
   `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_bootstrap.py`
