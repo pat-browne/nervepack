@@ -111,35 +111,56 @@ resolved "implement despite dirty tree" || { echo "FAIL: dirty-tree suggestion n
 rm -f "$repo/dirt.txt"; git -C "$repo" branch -qD "np-suggest/implement-despite-dirty-tree" 2>/dev/null || true
 
 # 5. lock held by a LIVE owner: refuse (busy)
-# Use a real, backgrounded CHILD process's pid ($!), NOT bash's own $$.
-# Production only ever writes os.getpid() from a Python process into this
-# file, so a genuine CreateProcess'd child pid is what actually needs
-# testing here -- and on Windows, bash's own $$ under Git-bash/MSYS is NOT
-# guaranteed to be the same number as the native Windows pid OpenProcess
-# needs (confirmed via a real Windows CI hang chase: OpenProcess($$) failed
-# with GetLastError=87/ERROR_INVALID_PARAMETER even though the bash script
-# was genuinely alive; see docs/ARCHITECTURE.md's "spawn a subprocess with
-# timeout=, or check whether a PID is alive" change-impact row). A
-# backgrounded child (like 5b's `sleep` below) gets a real, CreateProcess'd
-# Windows pid via $!, which is what this scenario needs to actually probe.
+# Use a REAL python3 process's own self-reported os.getpid() as the lock
+# owner -- NOT bash job control ($$ or $!). Production only ever writes
+# str(os.getpid()) from a live Python process into this file, so that's the
+# only pid shape that needs to be reliably checkable here.
+#
+# This replaces an earlier version that used bash's own $! (a backgrounded
+# `sleep 30 &`), on the theory that a real CreateProcess'd child would have a
+# native-Windows-resolvable pid unlike bash's self-referential $$. A real
+# Windows CI chase (see docs/ARCHITECTURE.md's pid-liveness change-impact
+# row) disproved that theory conclusively: an isolated diagnostic
+# (test_pid_alive_diag.sh) proved _pid_alive_windows() correctly resolves
+# BOTH a live $!-backgrounded pid AND a real python3 process's own
+# os.getpid() in the same CI run -- yet THIS scenario, using bash's $! for
+# the exact same live-owner check, still failed identically in that same
+# run (owner read back correctly, but _pid_alive(owner) reported False). The
+# conclusion: bash's $!/$$ under Git-bash/MSYS is not reliably the native
+# Windows pid OpenProcess needs -- it can coincidentally match (as it did in
+# the isolated diagnostic) or not (as it did here), because bash and Windows
+# draw pid numbers from different pools. Only a python3 process's own
+# self-reported os.getpid() -- what production actually writes -- is a valid
+# stand-in for "a live pid" on this platform; a bash-tracked pid never was.
 : > "$tmp/resolved.txt"; mkdir -p "$tmp/lock"
-sleep 30 & live_pid=$!
+live_pid_file="$tmp/live_pid"
+python3 -c '
+import os, sys, time
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    f.write(str(os.getpid())); f.flush()
+time.sleep(30)
+' "$live_pid_file" &
+live_bg_pid=$!
+for _ in $(seq 1 50); do [[ -s "$live_pid_file" ]] && break; sleep 0.1; done
+live_pid="$(cat "$live_pid_file")"
 echo "$live_pid" > "$tmp/lock/pid"
-# TEMPORARY: NP_DEBUG_LOCK=1 -- an isolated diagnostic (test_pid_alive_diag.sh)
-# already proved _pid_alive_windows() correctly reports a live $!-backgrounded
-# pid as alive on real Windows CI, yet this exact scenario still fails
-# identically -- ruling out _pid_alive_windows() and pointing at
-# _acquire_lock()'s caller-visible behavior instead (see np_implement_suggestion.py).
-# Remove once the real cause is confirmed.
-NP_DEBUG_LOCK=1 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
-kill "$live_pid" 2>/dev/null || true; wait "$live_pid" 2>/dev/null || true
+MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
+kill "$live_bg_pid" 2>/dev/null || true; wait "$live_bg_pid" 2>/dev/null || true
 resolved "locked out" && { echo "FAIL: ran while a live lock was held"; exit 1; }
 [[ "$(status_of "locked out")" == "busy" ]] || { echo "FAIL: lock-held status not 'busy'"; exit 1; }
 rm -rf "$tmp/lock"
 
 # 5b. STALE lock (owner pid dead): reclaim it and run
+# Same reasoning as 5: the "dead" pid must be a real python3 process's own
+# os.getpid(), not bash's $!/$$, so it's a valid probe on every platform.
 : > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
-sleep 0 & dead=$!; wait $dead 2>/dev/null                 # $dead is now a dead (but was a real) pid
+dead_pid_file="$tmp/dead_pid"
+python3 -c '
+import os, sys
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    f.write(str(os.getpid()))
+' "$dead_pid_file"                                         # exits immediately -- $dead is now a dead (but was a real) pid
+dead="$(cat "$dead_pid_file")"
 mkdir -p "$tmp/lock"; echo "$dead" > "$tmp/lock/pid"
 MODE_OVERRIDE="direct" LLM="$tmp/llm-ok" run "reclaim the stale lock"
 resolved "reclaim the stale lock" || { echo "FAIL: did not reclaim a stale lock"; exit 1; }

@@ -151,24 +151,6 @@ def _pid_alive_windows(pid):
 def _acquire_lock(lock_path):
     """mkdir-atomic lock that self-heals: a lock left behind by a killed owner
     (no cleanup ran) is reclaimed once that pid is confirmed gone."""
-    # TEMPORARY diagnostic (NP_DEBUG_LOCK=1), gated so it never fires in
-    # production or in any other test: an isolated diagnostic
-    # (test_pid_alive_diag.sh) already proved _pid_alive_windows() correctly
-    # reports a live $!-backgrounded pid as alive on real Windows CI -- yet
-    # test_implement.sh's scenario 5, which exercises this exact function via
-    # the SAME mechanism end-to-end, still fails identically. That rules out
-    # _pid_alive_windows() as the root cause and points at this function's
-    # caller-visible behavior instead -- most likely a lock_path that Python
-    # doesn't see as already existing (an MSYS-vs-native path mismatch: bash
-    # env vars, unlike argv, do NOT get MSYS's automatic POSIX-path
-    # conversion for a native child process -- the same class of bug already
-    # fixed once in this file for mkdtemp's TMPDIR fallback). Remove once the
-    # real cause is confirmed.
-    _debug = os.environ.get("NP_DEBUG_LOCK") == "1"
-    if _debug:
-        print("[lock-diag] lock_path=%r isdir-before-claim=%s" % (lock_path, os.path.isdir(lock_path)),
-              file=sys.stderr)
-
     def _claim():
         try:
             os.mkdir(lock_path)
@@ -182,9 +164,6 @@ def _acquire_lock(lock_path):
         return True
 
     if _claim():
-        if _debug:
-            print("[lock-diag] claimed on FIRST attempt (Python saw no pre-existing lock dir)",
-                  file=sys.stderr)
         return True
     owner = None
     try:
@@ -192,10 +171,6 @@ def _acquire_lock(lock_path):
             owner = int(fh.read().strip())
     except (OSError, ValueError):
         owner = None
-    if _debug:
-        alive = owner is not None and _pid_alive(owner)
-        print("[lock-diag] second attempt: owner=%r _pid_alive(owner)=%s" % (owner, alive),
-              file=sys.stderr)
     if owner is not None and _pid_alive(owner):
         return False
     shutil.rmtree(lock_path, ignore_errors=True)
