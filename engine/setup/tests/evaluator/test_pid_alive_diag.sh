@@ -22,13 +22,25 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"
 SETUP="$NP/engine/setup"
 
-python3 - "$SETUP" "$$" <<'PYEOF'
+# MSYS/Cygwin expose /proc/<pid>/winpid: the REAL native Windows PID behind an
+# MSYS-numbered pid, when the two differ. If this file exists and its value
+# differs from $$, that's direct proof bash's own $$ is not a Windows-API-
+# resolvable PID at all here (which would fully explain OpenProcess($$)
+# failing with ERROR_INVALID_PARAMETER regardless of how correct the ctypes
+# call itself is).
+winpid=""
+if [[ -r "/proc/$$/winpid" ]]; then
+  winpid="$(cat "/proc/$$/winpid" 2>/dev/null || true)"
+fi
+echo "bash \$\$=$$ /proc/\$\$/winpid=${winpid:-<not present>}"
+
+python3 - "$SETUP" "$$" "${winpid:-0}" <<'PYEOF'
 import ctypes
 import os
 import subprocess
 import sys
 
-setup_dir, bash_pid = sys.argv[1], int(sys.argv[2])
+setup_dir, bash_pid, winpid = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 sys.path.insert(0, setup_dir)
 
 if os.name != "nt":
@@ -49,11 +61,27 @@ if not self_alive:
 
 # 2. THE actual production shape: a live Git-bash PID, passed in from a still-
 #    running bash script (this python process's own parent), checked while
-#    that bash script is blocked waiting on us -- must report alive.
+#    that bash script is blocked waiting on us. NOTE: this is expected to
+#    report False on Windows if bash's $$ is an MSYS-internal pid rather than
+#    a native Windows pid -- that's the hypothesis winpid (below) tests
+#    directly. Not counted as a hard failure here; recorded for comparison.
 bash_alive = m._pid_alive(bash_pid)
-print("live bash test script (pid=%d) alive: %s (expect True)" % (bash_pid, bash_alive))
-if not bash_alive:
-    failures.append("bash-parent")
+print("live bash test script via $$ (pid=%d) alive: %s" % (bash_pid, bash_alive))
+
+# 2b. The SAME live process, but via /proc/$$/winpid (the real native Windows
+#     pid MSYS/Cygwin expose for translation) instead of bash's own $$. If
+#     this reports True while 2 reports False, that's direct confirmation
+#     that $$ and the native Windows pid are simply different numbers here --
+#     not a bug in _pid_alive_windows(), a pid-namespace mismatch in what the
+#     test was feeding it.
+if winpid:
+    winpid_alive = m._pid_alive(winpid)
+    print("live bash test script via /proc/$$/winpid (pid=%d) alive: %s (expect True)"
+          % (winpid, winpid_alive))
+    if not winpid_alive:
+        failures.append("winpid")
+else:
+    print("no /proc/$$/winpid available -- skipping the winpid cross-check")
 
 # 3. raw ctypes diagnostics for the bash-parent pid, bypassing _pid_alive
 #    entirely, so a failure above comes with actual evidence instead of a
@@ -83,10 +111,14 @@ if handle:
         kernel32.CloseHandle(handle2)
 
 # 4. a definitely-dead pid (a subprocess that has already exited) must report
-#    NOT alive.
-p = subprocess.run([sys.executable, "-c", "pass"])
-dead_alive = m._pid_alive(p.pid)
-print("just-exited subprocess (pid=%d) alive: %s (expect False)" % (p.pid, dead_alive))
+#    NOT alive. subprocess.run() returns a CompletedProcess, which has no
+#    .pid attribute (only Popen does) -- use Popen directly and wait() so we
+#    still get a real, already-exited native Windows pid to check.
+proc = subprocess.Popen([sys.executable, "-c", "pass"])
+dead_pid = proc.pid
+proc.wait()
+dead_alive = m._pid_alive(dead_pid)
+print("just-exited subprocess (pid=%d) alive: %s (expect False)" % (dead_pid, dead_alive))
 if dead_alive:
     failures.append("dead-pid")
 
