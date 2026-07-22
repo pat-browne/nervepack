@@ -110,21 +110,37 @@ def _pid_alive_windows(pid):
     probe on Windows the way it is on POSIX: per the os.kill docs, any signal
     value other than CTRL_C_EVENT/CTRL_BREAK_EVENT makes Windows call
     TerminateProcess -- signal 0 can actually KILL the target process instead
-    of merely checking it exists. (Found on real Windows CI: this stale-lock
-    reclaim path treated a genuinely live lock owner as dead, because
-    OpenProcess failed for that pid with a WinError Python doesn't map to
-    ProcessLookupError, falling through to the generic `except OSError:
-    return False` branch -- "looks dead" rather than "verified dead".)
-    Uses a QUERY-only OpenProcess (no TERMINATE right requested) plus
-    GetExitCodeProcess, so this can never terminate anything it inspects."""
+    of merely checking it exists. Uses a QUERY-only OpenProcess (no TERMINATE
+    right requested) plus GetExitCodeProcess, so this can never terminate
+    anything it inspects.
+
+    Every ctypes.windll call here sets explicit argtypes/restype -- NOT
+    optional. OpenProcess returns a HANDLE (pointer-sized: 8 bytes on 64-bit
+    Windows); ctypes.windll's default assumed return type is c_int (4 bytes,
+    signed). Left unset, a genuinely valid 64-bit handle value gets truncated/
+    reinterpreted through that 32-bit default and can come back looking
+    falsy, so `if not handle` wrongly reports a live process as dead -- this
+    exact bug shipped in an earlier version of this function and was caught
+    on real Windows CI (a genuinely live lock owner was treated as dead and
+    its lock wrongly reclaimed) -- the failure mode is silent, not an
+    exception, which is what made it easy to ship without a Windows host to
+    test against."""
+    from ctypes import wintypes
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     STILL_ACTIVE = 259
     kernel32 = ctypes.windll.kernel32  # noqa: attr-defined (Windows-only attribute)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
     handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not handle:
         return False
     try:
-        exit_code = ctypes.c_ulong()
+        exit_code = wintypes.DWORD()
         if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
             return False
         return exit_code.value == STILL_ACTIVE
