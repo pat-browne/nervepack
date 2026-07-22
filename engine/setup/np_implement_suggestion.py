@@ -140,6 +140,13 @@ def _git(repo, *args, **kwargs):
     # should never fire but might) can't wedge the whole job indefinitely, on
     # top of the agent-call timeout that already covers the LLM subprocess.
     kwargs.setdefault("timeout", 60)
+    # Never let a git subprocess inherit our stdin -- with no redirection, a
+    # prompt (credential helper, merge editor) blocks reading from whatever
+    # this process's stdin happens to be, which on a CI runner may never see
+    # EOF. DEVNULL makes any such read fail closed immediately instead of
+    # hanging (found via a real 6-hour Windows CI hang traced to exactly this
+    # gap in _default_resolve()'s OWN un-timed, un-redirected git calls below).
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
     return subprocess.run(["git", "-C", repo] + list(args), **kwargs)
 
 
@@ -426,7 +433,7 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
 
 def _default_gh_pr_create(repo, branch, base):
     r = subprocess.run(["gh", "pr", "create", "--fill", "--head", branch, "--base", base],
-                       cwd=repo, capture_output=True, text=True)
+                       cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60)
     return (r.stdout or "").strip() if r.returncode == 0 else ""
 
 
@@ -438,29 +445,29 @@ def _default_resolve(text):
     which may not be `repo` (a split layout's dashboard/data is only a symlink
     into the content overlay)."""
     resolve_script = os.path.join(_HERE, "np-suggestion-resolve.sh")
+    # stdin=DEVNULL + timeout: this call previously had neither, and a 6-hour
+    # Windows CI hang traced to exactly here -- np-suggestion-resolve.sh (or
+    # whatever it shells to) inheriting this process's stdin with no EOF ever
+    # coming, on a host with no real terminal to satisfy a read.
     subprocess.run(np_bashlib.argv(["bash", resolve_script, text]), stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+                   stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, timeout=60)
     ledger = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
         np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
     ledger_dir = os.path.dirname(ledger)
-    root_r = subprocess.run(["git", "-C", ledger_dir, "rev-parse", "--show-toplevel"],
-                            capture_output=True, text=True)
+    root_r = _git(ledger_dir, "rev-parse", "--show-toplevel")
     resolve_dir = (root_r.stdout or "").strip() if root_r.returncode == 0 else ""
     resolve_dir = resolve_dir or os.environ.get("IMPLEMENT_REPO") or _NP
 
     for f in ("dashboard/data/resolved-suggestions.txt", "dashboard/data/metrics.js"):
         if os.path.exists(os.path.join(resolve_dir, f)):
-            subprocess.run(["git", "-C", resolve_dir, "add", "--", f])
-    staged = subprocess.run(["git", "-C", resolve_dir, "diff", "--cached", "--quiet"])
+            _git(resolve_dir, "add", "--", f)
+    staged = _git(resolve_dir, "diff", "--cached", "--quiet")
     if staged.returncode != 0:  # non-zero == there IS a staged diff
-        cbase_r = subprocess.run(["git", "-C", resolve_dir, "rev-parse", "--abbrev-ref", "HEAD"],
-                                 capture_output=True, text=True)
+        cbase_r = _git(resolve_dir, "rev-parse", "--abbrev-ref", "HEAD")
         cbase = (cbase_r.stdout or "").strip() or "main"
-        subprocess.run(["git", "-C", resolve_dir, "commit", "-q", "-m",
-                        "evaluator(suggestions): resolve implemented suggestion"])
-        if subprocess.run(["git", "-C", resolve_dir, "remote", "get-url", "origin"],
-                          capture_output=True, text=True).returncode == 0:
-            subprocess.run(["git", "-C", resolve_dir, "push", "-q", "origin", "HEAD:%s" % cbase])
+        _git(resolve_dir, "commit", "-q", "-m", "evaluator(suggestions): resolve implemented suggestion")
+        if _git(resolve_dir, "remote", "get-url", "origin").returncode == 0:
+            _git(resolve_dir, "push", "-q", "origin", "HEAD:%s" % cbase)
 
 
 if __name__ == "__main__":
