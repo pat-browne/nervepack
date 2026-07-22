@@ -149,7 +149,7 @@ three are Python, dispatched via `engine/nervepack_engine/cli.py`):**
    (always) writes/refreshes the **current** session's pointer via
    `resume_write.py`'s `--throttle` mode, gated by `resume.interval` (default
    300s).
-3. **Opt-in cron** (`resume.cron`, default `off`) — `70-install-memory-cron.sh`
+3. **Opt-in cron** (`resume.cron`, default `off`) — `cli.py setup install-memory-cron`
    installs `cli.py resume-write --active --throttle` every `resume.cron_min`
    minutes (default 5) when enabled — its own top-level dispatch branch (not a
    `hook` subcommand, since the writer isn't in `_HOOKS` and the cron has no
