@@ -20,8 +20,10 @@ harness language policy. Fail-open: a bad request returns an error response; the
 server itself never crashes.
 
 Env: NP_DASH_PORT (default 8787) · NP_SUGGESTIONS_TOP (default 10) · the review
-pass shells out to setup/np-llm.sh (the backend-neutral LLM seam, which sets
-NERVEPACK_AGENT) and degrades gracefully if it's unavailable.
+pass calls np_model.complete() in-process (the backend-neutral LLM seam, which
+sets NERVEPACK_AGENT and strips stale CLAUDE_CODE_* env -- load-bearing for
+THIS long-lived server specifically, see np_model.py's docstring) and degrades
+gracefully if it raises.
 """
 import json
 import os
@@ -39,6 +41,7 @@ NP = os.path.dirname(os.path.dirname(HERE))
 # resolves to System32 WSL; .sh can't be exec'd directly). No-op off Windows.
 sys.path.insert(0, HERE)
 import np_bashlib  # noqa: E402
+import np_model  # noqa: E402
 import np_toggle  # noqa: E402
 import np_toggle_schema  # noqa: E402
 # Static root + data source are env-overridable so the server is isolatable in tests
@@ -51,7 +54,6 @@ DATA = os.path.realpath(os.path.join(DASH, "data"))
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 RESOLVE = os.path.join(HERE, "np-suggestion-resolve.sh")
 IMPLEMENT = os.environ.get("NP_IMPLEMENT") or os.path.join(HERE, "np-implement-suggestion.sh")
-NPLLM = os.path.join(HERE, "np-llm.sh")
 TOGGLES_LIB = os.path.join(HERE, "np-toggle-lib.sh")
 TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
@@ -181,9 +183,8 @@ def review_rows():
         "of objects {\"i\": <index>, \"decision\": \"implement\"|\"skip\", "
         "\"reason\": \"<=12 words\"}. No prose, no code fence.\n\n" + listing)
     try:
-        p = subprocess.run(np_bashlib.argv([NPLLM, "complete"]), input=prompt,
-                           capture_output=True, text=True, timeout=120)
-        verdicts = json.loads(_strip_fence(p.stdout))
+        out = np_model.complete(prompt, timeout=120)
+        verdicts = json.loads(_strip_fence(out))
         by_i = {int(v["i"]): v for v in verdicts if "i" in v}
         for i, r in enumerate(rows):
             v = by_i.get(i)
