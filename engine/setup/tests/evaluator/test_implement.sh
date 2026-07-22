@@ -125,7 +125,13 @@ rm -f "$repo/dirt.txt"; git -C "$repo" branch -qD "np-suggest/implement-despite-
 : > "$tmp/resolved.txt"; mkdir -p "$tmp/lock"
 sleep 30 & live_pid=$!
 echo "$live_pid" > "$tmp/lock/pid"
-MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
+# TEMPORARY: NP_DEBUG_LOCK=1 -- an isolated diagnostic (test_pid_alive_diag.sh)
+# already proved _pid_alive_windows() correctly reports a live $!-backgrounded
+# pid as alive on real Windows CI, yet this exact scenario still fails
+# identically -- ruling out _pid_alive_windows() and pointing at
+# _acquire_lock()'s caller-visible behavior instead (see np_implement_suggestion.py).
+# Remove once the real cause is confirmed.
+NP_DEBUG_LOCK=1 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
 kill "$live_pid" 2>/dev/null || true; wait "$live_pid" 2>/dev/null || true
 resolved "locked out" && { echo "FAIL: ran while a live lock was held"; exit 1; }
 [[ "$(status_of "locked out")" == "busy" ]] || { echo "FAIL: lock-held status not 'busy'"; exit 1; }
