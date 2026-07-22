@@ -17,7 +17,6 @@ Parity-locked to np-llm.sh (same argv + stdin, both modes) by
 tests/mcp/parity/test_model_parity.sh and test_agent_parity.sh. stdlib only.
 """
 import os
-import subprocess
 import sys
 
 import np_bashlib
@@ -79,7 +78,12 @@ def complete(prompt, system=None, timeout=None):
             argv += ["--system", system]
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
-    r = subprocess.run(np_bashlib.argv(argv), input=prompt, capture_output=True, text=True, env=env, timeout=timeout)
+    # run_killtree, not subprocess.run: on a timeout, plain subprocess.run's own
+    # Windows kill-then-drain fallback can block forever if a grandchild the
+    # backend spawned is still holding the output pipe open -- see
+    # np_bashlib.run_killtree's docstring (confirmed via CPython's own
+    # subprocess.run source, not a guess).
+    r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, env=env, timeout=timeout)
     return r.stdout
 
 
@@ -109,8 +113,10 @@ def agent(prompt, tools, cwd=None, timeout=None):
         env["NP_LLM_TOOLS"] = tools
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
-    r = subprocess.run(np_bashlib.argv(argv), input=prompt, cwd=cwd, capture_output=True,
-                       text=True, env=env, timeout=timeout)
+    # run_killtree, not subprocess.run -- see complete()'s comment above; the
+    # agent backend is even more exposed since it's tools-enabled and can
+    # itself spawn arbitrary child processes (git, a local agentic host).
+    r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, cwd=cwd, env=env, timeout=timeout)
     return r.returncode, r.stdout, r.stderr
 
 

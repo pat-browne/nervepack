@@ -131,23 +131,22 @@ def _acquire_lock(lock_path):
     return _claim()
 
 
-def _git(repo, *args, **kwargs):
-    kwargs.setdefault("capture_output", True)
-    kwargs.setdefault("text", True)
-    # Every call here is a local, normally-sub-second operation (no remote push
-    # is ever attempted without a pre-checked origin) -- a hard cap so a stuck
-    # git process (file-lock contention, an interactive credential prompt that
-    # should never fire but might) can't wedge the whole job indefinitely, on
-    # top of the agent-call timeout that already covers the LLM subprocess.
-    kwargs.setdefault("timeout", 60)
-    # Never let a git subprocess inherit our stdin -- with no redirection, a
-    # prompt (credential helper, merge editor) blocks reading from whatever
-    # this process's stdin happens to be, which on a CI runner may never see
-    # EOF. DEVNULL makes any such read fail closed immediately instead of
-    # hanging (found via a real 6-hour Windows CI hang traced to exactly this
-    # gap in _default_resolve()'s OWN un-timed, un-redirected git calls below).
-    kwargs.setdefault("stdin", subprocess.DEVNULL)
-    return subprocess.run(["git", "-C", repo] + list(args), **kwargs)
+def _git(repo, *args):
+    # run_killtree, not subprocess.run: git can spawn a helper (credential
+    # manager, gpg-agent for a signed commit) that outlives git itself. On a
+    # timeout, plain subprocess.run only kills the direct git process, and its
+    # own kill-then-drain fallback then blocks forever on Windows if that
+    # helper still holds the output pipe open (confirmed by reading CPython's
+    # own subprocess.run source: the mswindows branch calls process.kill()
+    # then process.communicate() again with NO timeout). That is the actual
+    # mechanism behind a real multi-hour Windows CI hang this whole module has
+    # been chasing -- see np_bashlib.run_killtree's docstring. stdin=DEVNULL:
+    # never let a git subprocess inherit ours (a credential/merge-editor
+    # prompt would otherwise block on a read that may never see EOF on a CI
+    # runner). timeout=60: every call here is a local, normally-sub-second
+    # operation (no remote push is ever attempted without a pre-checked
+    # origin), so this is a defensive cap, not a real budget.
+    return np_bashlib.run_killtree(["git", "-C", repo] + list(args), stdin=subprocess.DEVNULL, timeout=60)
 
 
 def _slug(text):
@@ -296,8 +295,12 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
     with no .exe/.bat extension); otherwise calls np_model.agent() in-process."""
     override = os.environ.get("IMPLEMENT_LLM")
     if override:
-        r = subprocess.run(np_bashlib.argv(["bash", override, "agent", "--tools", tools]),
-                           input=prompt, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        # run_killtree, not subprocess.run: the override script is a bash tree
+        # (bash -> git commit -> possibly a credential/gpg helper) that can
+        # outlive its own top-level process; see _git()'s docstring for why
+        # subprocess.run's own timeout can hang forever on Windows here.
+        r = np_bashlib.run_killtree(np_bashlib.argv(["bash", override, "agent", "--tools", tools]),
+                                    input=prompt, cwd=cwd, timeout=timeout)
         return r.returncode, r.stdout, r.stderr
     return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
 
@@ -432,8 +435,10 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
 
 
 def _default_gh_pr_create(repo, branch, base):
-    r = subprocess.run(["gh", "pr", "create", "--fill", "--head", branch, "--base", base],
-                       cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60)
+    # run_killtree, not subprocess.run -- see _git()'s docstring; `gh` can shell
+    # out to a credential helper that outlives it.
+    r = np_bashlib.run_killtree(["gh", "pr", "create", "--fill", "--head", branch, "--base", base],
+                                cwd=repo, stdin=subprocess.DEVNULL, timeout=60)
     return (r.stdout or "").strip() if r.returncode == 0 else ""
 
 
