@@ -84,16 +84,31 @@ log "bash \$\$=$$ /proc/\$\$/winpid=${winpid:-<not present>}"
 #    test-fixture defect, not a production one. Check a REAL backgrounded
 #    python3 process's self-reported os.getpid() directly -- this is the only
 #    check here that mirrors production exactly.
+# Two straight fixes (removing `exec > >(tee)`, then inline-vs-trap cleanup)
+# produced ZERO change in a reproducible ~30s stall between this point and the
+# next log line, on Linux CI specifically (never reproduced locally on macOS)
+# -- per systematic-debugging, that's the point to stop re-guessing and add
+# fine-grained timestamped markers so the NEXT run pinpoints the exact
+# sub-statement that blocks, instead of a third blind fix attempt.
+mark() { printf '%s [mark] %s\n' "$(date +%s.%N 2>/dev/null || date +%s)" "$1" >> "$DEBUG_LOG"; }
+mark "before sleep 30 &"
 sleep 30 &
 bang_pid=$!
+mark "backgrounded sleep, bang_pid=$bang_pid"
 
 ps_winpid=""
+mark "before ps -a | awk"
 ps_row="$(ps -a 2>/dev/null | awk -v p="$bang_pid" '$1==p')"
+mark "after ps -a | awk, ps_row=[$ps_row]"
 if [[ -n "$ps_row" ]]; then
   # Git-bash/MSYS ps column order: PID PPID PGID WINPID TTY UID STIME COMMAND
+  mark "before ps_winpid awk"
   ps_winpid="$(awk -v p="$bang_pid" '$1==p {print $4}' <<<"$ps_row")"
+  mark "after ps_winpid awk, ps_winpid=$ps_winpid"
 fi
+mark "before log \$! line"
 log "bash \$!=$bang_pid ps row=[${ps_row:-<none>}] ps-derived WINPID=${ps_winpid:-<not present>}"
+mark "after log \$! line"
 
 py_pid_file="$(mktemp)"
 python3 -c '

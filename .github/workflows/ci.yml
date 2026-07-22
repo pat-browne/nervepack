@@ -50,6 +50,29 @@ jobs:
       - name: Run regression suite
         run: bash engine/setup/tests/run-all.sh --report regression-report.md
 
+      # See the Windows job's identical step: run-all.sh only echoes a test's
+      # captured stdout on FAILURE, so test_pid_alive_diag.sh's timestamped
+      # markers (written straight to this file, not through stdout) would
+      # otherwise never surface here even when this job's own log shows a FAIL.
+      # $GITHUB_STEP_SUMMARY only renders in the web UI's Summary tab -- it is
+      # NOT part of the step log stream, so `gh run view --log` / `gh api
+      # .../logs` can never retrieve it. Echo to stdout too so this evidence
+      # is retrievable the same way every other test line in this job is.
+      - name: Publish pid diagnostic evidence
+        if: always()
+        run: |
+          if [[ -f .ci-debug-pid-diag.log ]]; then
+            echo "=== PID liveness diagnostic evidence ==="
+            cat .ci-debug-pid-diag.log
+            echo "=== end PID liveness diagnostic evidence ==="
+            {
+              echo "## PID liveness diagnostic evidence"
+              echo '```'
+              cat .ci-debug-pid-diag.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish report to job summary
         if: always()
         run: cat regression-report.md >> "$GITHUB_STEP_SUMMARY"
@@ -139,14 +162,23 @@ jobs:
       # test_pid_alive_diag.sh's evidence (raw OpenProcess/GetLastError, ps
       # WINPID cross-check) never reaches the log on a PASS -- it mirrors its
       # own output to this fixed path specifically so it's visible either way.
+      # $GITHUB_STEP_SUMMARY only renders in the web UI's Summary tab -- it is
+      # NOT part of the step log stream, so `gh run view --log` / `gh api
+      # .../logs` can never retrieve it. Echo to stdout too so this evidence
+      # is retrievable the same way every other test line in this job is.
       - name: Publish pid diagnostic evidence
         if: always()
         run: |
           if [[ -f .ci-debug-pid-diag.log ]]; then
-            echo "## PID liveness diagnostic evidence" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat .ci-debug-pid-diag.log >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "=== PID liveness diagnostic evidence ==="
+            cat .ci-debug-pid-diag.log
+            echo "=== end PID liveness diagnostic evidence ==="
+            {
+              echo "## PID liveness diagnostic evidence"
+              echo '```'
+              cat .ci-debug-pid-diag.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publish report to job summary
