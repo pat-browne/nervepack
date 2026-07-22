@@ -134,6 +134,12 @@ def _acquire_lock(lock_path):
 def _git(repo, *args, **kwargs):
     kwargs.setdefault("capture_output", True)
     kwargs.setdefault("text", True)
+    # Every call here is a local, normally-sub-second operation (no remote push
+    # is ever attempted without a pre-checked origin) -- a hard cap so a stuck
+    # git process (file-lock contention, an interactive credential prompt that
+    # should never fire but might) can't wedge the whole job indefinitely, on
+    # top of the agent-call timeout that already covers the LLM subprocess.
+    kwargs.setdefault("timeout", 60)
     return subprocess.run(["git", "-C", repo] + list(args), **kwargs)
 
 
