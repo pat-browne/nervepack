@@ -48,11 +48,17 @@ run() {  # $1=text, reads MODE_OVERRIDE/LLM/CONTENT_OVERRIDE/RESOLVED/AGENT_TIME
   # CONTENT_OVERRIDE — otherwise it would silently default to this machine's real
   # engine checkout, and a "not implementable"/"no commit" test case would spawn a
   # real second agentic attempt against it.
+  # IMPLEMENT_AGENT_TIMEOUT defaults to 20s here (not the production 600s): every
+  # stub below exits in well under a second, so this is generous slack, not a
+  # tight bound -- but it caps the worst case if a subprocess pipe doesn't close
+  # promptly (observed on the Windows CI lane: bash-spawned children can hold
+  # stdout/stderr open past the parent's own exit), instead of every non-9b
+  # scenario silently riding the full 600s production default to a timeout.
   NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$localfile" \
   IMPLEMENT_REPO="$repo" IMPLEMENT_LLM="${LLM:-$tmp/llm-ok}" \
   IMPLEMENT_LOG="$tmp/impl.log" IMPLEMENT_LOCK="$tmp/lock" \
   IMPLEMENT_STATUS_DIR="$tmp/status" \
-  IMPLEMENT_AGENT_TIMEOUT="${AGENT_TIMEOUT:-600}" \
+  IMPLEMENT_AGENT_TIMEOUT="${AGENT_TIMEOUT:-20}" \
   NP_CONTENT_DIR="${CONTENT_OVERRIDE:-$tmp/no-content-dir}" \
   NP_RESOLVED_SUGGESTIONS="${RESOLVED:-$tmp/resolved.txt}" NP_RESOLVE_NO_BUILD=1 \
   python3 "$CLI" implement-suggestion "$1"
