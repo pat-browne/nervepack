@@ -39,9 +39,20 @@ SETUP="$NP/engine/setup"
 # is the whole point even when every check passes (e.g. confirming ps's WINPID
 # cross-check resolves correctly), so mirror it to a fixed on-disk path an
 # always()-gated CI step can cat regardless of pass/fail.
+#
+# NOTE: deliberately NOT `exec > >(tee ...) 2>&1` -- a live process-substitution
+# pipe combined with backgrounded 30s children (below) reproduced a genuine
+# 30s hang on Linux CI (confirmed: run-all.sh's outer `out=$(...)` blocked
+# until the backgrounded sleep/python helper naturally exited, because their
+# inherited fd1 pointed at that pipe and nothing closed it early enough). A
+# plain per-line append has no persistent pipe for a background child to hold
+# open, so it can't reproduce that class of bug regardless of the exact
+# mechanism. test_implement.sh's own scenario 5 avoids the same hazard by
+# killing its backgrounded sleep INLINE, immediately after use, rather than
+# deferring cleanup -- mirrored below for the same reason.
 DEBUG_LOG="$NP/.ci-debug-pid-diag.log"
 : > "$DEBUG_LOG"
-exec > >(tee -a "$DEBUG_LOG") 2>&1
+log() { echo "$1"; printf '%s\n' "$1" >> "$DEBUG_LOG"; }
 
 # MSYS/Cygwin expose /proc/<pid>/winpid: the REAL native Windows PID behind an
 # MSYS-numbered pid, when the two differ. If this file exists and its value
@@ -53,7 +64,7 @@ winpid=""
 if [[ -r "/proc/$$/winpid" ]]; then
   winpid="$(cat "/proc/$$/winpid" 2>/dev/null || true)"
 fi
-echo "bash \$\$=$$ /proc/\$\$/winpid=${winpid:-<not present>}"
+log "bash \$\$=$$ /proc/\$\$/winpid=${winpid:-<not present>}"
 
 # Three straight fix attempts targeting _pid_alive_windows() itself (os.kill-is-
 # unsafe, ctypes ABI/restype, then retargeting scenario 5 from $$ to $!) have
@@ -82,7 +93,7 @@ if [[ -n "$ps_row" ]]; then
   # Git-bash/MSYS ps column order: PID PPID PGID WINPID TTY UID STIME COMMAND
   ps_winpid="$(awk -v p="$bang_pid" '$1==p {print $4}' <<<"$ps_row")"
 fi
-echo "bash \$!=$bang_pid ps row=[${ps_row:-<none>}] ps-derived WINPID=${ps_winpid:-<not present>}"
+log "bash \$!=$bang_pid ps row=[${ps_row:-<none>}] ps-derived WINPID=${ps_winpid:-<not present>}"
 
 py_pid_file="$(mktemp)"
 python3 -c '
@@ -94,8 +105,13 @@ time.sleep(30)
 py_bg_pid=$!
 for _ in $(seq 1 50); do [[ -s "$py_pid_file" ]] && break; sleep 0.1; done
 py_reported_pid="$(cat "$py_pid_file" 2>/dev/null || echo 0)"
-echo "backgrounded python3 helper: bash \$!=$py_bg_pid self-reported os.getpid()=$py_reported_pid"
+log "backgrounded python3 helper: bash \$!=$py_bg_pid self-reported os.getpid()=$py_reported_pid"
 
+# Safety net only (belt-and-braces): the REAL cleanup is the inline kill right
+# after the heredoc below, which is what actually needs to run before this
+# script's own process exits. This trap just catches an early/error exit path
+# (e.g. `set -e` firing inside the heredoc invocation itself) that would skip
+# past the inline cleanup -- killing an already-dead pid is a harmless no-op.
 cleanup_bg() {
   kill "$bang_pid" "$py_bg_pid" 2>/dev/null || true
   wait "$bang_pid" "$py_bg_pid" 2>/dev/null || true
@@ -103,7 +119,14 @@ cleanup_bg() {
 }
 trap cleanup_bg EXIT
 
-python3 - "$SETUP" "$$" "${winpid:-0}" "$bang_pid" "${ps_winpid:-0}" "$py_reported_pid" <<'PYEOF'
+# Foreground pipe, not process substitution -- python3 here runs and exits
+# before `tee` sees EOF, no lingering background child holds this pipe open.
+# set +e around it: under pipefail a nonzero here (the real FAIL/PASS signal)
+# would otherwise trip `set -e` at this exact statement and skip the inline
+# cleanup right below -- capture the real exit code via PIPESTATUS instead and
+# exit with it explicitly once cleanup has run.
+set +e
+python3 - "$SETUP" "$$" "${winpid:-0}" "$bang_pid" "${ps_winpid:-0}" "$py_reported_pid" 2>&1 <<'PYEOF' | tee -a "$DEBUG_LOG"
 import ctypes
 import os
 import subprocess
@@ -235,3 +258,14 @@ if failures:
     sys.exit(1)
 print("PASS test_pid_alive_diag")
 PYEOF
+diag_status="${PIPESTATUS[0]}"
+set -e
+
+# Inline cleanup (mirrors test_implement.sh scenario 5's proven pattern):
+# kill+wait right here, before this script's own process exits, rather than
+# deferring to the EXIT trap above (which stays only as a safety net).
+kill "$bang_pid" "$py_bg_pid" 2>/dev/null || true
+wait "$bang_pid" "$py_bg_pid" 2>/dev/null || true
+rm -f "$py_pid_file"
+
+exit "$diag_status"
