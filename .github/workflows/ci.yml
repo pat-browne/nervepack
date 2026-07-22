@@ -135,6 +135,16 @@ jobs:
           MSYS: winsymlinks:nativestrict
         run: bash engine/setup/tests/run-all.sh --report regression-report-win.md
 
+      # TEMPORARY (remove once the Windows CI hang in test_implement.sh is diagnosed):
+      # run-all.sh captures each test's stdout via command substitution, which buffers
+      # everything until the subprocess exits -- so a hung test (killed by cancellation,
+      # never exits cleanly) leaves nothing in the main step's log. test_implement.sh
+      # mirrors its progress markers to this fixed on-disk path instead, so this
+      # always()-gated step surfaces them even after a cancel/timeout.
+      - name: Dump implement-suggestion debug progress (temporary)
+        if: always()
+        run: cat .ci-debug-implement-progress.log 2>/dev/null || echo "(no progress file -- test_implement.sh never started, or already cleaned up)"
+
       - name: Publish report to job summary
         if: always()
         run: cat regression-report-win.md >> "$GITHUB_STEP_SUMMARY" || true
