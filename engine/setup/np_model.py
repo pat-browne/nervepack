@@ -79,7 +79,7 @@ def complete(prompt, system=None, timeout=None):
             argv += ["--system", system]
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
-    r = subprocess.run(argv, input=prompt, capture_output=True, text=True, env=env, timeout=timeout)
+    r = subprocess.run(np_bashlib.argv(argv), input=prompt, capture_output=True, text=True, env=env, timeout=timeout)
     return r.stdout
 
 
