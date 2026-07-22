@@ -2,8 +2,9 @@
 
 Bash-to-python migration (content overlay design spec
 2026-07-15-nervepack-python-cli-consolidation-design.md): `hook`, `cron`, and
-`resume-write` shipped in phases 1-5; `setup` (phase 6, OS-scheduler installers
-only so far) joins them here. Remaining groups (onboard/toggle/doctor/sync/
+`resume-write` shipped in phases 1-5; `setup` (phase 6, OS-scheduler installers,
+joined by phase 7's toolchain-baseline steps) and `onboard` (phase 7, the
+full-onboard orchestrator) join them here. Remaining groups (toggle/doctor/sync/
 dashboard/mcp) are added as later phases port their scripts — see the spec's
 "Sequenced phases".
 
@@ -41,6 +42,8 @@ from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
+import np_bootstrap  # noqa: E402
+import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
 
@@ -73,6 +76,13 @@ _SETUP = {
     "install-memory-cron": np_scheduler_install.install_cron,
     "install-memory-launchd": np_scheduler_install.install_launchd,
     "install-memory-schtasks": np_scheduler_install.install_schtasks,
+    "install-apt-baseline": np_bootstrap.install_apt_baseline,
+    "install-brew-baseline": np_bootstrap.install_brew_baseline,
+    "install-rustup": np_bootstrap.install_rustup,
+    "install-claude-plugins": np_bootstrap.install_claude_plugins,
+    "prewarm-serena": np_bootstrap.prewarm_serena,
+    "install-pii-deps": np_bootstrap.install_pii_deps,
+    "install-vscode-extensions": np_bootstrap.install_vscode_extensions,
 }
 
 
@@ -162,6 +172,15 @@ def main(argv=None):
             return fn()
         except Exception as exc:
             _bail(name, "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "onboard":
+        # The doctor's exit status is the orchestrator's status (matches the
+        # bash original) -- also a real, intentional non-zero exit, not fail-open.
+        try:
+            return np_onboard.run()
+        except Exception as exc:
+            _bail("onboard", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] != "hook" or len(argv) < 2:

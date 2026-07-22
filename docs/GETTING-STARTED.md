@@ -26,14 +26,14 @@ every nervepack hook and cron.
 
 | OS | Command |
 |---|---|
-| Linux | `~/Code/nervepack/engine/setup/00-apt-baseline.sh` |
-| macOS | `~/Code/nervepack/engine/setup/00-brew-baseline.sh` |
-| Windows | No installer script — install **Node 20, Python 3, `gh`, and `jq`** by hand (Git for Windows already covers bash). |
+| Linux | `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-apt-baseline` |
+| macOS | `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-brew-baseline` |
+| Windows | No installer step — install **Node 20, Python 3, `gh`, and `jq`** by hand (Git for Windows already covers bash). |
 
 The engine runs on **Bash + Python 3** — the baseline above installs Python (`apt` on
 Linux, `uv python install` on macOS; install it by hand on Windows), so every engine
 script works out of the box. On a Claude host, finish with
-`~/Code/nervepack/engine/setup/20-claude-plugins.sh`.
+`python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-claude-plugins`.
 
 **3. Authenticate GitHub** (so the maintenance jobs can push your content):
 
@@ -51,8 +51,8 @@ onboard nervepack
 skill, so it only exists *after* onboarding links the skills. Saying "onboard
 nervepack" works from zero because the agent auto-loads this repo's `CLAUDE.md`,
 which routes it to the contract. Non-interactive alternative:
-`~/Code/nervepack/engine/setup/np-onboard.sh` runs the same wiring directly. Once
-onboarded, `/np-onboard` is available for re-runs.)
+`python3 ~/Code/nervepack/engine/nervepack_engine/cli.py onboard` runs the same
+wiring directly. Once onboarded, `/np-onboard` is available for re-runs.)
 
 Your agent reads the tool-neutral contract, links the skills, installs the session hooks
 and scheduler, writes `~/.config/nervepack/adapter.json`, and runs the doctor until every
@@ -66,7 +66,7 @@ That's the whole install. What differs by OS is handled for you:
 
 | | macOS | Windows |
 |---|---|---|
-| Toolchain | `00-brew-baseline.sh` | manual (Node · Python · gh · jq) |
+| Toolchain | `cli.py setup install-brew-baseline` | manual (Node · Python · gh · jq) |
 | Scheduler backend | launchd LaunchAgents | Windows Task Scheduler |
 | Hook execution | native bash | commands auto-wrapped through Git-bash |
 
