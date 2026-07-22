@@ -477,11 +477,14 @@ def _tool_maintain(args):
 
 def _tool_onboard(args):
     # Bootstrap the whole install: link skills, wire the lifecycle hooks, install the
-    # scheduler, register the MCP, run the doctor. Shells out to the bash installers
-    # (via np-onboard.sh), so it refuses cleanly on a bash-free host like flush/maintain.
+    # scheduler, register the MCP, run the doctor. Dispatches to `cli.py onboard`
+    # (np_onboard.py, phase 7 of the bash->Python migration) -- that orchestrator is
+    # Python now, but most of its individual steps (link-skills, dashboard-data,
+    # every 5x/6x hook installer, the doctor) are still bash it shells out to, so
+    # this still refuses cleanly on a bash-free host like flush/maintain.
     require_writes()
     if USE_PY and not _bash_available():
-        raise Disabled("nervepack_onboard needs bash — it runs the setup/installer "
+        raise Disabled("nervepack_onboard needs bash — its steps are setup/installer "
                        "scripts (not supported on a bash-free host)")
     # Optionally point at the overlays first, mirroring ~/.config/nervepack/{content,team}-dir.
     cfg = os.path.join(os.path.expanduser("~"), ".config", "nervepack")
@@ -491,7 +494,8 @@ def _tool_onboard(args):
             os.makedirs(cfg, exist_ok=True)
             with open(os.path.join(cfg, fname), "w", encoding="utf-8") as fh:
                 fh.write(val + "\n")
-    rc, out, err = run(["bash", os.path.join(SETUP, "np-onboard.sh")])
+    cli = os.path.join(_ENGINE_DIR, "nervepack_engine", "cli.py")
+    rc, out, err = run([sys.executable, cli, "onboard"])
     return (out + err).strip() or "onboarded"
 
 

@@ -83,7 +83,10 @@ def _cli_path(nervepack_root):
     return os.path.join(nervepack_root, "engine", "nervepack_engine", "cli.py")
 
 
-def _uname_s(uname_fn=None):
+def uname_s(uname_fn=None):
+    """Public (not module-private): np_onboard.py's scheduler-step dispatch
+    reuses this exact helper so its OS decision can never drift from the one
+    each install_* function makes for itself."""
     if uname_fn is not None:
         return uname_fn()
     try:
@@ -170,7 +173,7 @@ def _default_launchctl(plist_path):
 def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
                      token_prefix_fn=None, launchctl_fn=None, uname_fn=None):
     force = force if force is not None else bool(os.environ.get("NP_LAUNCHD_FORCE"))
-    if _uname_s(uname_fn) != "Darwin" and not force:
+    if uname_s(uname_fn) != "Darwin" and not force:
         print("install-memory-launchd is the macOS path — on Linux use install-memory-cron")
         return 1
 
@@ -222,7 +225,7 @@ def install_schtasks(setup_dir=None, force=None, uname_fn=None, schtasks_fn=None
     # testing on real Windows, updating this function AND both ARCHITECTURE.md
     # notes in the same change.
     force = force if force is not None else bool(os.environ.get("NP_SCHTASKS_FORCE"))
-    kernel = _uname_s(uname_fn)
+    kernel = uname_s(uname_fn)
     if not re.match(r"^(MINGW|MSYS|CYGWIN)", kernel) and not force:
         print("install-memory-schtasks is the native-Windows path — "
               "on Linux use install-memory-cron, on macOS use install-memory-launchd")

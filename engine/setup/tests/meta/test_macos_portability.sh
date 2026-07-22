@@ -24,11 +24,13 @@ PATTERNS='stat -c|find[^|]*-printf|readlink -f|grep -P|date -d |date --date'
 # Unlike the GNU-coreutils set above, these break in EVERY script that can run on a
 # Mac — including the numbered onboarding/launchd scripts (30/35/60/71-77), which is
 # exactly why the bug that motivated this lived in 30-link-skills.sh. So the bash-3.2
-# scan is NOT exempted for numbered scripts; only the truly Linux-only bootstrapper
-# (apt baseline) skips it — the crontab/launchd/schtasks installers are Python now
-# (np_scheduler_install.py), not bash, so they're outside this scan's scope entirely.
+# scan is NOT exempted for numbered scripts. There is no Linux-only bootstrapper left
+# to exempt either: the apt/brew baselines, the scheduler installers, and the
+# onboard orchestrator are all Python now (np_bootstrap.py / np_scheduler_install.py
+# / np_onboard.py), so this list stays empty until a genuinely bash, Linux-only
+# script exists again.
 BASH4='(declare|local) -A|^[[:space:]]*(mapfile|readarray)'
-BASH4_LINUX_ONLY=' 00-apt-baseline.sh '
+BASH4_LINUX_ONLY=''
 
 fail=0
 while IFS= read -r f; do

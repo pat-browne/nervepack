@@ -123,7 +123,7 @@ if git merge-base --is-ancestor "$local_rev" "$remote_rev"; then
   pulled=$(git rev-list --count HEAD..origin/main)
   if git merge --ff-only --quiet origin/main 2>/tmp/np-core-sync.err; then
     "$NERVEPACK/engine/setup/30-link-skills.sh" >/dev/null 2>&1 || true
-    # Re-run every lifecycle hook installer (same 50–69 glob as np-onboard.sh) so a
+    # Re-run every lifecycle hook installer (same 50–69 glob as np_onboard.py) so a
     # pulled change to a hook's registered command (e.g. a stdout/stderr redirect
     # fix) actually reaches ~/.claude/settings.json. Hook registration is a
     # one-time install-time artifact — git pull alone updates the scripts on disk

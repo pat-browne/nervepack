@@ -62,11 +62,12 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **Secrets refresh** | — | `np-env-secrets-refresh` skill | `specs/2026-05-26-secrets-refresh-design.md` |
 | **Wiki/sources** (curated reference) | — | `wiki/topics/<topic>/` and `wiki/concepts/<concept>/` (each a folder = one synthesis page + co-located sources; concepts mirror topics — there is no separate top-level `sources/` dir), `log.md` | AGENTS.md §"Wiki layer" |
 | **LLM-agnostic onboarding** | — | `np-llm.sh` (LLM-CLI seam), `engine/onboard/{ONBOARD.md,capabilities.json,adapters/}`, `np-doctor.sh`, `np-core-onboard` skill | `specs/2026-06-05-agnostic-onboarding-design.md` |
+| **Onboard orchestrator + toolchain bootstrap** (phase 7 of the bash→Python migration) | — | `engine/setup/np_onboard.py` (`cli.py onboard` — the full-onboard sequence: link-skills, dashboard-data bridge, every 5x/6x hook installer, the OS-scheduler step, the doctor; same entry point the MCP `nervepack_onboard` tool calls), `engine/setup/np_bootstrap.py` (`cli.py setup install-apt-baseline` / `install-brew-baseline` / `install-rustup` / `install-claude-plugins` / `prewarm-serena` / `install-pii-deps` / `install-vscode-extensions` — one-time toolchain-baseline steps, no toggle family since they're not runtime hooks) | (no dedicated design doc; see the migration spec's phase-7 entry) |
 | **Scheduled-auth token** (long-lived claude OAuth token for launchd/cron) | — (doctor capability `scheduled-auth-token`, SHOULD) | `engine/setup/np-token-lib.sh` (`np_claude_token_env_prefix`/`_store`/`_status`; the Python scheduler installers use only the small `engine/setup/np_token_lib.py` port of `claude_token_env_prefix`, not this bash file — `_store`/`_status` stay bash-only until phase 8), `engine/setup/np_token_status.py` (stdlib date math), `engine/setup/62-install-scheduled-auth-token.sh` (the one-time interactive walkthrough — `claude setup-token` needs a real terminal + browser approval, so it can't be scripted end-to-end), wired into `np_scheduler_install.py`'s `install_launchd`/`install_cron` (each scheduled job's command is prefixed with a snippet that re-reads the token file at RUN TIME, so rotating the token later is just overwriting the file — no plist/crontab reinstall needed), `np-doctor.sh` `scheduled-auth-token` core check (WARNs ~30 days before the ~1-year token expires). **`install_schtasks` (Windows) is NOT wired** — the token snippet's embedded `"..."` would collide with the nested double-quoting `schtasks //TR "..."` already requires, and this needs verifying on a real Windows/Git-bash host before shipping (tracked as a roadmap issue; unchanged by the phase-6 Python port — deliberately preserved, not an oversight). | (no content-overlay spec; this is engine-only glue) |
 | **MCP layer** (model-agnostic surface) | `mcp` (`writes`/`contribute` params) | `engine/setup/np-mcp-server.py` (stdlib stdio JSON-RPC dispatcher), `engine/bin/nervepack-mcp` (launcher), `engine/setup/58-install-mcp.sh` (Claude Code registration), `engine/bin/nervepack-install` → `engine/setup/np-mcp-install.sh` (the **guided one-line install**: prompt content/team overlay → register → run the doctor; non-interactive falls back to defaults; test `tests/onboard/test_mcp_install.sh`), `engine/setup/tests/mcp/test_mcp_server.py`. **Team-layer-aware (Phase 3):** `_tool_recall` merges episodic/lesson recall across team+personal overlays per `team.merge`. | `specs/2026-06-08-nervepack-mcp-layer-design.md` |
 | **Content seam** (engine/overlay split) | — (config: `NP_CONTENT_DIR`) | `engine/setup/np-content-lib.sh` (`np_content_dir` resolver + `np_content_dir_origin`/`np_content_is_explicit` — the single explicit-vs-implicit detector, issue #12; consumed across recall/guard hooks, skill link+index, metrics, MCP, doctor). Personal-content writers (memory-promote, episodic-maintain, skill-maintain, `np_aggregate.py`) **skip their commit** when the dir is the *implicit* engine-root fallback (NP_CONTENT_DIR unset AND no `~/.config/nervepack/content-dir`), so they never pollute the PII-clean engine; the doctor `content` check warns. A deliberate single-repo user opts in via the config file (origin `config`). Example overlay: the public `nervepack-content-example` repo. Optional **team** overlay (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`, toggle `team`) overrides personal skills + merged INDEX (Phase 1); resolved by `np_team_dir`/`np_team_dir_origin`. The team value may be a **comma-separated list of up to 4 dirs** (first = highest precedence), stacking `team[0] > … > team[n] > personal > engine`; `np_team_dirs` is the single parse/validate/cap point and `np_team_dir` is its highest-precedence first entry. Phase 2a: recall hooks (`lesson`/`episodic`) read across layers via `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`); mode = `team.merge` param (`override`\|`concatenate`\|`team-only`). Phase 2b: `wiki_index()` merges team+personal wiki overlays. Phase 3: `dashboard/build.py` `learned_counts()` and `engine/setup/np-mcp-server.py` `_tool_recall` merged — **team content layer complete through Phase 3** (metrics remain personal-only by design). | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
 | **CI PII guard** (secret/PII gate) | — (always-on CI job) | `publish/np-publish-scan.py` (secret/PII scanner; LAN-IP/RFC1918 rule, never loopback) + `scan-allowlist.txt`; CI job `pii-guard` in `.github/workflows/ci.yml`; pre-publish gate `publish/np-publish-snapshot.sh` (+ `publish/PUBLISH.md`); tests `engine/setup/tests/publish/` | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
-| **PII filter** (context-window and storage-time scrub) | `pii_filter` (default off) | `np-pii-filter.py`, `episodic-scrub.sh` (extended), `episodic_recall.py` (extended — shells to `np-pii-filter.py` via a `sys.executable` subprocess, `pii_filter_fn` injectable for tests), `lesson_recall.py` (extended, same pattern), `np_scrub.py` (extended, `NP_PII_FILTER=1`), `25-install-pii-deps.sh` | `specs/2026-07-06-pii-filter-design.md` |
+| **PII filter** (context-window and storage-time scrub) | `pii_filter` (default off) | `np-pii-filter.py`, `episodic-scrub.sh` (extended), `episodic_recall.py` (extended — shells to `np-pii-filter.py` via a `sys.executable` subprocess, `pii_filter_fn` injectable for tests), `lesson_recall.py` (extended, same pattern), `np_scrub.py` (extended, `NP_PII_FILTER=1`), `cli.py setup install-pii-deps` | `specs/2026-07-06-pii-filter-design.md` |
 
 ## Runtime wiring — what fires what
 
@@ -92,9 +93,14 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | Weekly Wed 10:00 | `cli.py cron compact` (backed by `np_agentic_cron.py`; maintain.compact toggle, default on) |
 | Every `resume.cron_min` min (opt-in, `resume.cron=off` by default) | `cli.py resume-write --active --throttle` |
 
-**Setup numbering:** `00–21` toolchain · `30` link-skills (+`60` index) · `35` link-dashboard-data (content bridge) · `40`
-sync · `50–56` install hooks · `61` install-resume-hook · `62` install-scheduled-auth-token · `71–77` cron bodies (the OS scheduler that installs them is `cli.py setup install-memory-{cron,launchd,schtasks}` — Python, no numbered `70-*.sh`) · `80–91`
-vscode + permissions. Scripts are idempotent and run in order on a fresh box.
+**Setup numbering:** `30` link-skills (+`60` index) · `35` link-dashboard-data (content bridge) · `40`
+sync · `50–56` install hooks · `61` install-resume-hook · `62` install-scheduled-auth-token · `71–77` cron bodies (the OS scheduler that installs them is `cli.py setup install-memory-{cron,launchd,schtasks}` — Python, no numbered `70-*.sh`) · `90–91`
+permissions. Scripts are idempotent and run in order on a fresh box. The toolchain
+baselines and VSCode extensions (formerly `00`/`00-brew`/`10-rustup`/`20-claude-plugins`/
+`21-prewarm-serena`/`25-install-pii-deps`/`80-install-vscode-extensions`) and the whole
+`np-onboard.sh` orchestrator are Python now (phase 7): `cli.py setup <step>` (e.g.
+`install-apt-baseline`, `install-claude-plugins`, `install-vscode-extensions`) and
+`cli.py onboard` — no numbered files, so they're outside this numbering scheme entirely.
 
 ## The two data pipelines (the heart of the system)
 
@@ -156,7 +162,19 @@ Record shapes (keep these stable; readers depend on them):
    and adds a row to `toggles.conf` (→ `specs/…feature-toggles`). Fail-open: unknown = on.
 4. **Cheap model by default.** Summarizers/judges → `claude-haiku-4-5-20251001`;
    agentic crons → `claude-sonnet-4-6`. Never Opus in automation. (→ CLAUDE.md §"Model selection")
-5. **Bash for glue, Python for parsing/logic** (→ CLAUDE.md §"Harness language policy").
+5. **Superseded: "Bash for glue, Python for parsing/logic."** The original split
+   (→ CLAUDE.md §"Harness language policy") kept hot-path hooks and OS-glue scripts
+   bash, reserving Python for parsing/logic off the hot path. The bash->Python CLI
+   consolidation (content overlay spec
+   `2026-07-15-nervepack-python-cli-consolidation-design.md`) overturns this: the
+   user accepted the ~20-70ms/call latency cost of a full Python port — including
+   hot-path hooks and OS-scheduler/bootstrap glue — in exchange for one language
+   everywhere, planning to reclaim performance in a later compiled-language phase
+   (Phase B, tracked in `ROADMAP.md`, not designed yet). Phases 1-7 are complete
+   (hooks, crons, scheduler installers, toolchain bootstrap, the onboard
+   orchestrator); phases 8-10 (sourced libs, `np-llm.sh`, `np-implement-suggestion.sh`)
+   remain bash. Treat "which language is this in" as a per-script fact you check in
+   the feature catalog above, not an inferable rule.
 6. **Every script has a regression test** in `engine/setup/tests/` (stdlib `unittest` /
    plain bash; stub `claude` via `CLAUDE_BIN`). The whole suite runs via
    `engine/setup/tests/run-all.sh` (hermetic, zero third-party deps outside `e2e/`);

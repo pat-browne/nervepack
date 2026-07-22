@@ -21,6 +21,26 @@ It does not track any individual user's personal content overlay.
   `engine/setup/tests/setup/test_link_dashboard_data.sh`.
 
 ### Added
+- **Toolchain bootstrap + the onboard orchestrator ported to Python** (phase 7 of the
+  bash→Python CLI consolidation, content-overlay spec
+  `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_bootstrap.py`
+  replaces the seven one-time toolchain-baseline scripts
+  (`00-apt-baseline.sh`, `00-brew-baseline.sh`, `10-rustup.sh`, `20-claude-plugins.sh`,
+  `21-prewarm-serena.sh`, `25-install-pii-deps.sh`, `80-install-vscode-extensions.sh`),
+  dispatched as `cli.py setup install-apt-baseline` / `install-brew-baseline` /
+  `install-rustup` / `install-claude-plugins` / `prewarm-serena` / `install-pii-deps` /
+  `install-vscode-extensions`. `np_onboard.py` replaces `np-onboard.sh` itself
+  (`cli.py onboard`) — the full-onboard orchestrator the MCP `nervepack_onboard` tool
+  and a bare-CLI onboard share; most of its individual steps (link-skills,
+  dashboard-data bridge, every 5x/6x hook installer, the doctor) stay bash for now
+  and it shells out to them exactly as before — only the orchestration logic and the
+  scheduler-step dispatch (phase 6) are Python. These bootstrap scripts had no
+  dedicated tests before (only a syntax/portability scan); `test_np_bootstrap.py`
+  (24 cases) and `test_np_onboard.py` (8 cases, translating every case the retired
+  `test_np_onboard.sh` covered) are new coverage. Also supersedes ARCHITECTURE.md
+  invariant 5 ("bash for glue, Python for parsing/logic") with the migration's
+  actual decision, and updates every doc/comment reference to the retired filenames.
+
 - **OS-scheduler installers ported to Python** (phase 6 of the bash→Python CLI
   consolidation, content-overlay spec
   `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_scheduler_install.py`

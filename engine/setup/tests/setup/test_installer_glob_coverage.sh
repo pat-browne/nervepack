@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # np-test: installer-glob-coverage | happy
-# Regression guard: the lifecycle-hook installer loops in np-onboard.sh and
+# Regression guard: the lifecycle-hook installer loops in np_onboard.py and
 # 40-sync-nervepack.sh MUST pick up EVERY NN-install-*.sh in the 50–69 band,
 # and MUST NOT sweep in the platform-specific 70-install-memory-* installers.
 #
@@ -20,7 +20,7 @@ fail() { echo "FAIL test_installer_glob_coverage: $*"; exit 1; }
 [[ -e "$SETUP/61-install-resume-hook.sh" ]] \
   || fail "61-install-resume-hook.sh missing — test fixture assumption broken"
 
-for driver in np-onboard.sh 40-sync-nervepack.sh; do
+for driver in np_onboard.py 40-sync-nervepack.sh; do
   path="$SETUP/$driver"
   [[ -e "$path" ]] || fail "$driver not found at $path"
 
