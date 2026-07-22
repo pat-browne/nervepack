@@ -111,15 +111,29 @@ resolved "implement despite dirty tree" || { echo "FAIL: dirty-tree suggestion n
 rm -f "$repo/dirt.txt"; git -C "$repo" branch -qD "np-suggest/implement-despite-dirty-tree" 2>/dev/null || true
 
 # 5. lock held by a LIVE owner: refuse (busy)
-: > "$tmp/resolved.txt"; mkdir -p "$tmp/lock"; echo $$ > "$tmp/lock/pid"   # $$ = this test, alive
+# Use a real, backgrounded CHILD process's pid ($!), NOT bash's own $$.
+# Production only ever writes os.getpid() from a Python process into this
+# file, so a genuine CreateProcess'd child pid is what actually needs
+# testing here -- and on Windows, bash's own $$ under Git-bash/MSYS is NOT
+# guaranteed to be the same number as the native Windows pid OpenProcess
+# needs (confirmed via a real Windows CI hang chase: OpenProcess($$) failed
+# with GetLastError=87/ERROR_INVALID_PARAMETER even though the bash script
+# was genuinely alive; see docs/ARCHITECTURE.md's "spawn a subprocess with
+# timeout=, or check whether a PID is alive" change-impact row). A
+# backgrounded child (like 5b's `sleep` below) gets a real, CreateProcess'd
+# Windows pid via $!, which is what this scenario needs to actually probe.
+: > "$tmp/resolved.txt"; mkdir -p "$tmp/lock"
+sleep 30 & live_pid=$!
+echo "$live_pid" > "$tmp/lock/pid"
 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
+kill "$live_pid" 2>/dev/null || true; wait "$live_pid" 2>/dev/null || true
 resolved "locked out" && { echo "FAIL: ran while a live lock was held"; exit 1; }
 [[ "$(status_of "locked out")" == "busy" ]] || { echo "FAIL: lock-held status not 'busy'"; exit 1; }
 rm -rf "$tmp/lock"
 
 # 5b. STALE lock (owner pid dead): reclaim it and run
 : > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
-sleep 0 & dead=$!; wait $dead 2>/dev/null                 # $dead is now a dead pid
+sleep 0 & dead=$!; wait $dead 2>/dev/null                 # $dead is now a dead (but was a real) pid
 mkdir -p "$tmp/lock"; echo "$dead" > "$tmp/lock/pid"
 MODE_OVERRIDE="direct" LLM="$tmp/llm-ok" run "reclaim the stale lock"
 resolved "reclaim the stale lock" || { echo "FAIL: did not reclaim a stale lock"; exit 1; }
