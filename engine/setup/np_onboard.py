@@ -67,6 +67,14 @@ def _step_cli(cli, args, run_fn):
 
 
 def run(run_fn=None, uname_fn=None, setup_dir=None, glob_fn=None):
+    # Force UTF-8: the step banners use "──" (em-dash box-drawing), and native
+    # Windows Python defaults stdout to cp1252, which can't encode it -- that
+    # would raise UnicodeEncodeError and abort the whole run. Same fix as
+    # np_doctor.py/np_model.py/np_evaluator.py/np_sync.py/np_capture.py's
+    # __main__ guards; this one lives in run() itself since onboard is always
+    # invoked as a function call (via cli.py's dispatch), never as a script.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     run_fn = run_fn or _default_run
     setup_dir = setup_dir or _setup_dir()
     cli = _cli_path()
