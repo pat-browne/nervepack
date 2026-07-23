@@ -25,7 +25,11 @@ class TestInstructionBlock(unittest.TestCase):
         self._tmp.cleanup()
 
     def _read(self, path):
-        with open(path) as fh:
+        # encoding="utf-8" required: install()/remove() always write the
+        # BEGIN marker (which contains an em-dash) as UTF-8. Without this,
+        # Windows' default open() encoding (the ANSI codepage, not UTF-8)
+        # misdecodes that byte sequence -- confirmed on real Windows CI.
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
 
     def test_1_install_preserves_content_and_adds_one_block(self):
@@ -103,7 +107,12 @@ class TestInstructionBlock(unittest.TestCase):
     def test_6_remove_handles_lone_begin_marker(self):
         i = os.path.join(self.tmp, "CLAUDE_lone_begin.md")
         begin = "<!-- nervepack:begin (managed — do not edit; remove via np-instruction-block.sh remove) -->"
-        with open(i, "w") as fh:
+        # encoding="utf-8" required: this fixture writes the em-dash
+        # directly. Without it, Windows' default open() encoding writes a
+        # different (wrong) byte sequence for that character than
+        # remove()'s own encoding="utf-8" read expects -- confirmed on real
+        # Windows CI (UnicodeDecodeError, not just a mismatch).
+        with open(i, "w", encoding="utf-8") as fh:
             fh.write(begin + "\nORPHAN user content\n")
         np_instruction_block.remove(i)
         content = self._read(i)

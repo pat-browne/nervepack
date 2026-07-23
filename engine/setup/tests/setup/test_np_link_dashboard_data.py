@@ -33,13 +33,26 @@ class TestLinkDashboardData(unittest.TestCase):
     def _link_path(self):
         return os.path.join(self.np_root, "dashboard", "data")
 
+    def _readlink_normalized(self, link):
+        # os.readlink() on Windows can return the extended-length-path form
+        # (\\?\C:\...) even for a symlink created from a normal path -- a
+        # Windows-only path-normalization detail unrelated to whether the
+        # symlink actually points at the right place. Strip it before
+        # comparing so the test isn't sensitive to this. Confirmed on real
+        # Windows CI (a correct symlink otherwise failed a raw string
+        # equality check against the un-prefixed target path).
+        target = os.readlink(link)
+        if target.startswith("\\\\?\\"):
+            target = target[4:]
+        return os.path.normpath(target)
+
     def test_1_fresh_clone_creates_symlink(self):
         code = np_link_dashboard_data.link(np_root=self.np_root, content_dir_fn=lambda: self.content_dir)
         self.assertEqual(code, 0)
         link = self._link_path()
         self.assertTrue(os.path.islink(link))
-        target = os.readlink(link)
-        self.assertEqual(target, os.path.join(self.content_dir, "dashboard", "data"))
+        target = self._readlink_normalized(link)
+        self.assertEqual(target, os.path.normpath(os.path.join(self.content_dir, "dashboard", "data")))
         self.assertTrue(os.path.isdir(target))
 
     def test_2_idempotent_rerun(self):
@@ -48,7 +61,8 @@ class TestLinkDashboardData(unittest.TestCase):
         self.assertEqual(code, 0)
         link = self._link_path()
         self.assertTrue(os.path.islink(link))
-        self.assertEqual(os.readlink(link), os.path.join(self.content_dir, "dashboard", "data"))
+        self.assertEqual(self._readlink_normalized(link),
+                         os.path.normpath(os.path.join(self.content_dir, "dashboard", "data")))
 
     def test_3_wrong_target_replaced(self):
         wrong_target = os.path.join(self.tmp, "wrong-target-xyz")
@@ -58,7 +72,8 @@ class TestLinkDashboardData(unittest.TestCase):
         self.assertEqual(code, 0)
         link = self._link_path()
         self.assertTrue(os.path.islink(link))
-        self.assertEqual(os.readlink(link), os.path.join(self.content_dir, "dashboard", "data"))
+        self.assertEqual(self._readlink_normalized(link),
+                         os.path.normpath(os.path.join(self.content_dir, "dashboard", "data")))
 
     def test_4_single_repo_layout_is_noop(self):
         # content dir == engine root -- mirrors test_link_dashboard_data.sh's

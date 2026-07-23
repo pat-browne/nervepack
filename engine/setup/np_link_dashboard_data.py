@@ -23,6 +23,18 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))
 
 
+def _norm_target(path):
+    # os.readlink() on Windows can return the extended-length-path form
+    # (\\?\C:\...) even for a symlink created from a normal path --
+    # os.path.abspath() does not strip this, so a byte-for-byte-correct
+    # symlink can otherwise compare unequal to its own freshly-computed
+    # target, defeating idempotency (a spurious "stale, replacing" every
+    # run instead of a true no-op). Confirmed on real Windows CI.
+    if path.startswith("\\\\?\\"):
+        path = path[4:]
+    return os.path.abspath(path)
+
+
 def link(np_root=None, content_dir_fn=None):
     np_root = np_root or _NP
     if content_dir_fn is None:
@@ -52,7 +64,7 @@ def link(np_root=None, content_dir_fn=None):
 
     if os.path.islink(link_path):
         current = os.readlink(link_path)
-        if os.path.abspath(current) == os.path.abspath(target):
+        if _norm_target(current) == _norm_target(target):
             print("35-link-dashboard-data: ok (already correct symlink -> %s)" % target)
             return 0
         try:
