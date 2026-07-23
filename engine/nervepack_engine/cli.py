@@ -45,6 +45,7 @@ import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
 import np_implement_suggestion  # noqa: E402
+import np_merge_wait  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
@@ -105,6 +106,21 @@ def _parse_resume_write_args(argv):
             kwargs["active"] = True; i += 1
         else:
             i += 1
+    return kwargs
+
+
+def _parse_merge_wait_args(argv):
+    kwargs = {}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--repo", "--branch", "--base") and i + 1 < len(argv):
+            kwargs[arg[2:]] = argv[i + 1]; i += 2
+        elif arg in ("--interval", "--backoff", "--timeout", "--settle") and i + 1 < len(argv):
+            kwargs[arg[2:]] = int(argv[i + 1]); i += 2
+        else:
+            i += 1
+    kwargs.setdefault("repo", ".")
     return kwargs
 
 
@@ -196,6 +212,19 @@ def main(argv=None):
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0
+
+    if argv[0] == "merge-wait":
+        try:
+            kwargs = _parse_merge_wait_args(argv[1:])
+            code, lines = np_merge_wait.wait_and_check(**kwargs)
+            sys.stdout.write("\n".join(lines) + "\n")
+            return code
+        except ValueError as exc:
+            sys.stderr.write("np-merge-wait: %s\n" % exc)
+            return 1
+        except Exception as exc:
+            _bail("merge-wait", "unhandled exception: %r" % exc)
+            return 1
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0
