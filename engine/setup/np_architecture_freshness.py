@@ -25,8 +25,11 @@ def check(arch_file=None, toggles_file=None, specs_dir=None):
     if not os.path.isfile(arch_file):
         return ["architecture-freshness: ARCHITECTURE.md missing at %s" % arch_file]
 
-    with open(arch_file, "r", encoding="utf-8") as fh:
-        arch_text = fh.read()
+    try:
+        with open(arch_file, "r", encoding="utf-8") as fh:
+            arch_text = fh.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        return ["architecture-freshness: could not read ARCHITECTURE.md at %s: %s" % (arch_file, exc)]
 
     lines = []
     gaps = 0
