@@ -24,6 +24,14 @@ def _norm(text):
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
+def default_ledger_path():
+    """Resolve the resolved-suggestions ledger path: NP_RESOLVED_SUGGESTIONS
+    env override, else dashboard/data/resolved-suggestions.txt under the
+    content dir."""
+    return os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
+        np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
+
+
 def resolve(text, ledger_path=None, no_build=None):
     """Returns (message, exit_code). exit_code 2 on empty text (matches the
     bash original's `exit 2`); 0 otherwise."""
@@ -31,8 +39,7 @@ def resolve(text, ledger_path=None, no_build=None):
         return ('usage: np-suggestion-resolve "<suggestion text>"', 2)
 
     if ledger_path is None:
-        ledger_path = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
-            np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
+        ledger_path = default_ledger_path()
     if no_build is None:
         no_build = os.environ.get("NP_RESOLVE_NO_BUILD") == "1"
 
