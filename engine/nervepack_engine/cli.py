@@ -45,6 +45,7 @@ import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
 import np_implement_suggestion  # noqa: E402
+import np_instruction_block  # noqa: E402
 import np_merge_wait  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
@@ -235,6 +236,21 @@ def main(argv=None):
             return code
         except Exception as exc:
             _bail("suggestion-resolve", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "instruction-block":
+        if len(argv) < 3 or argv[1] not in ("install", "remove"):
+            sys.stderr.write("usage: cli.py instruction-block {install|remove} <file>\n")
+            return 2
+        action, file_path = argv[1], argv[2]
+        try:
+            (np_instruction_block.install if action == "install" else np_instruction_block.remove)(file_path)
+            return 0
+        except ValueError as exc:
+            sys.stderr.write("np-instruction-block: %s\n" % exc)
+            return 2
+        except Exception as exc:
+            _bail("instruction-block", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] != "hook" or len(argv) < 2:
