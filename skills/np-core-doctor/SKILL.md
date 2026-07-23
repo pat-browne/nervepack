@@ -17,7 +17,7 @@ Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI).
 
 ```
   [MUST  ] llm-cli                PASS
-  [SHOULD] dashboard-data         WARN (run 35-link-dashboard-data.sh)
+  [SHOULD] dashboard-data         WARN (run cli.py setup link-dashboard-data)
 ```
 
 - **MUST** — feature is broken without this; doctor exits non-zero if any MUST fails.
@@ -41,7 +41,7 @@ Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI).
 | Check | Fix |
 |---|---|
 | `team` | Set `NP_TEAM_DIR` or `~/.config/nervepack/team-dir` if you have a team overlay; otherwise safe to ignore |
-| `dashboard-data` | `bash ~/Code/nervepack/engine/setup/35-link-dashboard-data.sh` |
+| `dashboard-data` | `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-dashboard-data` |
 | `hook-scripts` | Re-run the failing bootstrap (the error names the missing script) |
 | `session-start` | Re-run `51-install-nervepack-directive-hook.sh` (+ `52/53/56` for other hooks) |
 | `session-end-capture` | Re-run `52-install-episodic-hooks.sh` |
@@ -60,7 +60,7 @@ API-key auth.
 skip commits until `NP_CONTENT_DIR` is explicit. Set it to avoid silent no-ops.
 
 **`dashboard-data` WARN after moving the repo** — the symlink points to the old path;
-re-run `35-link-dashboard-data.sh`.
+re-run `cli.py setup link-dashboard-data`.
 
 **Adapter checks report MISSING** — no `~/.config/nervepack/adapter.json` yet; run the
 onboarding flow ([[np-core-onboard]]) to wire the adapter and generate the file.
