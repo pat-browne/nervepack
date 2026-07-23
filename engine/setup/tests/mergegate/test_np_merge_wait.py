@@ -98,10 +98,24 @@ class TestMergeWait(unittest.TestCase):
             return str(counter["n"])
 
         code, lines = np_merge_wait.wait_and_check(
-            repo, branch="feature", base="main", interval=0, backoff=0,
+            repo, branch="feature", base="main", interval=1, backoff=0,
             settle=2, timeout=1, state_cmd=_state_cmd)
         self.assertEqual(code, 3)
         self.assertTrue(any("RESULT: TIMEOUT" in ln for ln in lines))
+
+    def test_5_not_a_git_repo_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            np_merge_wait.wait_and_check(
+                "/tmp/not-a-git-repo-xyz-nonexistent", branch="feature")
+
+    def test_6_unknown_arg_exits_nonzero_with_message(self):
+        cli_path = os.path.normpath(
+            os.path.join(_ENGINE_SETUP, "..", "nervepack_engine", "cli.py"))
+        result = subprocess.run(
+            [sys.executable, cli_path, "merge-wait", "--repo", ".", "--bogus-flag", "foo"],
+            capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown arg", result.stderr)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ import time
 import np_bashlib
 
 
-def _git(repo, *args, check=False):
+def _git(repo, *args):
     # run_killtree, not subprocess.run: matches the established precedent in
     # np_implement_suggestion.py's _git() -- a git subprocess can spawn a
     # credential-helper/gpg-agent child that outlives it, and plain
@@ -48,6 +48,10 @@ def wait_and_check(repo, branch=None, base="origin/main", interval=60,
     3 TIMEOUT. Raises ValueError (usage error, bash's exit 1) if branch can't
     be determined."""
     lines = []
+    check_repo = _git(repo, "rev-parse", "--git-dir")
+    if check_repo.returncode != 0:
+        raise ValueError("not a git repo: %s" % repo)
+
     if not branch:
         r = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
         branch = (r.stdout or "").strip()
@@ -56,7 +60,7 @@ def wait_and_check(repo, branch=None, base="origin/main", interval=60,
 
     lines.append("np-merge-wait: watching %s (branch '%s' vs '%s') for quiescence…"
                  % (repo, branch, base))
-    start_time = time.time()
+    elapsed = 0
     iv = interval
     prev = None
     stable = 0
@@ -67,13 +71,13 @@ def wait_and_check(repo, branch=None, base="origin/main", interval=60,
         if stable >= settle:
             lines.append("np-merge-wait: repo quiet (%d stable samples)." % stable)
             break
-        elapsed = int(time.time() - start_time)
         if elapsed >= timeout:
             lines.append("np-merge-wait: still active after %ds (timeout %ds)."
                          % (elapsed, timeout))
             lines.append("RESULT: TIMEOUT")
             return 3, lines
         time.sleep(iv)
+        elapsed += iv
         iv += backoff
 
     issues = []
@@ -89,7 +93,7 @@ def wait_and_check(repo, branch=None, base="origin/main", interval=60,
     if verify.returncode == 0:
         log = _git(repo, "log", "%s..%s" % (base, branch), "--format=%B")
         body = log.stdout or ""
-        trailers = len(re.findall(r"co-authored-by:\s*claude|generated with .*claude", body, re.IGNORECASE))
+        trailers = len(re.findall(r"co-authored-by: claude|generated with .*claude", body, re.IGNORECASE))
         if trailers > 0:
             issues.append("%d commit(s) carry a forbidden AI-attribution trailer" % trailers)
 

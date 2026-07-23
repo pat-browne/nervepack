@@ -119,7 +119,7 @@ def _parse_merge_wait_args(argv):
         elif arg in ("--interval", "--backoff", "--timeout", "--settle") and i + 1 < len(argv):
             kwargs[arg[2:]] = int(argv[i + 1]); i += 2
         else:
-            i += 1
+            raise ValueError("unknown arg: %s" % arg)
     kwargs.setdefault("repo", ".")
     return kwargs
 
