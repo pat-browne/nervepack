@@ -49,6 +49,7 @@ import np_merge_wait  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
+import np_suggestion_resolve  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -224,6 +225,16 @@ def main(argv=None):
             return 1
         except Exception as exc:
             _bail("merge-wait", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "suggestion-resolve":
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            message, code = np_suggestion_resolve.resolve(text)
+            sys.stdout.write(message + "\n")
+            return code
+        except Exception as exc:
+            _bail("suggestion-resolve", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] != "hook" or len(argv) < 2:
