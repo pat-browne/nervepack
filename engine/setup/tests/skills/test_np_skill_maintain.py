@@ -126,17 +126,16 @@ class ArchitectureFreshnessTest(unittest.TestCase):
     def tearDown(self):
         self.env.stop()
 
-    def _stub_freshness(self, body):
-        """Point _HERE at a temp dir holding a stub np-architecture-freshness.sh."""
-        stub_dir = os.path.join(self.tmp, "setup")
-        os.makedirs(stub_dir, exist_ok=True)
-        path = os.path.join(stub_dir, "np-architecture-freshness.sh")
-        _write(path, "#!/usr/bin/env bash\n%s\n" % body)
-        os.chmod(path, 0o755)
-        return mock.patch.object(np_skill_maintain, "_HERE", stub_dir)
+    def _stub_freshness(self, lines):
+        """Stub np_architecture_freshness.check() (called in-process, phase
+        11) to return canned output lines."""
+        return mock.patch.object(
+            np_skill_maintain.np_architecture_freshness, "check",
+            return_value=lines)
 
     def test_stale_writes_marker(self):
-        with self._stub_freshness('echo "STALE: docs/foo.md not in map"'):
+        with self._stub_freshness(
+                ["STALE: docs/foo.md not in map", "architecture-freshness: 1 gap(s)"]):
             np_skill_maintain._architecture_freshness()
         self.assertTrue(os.path.isfile(self.marker))
         with open(self.marker, encoding="utf-8") as fh:
@@ -145,7 +144,7 @@ class ArchitectureFreshnessTest(unittest.TestCase):
     def test_clean_removes_stale_marker(self):
         os.makedirs(self.cache, exist_ok=True)
         _write(self.marker, "old drift\n")
-        with self._stub_freshness('echo "OK: map fresh"'):
+        with self._stub_freshness(["architecture-freshness: 0 gap(s)"]):
             np_skill_maintain._architecture_freshness()
         self.assertFalse(os.path.exists(self.marker))
 

@@ -14,7 +14,7 @@ import os
 import subprocess
 import tempfile
 
-import np_bashlib
+import np_architecture_freshness
 import np_content
 import np_graduation_detect
 import np_llm_agent
@@ -84,26 +84,19 @@ def _skill_roots():
 
 
 def _architecture_freshness():
-    """Advisory, deterministic: run np-architecture-freshness.sh, log its last
-    line, and mirror its STALE verdict into ~/.cache/nervepack/architecture-stale
-    (written on drift, removed when clean). Never blocks. Bash subprocess -- this
-    separate script keeps its own future port slot; skill-maintain is an agent
-    cron that already requires bash for np-llm.sh."""
-    script = os.path.join(_HERE, "np-architecture-freshness.sh")
-    try:
-        out = subprocess.run(
-            np_bashlib.argv(["bash", script]), stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, errors="replace").stdout or ""
-    except OSError:
-        out = ""
-    lines = out.splitlines()
+    """Advisory, deterministic: run the freshness check in-process (phase 11
+    -- np_architecture_freshness.check()), log its last line, and mirror its
+    STALE verdict into ~/.cache/nervepack/architecture-stale (written on
+    drift, removed when clean). Never blocks."""
+    lines = np_architecture_freshness.check()
     _log(lines[-1] if lines else "")
     stale = [ln for ln in lines if ln.startswith("STALE:")]
     marker = os.path.join(_home(), ".cache", "nervepack", "architecture-stale")
     if stale:
         for ln in stale:
             _log(ln)
-        _write(marker, out if out.endswith("\n") else out + "\n")
+        out = "\n".join(lines) + "\n"
+        _write(marker, out)
     else:
         try:
             os.remove(marker)

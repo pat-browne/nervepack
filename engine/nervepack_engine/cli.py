@@ -45,9 +45,13 @@ import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
 import np_implement_suggestion  # noqa: E402
+import np_instruction_block  # noqa: E402
+import np_link_dashboard_data  # noqa: E402
+import np_merge_wait  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
+import np_suggestion_resolve  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -78,6 +82,7 @@ _SETUP = {
     "install-memory-cron": np_scheduler_install.install_cron,
     "install-memory-launchd": np_scheduler_install.install_launchd,
     "install-memory-schtasks": np_scheduler_install.install_schtasks,
+    "link-dashboard-data": np_link_dashboard_data.link,
     "install-apt-baseline": np_bootstrap.install_apt_baseline,
     "install-brew-baseline": np_bootstrap.install_brew_baseline,
     "install-rustup": np_bootstrap.install_rustup,
@@ -105,6 +110,21 @@ def _parse_resume_write_args(argv):
             kwargs["active"] = True; i += 1
         else:
             i += 1
+    return kwargs
+
+
+def _parse_merge_wait_args(argv):
+    kwargs = {}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--repo", "--branch", "--base") and i + 1 < len(argv):
+            kwargs[arg[2:]] = argv[i + 1]; i += 2
+        elif arg in ("--interval", "--backoff", "--timeout", "--settle") and i + 1 < len(argv):
+            kwargs[arg[2:]] = int(argv[i + 1]); i += 2
+        else:
+            raise ValueError("unknown arg: %s" % arg)
+    kwargs.setdefault("repo", ".")
     return kwargs
 
 
@@ -196,6 +216,44 @@ def main(argv=None):
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0
+
+    if argv[0] == "merge-wait":
+        try:
+            kwargs = _parse_merge_wait_args(argv[1:])
+            code, lines = np_merge_wait.wait_and_check(**kwargs)
+            sys.stdout.write("\n".join(lines) + "\n")
+            return code
+        except ValueError as exc:
+            sys.stderr.write("np-merge-wait: %s\n" % exc)
+            return 1
+        except Exception as exc:
+            _bail("merge-wait", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "suggestion-resolve":
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            message, code = np_suggestion_resolve.resolve(text)
+            sys.stdout.write(message + "\n")
+            return code
+        except Exception as exc:
+            _bail("suggestion-resolve", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "instruction-block":
+        if len(argv) < 3 or argv[1] not in ("install", "remove"):
+            sys.stderr.write("usage: cli.py instruction-block {install|remove} <file>\n")
+            return 2
+        action, file_path = argv[1], argv[2]
+        try:
+            (np_instruction_block.install if action == "install" else np_instruction_block.remove)(file_path)
+            return 0
+        except ValueError as exc:
+            sys.stderr.write("np-instruction-block: %s\n" % exc)
+            return 2
+        except Exception as exc:
+            _bail("instruction-block", "unhandled exception: %r" % exc)
+            return 1
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0

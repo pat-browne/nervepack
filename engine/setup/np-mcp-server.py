@@ -55,6 +55,7 @@ import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; 
 import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
 import np_skill_maintain  # noqa: E402  skill-maintenance orchestrator (75-skill-maintain.sh retired; this is now the only implementation)
 import np_agentic_cron  # noqa: E402  shared agentic-cron helper (71/72-run-*.sh retired; memory_promote()/episodic_maintain() are now the only implementations)
+import np_suggestion_resolve  # noqa: E402  in-process resolve/reject (np-suggestion-resolve.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -398,8 +399,8 @@ def _tool_suggestions(args):
         rc, out, err = run([sys.executable, rev, "clear"])
         return (out + err).strip() or "cleared"
     if action in ("resolve", "reject"):
-        rc, out, err = run(["bash", os.path.join(SETUP, "np-suggestion-resolve.sh"), args["text"]])
-        return (out + err).strip() or f"{action}d"
+        message, _rc = np_suggestion_resolve.resolve(args["text"])
+        return message or f"{action}d"
     if action == "implement":
         require_contribute()
         # async, detached — mirrors the dashboard server's /api/implement route.

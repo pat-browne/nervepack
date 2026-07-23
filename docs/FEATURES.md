@@ -411,7 +411,7 @@ does a gated Sonnet pass move overflow into `references/`, validated-or-reverted
 ARCHITECTURE freshness check (both advisory).
 
 **Assets.** `np_skill_maintain.py` (dispatched via `cli.py cron skill-maintain`), `np_skill_budget.py`, `np_skill_validate.py`,
-`np_graduation_detect.py`, `np-architecture-freshness.sh` (retained bash advisory subprocess),
+`np_graduation_detect.py`, `np_architecture_freshness.py` (advisory, `cli.py`-importable, called in-process),
 `agents/np-flow-skill-maintain.md`. Toggle: `skills` (`split_kb`, `soft_kb`,
 `catalog_tok`, `max_per_run`, `graduate_seen`, `graduate_kb`).
 

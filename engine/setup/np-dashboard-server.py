@@ -8,7 +8,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   GET  /                      -> dashboard/index.html
   GET  /<path>                -> static file under dashboard/ (path-sanitized)
   GET  /api/health            -> {"ok": true}
-  POST /api/resolve {text}    -> mark one suggestion acted-on (np-suggestion-resolve.sh)
+  POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
 
@@ -42,6 +42,7 @@ NP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import np_bashlib  # noqa: E402
 import np_model  # noqa: E402
+import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
 import np_toggle_schema  # noqa: E402
 # Static root + data source are env-overridable so the server is isolatable in tests
@@ -52,7 +53,6 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
-RESOLVE = os.path.join(HERE, "np-suggestion-resolve.sh")
 # NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
 # this); the real default is np_implement_suggestion.py (phase 10) dispatched via
 # cli.py, not the retired bash np-implement-suggestion.sh.
@@ -295,7 +295,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = (self._body().get("text") or "").strip()
                 if not text:
                     return self._json({"error": "missing text"}, 400)
-                subprocess.run(np_bashlib.argv([RESOLVE, text]), capture_output=True, text=True, timeout=30)
+                np_suggestion_resolve.resolve(text, ledger_path=_RESOLVED or None, no_build=_NO_BUILD or None)
                 return self._json({"ok": True})
             if route == "/api/implement":
                 text = (self._body().get("text") or "").strip()

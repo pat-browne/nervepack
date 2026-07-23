@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # np-test: residency | resolved-suggestions.txt default resolves under content root, not engine
-# Verify that np-suggestion-resolve.sh and dashboard/build.py route the resolved-
+# Verify that np_suggestion_resolve.py and dashboard/build.py route the resolved-
 # suggestions ledger through the content resolver (np_content_dir / _content_dir())
 # when NP_RESOLVED_SUGGESTIONS is unset -- the same pattern metrics.jsonl already uses.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$(cd "$HERE/../.." && pwd)"
 NP="$(cd "$SETUP/../.." && pwd)"
-RESOLVE="$SETUP/np-suggestion-resolve.sh"
+RESOLVE="$SETUP/np_suggestion_resolve.py"
 BUILD="$NP/dashboard/build.py"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
-# ── Test 1: np-suggestion-resolve.sh default lands under NP_CONTENT_DIR, not $NP ──
+# ── Test 1: np_suggestion_resolve.py default lands under NP_CONTENT_DIR, not $NP ──
 content_dir="$tmp/content"
 mkdir -p "$content_dir/dashboard/data"
 
-NP_CONTENT_DIR="$content_dir" NP_RESOLVE_NO_BUILD=1 bash "$RESOLVE" "Test residency suggestion" >/dev/null
+NP_CONTENT_DIR="$content_dir" NP_RESOLVE_NO_BUILD=1 python3 "$RESOLVE" "Test residency suggestion" >/dev/null
 expected_ledger="$content_dir/dashboard/data/resolved-suggestions.txt"
 if [[ ! -f "$expected_ledger" ]]; then
   echo "FAIL test_residency (shell): ledger not found under NP_CONTENT_DIR ($expected_ledger)"

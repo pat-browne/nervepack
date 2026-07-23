@@ -82,7 +82,7 @@ def run(run_fn=None, uname_fn=None, setup_dir=None, glob_fn=None):
 
     # 1. Knowledge + the dashboard data bridge.
     _step_script(setup_dir, "30-link-skills.sh", run_fn)
-    _step_script(setup_dir, "35-link-dashboard-data.sh", run_fn)
+    _step_cli(cli, ["setup", "link-dashboard-data"], run_fn)
 
     # 2. Every lifecycle hook installer (50-69). Globbed + numeric-sorted so a
     #    newly added hook is picked up automatically, in order.
