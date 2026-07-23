@@ -501,8 +501,7 @@ def _default_resolve(text):
     # Windows-hang investigation (stdin=DEVNULL, timeout=60). No subprocess,
     # no stdin/timeout concern at all.
     np_suggestion_resolve.resolve(text)
-    ledger = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
-        np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
+    ledger = np_suggestion_resolve.default_ledger_path()
     ledger_dir = os.path.dirname(ledger)
     root_r = _git(ledger_dir, "rev-parse", "--show-toplevel")
     resolve_dir = (root_r.stdout or "").strip() if root_r.returncode == 0 else ""
