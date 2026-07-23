@@ -66,6 +66,20 @@ class TestArchitectureFreshness(unittest.TestCase):
             arch_file=arch, toggles_file=self.toggles, specs_dir="")
         self.assertIn("architecture-freshness: 0 gap", "\n".join(lines))
 
+    def test_5_unreadable_map_is_advisory_no_crash(self):
+        arch = os.path.join(self.tmp, "ARCH-unreadable.md")
+        with open(arch, "w") as fh:
+            fh.write("# map\n")
+        os.chmod(arch, 0o000)
+        try:
+            lines = np_architecture_freshness.check(
+                arch_file=arch, toggles_file=self.toggles, specs_dir=self.specs_dir)
+        finally:
+            os.chmod(arch, 0o644)
+        joined = "\n".join(lines)
+        self.assertIn("could not read ARCHITECTURE.md at %s" % arch, joined)
+        self.assertNotIn("STALE:", joined)
+
 
 if __name__ == "__main__":
     unittest.main()
