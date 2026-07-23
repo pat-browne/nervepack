@@ -2,10 +2,12 @@
 np-architecture-freshness.sh. Ports the 3 cases from test_freshness.sh
 (missing feature flagged, missing spec flagged, 0 gaps when fresh) and the
 1 case from test_freshness_failure.sh (missing map -> advisory, no crash)."""
+import builtins
 import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
@@ -67,15 +69,22 @@ class TestArchitectureFreshness(unittest.TestCase):
         self.assertIn("architecture-freshness: 0 gap", "\n".join(lines))
 
     def test_5_unreadable_map_is_advisory_no_crash(self):
+        # chmod 0o000 doesn't reliably deny read access on Windows (the owner's
+        # process can still open the file), so simulate the OSError directly
+        # rather than relying on filesystem permission semantics.
         arch = os.path.join(self.tmp, "ARCH-unreadable.md")
         with open(arch, "w") as fh:
             fh.write("# map\n")
-        os.chmod(arch, 0o000)
-        try:
+        real_open = builtins.open
+
+        def fake_open(path, *args, **kwargs):
+            if os.path.abspath(path) == os.path.abspath(arch):
+                raise OSError("permission denied")
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=fake_open):
             lines = np_architecture_freshness.check(
                 arch_file=arch, toggles_file=self.toggles, specs_dir=self.specs_dir)
-        finally:
-            os.chmod(arch, 0o644)
         joined = "\n".join(lines)
         self.assertIn("could not read ARCHITECTURE.md at %s" % arch, joined)
         self.assertNotIn("STALE:", joined)
