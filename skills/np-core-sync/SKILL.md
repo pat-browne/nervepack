@@ -103,9 +103,10 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
   settings.json ran the stale command for days (symptom: "we fixed this
   yesterday" for any hook-command change, or unexplained SessionStart delays
   from an un-redirected backgrounded hook). If you ever see that symptom again,
-  check the live settings.json hook strings against the installer source —
-  they can only diverge for setup scripts outside the `5[0-9]-install-*.sh`
-  glob (e.g. `61-install-resume-hook.sh`), which still need a manual re-run.
+  check the live settings.json hook strings against `engine/setup/hooks.manifest`
+  (the sync re-runs `cli.py setup install-hooks`, which registers every row from
+  it). Only non-hook setup scripts outside the `[56][0-9]-install-*.sh` glob
+  would still need a manual re-run.
 
 ## Why this is safe across many session starts before cron runs
 

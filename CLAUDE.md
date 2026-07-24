@@ -11,14 +11,15 @@ Read `docs/ROADMAP.md` and re-evaluate any deferred item whose trigger now appli
 **Before changing any code, also read `docs/ARCHITECTURE.md`.**
 
 ## When the user lands in `~/Code/nervepack` and starts a session
-- A `SessionStart` hook (installed via `engine/setup/50-install-session-hook.sh`)
-  has already run the defensive sync in the background. Result is in
+- A `SessionStart` hook (registered via `cli.py setup install-hooks` from
+  `engine/setup/hooks.manifest`) has already run the defensive sync in the
+  background. Result is in
   `~/.cache/np-core-sync-status`.
 - You don't need to re-pull unless the user asks.
 
 ## Why every session is told to consult nervepack first
-A second `SessionStart` hook (installed via
-`engine/setup/51-install-nervepack-directive-hook.sh`) runs
+A second `SessionStart` hook (registered via `cli.py setup install-hooks` from
+`engine/setup/hooks.manifest`) runs
 `engine/nervepack_engine/hooks/session_directive.py` (dispatched via
 `engine/nervepack_engine/cli.py` as `cli.py hook session-directive`)
 **synchronously** and injects `engine/setup/nervepack-session-directive.md` as session
@@ -50,7 +51,7 @@ silently no-op because the memory dir won't exist in the cloud sandbox.
 - **Capture** (local): `SessionEnd` + `PreCompact` hooks
   (`engine/nervepack_engine/hooks/episodic_capture.py`, dispatched via
   `engine/nervepack_engine/cli.py` as `cli.py hook episodic-capture <mode>`,
-  registered by `engine/setup/52-install-episodic-hooks.sh`) summarize the
+  registered via `cli.py setup install-hooks` from `engine/setup/hooks.manifest`) summarize the
   session via Haiku and append a note to
   `~/.cache/nervepack/episodic-inbox/` — local only, never committed in the hot path.
   The `SessionEnd` capture is **best-effort only** — Claude Code kills slow
@@ -73,7 +74,7 @@ exits without awaiting them) and **`/exit` doesn't fire `SessionEnd` at all** �
 the SessionEnd capture + evaluator are best-effort and, on their own, lose almost
 every session. `engine/nervepack_engine/hooks/backcapture_sweep.py` (dispatched via
 `engine/nervepack_engine/cli.py` as `nervepack hook backcapture-sweep`, registered on `SessionStart`,
-backgrounded, by `engine/setup/56-install-backcapture-hook.sh`; toggle `memory.backcapture`)
+backgrounded, via `cli.py setup install-hooks` from `engine/setup/hooks.manifest`; toggle `memory.backcapture`)
 is the guaranteed path: it scans `~/.claude/projects/*/*.jsonl`, and for each
 **completed** prior session with no record yet, re-runs the same capture + evaluator
 against the saved transcript. SessionStart is awaited and the backgrounded work
@@ -97,8 +98,9 @@ window was silently and permanently lost — no record it ever existed.
 
 ### Resume pointer (wiring)
 
-The deterministic "where we left off" pointer (`engine/setup/61-install-resume-hook.sh`,
-toggle family `resume`, default on). Two hooks, both Python (dispatched via
+The deterministic "where we left off" pointer (registered via `cli.py setup
+install-hooks` from `engine/setup/hooks.manifest`, toggle family `resume`,
+default on). Two hooks, both Python (dispatched via
 `engine/nervepack_engine/cli.py`): `SessionStart` runs
 `engine/nervepack_engine/hooks/resume_sessionstart.py` (`cli.py hook
 resume-sessionstart`) **backgrounded** (reconstructs the pointer for the
@@ -111,9 +113,9 @@ cron (`resume.cron`, default off) runs `cli.py resume-write --active
 since the cron has no stdin/hook payload to source `--session`/`--transcript`/
 `--cwd` from. Params: `resume.interval` (live-write throttle, 300s), `max_age`
 (86400s — older pointers aren't surfaced), `active_window` (900s), and the
-cron backstop (`cron=off`, `cron_min=5`). The installer registers by basename,
-so re-running after a path change replaces the stale entry instead of
-duplicating it.
+cron backstop (`cron=off`, `cron_min=5`). `install-hooks` registers by basename
+(`np_hook.register`), so re-running after a path change replaces the stale entry
+instead of duplicating it.
 
 ### Lessons layer (wiring)
 
@@ -126,7 +128,8 @@ duplicating it.
   warranted (independent of provenance), and regenerates `memory/lessons/INDEX.md`.
 - **Enforce:** `engine/nervepack_engine/hooks/lesson_guard.py` (dispatched via
   `engine/nervepack_engine/cli.py` as `cli.py hook lesson-guard`, registered on
-  `PreToolUse` with matchers `Bash`/`Read` by `engine/setup/53-install-lesson-hooks.sh`)
+  `PreToolUse` with matchers `Bash`/`Read` via `cli.py setup install-hooks` from
+  `engine/setup/hooks.manifest`)
   gates `ask` entries and injects `warn` ones at the tool call for any lesson
   carrying a non-empty `enforce.tool_match`, skipping advisory-only entries;
   `engine/nervepack_engine/hooks/lesson_recall.py` (dispatched as

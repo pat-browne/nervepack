@@ -106,7 +106,7 @@ and auto-commits (the one subtree exempt from the human-review gate). *Recall*
 injects matching themes on a session's first prompts.
 
 **Assets.** `episodic-capture.sh`, `engine/nervepack_engine/hooks/episodic_recall.py`
-(Python port via `cli.py` dispatcher; installed by `52-install-episodic-hooks.sh`), `episodic-match.sh`,
+(Python port via `cli.py` dispatcher; registered via `cli.py setup install-hooks` from `engine/setup/hooks.manifest`), `episodic-match.sh`,
 `np-backcapture-sweep.sh`, `agents/np-flow-episodic-maintain.md`, `memory/episodic/` (overlay).
 Toggle: `memory`.
 
@@ -175,11 +175,11 @@ after that ledger's `Plan:` line, if present.
 dispatched as `cli.py resume-write`), `engine/nervepack_engine/hooks/resume_sessionstart.py`
 (`cli.py hook resume-sessionstart`), `engine/nervepack_engine/hooks/resume_recall.py`
 (`cli.py hook resume-recall`), `np-transcript-extract.py --last-user`,
-`61-install-resume-hook.sh`. Toggle: `resume` (params: `interval=300`,
+registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Toggle: `resume` (params: `interval=300`,
 `max_age=86400`, `cron=off`, `cron_min=5`, `active_window=900`). **Doctor:** the
 `resume-pointer` capability checks `resume_write.py` exists and both hooks are
 registered in `settings.json` (recognizing either the legacy bash commands or
-the new `cli.py` dispatch), else `WARN`s to run `61-install-resume-hook.sh`.
+the new `cli.py` dispatch), else `WARN`s to run `cli.py setup install-hooks`.
 
 **Situational example.** You're mid-way through Task 4 of an SDD plan on
 `feat/resume-pointer-wiring`, several files dirty, when the session dies —
@@ -214,7 +214,7 @@ out to it. Fires only on creation (`Write`), not every subsequent `Edit` — the
 ask is "when a plan or spec is *made*", not on every revision.
 
 **Assets.** `engine/nervepack_engine/hooks/open_artifact.py`,
-`63-install-open-artifact-hook.sh`. Toggle: `focus` (no params). No dedicated
+registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Toggle: `focus` (no params). No dedicated
 doctor capability — the generic hook-registration check already covers "is
 this wired".
 
@@ -473,7 +473,7 @@ domain defaults, and a trigger→skill routing table. It's a **byte-stable prefi
 
 **Assets.** `engine/nervepack_engine/hooks/session_directive.py` (dispatched as
 `cli.py hook session-directive`), `engine/setup/nervepack-session-directive.md`,
-`51-install-nervepack-directive-hook.sh`. Toggle: `directive`.
+registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Toggle: `directive`.
 
 **Situational example.** You open a session and ask to "build a settings page." The
 directive has already told you to brainstorm first and to check `np-kb-branding` for
@@ -551,7 +551,7 @@ only as an optional example).
 
 **Assets.** `engine/nervepack_engine/hooks/struggle_escalation.py`,
 `engine/nervepack_engine/hooks/skill_trigger_recall.py`,
-`57-install-escalation-hook.sh`, `59-install-skill-trigger-hook.sh`, their installers.
+the `UserPromptSubmit` rows in `engine/setup/hooks.manifest` (applied by `cli.py setup install-hooks`).
 Toggles: `evaluator.escalation`, `skills.trigger_recall`.
 
 **Situational example.** Three tool calls into a task you keep tripping the lesson
