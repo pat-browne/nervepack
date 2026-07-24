@@ -2,8 +2,9 @@
 call path that replaced the 11 NN-install-*.sh hook installers + np-hook-lib.sh.
 Runs the real dispatch into a temp CLAUDE_SETTINGS and asserts the full
 registration inventory: right command under right event/matcher, session-flush
-LAST in SessionEnd, lesson-guard under BOTH Bash+Read, open-artifact matcher
-Write, backgrounded hooks keep `>/dev/null 2>&1 &`, idempotency, and 53's
+LAST in SessionEnd, lesson-guard under all six matchers (Bash/Read/Edit/Write/
+Skill/mcp__.*), open-artifact matcher Write, backgrounded hooks keep
+`>/dev/null 2>&1 &`, idempotency, and 53's
 legacy migration purge. Consolidates the retired per-installer .sh tests
 (directive/episodic/evaluator/escalation/lessons/session/backcapture/flush).
 """
@@ -79,11 +80,14 @@ class TestInstallHooks(unittest.TestCase):
         se = self._commands(s, "SessionEnd")
         self.assertIn("hook session-flush", se[-1])
 
-    def test_lesson_guard_under_both_matchers(self):
+    def test_lesson_guard_under_all_matchers(self):
+        # issue #152: Phase 2 (non-Bash tool_name matching) never ran for
+        # Edit/Write/Skill/MCP tool calls because no PreToolUse matcher told
+        # Claude Code to invoke this hook for them -- these six must coexist.
         s = self._install()
         pre = _cmds(s, "PreToolUse")
         guards = sorted(m for m, c in pre if "hook lesson-guard" in c)
-        self.assertEqual(guards, ["Bash", "Read"])
+        self.assertEqual(guards, ["Bash", "Edit", "Read", "Skill", "Write", "mcp__.*"])
 
     def test_open_artifact_matcher_is_write(self):
         s = self._install()
@@ -133,7 +137,8 @@ class TestInstallHooks(unittest.TestCase):
         for stale in ("playbook-guard.sh", "playbook-recall.sh", "strategy-recall.sh"):
             self.assertNotIn(stale, blob, stale)
         pre = _cmds(s, "PreToolUse")
-        self.assertEqual(sorted(m for m, c in pre if "hook lesson-guard" in c), ["Bash", "Read"])
+        self.assertEqual(sorted(m for m, c in pre if "hook lesson-guard" in c),
+                          ["Bash", "Edit", "Read", "Skill", "Write", "mcp__.*"])
         ups = self._commands(s, "UserPromptSubmit")
         self.assertEqual(sum(1 for c in ups if "hook lesson-recall" in c), 1)
 
