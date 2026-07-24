@@ -45,6 +45,7 @@ from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
+import np_dashboard  # noqa: E402
 import np_doctor  # noqa: E402
 import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
@@ -286,6 +287,17 @@ def main(argv=None):
         except Exception as exc:
             _bail("instruction-block", "unhandled exception: %r" % exc)
             return 1
+
+    if argv[0] == "open-dashboard":
+        # The MANUAL, on-demand dashboard open -- a distinct top-level command
+        # from the SessionStart hook `cli.py hook open-dashboard`: no boot guard,
+        # always rebuilds + opens, prints "opened <url>". Fail-open like the bash
+        # open-dashboard.sh it replaces: always 0, even on an unhandled exception.
+        try:
+            return np_dashboard.open_manual()
+        except Exception as exc:
+            _bail("open-dashboard", "unhandled exception: %r" % exc)
+            return 0
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0

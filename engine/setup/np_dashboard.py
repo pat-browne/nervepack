@@ -1,8 +1,10 @@
-"""Bash-free port of np-dashboard-launch.sh's URL/opener resolution. Consumed
-in-process by the new engine/nervepack_engine/hooks/open_dashboard.py
-(cli.py-dispatched SessionStart hook). np-dashboard-launch.sh itself is NOT
-retired -- open-dashboard.sh (the manual open script, out of scope for this
-migration phase) still sources it directly, so both implementations coexist.
+"""Bash-free port of np-dashboard-launch.sh's URL/opener resolution AND
+open-dashboard.sh's manual on-demand open (open_manual()). The sole
+implementation for both dashboard open paths: the SessionStart hook
+(engine/nervepack_engine/hooks/open_dashboard.py, cli.py hook open-dashboard)
+consumes dashboard_url()/resolve_opener()/boot_id() in-process, and the manual
+open (cli.py open-dashboard) calls open_manual(). Both retired bash scripts
+(np-dashboard-launch.sh, open-dashboard.sh) are gone.
 
 boot_id() is a deliberate BEHAVIOR CHANGE from the bash original, not a
 byte-parity port: bash's guard reads /proc/sys/kernel/random/boot_id, which
@@ -18,6 +20,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 
 import np_toggle
@@ -112,3 +115,51 @@ def boot_id():
     except (OSError, subprocess.SubprocessError):
         pass
     return "unknown"
+
+
+def open_manual():
+    """Port of open-dashboard.sh: the MANUAL, on-demand dashboard open. Unlike
+    the SessionStart hook (open once per OS boot), this is a deliberate user
+    action with NO boot guard -- it always rebuilds the data file and opens. A
+    single manual open is not in the SessionStart path, so it cannot start the
+    remote-desktop reconnect/re-open loop the hook guards against. Fail-open:
+    ALWAYS returns 0, never hard-errors.
+
+    Mirrors the bash exactly: (1) refresh metrics.js (best-effort), passing the
+    evaluator.wiki_nav/wiki_mermaid params build.py reads so the left-nav honors
+    them; (2) resolve the URL via dashboard_url() (file:// by default, http:// +
+    a spawned server when evaluator.dashboard_serve is on); (3) `command -v`
+    gate -- if the resolved opener is neither on PATH (shutil.which) nor an
+    existing path (os.path.isfile), print `no opener (<opener|none>) found` to
+    stderr and return (a bogus NP_DASH_OPENER override still fails this gate);
+    (4) else open it (best-effort) and print `opened <url>` to stdout."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(newline="\n")
+        except (ValueError, OSError):
+            pass
+
+    env = dict(os.environ)
+    env["WIKI_NAV"] = np_toggle.param("evaluator.wiki_nav", "on")
+    env["WIKI_MERMAID"] = np_toggle.param("evaluator.wiki_mermaid", "on")
+    build = os.path.join(_ENGINE, "dashboard", "build.py")
+    try:
+        subprocess.run([sys.executable, build], env=env,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except OSError:
+        pass
+
+    url = dashboard_url()
+
+    opener = resolve_opener()
+    if not (opener and (shutil.which(opener) or os.path.isfile(opener))):
+        sys.stderr.write("no opener (%s) found\n" % (opener or "none"))
+        return 0
+
+    try:
+        subprocess.run([opener, url], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=False)
+    except OSError:
+        pass
+    sys.stdout.write("opened %s\n" % url)
+    return 0
