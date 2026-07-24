@@ -149,20 +149,17 @@ def _bash_available():
 
 
 def _tool_doctor(args):
-    # Full bash doctor whenever bash exists (no fidelity loss — covers llm-cli +
-    # adapter checks); the bash-free Python doctor (core checks only) is the
-    # fallback on a host with no bash so the tool works at all there.
-    if USE_PY and not _bash_available():
-        text, _ = np_doctor.report()
-        return text.strip()
-    rc, out, err = run(["bash", os.path.join(SETUP, "np-doctor.sh")])
-    return (out + err).strip() or f"(doctor produced no output, exit {rc})"
+    # Single in-process call path (phase 15): np_doctor.report() runs ALL 16
+    # capabilities natively (core + adapter, incl. llm-cli) — no bash np-doctor.sh,
+    # which has been retired. Works identically on a bash-free host.
+    text, _ = np_doctor.report()
+    return text.strip()
 
 
 TOOLS = [
     {
         "name": "nervepack_doctor",
-        "description": "Run np-doctor.sh: verify this install against the nervepack onboard contract.",
+        "description": "Run the doctor: verify this install against the nervepack onboard contract.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "handler": _tool_doctor,
     },
