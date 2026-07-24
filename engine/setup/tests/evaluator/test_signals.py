@@ -52,6 +52,33 @@ class TestSignals(unittest.TestCase):
             self.assertGreater(sig["directive_tokens"], 0)  # fixed injection overhead measured
             self.assertIn("np-kb-branding", sig["skills_invoked"])
 
+    def test_directive_off_resolves_bashfree(self):
+        # Phase 12: directive_present() resolves via np_toggle IN-PROCESS (no bash).
+        # Prove it reads the conf to return False when the toggle is OFF, and that it
+        # needs no bash -- NP_BASH points at a nonexistent path, so any lingering
+        # ["bash", ...] shell-out would error and (fail-open) wrongly report True.
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = os.path.join(tmp, "toggles.conf")
+            with open(conf, "w") as fh:
+                fh.write("directive|shared|runtime|off|\n")
+            sig_dir = os.path.join(tmp, "sig")
+            os.makedirs(sig_dir)
+            transcript = os.path.join(tmp, "t.jsonl")
+            with open(transcript, "w") as fh:
+                fh.write('{"type":"tool_use","name":"Bash"}\n')
+            env = dict(os.environ)
+            env.update(
+                NP_TOGGLES_CONF=conf,
+                NP_TOGGLES_LOCAL=os.path.join(tmp, "local"),
+                NP_SIGNAL_DIR=sig_dir,
+                NP_BASH=os.path.join(tmp, "no-such-bash-xyz"),
+            )
+            sig = json.loads(subprocess.run(
+                ["python3", SIG, "s1", transcript],
+                env=env, capture_output=True, text=True, check=True,
+            ).stdout)
+            self.assertFalse(sig["directive_present"])
+
     def test_tokens_summed_once_per_message_id(self):
         # Claude Code logs one line per content block of a turn, all sharing the
         # same message.id + usage object. Summing every line triple-counts; the

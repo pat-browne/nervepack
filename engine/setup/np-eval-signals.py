@@ -5,25 +5,24 @@
 
 Log-authoritative for hook fires; tolerant transcript parse for skills/tool_calls.
 Stdlib only — no third-party deps (see CLAUDE.md § "Harness language policy").
-Toggle resolution is single-sourced in bash: we shell out to `np_enabled` rather
-than reimplement the resolver here. Fail-open: any error degrades a field to its
-empty/zero default; the script never raises out to the caller.
+Toggle resolution is single-sourced through `np_toggle` (the in-process Python
+resolver, parity-locked to np-toggle-lib.sh) rather than reimplemented here — no
+bash shell-out (phase 12). Fail-open: any error degrades a field to its empty/zero
+default; the script never raises out to the caller.
 
 This is the proof-of-concept port establishing the bash→Python pattern: the
 parsing/data-assembly logic that kept hitting bash's pipefail+grep footguns now
-lives in a language with real data structures, while the hot-path glue stays bash.
+lives in a language with real data structures.
 """
 import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LIB = os.path.join(HERE, "np-toggle-lib.sh")
 sys.path.insert(0, HERE)
-import np_bashlib  # noqa: E402  — bash shell-out works under Git-bash on Windows (no-op off it)
+import np_toggle  # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 
 
 def cmd_fingerprint(cmd):
@@ -188,14 +187,10 @@ def parse_transcript(path):
 
 
 def directive_present():
-    """Mirror `np_enabled directive` (fail-open: on/True if the check errors)."""
+    """Mirror `np_enabled directive` (fail-open: on/True if the check errors).
+    Resolved in-process via np_toggle — the single Python resolver, no bash."""
     try:
-        rc = subprocess.run(
-            np_bashlib.argv(["bash", "-c", 'source "$1"; np_enabled directive', "_", LIB]),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode
-        return rc == 0
+        return np_toggle.enabled("directive")
     except Exception:
         return True
 
