@@ -124,7 +124,7 @@ The server is **safe-by-default**:
 
 - **Reads** (`doctor`, `recall`, `dashboard`, resources, prompts) are always available.
 - **Writes** are gated by the `mcp.writes` param (**default on**). Turn them off with
-  `nervepack-toggle param mcp.writes off` to make the server strictly read-only.
+  `cli.py toggle param mcp.writes off` to make the server strictly read-only.
 - **Durable git commits** (`nervepack_contribute`, and the `suggestions` implement
   action) are gated separately by `mcp.contribute` (**default off**). Durable
   auto-commit is opt-in because it bypasses the human-reviewed contribute gate.

@@ -77,12 +77,12 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
 
 | Param | Default | Effect | Flip |
 |---|---|---|---|
-| `dashboard_open` | `on` | auto-open on the first session of each boot | `nervepack-toggle evaluator.dashboard_open off` |
-| `dashboard_serve` | `on` | http backend (buttons work) vs static file:// | `nervepack-toggle evaluator.dashboard_serve off` |
-| `dashboard_port` | `8787` | port for the localhost backend | `nervepack-toggle param evaluator.dashboard_port <n>` |
+| `dashboard_open` | `on` | auto-open on the first session of each boot | `cli.py toggle evaluator.dashboard_open off` |
+| `dashboard_serve` | `on` | http backend (buttons work) vs static file:// | `cli.py toggle evaluator.dashboard_serve off` |
+| `dashboard_port` | `8787` | port for the localhost backend | `cli.py toggle param evaluator.dashboard_port <n>` |
 
-`nervepack-toggle evaluator.<param> off` writes a **per-machine** override
-(`~/.config/nervepack/toggles.local`); `nervepack-toggle param evaluator.<param> <v>`
+`cli.py toggle evaluator.<param> off` writes a **per-machine** override
+(`~/.config/nervepack/toggles.local`); `cli.py toggle param evaluator.<param> <v>`
 edits the committed manifest (repo-wide default). Both are read by `np_param`, local
 first. See [[np-core-toggle]].
 

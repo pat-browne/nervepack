@@ -1,6 +1,6 @@
 """Param schema for the dashboard's toggle-editing panel — dashboard/API-only,
-NOT consulted by nervepack-toggle.sh (see the design spec, overlay
-docs/superpowers/specs/2026-07-09-dashboard-toggle-controls-design.md).
+NOT consulted by the toggle CLI/resolver (np_toggle.py); see the design spec,
+overlay docs/superpowers/specs/2026-07-09-dashboard-toggle-controls-design.md.
 
 Loads engine/setup/toggle-schema.json and validates a raw toggles.conf/
 toggles.local string value against its entry. A param with no schema entry is

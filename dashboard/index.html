@@ -415,8 +415,8 @@
     const dotted = fam + "." + p.key;
     const ro = p.self_lockout || !p.schema;
     const roNote = p.self_lockout
-      ? `<span class="togro" title="Controls this dashboard — edit via nervepack-toggle.sh">locked</span>`
-      : !p.schema ? `<span class="togro" title="No schema entry — edit via: nervepack-toggle param ${esc(dotted)} &lt;value&gt;">read-only</span>` : "";
+      ? `<span class="togro" title="Controls this dashboard — edit via the cli.py toggle command">locked</span>`
+      : !p.schema ? `<span class="togro" title="No schema entry — edit via: cli.py toggle param ${esc(dotted)} &lt;value&gt;">read-only</span>` : "";
     const warn = (p.schema && !p.valid) ? `<span class="togwarn" title="${esc(p.error || "")}">⚠ invalid: ${esc(p.value)}</span>` : "";
     let control;
     if (ro) {
@@ -443,7 +443,7 @@
 
   function familyControl(fam) {
     if (fam.self_lockout) {
-      return `<span class="togro" title="Controls this dashboard — edit via nervepack-toggle.sh">${fam.enabled ? "on" : "off"} (locked)</span>`;
+      return `<span class="togro" title="Controls this dashboard — edit via the cli.py toggle command">${fam.enabled ? "on" : "off"} (locked)</span>`;
     }
     return `<label class="swtoggle"><input type="checkbox" data-key="${esc(fam.feature)}" data-kind="feature"
       data-scope="${esc(fam.scope)}" ${fam.enabled ? "checked" : ""}><span class="swtrack"></span></label>`;

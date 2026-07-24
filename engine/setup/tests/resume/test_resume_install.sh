@@ -12,7 +12,6 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"   # tests/resume -> setup -> engine -> repo root
-TOGGLE="$NP/engine/setup/nervepack-toggle.sh"
 CLI="$NP/engine/nervepack_engine/cli.py"
 
 fail() { echo "FAIL: $*"; exit 1; }
@@ -48,7 +47,7 @@ jq -e '[.hooks.UserPromptSubmit[].hooks[].command] | any(test("cli\\.py hook res
 echo "PASS: install-hooks registers both resume events with correct backgrounding, idempotent"
 unset CLAUDE_SETTINGS
 
-# === 2. nervepack-toggle.sh audit does not flag resume as missing a family ===
+# === 2. `cli.py toggle audit` does not flag resume as missing a family ===
 export NP_TOGGLES_CONF="$tmp/toggles-audit.conf"
 export CLAUDE_SETTINGS="$tmp/settings-audit.json"
 cat > "$NP_TOGGLES_CONF" <<'C'
@@ -68,7 +67,7 @@ cat >/dev/null
 SHIM
 chmod +x "$tmp/crontab"
 
-audit_out="$(PATH="$tmp:$PATH" bash "$TOGGLE" audit 2>&1)"
+audit_out="$(PATH="$tmp:$PATH" python3 "$CLI" toggle audit 2>&1)"
 echo "$audit_out" | grep -qi 'resume' && fail "audit flagged resume as unmanaged: $audit_out"
 echo "$audit_out" | grep -q 'OK: all Nervepack hooks/cron map to a toggle family' \
   || fail "audit did not report a clean install: $audit_out"

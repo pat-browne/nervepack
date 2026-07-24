@@ -255,9 +255,10 @@ lessons stay low-authority and reversible.
 ### Feature toggles (what they are)
 
 Every Nervepack feature has an on/off switch. `engine/setup/toggles.conf` (committed) is
-the manifest; `engine/setup/np-toggle-lib.sh` resolves `~/.config/nervepack/toggles.local
-→ toggles.conf → default-on`. Flip via `engine/setup/nervepack-toggle.sh <feature> on|off`
-(or no args for an interactive picker), or the [[np-core-toggle]] skill.
+the manifest; `engine/setup/np-toggle-lib.sh` (and its Python peer `np_toggle.py`) resolve
+`~/.config/nervepack/toggles.local → toggles.conf → default-on`. Flip via
+`cli.py toggle <feature> on|off` (dispatched through `engine/nervepack_engine/cli.py`;
+no args = interactive picker), or the [[np-core-toggle]] skill.
 
 - **shared** features (memory, lessons, directive, sync) store state in the repo
   and propagate on the next sync; **local** ones (allowlist) and sub-overrides
@@ -277,7 +278,7 @@ or managed config:
 2. Wire enforcement: runtime/cron scripts source `np-toggle-lib.sh` and add
    `np_enabled <feature> || exit 0` (fail-open); managed config gets an install +
    a paired remove.
-3. `engine/setup/nervepack-toggle.sh audit` flags hooks/cron missing a toggle family.
+3. `cli.py toggle audit` flags hooks/cron missing a toggle family.
 
 ### Evaluator (what it is)
 

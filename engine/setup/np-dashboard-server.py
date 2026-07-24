@@ -60,7 +60,6 @@ _IMPLEMENT_OVERRIDE = os.environ.get("NP_IMPLEMENT")
 IMPLEMENT_ARGV = ([_IMPLEMENT_OVERRIDE] if _IMPLEMENT_OVERRIDE else
                   [sys.executable, os.path.join(os.path.dirname(HERE), "nervepack_engine", "cli.py"),
                    "implement-suggestion"])
-TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
 # Toggles the dashboard's OWN gating — flipping any of these from the panel would
 # disable the very server/panel serving that click, so the panel renders them
@@ -128,17 +127,9 @@ def current_mode():
 
 def set_implement_mode(mode):
     """Write the per-machine LOCAL override (not committed) so the dashboard can flip
-    pr<->direct without a commit. Mirrors nervepack-toggle's _set_local."""
-    key = "evaluator.implement_mode"
-    lines = []
-    try:
-        with open(TOGGLES_LOCAL) as fh:
-            lines = [ln for ln in fh if ln.split("=", 1)[0].strip() != key]
-    except FileNotFoundError:
-        os.makedirs(os.path.dirname(TOGGLES_LOCAL), exist_ok=True)
-    lines.append(f"{key}={mode}\n")
-    with open(TOGGLES_LOCAL, "w") as fh:
-        fh.writelines(lines)
+    pr<->direct without a commit — in-process via np_toggle.set_local (single source
+    of truth; honors NP_TOGGLES_LOCAL identically to TOGGLES_LOCAL above)."""
+    np_toggle.set_local("evaluator.implement_mode", mode)
 
 
 def toggle_ui_enabled():
@@ -322,17 +313,19 @@ class Handler(BaseHTTPRequestHandler):
                 value = str(value)
                 if key in SELF_LOCKOUT_FEATURES or key in SELF_LOCKOUT_PARAMS:
                     return self._json({"error": "this toggle controls the dashboard itself — "
-                                                 "use the CLI (nervepack-toggle.sh)"}, 400)
+                                                 "use the CLI (cli.py toggle)"}, 400)
                 if key in np_toggle.features():
                     # A bare feature — note some feature NAMES contain a dot themselves
                     # (e.g. "maintain.refine"), so membership in features() is checked
                     # BEFORE falling back to "contains a dot -> dotted param" below.
+                    # Flip in-process (single call path — no bash): shared-scope writes
+                    # commit+push (gated by NP_TOGGLE_NO_COMMIT), managed installs perms.
                     if value not in ("on", "off"):
                         return self._json({"error": "value must be on or off"}, 400)
-                    r = subprocess.run(np_bashlib.argv([TOGGLE_CLI, key, value]), cwd=NP,
-                                       capture_output=True, text=True, timeout=30)
-                    if r.returncode != 0:
-                        return self._json({"error": (r.stderr or "toggle failed").strip()}, 500)
+                    try:
+                        np_toggle.flip(key, value)
+                    except Exception as exc:
+                        return self._json({"error": str(exc) or "toggle failed"}, 500)
                     return self._json({"ok": True, "key": key, "value": value})
                 if "." in key:
                     valid, coerced, error = np_toggle_schema.validate(key, value)

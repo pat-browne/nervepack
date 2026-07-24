@@ -81,10 +81,11 @@ def run(cmd, stdin=None, env=None):
 # host, no bash fallback. That's what lets this long-running server gate + recall
 # with no bash subprocess per request (the whole point on a git-for-windows-free host).
 #
-# USE_PY still governs the not-yet-fully-ported doctor / sync / toggle-write tools
+# Toggle writes joined that single call path in phase 14 (_tool_toggle is fully
+# in-process now). USE_PY still governs the not-yet-fully-ported doctor / sync tools
 # below, which prefer bash when available and fall back to their partial Python
 # modules only when it isn't; NP_MCP_PURE_PYTHON=0 forces bash for those. Those
-# escape-hatch branches disappear as phases 14/15/17 finish their ports.
+# escape-hatch branches disappear as phases 15/17 finish their ports.
 USE_PY = os.environ.get("NP_MCP_PURE_PYTHON", "1") == "1"
 
 
@@ -169,28 +170,26 @@ TOOLS = [
 
 # --- vertical-slice tools ---------------------------------------------------
 def _tool_toggle(args):
+    # Single call path (phase 14): np_toggle is the whole write surface, so every
+    # branch runs in-process — no bash fallback, works on a bash-free host.
     action = args.get("action", "get")
     if action in ("get", "list"):
-        if USE_PY:
-            return "\n".join(np_toggle.status_lines())   # in-process status table (bash-free)
-        rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh"), "status"])
-        return (out + err).strip()
+        return "\n".join(np_toggle.status_lines())   # in-process status table
     require_writes()
     if action == "set":
         feat = args["feature"]
         state = args["state"]
-        # Local-file writes happen in-process (bash-free). Shared-feature writes
-        # (toggles.conf + git commit/push) and managed-permission scripts still need
-        # bash — route them to nervepack-toggle.sh, or refuse if no bash is present.
-        if USE_PY and np_toggle.is_local_set(feat):
+        # Pure local-file writes (portable). Route the rest by the same rule
+        # nervepack-toggle.sh used from MCP: a dotted (shared/managed-family) key is
+        # a param edit (toggles.conf col 5 + commit, or local); a bare feature flips.
+        if np_toggle.is_local_set(feat):
             np_toggle.set_local(feat, state)
             return f"{feat} = {state}" if "." in feat else f"{feat} -> {state}"
-        if USE_PY and not _bash_available():
-            raise Disabled("setting '%s' needs bash/git (shared or managed scope) — "
-                           "not supported on a bash-free host yet" % feat)
-        sub = ["param", feat, state] if "." in feat else [feat, state]
-        rc, out, err = run(["bash", os.path.join(SETUP, "nervepack-toggle.sh")] + sub)
-        return (out + err).strip() or f"set {feat}={state}"
+        if "." in feat:
+            np_toggle.set_conf_param(feat, state)
+            np_toggle.commit_shared(f"toggle({feat}): {state}")
+            return f"{feat} = {state}"
+        return np_toggle.flip(feat, state)           # "feat -> state"
     raise ValueError(f"unknown toggle action: {action}")
 
 
