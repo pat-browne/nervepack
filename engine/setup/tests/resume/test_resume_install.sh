@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # np-test: resume|install
-# Task 5: the toggle row, hook installer (61-install-resume-hook.sh), the opt-in
-# interval cron (cli.py setup install-memory-cron, gated on resume.cron), and the writer's
+# Task 5: the toggle row, hook registration (cli.py setup install-hooks — phase
+# 13 consolidated the former 61-install-resume-hook.sh into hooks.manifest), the
+# opt-in interval cron (cli.py setup install-memory-cron, gated on resume.cron), and the writer's
 # --active discovery mode (dispatched via engine/nervepack_engine/cli.py as
 # `cli.py resume-write --active` — its own top-level dispatch branch, not a
 # `hook` subcommand, since the writer isn't in _HOOKS). Hermetic: temp
@@ -11,7 +12,6 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"   # tests/resume -> setup -> engine -> repo root
-INSTALL_HOOK="$NP/engine/setup/61-install-resume-hook.sh"
 TOGGLE="$NP/engine/setup/nervepack-toggle.sh"
 CLI="$NP/engine/nervepack_engine/cli.py"
 
@@ -24,29 +24,28 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # ~/.config/nervepack/toggles.local.
 export NP_TOGGLES_LOCAL="$tmp/toggles-local-none"
 
-# === 1. Hook install: both hooks registered, right event, right basename;
-#        SessionStart backgrounded, UserPromptSubmit not; idempotent re-run. ===
+# === 1. Hook registration (cli.py setup install-hooks): the resume hooks land in
+#        the right event with correct backgrounding; idempotent re-run. Phase 13
+#        registers ALL lifecycle hooks in one step, so scope the assertions to the
+#        two resume commands (full-inventory coverage lives in
+#        tests/setup/test_install_hooks.py). ===
 export CLAUDE_SETTINGS="$tmp/settings.json"
 echo '{}' > "$CLAUDE_SETTINGS"
 
-bash "$INSTALL_HOOK" >/dev/null || fail "install script failed"
-bash "$INSTALL_HOOK" >/dev/null || fail "install script failed on second run"   # idempotent
+NP_HOOK_WRAP=0 python3 "$CLI" setup install-hooks >/dev/null || fail "install-hooks failed"
+NP_HOOK_WRAP=0 python3 "$CLI" setup install-hooks >/dev/null || fail "install-hooks failed on second run"   # idempotent
 
-ss_count="$(jq '[.hooks.SessionStart[].hooks[].command] | length' "$CLAUDE_SETTINGS")"
-up_count="$(jq '[.hooks.UserPromptSubmit[].hooks[].command] | length' "$CLAUDE_SETTINGS")"
-[[ "$ss_count" == "1" ]] || fail "SessionStart count=$ss_count (want 1 — idempotency broken)"
-[[ "$up_count" == "1" ]] || fail "UserPromptSubmit count=$up_count (want 1 — idempotency broken)"
+ss_count="$(jq '[.hooks.SessionStart[].hooks[].command | select(test("cli\\.py hook resume-sessionstart"))] | length' "$CLAUDE_SETTINGS")"
+up_count="$(jq '[.hooks.UserPromptSubmit[].hooks[].command | select(test("cli\\.py hook resume-recall"))] | length' "$CLAUDE_SETTINGS")"
+[[ "$ss_count" == "1" ]] || fail "resume-sessionstart count=$ss_count (want 1 — idempotency broken)"
+[[ "$up_count" == "1" ]] || fail "resume-recall count=$up_count (want 1 — idempotency broken)"
 
-jq -e '.hooks.SessionStart[0].hooks[0].command | test("cli\\.py hook resume-sessionstart")' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "SessionStart command has the wrong dispatch"
-jq -e '.hooks.SessionStart[0].hooks[0].command | test(" &$")' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "SessionStart command should be backgrounded with a trailing &"
-jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | test("cli\\.py hook resume-recall")' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "UserPromptSubmit command has the wrong dispatch"
-jq -e '.hooks.UserPromptSubmit[0].hooks[0].command | test(" &$") | not' "$CLAUDE_SETTINGS" >/dev/null \
-  || fail "UserPromptSubmit command should NOT be backgrounded"
+jq -e '[.hooks.SessionStart[].hooks[].command] | any(test("cli\\.py hook resume-sessionstart &$"))' "$CLAUDE_SETTINGS" >/dev/null \
+  || fail "SessionStart resume command should be backgrounded with a trailing &"
+jq -e '[.hooks.UserPromptSubmit[].hooks[].command] | any(test("cli\\.py hook resume-recall$"))' "$CLAUDE_SETTINGS" >/dev/null \
+  || fail "UserPromptSubmit resume command should NOT be backgrounded"
 
-echo "PASS: hook install registers both events with correct backgrounding, idempotent"
+echo "PASS: install-hooks registers both resume events with correct backgrounding, idempotent"
 unset CLAUDE_SETTINGS
 
 # === 2. nervepack-toggle.sh audit does not flag resume as missing a family ===

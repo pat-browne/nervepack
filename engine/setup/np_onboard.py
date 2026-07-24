@@ -12,10 +12,12 @@ chosen by `uname -s` (np_scheduler_install.uname_s, the SAME helper each
 install_* function gates on, so this dispatch can never drift from theirs):
 launchd on macOS, Task Scheduler on native Windows (Git-bash), cron elsewhere.
 
-Most individual steps (link-skills, link-dashboard-data, every 5x/6x hook
-installer, the doctor) are still bash -- this port is the ORCHESTRATION logic
-only; it shells out to each exactly as np-onboard.sh did. Only the scheduler
-step is a Python dispatch (`cli.py setup install-memory-*`, phase 6).
+Most individual steps (link-skills, the remaining non-hook 5x/6x installers,
+the doctor) are still bash -- this port is the ORCHESTRATION logic only; it
+shells out to each exactly as np-onboard.sh did. The lifecycle hooks are a
+single Python dispatch (`cli.py setup install-hooks`, phase 13 -- the 11
+NN-install-*.sh installers + the sourced bash hook lib consolidated into
+hooks.manifest), as is the scheduler step (`cli.py setup install-memory-*`, phase 6).
 """
 import glob
 import os
@@ -84,8 +86,15 @@ def run(run_fn=None, uname_fn=None, setup_dir=None, glob_fn=None):
     _step_script(setup_dir, "30-link-skills.sh", run_fn)
     _step_cli(cli, ["setup", "link-dashboard-data"], run_fn)
 
-    # 2. Every lifecycle hook installer (50-69). Globbed + numeric-sorted so a
-    #    newly added hook is picked up automatically, in order.
+    # 2. Every lifecycle hook, in one declarative step (phase 13). The 11
+    #    NN-install-*.sh hook installers + the sourced bash hook lib were
+    #    consolidated into engine/setup/hooks.manifest, driven by
+    #    `cli.py setup install-hooks`.
+    _step_cli(cli, ["setup", "install-hooks"], run_fn)
+
+    # 2b. The remaining non-hook installers in the 5x/6x band (post-consolidation
+    #    the glob matches only 58-install-mcp.sh + 62-install-scheduled-auth-token.sh).
+    #    Globbed + numeric-sorted so a newly added one is picked up automatically.
     for path in sorted(glob_fn(os.path.join(setup_dir, "[56][0-9]-install-*.sh"))):
         _step_script(setup_dir, os.path.basename(path), run_fn)
 

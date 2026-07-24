@@ -8,7 +8,7 @@
 #
 # Used by:
 #   - the np-core-sync skill (with --verbose to also stdout the status)
-#   - the SessionStart hook (50-install-session-hook.sh)
+#   - the SessionStart sync hook (registered via `cli.py setup install-hooks`)
 #   - cron / scheduled refinement agents
 set -euo pipefail
 
@@ -123,15 +123,18 @@ if git merge-base --is-ancestor "$local_rev" "$remote_rev"; then
   pulled=$(git rev-list --count HEAD..origin/main)
   if git merge --ff-only --quiet origin/main 2>/tmp/np-core-sync.err; then
     "$NERVEPACK/engine/setup/30-link-skills.sh" >/dev/null 2>&1 || true
-    # Re-run every lifecycle hook installer (same 50–69 glob as np_onboard.py) so a
-    # pulled change to a hook's registered command (e.g. a stdout/stderr redirect
-    # fix) actually reaches ~/.claude/settings.json. Hook registration is a
-    # one-time install-time artifact — git pull alone updates the scripts on disk
-    # but never re-applies them; without this, a hook fix can merge and sync clean
-    # while the live session still runs the stale, pre-fix command indefinitely.
-    # The range MUST include the 6x band: a newly added installer like
-    # 61-install-resume-hook.sh registers real hooks and, if excluded, would ship
-    # on disk yet never run — the exact bug that left resume-pointer unregistered.
+    # Re-apply hook registration so a pulled change to a hook's registered command
+    # (e.g. a stdout/stderr redirect fix, or a new hook row) actually reaches
+    # ~/.claude/settings.json. Hook registration is a one-time install-time
+    # artifact — git pull alone updates the scripts on disk but never re-applies
+    # them; without this, a hook fix can merge and sync clean while the live
+    # session still runs the stale, pre-fix command indefinitely.
+    # Phase 13: the 11 NN-install-*.sh hook installers + np-hook-lib.sh became one
+    # declarative step (engine/setup/hooks.manifest, driven by install-hooks).
+    python3 "$NERVEPACK/engine/nervepack_engine/cli.py" setup install-hooks >/dev/null 2>&1 || true
+    # Re-run the remaining non-hook 5x/6x installers (post-consolidation: only
+    # 58-install-mcp.sh + 62-install-scheduled-auth-token.sh) so a pulled change
+    # to them re-applies too. Same 50–69 glob as np_onboard.py's step 2b.
     for _f in "$NERVEPACK/engine/setup"/[56][0-9]-install-*.sh; do
       [[ -e "$_f" ]] && bash "$_f" >/dev/null 2>&1 || true
     done

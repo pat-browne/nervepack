@@ -66,44 +66,54 @@ class TestOnboard(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_1_runs_every_phase_in_order(self):
+        # 58-install-mcp.sh is a REMAINING non-hook installer picked up by the
+        # step-2b glob; the lifecycle hooks are now a single `cli.py setup
+        # install-hooks` dispatch (phase 13), not per-installer bash scripts.
         setup_dir = _make_setup_dir(self.tmp, [
-            "30-link-skills.sh", "61-install-resume-hook.sh",
+            "30-link-skills.sh", "58-install-mcp.sh",
         ])
         rec = _Recorder()
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         self.assertEqual(rc, 0)
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
         self.assertIn("30-link-skills.sh", basenames)
-        self.assertIn("61-install-resume-hook.sh", basenames)
+        self.assertIn("58-install-mcp.sh", basenames)
         self.assertIn("np-doctor.sh", basenames)
-        # link-dashboard-data is now a cli.py dispatch (phase 11), not a bash script.
+        # link-dashboard-data + install-hooks are cli.py dispatches, not bash.
         cli_calls = [c for c in rec.calls if c[0] != "bash"]
         self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
+        self.assertTrue(any("install-hooks" in c for c in cli_calls))
 
         def _idx(pred):
             return next(i for i, c in enumerate(rec.calls) if pred(c))
 
         link_skills_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "30-link-skills.sh")
         dashboard_idx = _idx(lambda c: c[0] != "bash" and "link-dashboard-data" in c)
-        hooks_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "61-install-resume-hook.sh")
+        hooks_idx = _idx(lambda c: c[0] != "bash" and "install-hooks" in c)
         doctor_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "np-doctor.sh")
-        # order: link-skills before dashboard-data before hooks before doctor
+        # order: link-skills < dashboard-data < install-hooks < doctor
         self.assertLess(link_skills_idx, dashboard_idx)
+        self.assertLess(dashboard_idx, hooks_idx)
         self.assertLess(hooks_idx, doctor_idx)
 
-    def test_2_glob_picks_up_5x_and_6x_but_not_70(self):
+    def test_2_glob_picks_up_remaining_non_hook_installers_but_not_70(self):
+        # Post-phase-13 the step-2b glob covers only the REMAINING non-hook 5x/6x
+        # installers (58-install-mcp.sh, 62-install-scheduled-auth-token.sh); it
+        # must still exclude the platform-specific 70-install-memory-* installers.
         setup_dir = _make_setup_dir(self.tmp, [
-            "50-install-session-hook.sh", "61-install-resume-hook.sh",
+            "58-install-mcp.sh", "62-install-scheduled-auth-token.sh",
         ])
-        # a stray 70-* file must NOT be picked up by the hook-installer glob
         with open(os.path.join(setup_dir, "70-install-memory-cron.sh"), "w") as fh:
             fh.write("exit 0\n")
         rec = _Recorder()
         np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
-        self.assertIn("50-install-session-hook.sh", basenames)
-        self.assertIn("61-install-resume-hook.sh", basenames)
+        self.assertIn("58-install-mcp.sh", basenames)
+        self.assertIn("62-install-scheduled-auth-token.sh", basenames)
         self.assertNotIn("70-install-memory-cron.sh", basenames)
+        # hooks come via the cli dispatch, not the glob
+        cli_calls = [c for c in rec.calls if c[0] != "bash"]
+        self.assertTrue(any("install-hooks" in c for c in cli_calls))
 
     def test_3_fail_soft_a_failing_step_does_not_abort_the_run(self):
         setup_dir = _make_setup_dir(self.tmp, ["30-link-skills.sh"])

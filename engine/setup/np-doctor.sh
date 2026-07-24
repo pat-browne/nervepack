@@ -119,12 +119,12 @@ core_check() {
     resume-pointer)
       local writer="$NP/engine/nervepack_engine/hooks/resume_write.py"
       if [[ ! -f "$writer" ]]; then
-        echo "WARN (resume_write.py missing — run engine/setup/61-install-resume-hook.sh)"
+        echo "WARN (resume_write.py missing — run: python3 engine/nervepack_engine/cli.py setup install-hooks)"
         return
       fi
       local settings="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
       if [[ ! -f "$settings" ]]; then
-        echo "WARN (no settings.json at $settings — run engine/setup/61-install-resume-hook.sh)"
+        echo "WARN (no settings.json at $settings — run: python3 engine/nervepack_engine/cli.py setup install-hooks)"
         return
       fi
       command -v jq >/dev/null || { echo "SKIP (jq unavailable)"; return; }
@@ -134,7 +134,7 @@ core_check() {
         && grep -qE 'np-resume-recall\.sh|cli\.py hook resume-recall' <<<"$cmds"; then
         echo PASS
       else
-        echo "WARN (resume-pointer hooks not registered in $settings — run engine/setup/61-install-resume-hook.sh)"
+        echo "WARN (resume-pointer hooks not registered in $settings — run: python3 engine/nervepack_engine/cli.py setup install-hooks)"
       fi ;;
     scheduled-auth-token)
       source "$HERE/np-token-lib.sh" 2>/dev/null || { echo SKIP; return; }
