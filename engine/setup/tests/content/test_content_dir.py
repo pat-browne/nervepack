@@ -11,6 +11,15 @@ def _setup_script(name):
     return os.path.join(REPO, "engine", "setup", name)
 
 
+_CLI = os.path.join(REPO, "engine", "nervepack_engine", "cli.py")
+
+
+def _doctor(env):
+    """Run the Python doctor (phase 15; np-doctor.sh retired) with a custom env."""
+    return subprocess.run([sys.executable, _CLI, "doctor"],
+                          capture_output=True, text=True, env=env)
+
+
 def resolve(env=None, home=None):
     """Run `source np-content-lib.sh; np_content_dir` with a custom env/HOME."""
     e = dict(os.environ)
@@ -232,8 +241,7 @@ class TestContentDir(unittest.TestCase):
     def test_doctor_passes_content_capability_with_default(self):
         # With no overlay configured, the default (repo root) has the content dirs, so the
         # content capability must PASS. Run the doctor and assert the content line isn't FAIL.
-        r = sh(_setup_script("np-doctor.sh"),
-               capture_output=True, text=True, env={**os.environ})
+        r = _doctor({**os.environ})
         line = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
         self.assertTrue(line, "doctor produced no 'content' capability line")
         self.assertFalse(any("FAIL" in l for l in line), f"content check failed: {line}")
@@ -246,8 +254,7 @@ class TestContentDir(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             e = {k: v for k, v in os.environ.items() if k != "NP_CONTENT_DIR"}
             e["HOME"] = u(home)
-            r = sh(_setup_script("np-doctor.sh"),
-                   capture_output=True, text=True, env=e)
+            r = _doctor(e)
             cline = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
             self.assertTrue(cline, "doctor produced no 'content' capability line")
             self.assertFalse(any("FAIL" in l for l in cline), f"content check failed: {cline}")
@@ -260,8 +267,7 @@ class TestContentDir(unittest.TestCase):
         # the implicit-fallback warning (only the accidental case warns).
         with tempfile.TemporaryDirectory() as content:
             e = dict(os.environ); e["NP_CONTENT_DIR"] = u(content)
-            r = sh(_setup_script("np-doctor.sh"),
-                   capture_output=True, text=True, env=e)
+            r = _doctor(e)
             cline = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
             joined = "\n".join(cline).lower()
             self.assertNotIn("implicit", joined,
@@ -274,8 +280,7 @@ class TestContentDir(unittest.TestCase):
         # the doctor must report PASS (not WARN/FAIL) for the dashboard-data capability.
         # We use the live engine which already has the symlink in place.
         e = dict(os.environ)
-        r = sh(_setup_script("np-doctor.sh"),
-               capture_output=True, text=True, env=e)
+        r = _doctor(e)
         ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
         self.assertTrue(ddlines, f"doctor produced no dashboard-data line; full output:\n{r.stdout}{r.stderr}")
         # Should be PASS when the symlink resolves correctly.
@@ -308,8 +313,7 @@ class TestContentDir(unittest.TestCase):
             with tempfile.TemporaryDirectory() as content:
                 # content overlay exists but has no dashboard/data subdir yet (fresh clone).
                 e = dict(os.environ); e["NP_CONTENT_DIR"] = u(content)
-                r = sh(_setup_script("np-doctor.sh"),
-                       capture_output=True, text=True, env=e)
+                r = _doctor(e)
             ddlines = [l for l in (r.stdout + r.stderr).splitlines() if "dashboard-data" in l.lower()]
             self.assertTrue(ddlines, f"doctor produced no dashboard-data line; output:\n{r.stdout}{r.stderr}")
             joined = "\n".join(ddlines).lower()

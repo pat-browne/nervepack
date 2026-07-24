@@ -109,6 +109,8 @@ def run(run_fn=None, uname_fn=None, setup_dir=None, glob_fn=None):
     _step_cli(cli, step_args, run_fn)
 
     # 4. Verify. The doctor's exit status is this function's return value.
-    print("── np-doctor.sh")
-    result = run_fn(["bash", os.path.join(setup_dir, "np-doctor.sh")])
+    #    In-process Python doctor via cli.py (phase 15; np-doctor.sh retired) —
+    #    runs all 16 capabilities, no bash.
+    print("── doctor")
+    result = run_fn([sys.executable, cli, "doctor"])
     return result.returncode

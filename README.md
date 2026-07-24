@@ -132,7 +132,7 @@ nervepack is tool-neutral: it onboards onto any agentic host via the contract in
 
 > **Warning.** ✅ Proven = validated end-to-end (`np-doctor` green + a real session). 🟡 WIP /
 > ⚪ Contract-only = the wiring/contract exists but has **not** been run end-to-end. Expect
-> rough edges, run `engine/setup/np-doctor.sh`, and report gaps. Don't assume feature parity:
+> rough edges, run `python3 engine/nervepack_engine/cli.py doctor`, and report gaps. Don't assume feature parity:
 > lifecycle capture/evaluator need a session-end event the host may lack.
 
 ## Getting started
@@ -142,7 +142,7 @@ first-time-user walkthrough: clone the engine, install the toolchain, onboard yo
 host, point at a content overlay, and verify. It leads with Claude Code; other hosts
 follow the same steps via [`engine/onboard/ONBOARD.md`](engine/onboard/ONBOARD.md).
 
-Already onboarded? Check any install with `engine/setup/np-doctor.sh`. Connecting a
+Already onboarded? Check any install with `python3 engine/nervepack_engine/cli.py doctor`. Connecting a
 non-Claude MCP client instead? See [`engine/onboard/MCP.md`](engine/onboard/MCP.md).
 
 ## Continual sync, in one picture

@@ -1,17 +1,19 @@
-"""Bash-free Python doctor — the deterministic core onboard-contract checks, for
-the MCP server on a host with no bash.
+"""Bash-free Python doctor — the sole implementation of nervepack's install
+health check (phase 15; np-doctor.sh retired). Verifies an install against the
+onboard contract (engine/onboard/capabilities.json), running ALL 16 capabilities
+in-process: the host-neutral `check:core` checks (llm-cli, git-sync, toggles,
+content, team, dashboard-data, hook-scripts, resume-pointer, scheduled-auth-token,
+pii_filter_full) via native git + np_toggle / np_content / np_model / np_token_lib,
+and the host-specific `check:adapter` checks (knowledge, session-*, scheduled-maint)
+by running the `verify` command the onboarding agent recorded in adapter.json.
 
-Mirrors np-doctor.sh's core checks (git-sync, toggles, content, team,
-dashboard-data, resume-pointer) using native git + np_toggle / np_content — no
-bash. The model seam (llm-cli) and host-adapter checks (knowledge, session-*,
-scheduled-maint) need bash / a shell / the model CLI, so they're reported
-**N/A** here and do NOT count against the MUST gate; run np-doctor.sh on a
-host with bash for those (the MCP server uses the full bash doctor whenever
-bash is available — this Python path is the bash-free fallback). Slice 3 of
-the git-for-windows-free MCP work (#38).
+Exit code: 1 iff any MUST capability is not PASS* (a "PASS…" prefix counts as
+pass); SHOULD shortfalls warn only. capabilities.json unreadable -> exit 2.
 
-Core-check lines are parity-locked to np-doctor.sh by
-tests/mcp/parity/test_doctor_parity.sh. stdlib only.
+Config (env, for tests + alt installs): NP_DIR · NP_CAPABILITIES · NP_ADAPTER ·
+CLAUDE_SETTINGS · CLAUDE_BIN / NP_LLM_BACKEND (llm-cli smoke) ·
+NP_CLAUDE_TOKEN_FILE. The MCP server (`nervepack_doctor`) and the onboard
+orchestrator both call report() in-process — no bash. stdlib only.
 """
 import json
 import os
@@ -20,8 +22,15 @@ import sys
 
 import np_toggle
 import np_content
+import np_model
+import np_token_lib
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def _np_dir():
@@ -32,6 +41,12 @@ def _np_dir():
 def _caps_path():
     return os.environ.get("NP_CAPABILITIES") or os.path.join(
         _np_dir(), "engine", "onboard", "capabilities.json")
+
+
+def _adapter_path():
+    # Mirror np-doctor.sh: ADAPTER="${NP_ADAPTER:-$HOME/.config/nervepack/adapter.json}".
+    return os.environ.get("NP_ADAPTER") or os.path.join(
+        os.path.expanduser("~"), ".config", "nervepack", "adapter.json")
 
 
 def _git_ok(np):
@@ -45,7 +60,75 @@ def _git_ok(np):
         return False
 
 
+def _walk_commands(node, out):
+    """Mirror the bash jq walk `.. | objects | select(.type?=="command") | .command`
+    over a settings.json `.hooks` subtree: collect every command string."""
+    if isinstance(node, dict):
+        if node.get("type") == "command" and "command" in node:
+            out.append(node["command"])
+        for v in node.values():
+            _walk_commands(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _walk_commands(v, out)
+    return out
+
+
 def _core_check(cap_id, np):
+    if cap_id == "llm-cli":
+        # In-process np_model.complete("ping") — the bash `printf 'ping' |
+        # np_model.py complete` smoke, without a subprocess. PASS iff the call
+        # returns non-empty text (command-substitution strips trailing newlines,
+        # so mirror that before the -n test); any backend error -> FAIL.
+        try:
+            out = np_model.complete("ping")
+        except Exception:
+            return "FAIL"
+        out = out.rstrip("\n") if out else out
+        return "PASS" if out else "FAIL"
+    if cap_id == "hook-scripts":
+        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
+            os.path.expanduser("~"), ".claude", "settings.json")
+        if not os.path.isfile(settings_path):
+            return "PASS (no settings.json at %s)" % settings_path
+        try:
+            settings = _load_json(settings_path)
+        except (OSError, ValueError):
+            # bash: a jq parse failure yields an empty command stream -> PASS.
+            settings = {}
+        home = os.environ.get("HOME") or os.path.expanduser("~")
+        broken = []
+        for cmd in _walk_commands(settings.get("hooks") or {}, []):
+            if not cmd:
+                continue
+            cmd = cmd.rstrip("\r")          # jq on Windows emits \r\n
+            if cmd.startswith("~"):         # ${cmd/#\~/$HOME}: expand a leading ~ only
+                cmd = home + cmd[1:]
+            script = cmd.split(" ", 1)[0]   # ${cmd%% *}: first space-delimited token
+            if "/" not in script:           # skip bare command names
+                continue
+            if not os.path.exists(script):
+                broken.append(script)
+        if not broken:
+            return "PASS"
+        return "FAIL (%d missing script(s): %s)" % (len(broken), " ".join(broken))
+    if cap_id == "scheduled-auth-token":
+        st = np_token_lib.claude_token_status()
+        word = st.split(" ", 1)[0]
+        if word == "ok":
+            return "PASS (%s)" % st
+        if word == "warn":
+            return ("WARN (rotation window — run engine/setup/"
+                    "62-install-scheduled-auth-token.sh --rotate; %s)" % st)
+        return ("WARN (no scheduled-auth token — run engine/setup/"
+                "62-install-scheduled-auth-token.sh; scheduled memory-promote/refine/"
+                "compact crons fail 'Not logged in' without it)")
+    if cap_id == "pii_filter_full":
+        try:
+            import presidio_analyzer  # noqa: F401
+            return "PASS"
+        except ImportError:
+            return "FAIL (run: python3 engine/nervepack_engine/cli.py setup install-pii-deps)"
     if cap_id == "git-sync":
         return "PASS" if _git_ok(np) else "FAIL"
     if cap_id == "toggles":
@@ -105,7 +188,7 @@ def _core_check(cap_id, np):
             return ("WARN (no settings.json at %s — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
         try:
-            settings = json.load(open(settings_path, encoding="utf-8"))
+            settings = _load_json(settings_path)
         except (OSError, ValueError):
             return ("WARN (resume-pointer hooks not registered in %s — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
@@ -129,37 +212,95 @@ def _core_check(cap_id, np):
     return "SKIP"
 
 
-# The model seam + host adapter checks can't be run bash-free; report them N/A and
-# keep them out of the MUST gate (the full bash doctor verifies them when bash exists).
-_NA = "N/A (not verified bash-free — run np-doctor.sh on a host with bash)"
+# ============================================================================
+# SECURITY / TRUST BOUNDARY — `_adapter_check` runs a host-authored shell snippet
+# via subprocess.run(verify, shell=True). This is DELIBERATE and BOUNDED:
+#
+#   * `verify` originates ONLY from adapter.json (NP_ADAPTER, default
+#     ~/.config/nervepack/adapter.json), which the onboarding agent writes ONCE
+#     during setup to record HOW this host proves its own wiring. It is host/
+#     operator-authored configuration, never user prompt / session / tool / model
+#     input. No other source reaches this function — do NOT widen it.
+#   * shell=True is REQUIRED to match the bash original's `eval "$verify"`: the
+#     idiomatic verify is a host-native shell pipe/grep boolean
+#     (`launchctl list | grep -q com.nervepack`, `crontab -l | grep -q …`), which
+#     needs the host's shell to run. An argv-list (shell=False) cannot express a
+#     pipe and would break every real adapter.
+#   * Default pipe semantics (exit = last command's status) match the bash
+#     `set +o pipefail` inside `( … )`: a `producer | grep -q PAT` that SIGPIPEs
+#     the producer (141) still reports PASS on a match, as a boolean check should.
+#
+# A code scanner will (correctly) flag shell=True here; the justification above is
+# the reason it stays. The reviewer's job is to confirm no untrusted path can set
+# `verify` — it can't: this is the same trust boundary `eval "$verify"` relied on,
+# not a new one.
+# ============================================================================
+def _run_verify(verify):
+    """Run a host-authored adapter `verify` snippet; True iff it exits 0.
+    See the trust-boundary block above for why shell=True is safe and required."""
+    try:
+        r = subprocess.run(
+            verify, shell=True,  # noqa: S602 — bounded to operator-authored adapter.json
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+def _adapter_check(cap_id):
+    """Port of np-doctor.sh's adapter_check: verify a host-specific capability by
+    running the `verify` the onboarding agent recorded in adapter.json."""
+    adapter_path = _adapter_path()
+    if not os.path.isfile(adapter_path):
+        return "MISSING"
+    try:
+        adapter = _load_json(adapter_path)
+    except (OSError, ValueError):
+        return "MISSING"
+    cap = (adapter.get("capabilities") or {}).get(cap_id) or {}
+    status = cap.get("status") or "missing"
+    verify = cap.get("verify") or ""
+    if status == "unsupported":
+        return "UNSUPPORTED"
+    if status == "wired":
+        return "PASS" if (verify and _run_verify(verify)) else "FAIL"
+    return "MISSING"
 
 
 def report():
-    """Return (text, exit_code). exit_code is 1 iff a MUST *core* check failed."""
+    """Run every capability in the contract and return (text, exit_code).
+    exit_code is 1 iff any MUST capability is not PASS*; 2 if the contract is
+    unreadable."""
     np = _np_dir()
     caps_path = _caps_path()
+    adapter_path = _adapter_path()
     try:
-        caps = json.load(open(caps_path, encoding="utf-8"))["capabilities"]
+        caps = _load_json(caps_path)["capabilities"]
     except (OSError, ValueError, KeyError) as exc:
         return ("doctor: capabilities.json not readable at %s: %s\n" % (caps_path, exc), 2)
-    lines = ["nervepack doctor (bash-free core checks) — contract: %s" % caps_path, ""]
+    lines = ["nervepack doctor — contract: %s" % caps_path]
+    if os.path.isfile(adapter_path):
+        lines.append("adapter: %s" % adapter_path)
+    else:
+        lines.append("adapter: (none at %s)" % adapter_path)
+    lines.append("")
     must_fail = 0
     for c in caps:
         cid = c.get("id", "")
         tier = c.get("tier", "")
-        if c.get("check") == "core" and cid != "llm-cli":
+        if c.get("check") == "core":
             st = _core_check(cid, np)
         else:
-            st = _NA   # llm-cli (model seam) + every adapter check
+            st = _adapter_check(cid)
         lines.append("  [%-6s] %-22s %s" % (tier, cid, st))
-        if tier == "MUST" and st != _NA and not st.startswith("PASS"):
+        # A status may carry an advisory suffix after PASS — treat any "PASS…" as pass.
+        if tier == "MUST" and not st.startswith("PASS"):
             must_fail = 1
     lines.append("")
     if must_fail == 0:
-        lines.append("doctor: MUST core checks OK ✓  (llm-cli + adapter shown N/A — "
-                     "verify with np-doctor.sh on a host with bash)")
+        lines.append("doctor: MUST tier OK ✓  (SHOULD shortfalls above are advisory)")
         return ("\n".join(lines) + "\n", 0)
-    lines.append("doctor: MUST core checks FAILED ✗  — fix the items above and re-run")
+    lines.append("doctor: MUST tier FAILED ✗  — fix the items above and re-run")
     return ("\n".join(lines) + "\n", 1)
 
 

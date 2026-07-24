@@ -1,6 +1,6 @@
 ---
 name: np-core-doctor
-description: Run and interpret nervepack's health check (np-doctor.sh) — when to use it, what each check means, how to fix FAIL/WARN results. Use post-install, after moving the repo, when a nervepack feature stops working, or when the user says "run the doctor" / "check nervepack health" / "/np-doctor".
+description: Run and interpret nervepack's health check (cli.py doctor) — when to use it, what each check means, how to fix FAIL/WARN results. Use post-install, after moving the repo, when a nervepack feature stops working, or when the user says "run the doctor" / "check nervepack health" / "/np-doctor".
 ---
 
 # np-core-doctor — health check runbook
@@ -8,10 +8,11 @@ description: Run and interpret nervepack's health check (np-doctor.sh) — when 
 ## Run it
 
 ```bash
-bash ~/Code/nervepack/engine/setup/np-doctor.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py doctor
 ```
 
-Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI).
+Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI). The doctor
+runs entirely in-process (Python, `engine/setup/np_doctor.py`) — no bash required.
 
 ## Output format
 

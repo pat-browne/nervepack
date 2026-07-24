@@ -15,7 +15,7 @@ this skill is the entry point.
 1. **Read the contract:** `engine/onboard/ONBOARD.md` + `engine/onboard/capabilities.json`. Identify
    your host and how it (a) surfaces standing context to the model, (b) fires session
    start/end events, (c) runs a headless model call. Each capability has per-host `hints`.
-2. **Check current state first:** `bash ~/Code/nervepack/engine/setup/np-doctor.sh`. It shows
+2. **Check current state first:** `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py doctor`. It shows
    what's already wired vs MISSING — only do work the doctor flags.
 3. **Satisfy each capability** for your host (MUST: `knowledge`, `llm-cli`, `git-sync`,
    `toggles`; SHOULD: the session-start/end + scheduled-maint ones — wire what your host
@@ -28,7 +28,7 @@ this skill is the entry point.
 5. **Record what you did** in `~/.config/nervepack/adapter.json` (per-machine): for each
    `check:adapter` capability, `{status: wired|unsupported, verify: "<cmd, exit 0 = ok>"}`.
    Start from `engine/onboard/adapters/<host>.example.json` if one exists.
-6. **Run the doctor until green:** `engine/setup/np-doctor.sh` (exits non-zero on a MUST
+6. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor` (exits non-zero on a MUST
    shortfall). Fix → re-run. That generate→verify→fix loop is what makes self-wiring safe.
 7. **Report** the doctor's per-capability table to the user and offer toggle choices
    (`np-core-toggle`).
