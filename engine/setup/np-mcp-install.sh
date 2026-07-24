@@ -138,7 +138,7 @@ if [[ -n "$team_raw" ]]; then
     printf '%s\n' "$team" > "$CFG/team-dir"
     # The `team` feature is on by default (shared toggle) — configuring the dir is what
     # activates the overlay. We never flip the shared toggle here: that would commit to
-    # the engine repo. If you've disabled it, re-enable with: nervepack-toggle team on.
+    # the engine repo. If you've disabled it, re-enable with: cli.py toggle team on.
     echo "  ✓ wrote $CFG/team-dir (the 'team' overlay is active by default)"
   else
     echo "  ! $team_err — skipping team overlay" >&2

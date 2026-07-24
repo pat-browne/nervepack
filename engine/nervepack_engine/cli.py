@@ -54,6 +54,7 @@ import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
+import np_toggle  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -242,6 +243,17 @@ def main(argv=None):
             return code
         except Exception as exc:
             _bail("suggestion-resolve", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "toggle":
+        # A user command (like setup/onboard), not a hook: a real, intentional
+        # non-zero exit (bad on|off usage -> 2) is meaningful, so this is NOT the
+        # hook/cron fail-open-to-0 path. np_toggle.cli() owns status/param/audit/
+        # menu/<feature> [on|off] routing and prints its own output.
+        try:
+            return np_toggle.cli(argv[1:])
+        except Exception as exc:
+            _bail("toggle", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] == "instruction-block":
