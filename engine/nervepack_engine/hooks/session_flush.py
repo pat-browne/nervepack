@@ -33,8 +33,6 @@ import subprocess
 import sys
 import time
 
-import np_bashlib
-
 _ENGINE_SETUP_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "setup"))
 _CLI_PATH = os.path.normpath(
@@ -70,14 +68,10 @@ def _default_step_fn(path):
         # interpreter here rather than in-process, so a substep failure/crash still
         # can't take down the detached flush process. A `path` may carry an extra
         # standalone-entrypoint arg after _ARG_SEP (e.g. "np_agentic_cron.py\x1c
-        # episodic-maintain") -- harmless no-op split for a bare path. Any remaining
-        # non-.py entry (none by default; kept for a future bash substep) still
-        # shells out via np_bashlib.argv() for Windows-safety.
+        # episodic-maintain") -- harmless no-op split for a bare path. Every substep
+        # is a .py entrypoint (no bash substep exists), so it runs via the interpreter.
         target, _, arg = path.partition(_ARG_SEP)
-        if target.endswith(".py"):
-            argv = [sys.executable, target] + ([arg] if arg else [])
-        else:
-            argv = np_bashlib.argv(["bash", target])
+        argv = [sys.executable, target] + ([arg] if arg else [])
         subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     return _call
 
