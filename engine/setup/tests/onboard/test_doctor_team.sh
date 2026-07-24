@@ -13,5 +13,10 @@ export HOME="$tmp"; mkdir -p "$tmp/team"
 out="$(NP_TEAM_DIR="$tmp/team" NP_CAPABILITIES="$CAPS" CLAUDE_BIN="$tmp/no-claude" \
        python3 "$CLI" doctor 2>&1 || true)"
 grep -qiE 'team' <<<"$out" || { echo "FAIL: doctor never mentions team"; exit 1; }
-grep -q "$tmp/team" <<<"$out" || { echo "FAIL: doctor doesn't show the team dir"; exit 1; }
+# Assert the configured team layer SURFACED (the PASS branch emits "team layers
+# (N): …"), rather than grepping the literal $tmp path: on the Windows/Git-bash
+# lane $tmp is an MSYS/backslash path that differs in form (and regex-escapes) from
+# what native-Python echoes back, making an exact-path match spuriously fail. The
+# exact-path behavior is covered host-natively in-process by test_np_doctor.py.
+grep -qi 'team layer' <<<"$out" || { echo "FAIL: doctor doesn't surface the configured team layer: $out"; exit 1; }
 echo "PASS test_doctor_team"

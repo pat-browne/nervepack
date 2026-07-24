@@ -209,8 +209,12 @@ class DoctorTest(unittest.TestCase):
 
     def test_hook_scripts_missing_named_fail_still_exit0(self):
         self._write_adapter(self._all_wired())
-        gone1 = os.path.join(self.tmp, "missing-guard.sh")
-        gone2 = os.path.join(self.tmp, "another-gone.sh")
+        # Forward-slash paths: real hook commands are registered forward-slash
+        # (~/Code/...) even on Windows, and the hook-scripts check treats a token
+        # with no "/" as a bare command name. os.path.join would give backslashes
+        # on the Windows lane -> wrongly skipped as a bare name (would spuriously PASS).
+        gone1 = os.path.join(self.tmp, "missing-guard.sh").replace(os.sep, "/")
+        gone2 = os.path.join(self.tmp, "another-gone.sh").replace(os.sep, "/")
         settings = os.path.join(self.tmp, "settings.json")
         with open(settings, "w") as f:
             json.dump({"hooks": {
