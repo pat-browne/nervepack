@@ -593,10 +593,11 @@ itself by reading a tool-neutral contract, and let any model back the automation
 
 **Workflow.** `np-llm.sh` is the backend-neutral LLM-CLI seam (sets `NERVEPACK_AGENT=1`,
 swaps `claude` for any OpenAI-compatible endpoint). `np-core-onboard` reads
-`engine/onboard/ONBOARD.md`, wires the host, and proves it with `np-doctor.sh`. Pre-
-flight gates check the *backend*, not the `claude` binary.
+`engine/onboard/ONBOARD.md`, wires the host, and proves it with `cli.py doctor`
+(in-process Python, `engine/setup/np_doctor.py`). Pre-flight gates check the
+*backend*, not the `claude` binary.
 
-**Assets.** `np-llm.sh`, `engine/onboard/`, `np-doctor.sh`, `np-core-onboard`.
+**Assets.** `np-llm.sh`, `engine/onboard/`, `engine/setup/np_doctor.py` (`cli.py doctor`), `np-core-onboard`.
 
 **Situational example.** On a Goose box with a local model, `/np-onboard` writes the
 adapter, points the seam at the local endpoint, and the doctor reports PASS. The

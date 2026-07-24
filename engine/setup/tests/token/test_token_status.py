@@ -98,5 +98,43 @@ class TestTokenStatusCli(unittest.TestCase):
         self.assertEqual(out, "warn 5")
 
 
+class TestClaudeTokenStatus(unittest.TestCase):
+    """np_token_lib.claude_token_status() (phase 15): the in-process port of
+    np-token-lib.sh's np_claude_token_status the doctor calls. Honors
+    NP_CLAUDE_TOKEN_FILE and returns the same one-word status as np_token_status."""
+
+    def setUp(self):
+        import np_token_lib  # imported here so a missing dep fails this class only
+        self.np_token_lib = np_token_lib
+        self.tmp = tempfile.mkdtemp()
+        self.token_file = os.path.join(self.tmp, "claude-oauth-token")
+        self._saved = os.environ.get("NP_CLAUDE_TOKEN_FILE")
+        os.environ["NP_CLAUDE_TOKEN_FILE"] = self.token_file
+
+    def tearDown(self):
+        if self._saved is None:
+            os.environ.pop("NP_CLAUDE_TOKEN_FILE", None)
+        else:
+            os.environ["NP_CLAUDE_TOKEN_FILE"] = self._saved
+
+    def test_missing(self):
+        self.assertEqual(self.np_token_lib.claude_token_status(), "missing")
+
+    def test_ok(self):
+        with open(self.token_file, "w") as f:
+            f.write("dummy")
+        with open(self.token_file + ".issued", "w") as f:
+            f.write(date.today().strftime("%Y-%m-%d"))
+        self.assertEqual(self.np_token_lib.claude_token_status(), "ok 365")
+
+    def test_warn(self):
+        with open(self.token_file, "w") as f:
+            f.write("dummy")
+        with open(self.token_file + ".issued", "w") as f:
+            f.write((date.today() - timedelta(days=350)).strftime("%Y-%m-%d"))
+        result = self.np_token_lib.claude_token_status()
+        self.assertTrue(result.startswith("warn "), result)
+
+
 if __name__ == "__main__":
     unittest.main()

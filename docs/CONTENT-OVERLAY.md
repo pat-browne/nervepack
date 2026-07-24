@@ -47,7 +47,7 @@ echo "$HOME/Code/squad-content,$HOME/Code/division-content,$HOME/Code/org-conten
 
 That stacks **squad > division > org > personal > engine** (the leftmost wins a name
 clash). More than four team dirs is a hard error — the session falls back to
-personal-only, and `np-doctor.sh` flags the invalid config.
+personal-only, and the doctor (`cli.py doctor`) flags the invalid config.
 
 ## Verify
 

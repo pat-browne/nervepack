@@ -38,9 +38,9 @@ echo "  Case 2 OK: engine/setup/ path to nonexistent file flagged MISSING"
 
 # --- Case 3: clean — a correct engine/-prefixed path to a real script passes. ---
 d3="$tmp/clean"; mkdir -p "$d3"
-# np-doctor.sh exists under the real engine root, which the checker always adds as
+# np_doctor.py exists under the real engine root, which the checker always adds as
 # a resolution root. Also include prose ("setup/teardown") that must NOT be flagged.
-printf 'Verify with `engine/setup/np-doctor.sh`. The setup/teardown cycle is separate.\n' > "$d3/doc.md"
+printf 'Verify with `engine/setup/np_doctor.py`. The setup/teardown cycle is separate.\n' > "$d3/doc.md"
 out3="$(python3 "$CHECK" "$d3" 2>&1)" && rc3=0 || rc3=$?
 [[ $rc3 -eq 0 ]] || fail "Case 3: expected exit 0 on a clean doc, got $rc3; output: $out3"
 echo "  Case 3 OK: correct engine/setup/ path passes; prose not flagged"

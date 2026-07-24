@@ -89,8 +89,8 @@ class BashFreeReadSurface(unittest.TestCase):
         self.assertFalse(r["result"]["isError"], r["result"])
 
     def test_doctor_is_bashfree(self):
-        # With bash unreachable, nervepack_doctor falls back to the Python core-check
-        # doctor (np_doctor) instead of shelling np-doctor.sh. It must return a report
+        # nervepack_doctor runs the in-process Python doctor (np_doctor) on every host
+        # (phase 15; np-doctor.sh retired). It must return a report
         # (not a tool error), with the deterministic core checks resolved in Python.
         c = self.client()
         c.initialize()

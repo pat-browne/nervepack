@@ -13,16 +13,17 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../../../.." && pwd)"   # tests/resume -> setup -> engine -> repo root
-DOCTOR="$NP/engine/setup/np-doctor.sh"
+CLI="$NP/engine/nervepack_engine/cli.py"   # phase 15: np-doctor.sh retired -> cli.py doctor
 
 fail() { echo "FAIL: $*"; exit 1; }
 
-command -v jq >/dev/null || { echo "PASS test_resume_doctor (skipped — jq missing)"; exit 0; }
-
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 export HOME="$tmp/home"; mkdir -p "$HOME"
+# Force the llm-cli smoke to FAIL fast (missing path) rather than make a real model
+# call — this test only asserts the resume-pointer line, and exits are ignored below.
+export CLAUDE_BIN="$tmp/no-claude"
 
-doctor() { CLAUDE_SETTINGS="$1" bash "$DOCTOR" 2>&1 || true; }
+doctor() { CLAUDE_SETTINGS="$1" python3 "$CLI" doctor 2>&1 || true; }
 
 # === 1. Both hooks registered (right event each) -> resume-pointer PASS.
 #        Covers BOTH the legacy bash command strings (an already-installed

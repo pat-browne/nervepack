@@ -45,6 +45,7 @@ from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
+import np_doctor  # noqa: E402
 import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
 import np_instruction_block  # noqa: E402
@@ -254,6 +255,21 @@ def main(argv=None):
             return np_toggle.cli(argv[1:])
         except Exception as exc:
             _bail("toggle", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "doctor":
+        # A user/verify command (like setup/onboard): the doctor's real exit code
+        # (0 MUST-OK / 1 MUST-fail / 2 contract-unreadable) is meaningful, so this
+        # is NOT the hook/cron fail-open-to-0 path. Force UTF-8+LF: the report
+        # contains ✓/✗ + em-dash (native-Windows Python defaults to cp1252).
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+        try:
+            text, code = np_doctor.report()
+            sys.stdout.write(text)
+            return code
+        except Exception as exc:
+            _bail("doctor", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] == "instruction-block":

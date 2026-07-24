@@ -9,6 +9,25 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Changed
+- **The doctor is now a single in-process Python implementation; `np-doctor.sh`
+  retired (phase 15 of the bash→Python migration).** `engine/setup/np_doctor.py`
+  previously ran only the six deterministic core checks and reported `llm-cli` +
+  every adapter capability as **N/A** (the bash-free MCP fallback), deferring to
+  `np-doctor.sh` for the full run. It now runs **all 16 capabilities** in-process:
+  the core checks gain `llm-cli` (in-process `np_model.complete("ping")`),
+  `hook-scripts`, `scheduled-auth-token` (new `np_token_lib.claude_token_status()`),
+  and `pii_filter_full`; a new `_adapter_check` runs each host-authored `verify`
+  from `adapter.json` (`subprocess.run(verify, shell=True)`, matching the bash
+  `eval "$verify"` — bounded to operator-authored config, documented in code).
+  `report()` mirrors `np-doctor.sh`'s full-doctor output byte-for-byte (header +
+  per-capability lines + MUST-tier exit codes: 1 iff a MUST cap isn't PASS*, 2 if
+  the contract is unreadable). Single call path: `cli.py doctor` (new dispatch),
+  the MCP `nervepack_doctor` tool, and `np_onboard.py`'s verify step all call
+  `np_doctor.report()` in-process — no bash. `np-doctor.sh` and its parity test
+  (`test_doctor_parity.sh`) are deleted; `np-token-lib.sh` stays (still sourced by
+  `62-install-scheduled-auth-token.sh`). New coverage: `tests/onboard/test_np_doctor.py`.
+
 ### Fixed
 - **`np_model.py complete()` missed the 2026-07-13 stale-session env-strip fix.**
   `np-llm.sh` strips `CLAUDECODE`/`CLAUDE_CODE_SESSION_ID`/etc. before every

@@ -80,7 +80,7 @@ class MCPClient:
         return mid
 
     def call(self, method, params=None, timeout=15):
-        # doctor shells out to np-doctor.sh which can take ~9.5 s; give it extra room.
+        # doctor runs in-process now (phase 15); keep a generous timeout regardless.
         if method == "tools/call" and isinstance(params, dict):
             if params.get("name") == "nervepack_doctor":
                 timeout = 30

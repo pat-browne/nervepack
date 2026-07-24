@@ -43,7 +43,7 @@ onboards through these same docs.
 4. **Configure `np-llm.sh`** for your model: set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`
    / `NP_LLM_MODEL_AGENT`) so `printf 'hi' | engine/setup/np-llm.sh complete` returns text.
    Claude Code is the default backend; for a local box use the goose/ollama backend.
-5. **Run the doctor until green:** `engine/setup/np-doctor.sh`. It reports each capability
+5. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor`. It reports each capability
    per tier (PASS / MISSING / UNSUPPORTED) and exits non-zero on any MUST failure.
    Fix and re-run. That generate → verify → fix loop is what makes self-wiring safe.
 

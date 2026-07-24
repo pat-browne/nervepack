@@ -1,10 +1,13 @@
-"""Python port of the ONE piece of np-token-lib.sh the scheduler installers need:
-np_claude_token_env_prefix. store()/status() stay bash-only (np-token-lib.sh) --
-62-install-scheduled-auth-token.sh and np-doctor.sh still call the bash original
-directly, so it can't be retired yet (phase 8 of the bash->Python migration).
+"""Python port of the pieces of np-token-lib.sh nervepack's Python callers need:
+np_claude_token_env_prefix (the scheduler installers) and np_claude_token_status
+(the phase-15 in-process doctor). store() stays bash-only (np-token-lib.sh) --
+62-install-scheduled-auth-token.sh still sources the bash original to mint the
+token, so np-token-lib.sh can't be retired yet.
 """
 import os
 import shlex
+
+import np_token_status
 
 
 def claude_token_file():
@@ -26,3 +29,14 @@ def claude_token_env_prefix():
     from the same file. See TestTokenLibParity for the behavioral check."""
     f = claude_token_file()
     return 'f=%s; [ -r "$f" ] && export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$f")"; ' % shlex.quote(f)
+
+
+def claude_token_status():
+    """Port of np-token-lib.sh's np_claude_token_status: the rotation-status word
+    for the scheduled-auth token file. Returns exactly one of
+    "missing" | "ok <days_left>" | "warn <days_left>" (see np_token_status.py).
+    Bash-free -- calls np_token_status.status() in-process rather than
+    subprocessing np_token_status.py, so the phase-15 doctor needs no interpreter
+    spawn. Behaviorally identical to the bash `python3 np_token_status.py <file>`
+    (same default TTL/warn windows)."""
+    return np_token_status.status(claude_token_file())
