@@ -312,6 +312,39 @@ class DoctorTest(unittest.TestCase):
         text, _ = np_doctor.report()
         self.assertIn("concatenate", self._line(text, "team"))
 
+    # --- review-gap regression guards (phase-15 review) --------------------
+    def test_team_over_cap_warns(self):
+        # >4 team dirs -> np_content.team_dirs() rejects (over-cap) -> [] while
+        # team_origin is "env" (not "none") -> the invalid/over-cap WARN branch.
+        self._write_adapter(self._all_wired())
+        os.environ["NP_TEAM_DIR"] = ",".join(self._mkdir("t%d" % i) for i in range(5))
+        text, _ = np_doctor.report()
+        line = self._line(text, "team")
+        self.assertIn("WARN", line)
+        self.assertIn("invalid", line)
+
+    def test_dashboard_data_split_missing_warns_then_single_repo_passes(self):
+        self._write_adapter(self._all_wired())
+        # setUp is a SPLIT layout (NP_CONTENT_DIR != NP_DIR) with no bridge ->
+        # dashboard/data missing -> WARN.
+        text, _ = np_doctor.report()
+        self.assertIn("WARN", self._line(text, "dashboard-data"))
+        # Single-repo (content dir == NP): the real dashboard/data dir must exist -> PASS.
+        os.environ["NP_CONTENT_DIR"] = os.environ["NP_DIR"]
+        os.makedirs(os.path.join(os.environ["NP_DIR"], "dashboard", "data"))
+        text, _ = np_doctor.report()
+        self.assertRegex(self._line(text, "dashboard-data"), r"\bPASS\b")
+
+    @unittest.skipIf(os.name == "nt", "POSIX pipefail-off / SIGPIPE pipe semantics")
+    def test_adapter_verify_pipe_form_passes(self):
+        # np-doctor.sh ran verify with pipefail DISABLED so the idiomatic
+        # `producer | grep -q PAT` (grep closes the pipe, SIGPIPEs the producer with
+        # 141) reports PASS, not FAIL. shell=True uses /bin/sh (no pipefail) so the
+        # behavior is preserved -- guard it (POSIX only; cmd.exe has no seq/grep).
+        self._write_adapter(self._all_wired(verify="seq 100000 | grep -q 1"))
+        text, code = np_doctor.report()
+        self.assertRegex(self._line(text, "knowledge"), r"\bPASS\b")
+
 
 if __name__ == "__main__":
     unittest.main()
