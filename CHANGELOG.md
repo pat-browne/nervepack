@@ -10,17 +10,109 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Fixed
+- **`np_model.py complete()` missed the 2026-07-13 stale-session env-strip fix.**
+  `np-llm.sh` strips `CLAUDECODE`/`CLAUDE_CODE_SESSION_ID`/etc. before every
+  backend call so a long-lived process (the dashboard server, a backgrounded
+  hook) inheriting a stale Claude Code session doesn't get its nested `claude -p`
+  calls mistaken for a child of that session ("Not logged in · Please run
+  /login"). The bash-free `complete()` port (git-for-windows-free MCP work,
+  #38) never carried that strip over — found and fixed while porting `agent()`
+  mode in phase 9 of the bash→Python migration. `test_model_parity.sh`
+  strengthened to assert non-leakage for both drivers.
+
 - **Dashboard shows no metrics on a fresh clone (split layout).** Root cause: the
   `<engine>/dashboard/data` → `<content>/dashboard/data` symlink bridge had no
   bootstrap step — it was created once by hand during the engine/content split
   migration and gitignored, so every new clone was missing it and the dashboard
-  loaded no metrics. Fix: `engine/setup/35-link-dashboard-data.sh` (idempotent
-  bootstrap step, numbered between 30-link-skills and 40-sync) creates or repairs
-  the symlink on a fresh clone. A missing bridge is now surfaced by `np-doctor.sh`
-  as a WARN on the new `dashboard-data` SHOULD capability. Regression test:
-  `engine/setup/tests/setup/test_link_dashboard_data.sh`.
+  loaded no metrics. Fix: `35-link-dashboard-data.sh` (idempotent bootstrap step,
+  numbered between 30-link-skills and 40-sync; later ported to
+  `np_link_dashboard_data.py` / `cli.py setup link-dashboard-data` in phase 11)
+  creates or repairs the symlink on a fresh clone. A missing bridge is now
+  surfaced by `np-doctor.sh` as a WARN on the new `dashboard-data` SHOULD
+  capability. Regression test: `test_np_link_dashboard_data.py` (originally
+  `test_link_dashboard_data.sh`).
 
 ### Added
+- **`np-implement-suggestion.sh` ported to Python (phase 10 — the last and most
+  security-sensitive script in the bash→Python CLI consolidation)**.
+  `np_implement_suggestion.py` (`cli.py implement-suggestion <text>`) faithfully
+  replicates every behavior of the bash original: the `NERVEPACK_AGENT` recursion
+  guard, the self-healing mkdir-lock (reclaims a stale lock once its owner pid is
+  confirmed dead), git-worktree isolation of the agentic pass (the user's
+  uncommitted work is never touched, never swept), the engine-repo-first /
+  content-overlay-fallback landing logic, `pr`/`direct` mode semantics, and —
+  unweakened — the nonce-delimited prompt-injection defense around the untrusted
+  suggestion text (2026-06-08 review). Uses `np_model.agent()` (phase 9) as its
+  LLM seam, now with a `timeout` parameter added to `np_model.agent()` itself so
+  a hung agent still can't wedge the job. `np-mcp-server.py`'s `implement` action
+  and `np-dashboard-server.py`'s `/api/implement` route both dispatch to it via
+  `cli.py` instead of spawning the retired bash script; `NP_IMPLEMENT`'s
+  single-script override contract (used by e2e/unit test stubs) is preserved.
+  `test_implement.sh` retargeted to the new entrypoint — 13 scenarios ported
+  1:1 (pr/direct modes, dirty-tree isolation, live/stale lock, prompt-injection
+  hardening x2, content-overlay fallback, both-repos-miss/not-implementable) plus
+  a new genuine-`subprocess.TimeoutExpired` case the bash original could only
+  simulate (via a fast-exiting stub), now exercised for real in well under a
+  second via an `IMPLEMENT_AGENT_TIMEOUT` test override.
+- **`np-llm.sh` `agent` mode ported to Python (phase 9)**, joining `complete` mode
+  (already bash-free). `np_model.agent()` mirrors `np-llm.sh agent` for both
+  backends — the `claude` backend calls the `claude` binary directly (no `bash -c`
+  wrapper, unlike `complete`+`agent` before this), the `local` backend still
+  shells `NP_LLM_AGENT_CMD` via `bash -c` when configured. `np_llm_agent.py`'s
+  `run_agent()` now calls `np_model.agent()` in-process instead of shelling to
+  bash `np-llm.sh agent`; `np-dashboard-server.py`'s suggestion-review pass and
+  `np-doctor.sh`'s `llm-cli` smoke check both switched to the Python `complete()`
+  path too. `np-llm.sh` stays on disk — its last direct caller,
+  `np-implement-suggestion.sh`, isn't ported until phase 10. New parity test
+  `test_agent_parity.sh` (byte-identical argv/stdin across both drivers, plus a
+  stale-session non-leakage check); `test_np_llm_agent.py` rewritten to mock
+  `np_model.agent()` directly instead of stubbing a subprocess.
+- **Phase 8 (sourced-lib resolvers) audited and documented as already complete
+  on the Python side** — `np_toggle.py`/`np_content.py` (the latter already a
+  port of both `np-content-lib.sh` *and* `np-layer-lib.sh`) were built during
+  earlier bash-free-MCP work and are parity-locked
+  (`test_toggle_parity.sh`/`test_content_parity.sh`), but this wasn't previously
+  recorded against the migration's phase numbering. The bash lib files
+  themselves remain — retirement is blocked on ~10 other bash scripts (the
+  toggle CLI, `open-dashboard.sh`, `np-doctor.sh`, the hook/mcp/skill
+  installers, `40-sync-nervepack.sh`) that aren't sequenced in any phase.
+  ARCHITECTURE.md now states this explicitly rather than leaving phase 8
+  looking silently incomplete.
+- **Toolchain bootstrap + the onboard orchestrator ported to Python** (phase 7 of the
+  bash→Python CLI consolidation, content-overlay spec
+  `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_bootstrap.py`
+  replaces the seven one-time toolchain-baseline scripts
+  (`00-apt-baseline.sh`, `00-brew-baseline.sh`, `10-rustup.sh`, `20-claude-plugins.sh`,
+  `21-prewarm-serena.sh`, `25-install-pii-deps.sh`, `80-install-vscode-extensions.sh`),
+  dispatched as `cli.py setup install-apt-baseline` / `install-brew-baseline` /
+  `install-rustup` / `install-claude-plugins` / `prewarm-serena` / `install-pii-deps` /
+  `install-vscode-extensions`. `np_onboard.py` replaces `np-onboard.sh` itself
+  (`cli.py onboard`) — the full-onboard orchestrator the MCP `nervepack_onboard` tool
+  and a bare-CLI onboard share; most of its individual steps (link-skills,
+  dashboard-data bridge, every 5x/6x hook installer, the doctor) stay bash for now
+  and it shells out to them exactly as before — only the orchestration logic and the
+  scheduler-step dispatch (phase 6) are Python. These bootstrap scripts had no
+  dedicated tests before (only a syntax/portability scan); `test_np_bootstrap.py`
+  (24 cases) and `test_np_onboard.py` (8 cases, translating every case the retired
+  `test_np_onboard.sh` covered) are new coverage. Also supersedes ARCHITECTURE.md
+  invariant 5 ("bash for glue, Python for parsing/logic") with the migration's
+  actual decision, and updates every doc/comment reference to the retired filenames.
+
+- **OS-scheduler installers ported to Python** (phase 6 of the bash→Python CLI
+  consolidation, content-overlay spec
+  `2026-07-15-nervepack-python-cli-consolidation-design.md`). `np_scheduler_install.py`
+  replaces `70-install-memory-{cron,launchd,schtasks}.sh`, dispatched as
+  `cli.py setup install-memory-{cron,launchd,schtasks}`. Same six authoritative jobs,
+  same schedule, same idempotent-replace semantics on all three backends; the opt-in
+  resume-pointer cron (`resume.cron`) moves with it. `np_token_lib.py` is a small new
+  standalone port of `np_claude_token_env_prefix` for the cron/launchd installers —
+  `install_schtasks` deliberately stays unwired to the token prefix (unverified
+  Windows quote-nesting risk, unchanged from the bash original). `np-onboard.sh`'s
+  scheduler-install step now dispatches through the CLI instead of running the
+  retired `.sh` files. Tests: `engine/setup/tests/nervepack_engine/test_np_scheduler_install.py`
+  (32 cases — every case the five retired bash tests covered, plus new coverage for
+  `install_cron`'s happy path, which had none before).
+
 - **Critical-path guard** (`engine/setup/np-path-check.py`). Scans docs and skills for
   references to nervepack's `setup/`/`onboard/` scripts and fails on a stale pre-split
   path (`setup/x` where the file now lives at `engine/setup/x`) or an `engine/…` path to

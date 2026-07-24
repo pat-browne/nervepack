@@ -8,7 +8,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   GET  /                      -> dashboard/index.html
   GET  /<path>                -> static file under dashboard/ (path-sanitized)
   GET  /api/health            -> {"ok": true}
-  POST /api/resolve {text}    -> mark one suggestion acted-on (np-suggestion-resolve.sh)
+  POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
 
@@ -20,8 +20,10 @@ harness language policy. Fail-open: a bad request returns an error response; the
 server itself never crashes.
 
 Env: NP_DASH_PORT (default 8787) · NP_SUGGESTIONS_TOP (default 10) · the review
-pass shells out to setup/np-llm.sh (the backend-neutral LLM seam, which sets
-NERVEPACK_AGENT) and degrades gracefully if it's unavailable.
+pass calls np_model.complete() in-process (the backend-neutral LLM seam, which
+sets NERVEPACK_AGENT and strips stale CLAUDE_CODE_* env -- load-bearing for
+THIS long-lived server specifically, see np_model.py's docstring) and degrades
+gracefully if it raises.
 """
 import json
 import os
@@ -39,6 +41,8 @@ NP = os.path.dirname(os.path.dirname(HERE))
 # resolves to System32 WSL; .sh can't be exec'd directly). No-op off Windows.
 sys.path.insert(0, HERE)
 import np_bashlib  # noqa: E402
+import np_model  # noqa: E402
+import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
 import np_toggle_schema  # noqa: E402
 # Static root + data source are env-overridable so the server is isolatable in tests
@@ -49,9 +53,13 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
-RESOLVE = os.path.join(HERE, "np-suggestion-resolve.sh")
-IMPLEMENT = os.environ.get("NP_IMPLEMENT") or os.path.join(HERE, "np-implement-suggestion.sh")
-NPLLM = os.path.join(HERE, "np-llm.sh")
+# NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
+# this); the real default is np_implement_suggestion.py (phase 10) dispatched via
+# cli.py, not the retired bash np-implement-suggestion.sh.
+_IMPLEMENT_OVERRIDE = os.environ.get("NP_IMPLEMENT")
+IMPLEMENT_ARGV = ([_IMPLEMENT_OVERRIDE] if _IMPLEMENT_OVERRIDE else
+                  [sys.executable, os.path.join(os.path.dirname(HERE), "nervepack_engine", "cli.py"),
+                   "implement-suggestion"])
 TOGGLES_LIB = os.path.join(HERE, "np-toggle-lib.sh")
 TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
@@ -97,7 +105,7 @@ def log(msg):
 
 def implement_status(text):
     """The job's per-suggestion status (busy|running|done|not_implementable|failed),
-    keyed by a hash of the exact text — the same key np-implement-suggestion.sh writes.
+    keyed by a hash of the exact text — the same key np_implement_suggestion.py writes.
     Missing -> {'state':'none'}. Lets the dashboard poll a row to completion."""
     if not text:
         return {"state": "none"}
@@ -181,9 +189,8 @@ def review_rows():
         "of objects {\"i\": <index>, \"decision\": \"implement\"|\"skip\", "
         "\"reason\": \"<=12 words\"}. No prose, no code fence.\n\n" + listing)
     try:
-        p = subprocess.run(np_bashlib.argv([NPLLM, "complete"]), input=prompt,
-                           capture_output=True, text=True, timeout=120)
-        verdicts = json.loads(_strip_fence(p.stdout))
+        out = np_model.complete(prompt, timeout=120)
+        verdicts = json.loads(_strip_fence(out))
         by_i = {int(v["i"]): v for v in verdicts if "i" in v}
         for i, r in enumerate(rows):
             v = by_i.get(i)
@@ -288,7 +295,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = (self._body().get("text") or "").strip()
                 if not text:
                     return self._json({"error": "missing text"}, 400)
-                subprocess.run(np_bashlib.argv([RESOLVE, text]), capture_output=True, text=True, timeout=30)
+                np_suggestion_resolve.resolve(text, ledger_path=_RESOLVED or None, no_build=_NO_BUILD or None)
                 return self._json({"ok": True})
             if route == "/api/implement":
                 text = (self._body().get("text") or "").strip()
@@ -297,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
-                subprocess.Popen(np_bashlib.argv([IMPLEMENT, text]), cwd=NP, start_new_session=True,
+                subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text]), cwd=NP, start_new_session=True,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
                 return self._json({"ok": True, "started": True})

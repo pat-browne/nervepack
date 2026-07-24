@@ -1,7 +1,7 @@
 """Bash-free port of np-resume-write.sh — deterministic resume-pointer writer
 (no LLM calls). NOT a stdin-JSON hook: called in-process by resume_recall.py
 and resume_sessionstart.py, and dispatched via `nervepack resume-write` for
-the opt-in interval cron (70-install-memory-cron.sh), which has no stdin/hook
+the opt-in interval cron (cli.py setup install-memory-cron), which has no stdin/hook
 payload to source --session/--transcript/--cwd from.
 
 Writes ${NP_RESUME_POINTER:-~/.cache/nervepack/resume-pointer.json} atomically

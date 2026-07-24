@@ -1,7 +1,7 @@
 # scheduled-refine
 
 The recurring agent prompt for refining this nervepack repo. Installed as a
-weekly local cron (Sunday) via `70-install-memory-cron.sh` — default-on, toggle
+weekly local cron (Sunday) via `cli.py setup install-memory-cron` — default-on, toggle
 `maintain.refine` to disable. May also be run as an optional cloud routine or OSS
 runner; see `agents/README.md` for the optional offload setup.
 

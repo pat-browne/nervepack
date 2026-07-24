@@ -53,8 +53,8 @@ If your host loads standing context from an instruction file (AGENTS.md / a Curs
 but cannot fire a session-start hook, satisfy `knowledge` for the directive by appending a
 managed block instead:
 
-    engine/setup/np-instruction-block.sh install <your instruction file>   # additive + idempotent
-    engine/setup/np-instruction-block.sh remove  <your instruction file>   # clean uninstall
+    python3 engine/nervepack_engine/cli.py instruction-block install <your instruction file>   # additive + idempotent
+    python3 engine/nervepack_engine/cli.py instruction-block remove  <your instruction file>   # clean uninstall
 
 It only ever touches its own `nervepack:begin`/`end` fence. Record the verify in your
 adapter: `"verify": "grep -q nervepack:begin <file>"`. Do NOT use this on a host that

@@ -80,19 +80,19 @@ def _core_check(cap_id, np):
             return "WARN (content dir unresolvable — cannot verify dashboard data bridge)"
         if cdir == np:
             return "PASS" if os.path.isdir(ddlink) else \
-                "WARN (dashboard/data dir missing — run 35-link-dashboard-data.sh)"
+                "WARN (dashboard/data dir missing — run: cli.py setup link-dashboard-data)"
         if os.path.islink(ddlink):
             try:
                 resolved = os.path.realpath(ddlink)
             except OSError:
                 resolved = ""
             return "PASS" if resolved and os.path.isdir(resolved) else \
-                "WARN (dashboard/data symlink exists but target does not resolve — run 35-link-dashboard-data.sh)"
+                "WARN (dashboard/data symlink exists but target does not resolve — run: cli.py setup link-dashboard-data)"
         if os.path.isdir(ddlink):
             return ("WARN (dashboard/data is a real directory, not a symlink into the "
                     "content overlay — metrics may load from the wrong location)")
-        return ("WARN (dashboard/data bridge missing — run 35-link-dashboard-data.sh to "
-                "create the symlink into the content overlay; the dashboard will show no "
+        return ("WARN (dashboard/data bridge missing — run: cli.py setup link-dashboard-data "
+                "to create the symlink into the content overlay; the dashboard will show no "
                 "metrics until then)")
     if cap_id == "resume-pointer":
         writer = os.path.join(np, "engine", "nervepack_engine", "hooks", "resume_write.py")

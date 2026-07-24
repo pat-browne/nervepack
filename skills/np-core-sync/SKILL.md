@@ -91,10 +91,11 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 - Does not push **except** in the `local is N ahead` outcome (the standing
   auto-approval above). Pushing *new* content happens via [[np-core-contribute]]
   or explicit user ask.
-- Does not re-run non-hook `engine/setup/*.sh` scripts. If a one-off setup
-  script changed (e.g. `00-apt-baseline.sh` added a new package), surface that
-  to the user — only `30-link-skills.sh` and every `5[0-9]-install-*.sh` hook
-  installer auto-run on a fast-forward (see above; #106).
+- Does not re-run non-hook `engine/setup/*.sh` scripts or `cli.py setup <step>`
+  bootstrap steps. If a one-off setup step changed (e.g. `install-apt-baseline`
+  added a new package), surface that to the user — only `30-link-skills.sh` and
+  every `5[0-9]-install-*.sh` hook installer auto-run on a fast-forward (see
+  above; #106).
 - **Does** edit `~/.claude/settings.json` as a side effect of the fast-forward
   case above (since #106) — if a hook installer's registered command changed,
   the live settings.json is updated in the same sync, no separate step needed.

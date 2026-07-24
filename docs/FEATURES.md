@@ -149,7 +149,7 @@ three are Python, dispatched via `engine/nervepack_engine/cli.py`):**
    (always) writes/refreshes the **current** session's pointer via
    `resume_write.py`'s `--throttle` mode, gated by `resume.interval` (default
    300s).
-3. **Opt-in cron** (`resume.cron`, default `off`) — `70-install-memory-cron.sh`
+3. **Opt-in cron** (`resume.cron`, default `off`) — `cli.py setup install-memory-cron`
    installs `cli.py resume-write --active --throttle` every `resume.cron_min`
    minutes (default 5) when enabled — its own top-level dispatch branch (not a
    `hook` subcommand, since the writer isn't in `_HOOKS` and the cron has no
@@ -418,12 +418,13 @@ and the good ones can be built by an agent without leaving the dashboard.
 
 **Workflow.** `np-suggestions-review.py` ranks/clears suggestions (the served
 dashboard exposes it as buttons via the localhost-only `np-dashboard-server.py`).
-Per-row **Implement** spawns an async agentic job (`np-implement-suggestion.sh`) in an
-isolated git worktree off the committed base, in `pr` or `direct` mode; **Reject**
-resolves it. `np-core-suggestions-review` drives the same flow from any host.
+Per-row **Implement** spawns an async agentic job (`np_implement_suggestion.py`,
+dispatched as `cli.py implement-suggestion`) in an isolated git worktree off the
+committed base, in `pr` or `direct` mode; **Reject** resolves it.
+`np-core-suggestions-review` drives the same flow from any host.
 
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
-`np-implement-suggestion.sh`, `agents/np-flow-implement-suggestion.md`,
+`np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.
@@ -443,7 +444,7 @@ does a gated Sonnet pass move overflow into `references/`, validated-or-reverted
 ARCHITECTURE freshness check (both advisory).
 
 **Assets.** `np_skill_maintain.py` (dispatched via `cli.py cron skill-maintain`), `np_skill_budget.py`, `np_skill_validate.py`,
-`np_graduation_detect.py`, `np-architecture-freshness.sh` (retained bash advisory subprocess),
+`np_graduation_detect.py`, `np_architecture_freshness.py` (advisory, `cli.py`-importable, called in-process),
 `agents/np-flow-skill-maintain.md`. Toggle: `skills` (`split_kb`, `soft_kb`,
 `catalog_tok`, `max_per_run`, `graduate_seen`, `graduate_kb`).
 

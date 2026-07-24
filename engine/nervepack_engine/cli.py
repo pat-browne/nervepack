@@ -1,10 +1,13 @@
 """nervepack CLI dispatcher — bash-free entrypoint for hooks/crons/setup.
 
-Phase 1 of the bash-to-python migration (content overlay design spec
-2026-07-15-nervepack-python-cli-consolidation-design.md): only `nervepack hook
-<name>` is wired so far. Other groups (cron/setup/onboard/toggle/doctor/sync/
-dashboard/mcp) are added as later phases port their scripts — see the spec's
-"Sequenced phases".
+Bash-to-python migration (content overlay design spec
+2026-07-15-nervepack-python-cli-consolidation-design.md): `hook`, `cron`, and
+`resume-write` shipped in phases 1-5; `setup` (phase 6, OS-scheduler installers,
+joined by phase 7's toolchain-baseline steps) and `onboard` (phase 7, the
+full-onboard orchestrator) followed; `implement-suggestion` (phase 10, the
+last and most security-sensitive script) joins them here. Remaining groups
+(toggle/doctor/sync/dashboard/mcp) are added as later phases port their
+scripts — see the spec's "Sequenced phases".
 
 Invoked today as a direct script path (no install step required):
     python3 engine/nervepack_engine/cli.py hook backcapture-sweep
@@ -41,7 +44,15 @@ from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
+import np_bootstrap  # noqa: E402
+import np_implement_suggestion  # noqa: E402
+import np_instruction_block  # noqa: E402
+import np_link_dashboard_data  # noqa: E402
+import np_merge_wait  # noqa: E402
+import np_onboard  # noqa: E402
+import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
+import np_suggestion_resolve  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
@@ -69,6 +80,20 @@ _CRONS = {
     "compact": np_agentic_cron.compact,
 }
 
+_SETUP = {
+    "install-memory-cron": np_scheduler_install.install_cron,
+    "install-memory-launchd": np_scheduler_install.install_launchd,
+    "install-memory-schtasks": np_scheduler_install.install_schtasks,
+    "link-dashboard-data": np_link_dashboard_data.link,
+    "install-apt-baseline": np_bootstrap.install_apt_baseline,
+    "install-brew-baseline": np_bootstrap.install_brew_baseline,
+    "install-rustup": np_bootstrap.install_rustup,
+    "install-claude-plugins": np_bootstrap.install_claude_plugins,
+    "prewarm-serena": np_bootstrap.prewarm_serena,
+    "install-pii-deps": np_bootstrap.install_pii_deps,
+    "install-vscode-extensions": np_bootstrap.install_vscode_extensions,
+}
+
 
 def _parse_resume_write_args(argv):
     kwargs = {}
@@ -87,6 +112,21 @@ def _parse_resume_write_args(argv):
             kwargs["active"] = True; i += 1
         else:
             i += 1
+    return kwargs
+
+
+def _parse_merge_wait_args(argv):
+    kwargs = {}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--repo", "--branch", "--base") and i + 1 < len(argv):
+            kwargs[arg[2:]] = argv[i + 1]; i += 2
+        elif arg in ("--interval", "--backoff", "--timeout", "--settle") and i + 1 < len(argv):
+            kwargs[arg[2:]] = int(argv[i + 1]); i += 2
+        else:
+            raise ValueError("unknown arg: %s" % arg)
+    kwargs.setdefault("repo", ".")
     return kwargs
 
 
@@ -140,6 +180,82 @@ def main(argv=None):
         except Exception as exc:
             _bail(name, "unhandled exception: %r" % exc)
         return 0
+
+    if argv[0] == "setup":
+        if len(argv) < 2:
+            return 0
+        name = argv[1]
+        fn = _SETUP.get(name)
+        if fn is None:
+            _bail("setup", "unknown setup step: %s" % name)
+            return 0
+        # Unlike hook/cron, a setup step has a real, intentional non-zero exit
+        # (wrong-OS refusal) that np-onboard.sh's step_cli() logs and continues
+        # past -- not the hook/cron fail-open-to-0 contract.
+        try:
+            return fn()
+        except Exception as exc:
+            _bail(name, "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "onboard":
+        # The doctor's exit status is the orchestrator's status (matches the
+        # bash original) -- also a real, intentional non-zero exit, not fail-open.
+        try:
+            return np_onboard.run()
+        except Exception as exc:
+            _bail("onboard", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "implement-suggestion":
+        # np_implement_suggestion.implement() is fail-open by design (every
+        # problem logs one line and returns 0, releasing the lock so the
+        # suggestion stays retryable) -- its own NERVEPACK_AGENT guard covers
+        # the re-entrancy case, so no extra check needed here.
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            return np_implement_suggestion.implement(text)
+        except Exception as exc:
+            _bail("implement-suggestion", "unhandled exception: %r" % exc)
+            return 0
+
+    if argv[0] == "merge-wait":
+        try:
+            kwargs = _parse_merge_wait_args(argv[1:])
+            code, lines = np_merge_wait.wait_and_check(**kwargs)
+            sys.stdout.write("\n".join(lines) + "\n")
+            return code
+        except ValueError as exc:
+            sys.stderr.write("np-merge-wait: %s\n" % exc)
+            return 1
+        except Exception as exc:
+            _bail("merge-wait", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "suggestion-resolve":
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            message, code = np_suggestion_resolve.resolve(text)
+            sys.stdout.write(message + "\n")
+            return code
+        except Exception as exc:
+            _bail("suggestion-resolve", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "instruction-block":
+        if len(argv) < 3 or argv[1] not in ("install", "remove"):
+            sys.stderr.write("usage: cli.py instruction-block {install|remove} <file>\n")
+            return 2
+        action, file_path = argv[1], argv[2]
+        try:
+            (np_instruction_block.install if action == "install" else np_instruction_block.remove)(file_path)
+            return 0
+        except ValueError as exc:
+            sys.stderr.write("np-instruction-block: %s\n" % exc)
+            return 2
+        except Exception as exc:
+            _bail("instruction-block", "unhandled exception: %r" % exc)
+            return 1
 
     if argv[0] != "hook" or len(argv) < 2:
         return 0

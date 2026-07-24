@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -49,6 +49,29 @@ jobs:
       # runs each hermetically, and writes a functionality-grouped Markdown report.
       - name: Run regression suite
         run: bash engine/setup/tests/run-all.sh --report regression-report.md
+
+      # See the Windows job's identical step: run-all.sh only echoes a test's
+      # captured stdout on FAILURE, so test_pid_alive_diag.sh's timestamped
+      # markers (written straight to this file, not through stdout) would
+      # otherwise never surface here even when this job's own log shows a FAIL.
+      # $GITHUB_STEP_SUMMARY only renders in the web UI's Summary tab -- it is
+      # NOT part of the step log stream, so `gh run view --log` / `gh api
+      # .../logs` can never retrieve it. Echo to stdout too so this evidence
+      # is retrievable the same way every other test line in this job is.
+      - name: Publish pid diagnostic evidence
+        if: always()
+        run: |
+          if [[ -f .ci-debug-pid-diag.log ]]; then
+            echo "=== PID liveness diagnostic evidence ==="
+            cat .ci-debug-pid-diag.log
+            echo "=== end PID liveness diagnostic evidence ==="
+            {
+              echo "## PID liveness diagnostic evidence"
+              echo '```'
+              cat .ci-debug-pid-diag.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publish report to job summary
         if: always()
@@ -68,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           # Pin to 3.12: playwright 1.48.0 pins greenlet 3.1.1, which has no wheel for
           # the very newest CPython (3.14) and fails to build from source in CI. The
@@ -110,7 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -135,6 +158,29 @@ jobs:
           MSYS: winsymlinks:nativestrict
         run: bash engine/setup/tests/run-all.sh --report regression-report-win.md
 
+      # run-all.sh only echoes a test's captured stdout when it FAILS, so
+      # test_pid_alive_diag.sh's evidence (raw OpenProcess/GetLastError, ps
+      # WINPID cross-check) never reaches the log on a PASS -- it mirrors its
+      # own output to this fixed path specifically so it's visible either way.
+      # $GITHUB_STEP_SUMMARY only renders in the web UI's Summary tab -- it is
+      # NOT part of the step log stream, so `gh run view --log` / `gh api
+      # .../logs` can never retrieve it. Echo to stdout too so this evidence
+      # is retrievable the same way every other test line in this job is.
+      - name: Publish pid diagnostic evidence
+        if: always()
+        run: |
+          if [[ -f .ci-debug-pid-diag.log ]]; then
+            echo "=== PID liveness diagnostic evidence ==="
+            cat .ci-debug-pid-diag.log
+            echo "=== end PID liveness diagnostic evidence ==="
+            {
+              echo "## PID liveness diagnostic evidence"
+              echo '```'
+              cat .ci-debug-pid-diag.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish report to job summary
         if: always()
         run: cat regression-report-win.md >> "$GITHUB_STEP_SUMMARY" || true
@@ -157,7 +203,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -186,7 +232,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 

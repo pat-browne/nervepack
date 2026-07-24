@@ -55,6 +55,7 @@ import np_evaluator  # noqa: E402  evaluator pipeline (np-evaluator.sh retired; 
 import np_aggregate  # noqa: E402  aggregate-metrics pipeline (73-aggregate-metrics.sh retired; this is now the only implementation)
 import np_skill_maintain  # noqa: E402  skill-maintenance orchestrator (75-skill-maintain.sh retired; this is now the only implementation)
 import np_agentic_cron  # noqa: E402  shared agentic-cron helper (71/72-run-*.sh retired; memory_promote()/episodic_maintain() are now the only implementations)
+import np_suggestion_resolve  # noqa: E402  in-process resolve/reject (np-suggestion-resolve.sh retired; this is now the only implementation)
 import shutil    # noqa: E402
 
 # nervepack_engine.hooks.* (e.g. session_flush) live under REPO/engine, a sibling
@@ -336,11 +337,16 @@ def _require_bash(tool):
     # nervepack_flush's own glue is bash-free (nervepack_engine.hooks.session_flush,
     # called in-process below) -- this gate now covers the agentic maintenance crons
     # (memory_promote()/episodic_maintain(), both np_agentic_cron.py -- their bash
-    # originals, 71/72-run-*.sh, are retired) and skill-maintain: each still shells
-    # out to np-llm.sh internally (claude -p with tools / bypass-permissions), so
-    # bash stays a real dependency even though the driver logic itself is in-process
-    # Python (73-aggregate-metrics.sh is retired; its np_aggregate.py replacement is
-    # called in-process and needs no bash at all). On a bash-free host, refuse
+    # originals, 71/72-run-*.sh, are retired) and skill-maintain: each calls
+    # np_llm_agent.run_agent() -> np_model.agent() for its Sonnet pass. As of phase 9
+    # of the bash->Python migration, np_model.agent()'s DEFAULT (claude) backend is
+    # itself bash-free (calls the `claude` binary directly, no `bash -c` wrapper) --
+    # this gate is conservative on purpose: NP_LLM_BACKEND=local with NP_LLM_AGENT_CMD
+    # still shells via `bash -c`, and that combination hasn't been verified safe to
+    # allow through on a bash-free host. Revisit narrowing this to the actual
+    # configured backend once that path is tested (73-aggregate-metrics.sh is
+    # retired; its np_aggregate.py replacement is called in-process and needs no
+    # bash at all, hence its own tool has no gate). On a bash-free host, refuse
     # cleanly (like the toggle shared-write path) instead of emitting a raw
     # subprocess error.
     if USE_PY and not _bash_available():
@@ -393,13 +399,16 @@ def _tool_suggestions(args):
         rc, out, err = run([sys.executable, rev, "clear"])
         return (out + err).strip() or "cleared"
     if action in ("resolve", "reject"):
-        rc, out, err = run(["bash", os.path.join(SETUP, "np-suggestion-resolve.sh"), args["text"]])
-        return (out + err).strip() or f"{action}d"
+        message, _rc = np_suggestion_resolve.resolve(args["text"])
+        return message or f"{action}d"
     if action == "implement":
         require_contribute()
         # async, detached — mirrors the dashboard server's /api/implement route.
         # mode is governed by the evaluator.implement_mode param (set via nervepack_toggle).
-        subprocess.Popen(np_bashlib.argv(["bash", os.path.join(SETUP, "np-implement-suggestion.sh"), args["text"]]),
+        # np_implement_suggestion.py (phase 10 -- the last script ported): dispatched
+        # via cli.py, no more bash np-implement-suggestion.sh.
+        cli = os.path.join(_ENGINE_DIR, "nervepack_engine", "cli.py")
+        subprocess.Popen([sys.executable, cli, "implement-suggestion", args["text"]],
                          cwd=REPO, start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return "implement job started (async; mode from evaluator.implement_mode)"
@@ -453,23 +462,24 @@ def _tool_maintain(args):
         return np_aggregate.aggregate()
     if job == "skills":
         # 75-skill-maintain.sh (the bash original) is retired -- np_skill_maintain.maintain()
-        # is now the only implementation. Unlike aggregate, it still shells to bash
-        # internally (the split pass runs np-llm.sh), so it stays gated by
-        # _require_bash like promote/maintain below rather than going fully bash-free.
+        # is now the only implementation. Its split pass calls np_llm_agent.run_agent()
+        # (np_model.agent(), phase 9 -- bash-free for the default claude backend), but
+        # it stays gated by _require_bash like promote/maintain below (see that
+        # function's docstring for why the gate isn't narrowed to the backend yet).
         _require_bash("nervepack_maintain")
         return np_skill_maintain.maintain()
     if job == "promote":
         # 71-run-memory-promote.sh (the bash original) is retired -- np_agentic_cron
-        # .memory_promote() is now the only implementation. Like skills, it still
-        # shells to bash internally (the agent call runs np-llm.sh), so it stays
-        # gated by _require_bash rather than going fully bash-free.
+        # .memory_promote() is now the only implementation. Like skills, its agent
+        # call runs through np_model.agent() (phase 9), but stays gated by
+        # _require_bash (see that function's docstring).
         _require_bash("nervepack_maintain")
         return np_agentic_cron.memory_promote()
     if job == "maintain":
         # 72-run-episodic-maintain.sh (the bash original) is retired -- np_agentic_cron
-        # .episodic_maintain() is now the only implementation. Like promote, it still
-        # shells to bash internally (the agent call runs np-llm.sh), so it stays
-        # gated by _require_bash rather than going fully bash-free.
+        # .episodic_maintain() is now the only implementation. Like promote, its agent
+        # call runs through np_model.agent() (phase 9), but stays gated by
+        # _require_bash (see that function's docstring).
         _require_bash("nervepack_maintain")
         return np_agentic_cron.episodic_maintain()
     raise ValueError(f"unknown maintain job: {job}")
@@ -477,11 +487,14 @@ def _tool_maintain(args):
 
 def _tool_onboard(args):
     # Bootstrap the whole install: link skills, wire the lifecycle hooks, install the
-    # scheduler, register the MCP, run the doctor. Shells out to the bash installers
-    # (via np-onboard.sh), so it refuses cleanly on a bash-free host like flush/maintain.
+    # scheduler, register the MCP, run the doctor. Dispatches to `cli.py onboard`
+    # (np_onboard.py, phase 7 of the bash->Python migration) -- that orchestrator is
+    # Python now, but most of its individual steps (link-skills, dashboard-data,
+    # every 5x/6x hook installer, the doctor) are still bash it shells out to, so
+    # this still refuses cleanly on a bash-free host like flush/maintain.
     require_writes()
     if USE_PY and not _bash_available():
-        raise Disabled("nervepack_onboard needs bash — it runs the setup/installer "
+        raise Disabled("nervepack_onboard needs bash — its steps are setup/installer "
                        "scripts (not supported on a bash-free host)")
     # Optionally point at the overlays first, mirroring ~/.config/nervepack/{content,team}-dir.
     cfg = os.path.join(os.path.expanduser("~"), ".config", "nervepack")
@@ -491,7 +504,8 @@ def _tool_onboard(args):
             os.makedirs(cfg, exist_ok=True)
             with open(os.path.join(cfg, fname), "w", encoding="utf-8") as fh:
                 fh.write(val + "\n")
-    rc, out, err = run(["bash", os.path.join(SETUP, "np-onboard.sh")])
+    cli = os.path.join(_ENGINE_DIR, "nervepack_engine", "cli.py")
+    rc, out, err = run([sys.executable, cli, "onboard"])
     return (out + err).strip() or "onboarded"
 
 

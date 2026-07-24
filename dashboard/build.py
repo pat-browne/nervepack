@@ -133,7 +133,7 @@ def _norm(s):
 def load_resolved(path):
     """Resolved/acted-on suggestions to never resurface — one suggestion text per
     line (blank and #-comment lines ignored). Lines may carry an optional trailing
-    tab+ISO-timestamp (appended by np-suggestion-resolve.sh for retention pruning);
+    tab+ISO-timestamp (appended by np_suggestion_resolve.py for retention pruning);
     the timestamp is stripped before normalization. Matched normalized. Missing = none."""
     resolved = set()
     try:

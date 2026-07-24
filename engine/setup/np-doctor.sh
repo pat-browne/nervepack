@@ -28,7 +28,7 @@ core_check() {
   case "$1" in
     llm-cli)
       local out rc
-      out="$(printf 'ping' | "$HERE/np-llm.sh" complete 2>/dev/null)"
+      out="$(printf 'ping' | python3 "$HERE/np_model.py" complete 2>/dev/null)"
       rc=$?
       [[ $rc -eq 0 && -n "$out" ]] && echo PASS || echo FAIL ;;
     git-sync)
@@ -69,8 +69,9 @@ core_check() {
       ;;
     dashboard-data)
       # In a split layout, dashboard/data must be a symlink resolving to an existing
-      # directory (the bridge created by 35-link-dashboard-data.sh). In a single-repo
-      # layout the real dir is already there — check it directly.
+      # directory (the bridge created by cli.py setup link-dashboard-data, backed by
+      # np_link_dashboard_data.py). In a single-repo layout the real dir is already
+      # there — check it directly.
       local cdir ddlink ddresolved
       cdir="$(source "$HERE/np-content-lib.sh" 2>/dev/null; np_content_dir 2>/dev/null)"
       ddlink="$NP/dashboard/data"
@@ -78,7 +79,7 @@ core_check() {
         echo "WARN (content dir unresolvable — cannot verify dashboard data bridge)"
       elif [[ "$cdir" == "$NP" ]]; then
         # Single-repo: real dir should exist.
-        [[ -d "$ddlink" ]] && echo PASS || echo "WARN (dashboard/data dir missing — run 35-link-dashboard-data.sh)"
+        [[ -d "$ddlink" ]] && echo PASS || echo "WARN (dashboard/data dir missing — run: cli.py setup link-dashboard-data)"
       else
         # Split layout: must be a symlink pointing at the content overlay.
         if [[ -L "$ddlink" ]]; then
@@ -86,12 +87,12 @@ core_check() {
           if [[ -d "$ddresolved" ]]; then
             echo PASS
           else
-            echo "WARN (dashboard/data symlink exists but target does not resolve — run 35-link-dashboard-data.sh)"
+            echo "WARN (dashboard/data symlink exists but target does not resolve — run: cli.py setup link-dashboard-data)"
           fi
         elif [[ -d "$ddlink" ]]; then
           echo "WARN (dashboard/data is a real directory, not a symlink into the content overlay — metrics may load from the wrong location)"
         else
-          echo "WARN (dashboard/data bridge missing — run 35-link-dashboard-data.sh to create the symlink into the content overlay; the dashboard will show no metrics until then)"
+          echo "WARN (dashboard/data bridge missing — run: cli.py setup link-dashboard-data to create the symlink into the content overlay; the dashboard will show no metrics until then)"
         fi
       fi ;;
     hook-scripts)
@@ -148,7 +149,7 @@ core_check() {
     pii_filter_full)
       python3 -c "import presidio_analyzer" >/dev/null 2>&1 \
         && echo PASS \
-        || echo "FAIL (run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy)" ;;
+        || echo "FAIL (run: python3 engine/nervepack_engine/cli.py setup install-pii-deps)" ;;
     *) echo SKIP ;;
   esac
 }

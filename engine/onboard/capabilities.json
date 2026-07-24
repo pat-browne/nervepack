@@ -13,9 +13,9 @@
         "claude-code": "symlink each skills/*/SKILL.md into ~/.claude/skills/ (reference: setup/30-link-skills.sh).",
         "goose": "expose skills via .goosehints (point at INDEX.md) and/or a recipe that loads the skill dir.",
         "generic": "make the markdown under skills/ part of the model's standing/system context each session.",
-        "cursor": "Cursor reads AGENTS.md + .cursor/rules/*.mdc natively (skills as standing context). For the consult-nervepack directive on a host without a session-start hook, append the managed block: setup/np-instruction-block.sh install <project>/AGENTS.md (or .cursor/rules/nervepack.mdc).",
-        "codex": "Codex reads AGENTS.md natively. Add the directive via the managed block: setup/np-instruction-block.sh install AGENTS.md.",
-        "instruction-file": "For any host that surfaces standing context through an instruction file but has NO session-start hook, run setup/np-instruction-block.sh install <native instruction file>. It appends only a fenced @import block (additive, idempotent, removable) — never run it on a host that already injects the directive via a session-start hook (e.g. Claude Code), to avoid double-injection. Verify: grep -q 'nervepack:begin' <file>."
+        "cursor": "Cursor reads AGENTS.md + .cursor/rules/*.mdc natively (skills as standing context). For the consult-nervepack directive on a host without a session-start hook, append the managed block: cli.py instruction-block install <project>/AGENTS.md (or .cursor/rules/nervepack.mdc).",
+        "codex": "Codex reads AGENTS.md natively. Add the directive via the managed block: cli.py instruction-block install AGENTS.md.",
+        "instruction-file": "For any host that surfaces standing context through an instruction file but has NO session-start hook, run cli.py instruction-block install <native instruction file>. It appends only a fenced @import block (additive, idempotent, removable) — never run it on a host that already injects the directive via a session-start hook (e.g. Claude Code), to avoid double-injection. Verify: grep -q 'nervepack:begin' <file>."
       }
     },
     {
@@ -75,7 +75,7 @@
       "why": "dashboard/index.html loads data/metrics.js as a relative sibling; in a split layout that file lives in the content overlay, so the engine's dashboard/data must be a symlink into that overlay. Without it a fresh clone shows no metrics.",
       "accept": "In a split layout, <engine>/dashboard/data is a symlink that resolves to an existing directory. In a single-repo layout, dashboard/data is a real directory. Either way, the dashboard can read its data.",
       "hints": {
-        "generic": "run engine/setup/35-link-dashboard-data.sh — it creates or repairs the symlink idempotently. Set NP_CONTENT_DIR or ~/.config/nervepack/content-dir first so the script knows where the content overlay lives."
+        "generic": "run python3 engine/nervepack_engine/cli.py setup link-dashboard-data — it creates or repairs the symlink idempotently. Set NP_CONTENT_DIR or ~/.config/nervepack/content-dir first so the script knows where the content overlay lives."
       }
     },
     {
@@ -148,9 +148,9 @@
       "why": "The backup cadence that consolidates memory, metrics and skill budgets even if on-exit promotion is missed; refine/compact keep skills lint-clean and deduped.",
       "accept": "A scheduler (cron or host-native) runs 71/72/73/75/76/77 on their cadences.",
       "hints": {
-        "claude-code": "user crontab (reference: 70-install-memory-cron.sh). 76 (refine, Sunday) and 77 (compact, Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
-        "claude-code-macos": "launchd LaunchAgents, not crontab (reference: 70-install-memory-launchd.sh); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
-        "claude-code-windows": "Windows Task Scheduler, not crontab (reference: 70-install-memory-schtasks.sh; runs under Git-bash, shells to schtasks.exe); verify with `schtasks //Query //FO LIST | grep -i nervepack`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
+        "claude-code": "user crontab (reference: cli.py setup install-memory-cron). 76 (refine, Sunday) and 77 (compact, Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
+        "claude-code-macos": "launchd LaunchAgents, not crontab (reference: cli.py setup install-memory-launchd); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
+        "claude-code-windows": "Windows Task Scheduler, not crontab (reference: cli.py setup install-memory-schtasks; runs under Git-bash, shells to schtasks.exe); verify with `schtasks //Query //FO LIST | grep -i nervepack`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: 76/77 can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
       }
     },
@@ -173,7 +173,7 @@
       "why": "Enables name/org/location scrubbing at storage time. Without it, pii_filter falls back to regex-only (structural PII only).",
       "accept": "python3 -c 'import presidio_analyzer' succeeds.",
       "hints": {
-        "generic": "Run engine/setup/25-install-pii-deps.sh to install Presidio + spaCy en_core_web_lg."
+        "generic": "Run cli.py setup install-pii-deps to install Presidio + spaCy en_core_web_lg."
       }
     }
   ]
