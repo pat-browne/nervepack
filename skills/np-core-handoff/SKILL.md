@@ -39,6 +39,11 @@ durable artifact — committing it pollutes the repo and the publish surface.
 - **Honor the argument.** If the user passed `$ARGUMENTS` (or answered the argument-hint),
   treat it as the next session's focus and tailor the doc to it — lead with what serves
   that goal, trim the rest.
+- **Run a retrospective before writing the doc.** Ask: what did this session assume that
+  turned out wrong, and what corrected it? Fold silently-corrected assumptions (a wrong
+  guessed path, a stale checkout, a bad sample) into the handoff's state section, and
+  capture anything durable via [[np-core-contribute]] rather than leaving it only in the
+  transcript the next agent won't see.
 
 ## When NOT to use this (vs. the rest of the continuity family)
 
