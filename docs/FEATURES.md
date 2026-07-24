@@ -239,9 +239,14 @@ be worth enforcing.
 and `strategies[]` on sessions with wins. `episodic-maintain` distills both into
 `memory/lessons/<topic>.md`, tagging each entry `provenance: failure` or
 `provenance: success` and adding an `enforce` block only when a tool-call gate is
-warranted. `lesson_guard.py` (`PreToolUse`, dispatched via `cli.py hook lesson-guard`)
+warranted. `lesson_guard.py` (`PreToolUse`, dispatched via `cli.py hook lesson-guard`,
+registered for `Bash`/`Read`/`Edit`/`Write`/`Skill`/a broad `mcp__.*` catch-all so
+non-Bash tool calls — including any MCP tool — actually reach it)
 gates `ask` entries / injects `warn` ones at the tool call for any entry that carries
-a non-empty `enforce.tool_match` — skipping advisory entries regardless of provenance.
+a non-empty `enforce.tool_match` (Bash commands) or a matching `enforce.tool_name_match`
+(any other tool, matched as a regex via `re.fullmatch` so one lesson can target a
+family of MCP tool names, e.g. `mcp__.*__repo_create_pull_request`) — skipping
+advisory entries regardless of provenance.
 `lesson_recall.py` (`UserPromptSubmit`, dispatched via `cli.py hook lesson-recall`,
 the merge of the former `playbook-recall.sh` + `strategy-recall.sh`) injects
 topic-matched entries on a session's first prompts, framing by provenance:
