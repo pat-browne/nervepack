@@ -61,8 +61,8 @@ echo "$outB" | grep -qE 'resume-pointer +PASS$' \
   && fail "absent hooks must not PASS resume-pointer: $(echo "$outB" | grep resume-pointer)"
 echo "$outB" | grep -qE 'resume-pointer +WARN' \
   || fail "absent hooks should report resume-pointer WARN: $(echo "$outB" | grep resume-pointer)"
-echo "$outB" | grep 'resume-pointer' | grep -qi '61-install-resume-hook.sh' \
-  || fail "resume-pointer WARN should hint at 61-install-resume-hook.sh: $(echo "$outB" | grep resume-pointer)"
+echo "$outB" | grep 'resume-pointer' | grep -qi 'setup install-hooks' \
+  || fail "resume-pointer WARN should hint at 'cli.py setup install-hooks': $(echo "$outB" | grep resume-pointer)"
 
 echo "PASS: no hooks registered -> resume-pointer WARN with fix hint"
 

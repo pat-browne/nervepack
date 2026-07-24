@@ -97,18 +97,18 @@ def _core_check(cap_id, np):
     if cap_id == "resume-pointer":
         writer = os.path.join(np, "engine", "nervepack_engine", "hooks", "resume_write.py")
         if not os.path.isfile(writer):
-            return ("WARN (resume_write.py missing — run "
-                    "engine/setup/61-install-resume-hook.sh)")
+            return ("WARN (resume_write.py missing — run: "
+                    "python3 engine/nervepack_engine/cli.py setup install-hooks)")
         settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
             os.path.expanduser("~"), ".claude", "settings.json")
         if not os.path.isfile(settings_path):
-            return ("WARN (no settings.json at %s — run "
-                    "engine/setup/61-install-resume-hook.sh)" % settings_path)
+            return ("WARN (no settings.json at %s — run: "
+                    "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
         try:
             settings = json.load(open(settings_path, encoding="utf-8"))
         except (OSError, ValueError):
-            return ("WARN (resume-pointer hooks not registered in %s — run "
-                    "engine/setup/61-install-resume-hook.sh)" % settings_path)
+            return ("WARN (resume-pointer hooks not registered in %s — run: "
+                    "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
         cmds = []
         def _walk(node):  # mirror the bash jq walk: `.. | objects | select(.type?=="command")`
             if isinstance(node, dict):
@@ -124,8 +124,8 @@ def _core_check(cap_id, np):
         has_recall = any("np-resume-recall.sh" in c or "cli.py hook resume-recall" in c for c in cmds)
         if has_session and has_recall:
             return "PASS"
-        return ("WARN (resume-pointer hooks not registered in %s — run "
-                "engine/setup/61-install-resume-hook.sh)" % settings_path)
+        return ("WARN (resume-pointer hooks not registered in %s — run: "
+                "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
     return "SKIP"
 
 
