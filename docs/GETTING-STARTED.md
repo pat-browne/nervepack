@@ -59,7 +59,7 @@ and scheduler, writes `~/.config/nervepack/adapter.json`, and runs the doctor un
 MUST capability is green. Verify any time:
 
 ```bash
-~/Code/nervepack/engine/setup/np-doctor.sh   # per-capability PASS/MISSING; non-zero on a real gap
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py doctor   # per-capability PASS/MISSING; non-zero on a real gap
 ```
 
 That's the whole install. What differs by OS is handled for you:

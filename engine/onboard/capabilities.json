@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "comment": "The tool-neutral integration contract for nervepack. The onboarding agent satisfies each capability for its host and records HOW (+ a verify command) in its adapter.json. np-doctor.sh reads this file: 'check:core' capabilities are verified by the doctor's shipped host-neutral checks; 'check:adapter' capabilities are verified by running the command the adapter recorded. MUST failures are errors; SHOULD failures are warnings; a host that cannot satisfy a SHOULD marks it 'unsupported'.",
+  "comment": "The tool-neutral integration contract for nervepack. The onboarding agent satisfies each capability for its host and records HOW (+ a verify command) in its adapter.json. The doctor (engine/setup/np_doctor.py, run via `cli.py doctor`) reads this file: 'check:core' capabilities are verified by the doctor's shipped host-neutral checks; 'check:adapter' capabilities are verified by running the command the adapter recorded. MUST failures are errors; SHOULD failures are warnings; a host that cannot satisfy a SHOULD marks it 'unsupported'.",
   "capabilities": [
     {
       "id": "knowledge",
