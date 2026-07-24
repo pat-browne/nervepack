@@ -46,6 +46,12 @@ mid-edit. Inspect its worktree first (`git -C <worktree> status` / `diff <base>`
 the diff is sound, finish it yourself — salvage beats restart. Re-dispatch only if the
 worktree is empty or the work is unsound. Full recipe: references/recovery.md
 
+When the deaths are **systematic** — the same transient infra error (a stream/idle-timeout
+storm) killing agent after agent, not a one-off stall — stop feeding the long role to
+dispatch: implement as controller yourself and dispatch only the shorter, **read-only
+review** subagent (which finishes far more often). A recurring fault is a signal to change
+the execution model, not to keep re-dispatching the role that keeps dying.
+
 **A subagent's claim about a *review* is not a verdict.** An implementer can come to rest
 narrating "the review passed" — it can't see the reviewer you dispatched separately. Act
 only on the reviewer's actual report or your own controller-side diff review. A
