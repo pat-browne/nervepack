@@ -209,27 +209,33 @@ class TestWindowsWrap(unittest.TestCase):
                              uname="Windows")
         self.assertEqual(self._cmd_at(), "bash -lc '~/x/y.sh &'")
 
-    def test_auto_detect_wraps_on_native_windows_os_name(self):
-        # Belt-and-suspenders: even if uname -s is unreachable (empty kernel),
-        # os.name == "nt" alone forces the wrap on native Windows.
-        env = {k: v for k, v in os.environ.items() if k != "NP_HOOK_WRAP"}
-        with mock.patch.dict(os.environ, env, clear=True), \
+    def test_uname_s_falls_back_to_windows_on_nt(self):
+        # When `uname -s` is unreachable (native Windows w/o Git-bash on PATH),
+        # _uname_s() returns a "Windows" sentinel iff os.name == "nt" -- the real
+        # native-Windows path (uname=None in production), which _wrap then treats
+        # as a Windows form. Tested without a live Windows host.
+        def _boom(*a, **k):
+            raise FileNotFoundError("uname")
+        with mock.patch.object(np_hook.subprocess, "run", _boom), \
              mock.patch.object(np_hook.os, "name", "nt"):
-            np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings,
-                             uname="")
-        self.assertEqual(self._cmd_at(), "bash -lc '~/x/y.sh &'")
+            self.assertEqual(np_hook._uname_s(), "Windows")
+        with mock.patch.object(np_hook.subprocess, "run", _boom), \
+             mock.patch.object(np_hook.os, "name", "posix"):
+            self.assertEqual(np_hook._uname_s(), "")
 
     def test_uname_s_exercises_real_detection(self):
         # Teeth for the auto path: _uname_s() must actually shell to `uname -s`
-        # (not a stub). On this POSIX host it returns a real non-empty kernel that
-        # is NOT a Windows form, so auto-detect leaves the command verbatim.
+        # (not a stub) and drive the wrap decision. Assert against whatever this
+        # host really is -- POSIX (Linux/Darwin) => verbatim; Git-bash (MINGW*) =>
+        # wrapped -- so the test is meaningful on BOTH the Linux and Windows lanes.
         kernel = np_hook._uname_s()
-        self.assertTrue(kernel, "_uname_s() returned empty on a POSIX host")
-        self.assertFalse(kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows")))
+        self.assertTrue(kernel, "_uname_s() returned empty on a real host")
+        expect_wrap = kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows"))
         env = {k: v for k, v in os.environ.items() if k != "NP_HOOK_WRAP"}
         with mock.patch.dict(os.environ, env, clear=True):
             np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings)
-        self.assertEqual(self._cmd_at(), "~/x/y.sh &")
+        expected = "bash -lc '~/x/y.sh &'" if expect_wrap else "~/x/y.sh &"
+        self.assertEqual(self._cmd_at(), expected)
 
     def test_malformed_settings_is_preserved_not_clobbered(self):
         # Fail-safe: a PRESENT-but-invalid settings.json must NOT be overwritten

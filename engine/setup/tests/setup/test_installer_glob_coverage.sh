@@ -63,6 +63,9 @@ spec.loader.exec_module(mod)
 print("\n".join(sorted(mod._HOOKS)))
 PY
 )"
+# Strip CR: on Windows, Python print() emits CRLF, so each handler name would
+# carry a trailing \r and never match the LF-only manifest names below.
+handler_names="${handler_names//$'\r'/}"
 [[ -n "$handler_names" ]] || fail "could not read _HOOKS from cli.py"
 
 # Every manifest hook name must have a handler.

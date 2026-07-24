@@ -105,15 +105,14 @@ def _wrap(cmd, wrap=None, uname=None):
         mode = "auto"
     mode = str(mode)
     if mode == "auto":
+        # The kernel string is authoritative: an explicitly-injected `uname` (tests)
+        # decides on its own, and real detection routes the os.name=="nt" fallback
+        # THROUGH _uname_s() (which returns "Windows" when `uname -s` is unreachable
+        # on a native-Windows host). Keeping the os.name check out of _wrap is what
+        # lets an injected uname="Linux" stay verbatim even when the test process
+        # itself runs on Windows (phase-13 Windows-lane finding).
         kernel = uname if uname is not None else _uname_s()
-        # Wrap on any Windows form: Git-bash (uname -s = MINGW*/MSYS*/CYGWIN*) OR
-        # native-Windows Python (os.name == "nt"). The bash original keyed only on
-        # `uname -s`; keying additionally on os.name closes the gap where onboarding
-        # runs cli.py via NATIVE python3 -- there `uname -s` may be unreachable and
-        # platform reports "Windows", not "MINGW*", so the old check registered a
-        # bare `.sh &` command PowerShell can't execute (phase-13 review finding).
-        is_windows = kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows")) or os.name == "nt"
-        mode = "1" if is_windows else "0"
+        mode = "1" if kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows")) else "0"
     if mode == "1":
         return "bash -lc '%s'" % cmd
     return cmd
