@@ -96,6 +96,18 @@ class TestAllowlist(unittest.TestCase):
         with open(self.settings) as fh:
             self.assertEqual(fh.read(), before, "malformed settings.json was clobbered")
 
+    def test_remove_failsafe_on_malformed_settings(self):
+        # Symmetric to install's fail-safe: a present-but-malformed settings.json
+        # must be preserved, not clobbered (the phase-13 np_hook lesson).
+        with open(self.settings, "w") as fh:
+            fh.write("{ this is not valid json ")
+        with open(self.settings) as fh:
+            before = fh.read()
+        with self.assertRaises(ValueError):
+            np_toggle.remove_permissions()
+        with open(self.settings) as fh:
+            self.assertEqual(fh.read(), before, "malformed settings.json was clobbered by remove")
+
     def test_remove_noop_when_settings_absent(self):
         self.assertFalse(os.path.exists(self.settings))
         np_toggle.remove_permissions()          # must not raise, must not create

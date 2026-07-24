@@ -19,6 +19,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 CLI = os.path.normpath(os.path.join(SETUP, "..", "nervepack_engine", "cli.py"))
 LIB = os.path.join(SETUP, "np-toggle-lib.sh")
+if SETUP not in sys.path:
+    sys.path.insert(0, SETUP)
+import np_toggle  # noqa: E402
 
 CONF = (
     "memory|shared|runtime|on|\n"
@@ -93,6 +96,11 @@ class TestToggleCli(unittest.TestCase):
         self._run("memory", "off")
         out = self._run("status").stdout
         self.assertRegex(out, r"memory\s+off")
+        # Byte-exact table (closes the parity gap the deleted write-parity test held):
+        # the printf layout `%-14s %-7s %s` and the SCOPE column must not drift.
+        lines = out.splitlines()
+        self.assertIn("%-14s %-7s %s" % ("FEATURE", "STATE", "SCOPE"), lines)
+        self.assertIn("%-14s %-7s %s" % ("memory", "off", "shared"), lines)
 
     def test_dotted_bare_feature_flips_conf_not_local(self):
         # A declared feature whose own name contains a dot (maintain.refine) must
@@ -128,6 +136,40 @@ class TestToggleCli(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("allowlist=off", self._read(self.local).splitlines())
         self.assertFalse(os.path.exists(settings), "managed guard still wrote settings.json")
+
+
+class TestSetLocal(unittest.TestCase):
+    """Direct set_local() coverage the deleted write-parity test held: overwriting
+    one local key must preserve the others, and a dotted local-param write works."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.local = os.path.join(self._tmp.name, "local")
+        self._prev = os.environ.get("NP_TOGGLES_LOCAL")
+        os.environ["NP_TOGGLES_LOCAL"] = self.local
+
+    def tearDown(self):
+        self._tmp.cleanup()
+        if self._prev is None:
+            os.environ.pop("NP_TOGGLES_LOCAL", None)
+        else:
+            os.environ["NP_TOGGLES_LOCAL"] = self._prev
+
+    def _lines(self):
+        with open(self.local, "r", newline="") as fh:
+            return fh.read().splitlines()
+
+    def test_overwrite_key_preserves_others_and_dedups(self):
+        np_toggle.set_local("evaluator.implement_mode", "pr")   # dotted local param
+        np_toggle.set_local("memory.recall", "off")
+        np_toggle.set_local("evaluator.implement_mode", "direct")  # overwrite the first
+        lines = self._lines()
+        self.assertIn("memory.recall=off", lines)                  # untouched key preserved
+        self.assertIn("evaluator.implement_mode=direct", lines)    # new value
+        self.assertNotIn("evaluator.implement_mode=pr", lines)     # old value dropped
+        self.assertEqual(
+            sum(1 for l in lines if l.startswith("evaluator.implement_mode=")), 1,
+            "overwrite left a duplicate line")
 
 
 if __name__ == "__main__":
