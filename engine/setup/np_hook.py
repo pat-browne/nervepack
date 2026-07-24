@@ -29,6 +29,8 @@ own hook commands are single-quote-free, so single-quote wrapping is safe.
 import json
 import os
 import re
+import subprocess
+import sys
 import tempfile
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,12 +60,15 @@ def _settings_path(settings_path=None):
 
 
 def _load(path):
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
+    # Missing file -> fresh {} (first install). A PRESENT but malformed file
+    # raises (ValueError) and propagates: callers must fail-safe rather than
+    # overwrite it -- matching the old `jq … > tmp && mv` behavior, where a jq
+    # parse error skipped the mv and preserved the user's settings.json intact.
+    if not os.path.exists(path):
         return {}
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data if isinstance(data, dict) else {}
 
 
 def _dump(path, data):
@@ -101,18 +106,31 @@ def _wrap(cmd, wrap=None, uname=None):
     mode = str(mode)
     if mode == "auto":
         kernel = uname if uname is not None else _uname_s()
-        mode = "1" if kernel.startswith(("MINGW", "MSYS", "CYGWIN")) else "0"
+        # Wrap on any Windows form: Git-bash (uname -s = MINGW*/MSYS*/CYGWIN*) OR
+        # native-Windows Python (os.name == "nt"). The bash original keyed only on
+        # `uname -s`; keying additionally on os.name closes the gap where onboarding
+        # runs cli.py via NATIVE python3 -- there `uname -s` may be unreachable and
+        # platform reports "Windows", not "MINGW*", so the old check registered a
+        # bare `.sh &` command PowerShell can't execute (phase-13 review finding).
+        is_windows = kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows")) or os.name == "nt"
+        mode = "1" if is_windows else "0"
     if mode == "1":
         return "bash -lc '%s'" % cmd
     return cmd
 
 
 def _uname_s():
+    """`uname -s` (parity with the bash original + np_scheduler_install.uname_s):
+    a Git-for-Windows host reports MINGW*/MSYS*/CYGWIN*. Falls back to a "Windows"
+    sentinel when uname is unavailable but os.name says we're on Windows, and to
+    "" elsewhere (Linux/macOS uname is always reachable)."""
     try:
-        import platform
-        return platform.system() or ""
+        r = subprocess.run(["uname", "-s"], capture_output=True, text=True, timeout=2)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
     except Exception:
-        return ""
+        pass
+    return "Windows" if os.name == "nt" else ""
 
 
 def _entry_joined(entry):
@@ -185,6 +203,18 @@ def read_manifest(manifest_path=None):
 
 def install_hooks(settings_path=None, manifest_path=None, wrap=None, uname=None):
     """Driver: run the 53 legacy purges, then register every manifest row in order."""
+    # Fail-safe pre-flight: never overwrite a PRESENT-but-malformed settings.json
+    # (that would silently wipe the user's permissions/model/env). Abort loudly and
+    # leave the file untouched -- the old jq path preserved it on a parse error too.
+    path = _settings_path(settings_path)
+    if os.path.exists(path):
+        try:
+            _load(path)
+        except (OSError, ValueError) as e:
+            sys.stderr.write(
+                "np_hook: refusing to modify malformed settings file %s (%s) -- "
+                "fix it and re-run install-hooks\n" % (path, e))
+            return 1
     for event, substrings in _LEGACY_PURGES:
         purge(event, substrings, settings_path=settings_path)
     for event, matcher, command in read_manifest(manifest_path):

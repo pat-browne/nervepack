@@ -45,7 +45,7 @@ done
 [[ -r "$MANIFEST" ]] || fail "hooks.manifest not found at $MANIFEST"
 
 # Hook names referenced in the manifest (dedup).
-manifest_names="$(grep -oE 'cli\.py hook [a-z-]+' "$MANIFEST" | awk '{print $3}' | sort -u)"
+manifest_names="$(grep -oE 'cli\.py hook [a-z0-9_-]+' "$MANIFEST" | awk '{print $3}' | sort -u)"
 [[ -n "$manifest_names" ]] || fail "no 'cli.py hook <name>' rows found in the manifest"
 
 # Handler names registered in cli.py's _HOOKS dict (the keys), via Python.

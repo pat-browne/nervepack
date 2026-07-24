@@ -199,6 +199,52 @@ class TestWindowsWrap(unittest.TestCase):
                              uname="Linux")
         self.assertEqual(self._cmd_at(), "~/x/y.sh &")
 
+    def test_auto_detect_wraps_when_uname_reports_windows(self):
+        # Native-CPython `platform.system()` returns "Windows" (not "MINGW*") even
+        # under Git-for-Windows -- the old check left this UNWRAPPED, so the hook
+        # command was a bare `.sh &` PowerShell can't run (phase-13 review MAJOR).
+        env = {k: v for k, v in os.environ.items() if k != "NP_HOOK_WRAP"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings,
+                             uname="Windows")
+        self.assertEqual(self._cmd_at(), "bash -lc '~/x/y.sh &'")
+
+    def test_auto_detect_wraps_on_native_windows_os_name(self):
+        # Belt-and-suspenders: even if uname -s is unreachable (empty kernel),
+        # os.name == "nt" alone forces the wrap on native Windows.
+        env = {k: v for k, v in os.environ.items() if k != "NP_HOOK_WRAP"}
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch.object(np_hook.os, "name", "nt"):
+            np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings,
+                             uname="")
+        self.assertEqual(self._cmd_at(), "bash -lc '~/x/y.sh &'")
+
+    def test_uname_s_exercises_real_detection(self):
+        # Teeth for the auto path: _uname_s() must actually shell to `uname -s`
+        # (not a stub). On this POSIX host it returns a real non-empty kernel that
+        # is NOT a Windows form, so auto-detect leaves the command verbatim.
+        kernel = np_hook._uname_s()
+        self.assertTrue(kernel, "_uname_s() returned empty on a POSIX host")
+        self.assertFalse(kernel.startswith(("MINGW", "MSYS", "CYGWIN", "Windows")))
+        env = {k: v for k, v in os.environ.items() if k != "NP_HOOK_WRAP"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings)
+        self.assertEqual(self._cmd_at(), "~/x/y.sh &")
+
+    def test_malformed_settings_is_preserved_not_clobbered(self):
+        # Fail-safe: a PRESENT-but-invalid settings.json must NOT be overwritten
+        # (which would wipe the user's permissions/model). register() raises and
+        # install_hooks() returns 1, both leaving the file byte-for-byte intact.
+        bad = '{"permissions": {"allow": ["Bash"]}, oops not json'
+        with open(self.settings, "w", encoding="utf-8") as fh:
+            fh.write(bad)
+        with self.assertRaises(ValueError):
+            np_hook.register("SessionStart", "~/x/y.sh &", settings_path=self.settings)
+        rc = np_hook.install_hooks(settings_path=self.settings)
+        self.assertEqual(rc, 1)
+        with open(self.settings, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), bad)
+
 
 class TestPurge(unittest.TestCase):
     def setUp(self):
