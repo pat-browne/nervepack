@@ -403,7 +403,8 @@ a diagram — the dashboard's no-external-fetch invariant holds), gated by
 `dashboard/index.html`, `dashboard/vendor/mermaid.min.js`,
 `engine/nervepack_engine/hooks/open_dashboard.py` (dispatched as `cli.py hook
 open-dashboard`, backed by `engine/setup/np_dashboard.py`),
-`open-dashboard.sh`, `np-core-dashboard`.
+`np_dashboard.open_manual()` (the manual open, `cli.py open-dashboard`),
+`np-core-dashboard`.
 Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`,
 `wiki_mermaid`, `dashboard_sessions`).
 
