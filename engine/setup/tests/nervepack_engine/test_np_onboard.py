@@ -67,20 +67,29 @@ class TestOnboard(unittest.TestCase):
 
     def test_1_runs_every_phase_in_order(self):
         setup_dir = _make_setup_dir(self.tmp, [
-            "30-link-skills.sh", "35-link-dashboard-data.sh",
-            "61-install-resume-hook.sh",
+            "30-link-skills.sh", "61-install-resume-hook.sh",
         ])
         rec = _Recorder()
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         self.assertEqual(rc, 0)
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
         self.assertIn("30-link-skills.sh", basenames)
-        self.assertIn("35-link-dashboard-data.sh", basenames)
         self.assertIn("61-install-resume-hook.sh", basenames)
         self.assertIn("np-doctor.sh", basenames)
+        # link-dashboard-data is now a cli.py dispatch (phase 11), not a bash script.
+        cli_calls = [c for c in rec.calls if c[0] != "bash"]
+        self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
+
+        def _idx(pred):
+            return next(i for i, c in enumerate(rec.calls) if pred(c))
+
+        link_skills_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "30-link-skills.sh")
+        dashboard_idx = _idx(lambda c: c[0] != "bash" and "link-dashboard-data" in c)
+        hooks_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "61-install-resume-hook.sh")
+        doctor_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "np-doctor.sh")
         # order: link-skills before dashboard-data before hooks before doctor
-        self.assertLess(basenames.index("30-link-skills.sh"), basenames.index("35-link-dashboard-data.sh"))
-        self.assertLess(basenames.index("61-install-resume-hook.sh"), basenames.index("np-doctor.sh"))
+        self.assertLess(link_skills_idx, dashboard_idx)
+        self.assertLess(hooks_idx, doctor_idx)
 
     def test_2_glob_picks_up_5x_and_6x_but_not_70(self):
         setup_dir = _make_setup_dir(self.tmp, [
@@ -97,11 +106,12 @@ class TestOnboard(unittest.TestCase):
         self.assertNotIn("70-install-memory-cron.sh", basenames)
 
     def test_3_fail_soft_a_failing_step_does_not_abort_the_run(self):
-        setup_dir = _make_setup_dir(self.tmp, ["30-link-skills.sh", "35-link-dashboard-data.sh"])
+        setup_dir = _make_setup_dir(self.tmp, ["30-link-skills.sh"])
         rec = _Recorder(fail_scripts={"30-link-skills.sh"})
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
+        cli_calls = [c for c in rec.calls if c[0] != "bash"]
+        self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
-        self.assertIn("35-link-dashboard-data.sh", basenames)
         self.assertIn("np-doctor.sh", basenames)
         self.assertEqual(rc, 0)  # doctor itself succeeded -- that's the return value
 

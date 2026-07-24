@@ -21,12 +21,12 @@ quiet, then gate on the diff**. It is the operational front-end to the
 
 ## The waiter
 
-`engine/setup/np-merge-wait.sh` blocks until the repo is **quiet** (all refs + HEAD
-+ working tree stable across a full poll interval), then checks merge-readiness.
-Read-only — it never commits, merges, or pushes.
+`cli.py merge-wait` (backed by `engine/setup/np_merge_wait.py`) blocks until the repo
+is **quiet** (all refs + HEAD + working tree stable across a full poll interval),
+then checks merge-readiness. Read-only — it never commits, merges, or pushes.
 
 ```bash
-engine/setup/np-merge-wait.sh --repo ~/Code/nervepack --branch <BR> --base origin/main
+python3 engine/nervepack_engine/cli.py merge-wait --repo ~/Code/nervepack --branch <BR> --base origin/main
 ```
 
 Cadence: starts at `--interval` 60s, adds `--backoff` 30s each cycle, gives up at

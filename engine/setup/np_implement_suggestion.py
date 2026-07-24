@@ -44,6 +44,7 @@ import time
 import np_bashlib
 import np_content
 import np_model
+import np_suggestion_resolve
 import np_toggle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -490,20 +491,17 @@ def _default_gh_pr_create(repo, branch, base):
 
 def _default_resolve(text):
     """Resolve (mark acted-on) + COMMIT the resolution so the ledger's own tree
-    is left clean. Shells to np-suggestion-resolve.sh (unported; rewrites
-    resolved-suggestions.txt + rebuilds metrics.js), then commits+pushes
-    whatever it touched at the git root that actually tracks the ledger --
-    which may not be `repo` (a split layout's dashboard/data is only a symlink
-    into the content overlay)."""
-    resolve_script = os.path.join(_HERE, "np-suggestion-resolve.sh")
-    # stdin=DEVNULL + timeout: this call previously had neither, and a 6-hour
-    # Windows CI hang traced to exactly here -- np-suggestion-resolve.sh (or
-    # whatever it shells to) inheriting this process's stdin with no EOF ever
-    # coming, on a host with no real terminal to satisfy a read.
-    subprocess.run(np_bashlib.argv(["bash", resolve_script, text]), stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, timeout=60)
-    ledger = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
-        np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
+    is left clean. Resolves in-process via np_suggestion_resolve.resolve()
+    (rewrites resolved-suggestions.txt + rebuilds metrics.js), then
+    commits+pushes whatever it touched at the git root that actually tracks
+    the ledger -- which may not be `repo` (a split layout's dashboard/data is
+    only a symlink into the content overlay)."""
+    # In-process now (phase 11) -- np_suggestion_resolve.resolve() replaces
+    # the bash shell-out that was one of the sites hardened during the
+    # Windows-hang investigation (stdin=DEVNULL, timeout=60). No subprocess,
+    # no stdin/timeout concern at all.
+    np_suggestion_resolve.resolve(text)
+    ledger = np_suggestion_resolve.default_ledger_path()
     ledger_dir = os.path.dirname(ledger)
     root_r = _git(ledger_dir, "rev-parse", "--show-toplevel")
     resolve_dir = (root_r.stdout or "").strip() if root_r.returncode == 0 else ""

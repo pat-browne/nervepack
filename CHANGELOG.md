@@ -24,11 +24,13 @@ It does not track any individual user's personal content overlay.
   `<engine>/dashboard/data` → `<content>/dashboard/data` symlink bridge had no
   bootstrap step — it was created once by hand during the engine/content split
   migration and gitignored, so every new clone was missing it and the dashboard
-  loaded no metrics. Fix: `engine/setup/35-link-dashboard-data.sh` (idempotent
-  bootstrap step, numbered between 30-link-skills and 40-sync) creates or repairs
-  the symlink on a fresh clone. A missing bridge is now surfaced by `np-doctor.sh`
-  as a WARN on the new `dashboard-data` SHOULD capability. Regression test:
-  `engine/setup/tests/setup/test_link_dashboard_data.sh`.
+  loaded no metrics. Fix: `35-link-dashboard-data.sh` (idempotent bootstrap step,
+  numbered between 30-link-skills and 40-sync; later ported to
+  `np_link_dashboard_data.py` / `cli.py setup link-dashboard-data` in phase 11)
+  creates or repairs the symlink on a fresh clone. A missing bridge is now
+  surfaced by `np-doctor.sh` as a WARN on the new `dashboard-data` SHOULD
+  capability. Regression test: `test_np_link_dashboard_data.py` (originally
+  `test_link_dashboard_data.sh`).
 
 ### Added
 - **`np-implement-suggestion.sh` ported to Python (phase 10 — the last and most
