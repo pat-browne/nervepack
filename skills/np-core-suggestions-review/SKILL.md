@@ -52,7 +52,7 @@ view of "open" matches what the dashboard shows.
 ## The GUI shortcut (served dashboard)
 
 When `evaluator.dashboard_serve` is **on** (a param, default on — flip off with
-`nervepack-toggle evaluator.dashboard_serve off`), the dashboard is served from a
+`cli.py toggle evaluator.dashboard_serve off`), the dashboard is served from a
 local backend (`engine/setup/np-dashboard-server.py`) and its Suggestions panel gains
 buttons: **Resolve** (one item → `np_suggestion_resolve.py` (`cli.py suggestion-resolve`)), **Review** (a single
 Haiku verdict pass over the top-N, via `np-llm.sh`), and **Review & clear** (resolve

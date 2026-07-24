@@ -1,18 +1,18 @@
 ---
 name: np-core-toggle
-description: Turn Nervepack features on/off and adjust their settings. Use when the user says "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or wants to change a param like the sync interval. Wraps engine/setup/nervepack-toggle.sh.
+description: Turn Nervepack features on/off and adjust their settings. Use when the user says "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or wants to change a param like the sync interval. Wraps the `cli.py toggle` command (engine/nervepack_engine/cli.py).
 ---
 
 # np-core-toggle
 
 Nervepack features each have an on/off toggle declared in `engine/setup/toggles.conf`.
-Use the CLI:
+Use the CLI (`TOGGLE="python3 ~/Code/nervepack/engine/nervepack_engine/cli.py toggle"`):
 
-- **List state:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh status`
-- **Flip:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh <feature> on|off`
-- **Set a param:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh param sync.interval 3600`
-- **Interactive picker:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh` (no args)
-- **Audit:** `~/Code/nervepack/engine/setup/nervepack-toggle.sh audit`
+- **List state:** `$TOGGLE status`
+- **Flip:** `$TOGGLE <feature> on|off`
+- **Set a param:** `$TOGGLE param sync.interval 3600`
+- **Interactive picker:** `$TOGGLE` (no args) / `$TOGGLE menu`
+- **Audit:** `$TOGGLE audit`
 
 Families (full param list in `toggles.conf`): `memory` (capture/recall/promote +
 back-capture params), `lessons` (auto-distilled lessons; `.enforce`), `directive`,
@@ -29,7 +29,7 @@ next sync; `allowlist` (local) and any sub-override write to
 
 **Sync:** primary sync runs on session exit (`SessionEnd`); the throttled
 `SessionStart` sync (default 1 day) is a backup. Change with
-`nervepack-toggle param sync.interval <seconds>`.
+`cli.py toggle param sync.interval <seconds>`.
 
 **When adding a NEW Nervepack feature, add a `toggles.conf` row and wire its
 enforcement** (`np_enabled` guard for runtime/cron, install/remove for managed) —

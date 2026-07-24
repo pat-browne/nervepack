@@ -498,23 +498,29 @@ it in. The new skill is live without a manual pull.
 **Purpose.** Every feature has an on/off switch (and tunable params), so nothing is
 load-bearing-without-escape and new behavior is always reversible.
 
-**Workflow.** `toggles.conf` (committed) is the manifest; `np-toggle-lib.sh` resolves
-`toggles.local → toggles.conf → default-on` (fail-open: unknown = on). Every runtime
-check goes through `np_enabled`/`np_param`. A flag needing its own default is a *param*,
-not a sub-toggle (sub-toggles wrongly inherit an "on" parent).
+**Workflow.** `toggles.conf` (committed) is the manifest; `np-toggle-lib.sh` (bash
+runtime/cron guards) and `np_toggle.py` (the Python resolver + the whole write surface)
+both resolve `toggles.local → toggles.conf → default-on` (fail-open: unknown = on). Every
+runtime check goes through `np_enabled`/`np_param`. Users drive it with `cli.py toggle`
+(`status`/`<feature> on|off`/`param`/`audit`/`menu`), which dispatches to
+`np_toggle.cli()`; shared flips edit `toggles.conf` and path-limited-commit+push, local
+and managed writes land in `toggles.local` (managed also installs/removes the Claude
+permission allowlist). A flag needing its own default is a *param*, not a sub-toggle
+(sub-toggles wrongly inherit an "on" parent).
 
 **Dashboard panel.** The served dashboard renders a Feature Toggles panel: switches
 for bare features and schema-typed inputs for params (types/validation from
 `toggle-schema.json` via `np_toggle_schema.py`), with hover help per row.
 `np-dashboard-server.py` exposes `GET /api/toggles` + `POST /api/toggle` — bare-feature
-flips shell out to `nervepack-toggle.sh` (shared scope commits+pushes; local/managed
+flips call `np_toggle.flip()` in-process (shared scope commits+pushes; local/managed
 stays local, after a confirm dialog for shared flips), dotted params write locally via
 `np_toggle.set_local()`. A self-lockout guard refuses to flip `evaluator` or the
 panel's own gating params (`dashboard_open`/`dashboard_serve`/`toggle_ui`). Gated by
 `evaluator.toggle_ui` (default on).
 
-**Assets.** `toggles.conf`, `np-toggle-lib.sh`, `nervepack-toggle.sh`, `np-core-toggle`,
-`toggle-schema.json`, `np_toggle_schema.py`, `np-dashboard-server.py` (`/api/toggles`).
+**Assets.** `toggles.conf`, `np-toggle-lib.sh`, `np_toggle.py` + `np_toggle_audit.py`
+(+ `cli.py toggle`), `np-core-toggle`, `toggle-schema.json`, `np_toggle_schema.py`,
+`np-dashboard-server.py` (`/api/toggles`).
 
 **Situational example.** Lesson enforcement is too aggressive on a given machine. You
 run `np-core-toggle` → set `lessons.enforce` off locally; the guard hook no-ops there
