@@ -37,6 +37,11 @@ continuation channel that isn't there.
 5. **Verify the result yourself.** Treat the agent's report as a claim — independently
    re-check the key invariants (tree clean, tests/doctor green, nothing pushed public)
    before you trust "done."
+6. **Run a retrospective before calling it done.** After verification, ask: what did the
+   dispatched agent (or you, supervising) assume that turned out wrong, and what corrected
+   it? Capture silent mid-run corrections (a wrong guessed path, a stale checkout, a bad
+   sample) via [[np-core-contribute]], not just things that visibly broke — those are
+   exactly as valuable and easier to lose once the session ends.
 
 ## When a dispatched agent stalls — salvage, don't re-dispatch
 
