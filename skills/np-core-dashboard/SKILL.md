@@ -12,13 +12,15 @@ once-per-boot guard — knowing which is which answers "why didn't it open?".
 ## Open it now (manual, always works)
 
 ```bash
-bash ~/Code/nervepack/engine/setup/open-dashboard.sh
+python3 ~/Code/nervepack/engine/nervepack_engine/cli.py open-dashboard
 ```
 
-This rebuilds `metrics.js` from the latest metrics, resolves the URL, and opens it.
-It has **no boot guard** (a single deliberate open can't start the reconnect loop the
-SessionStart hook guards against — see below), so it opens every time you run it.
-`NP_DASH_OPENER` overrides `xdg-open` (e.g. for a headless box / test).
+This rebuilds `metrics.js` from the latest metrics, resolves the URL, and opens it
+(`np_dashboard.open_manual()`). It has **no boot guard** (a single deliberate open
+can't start the reconnect loop the SessionStart hook guards against — see below), so
+it opens every time you run it. `NP_DASH_OPENER` overrides `xdg-open` (e.g. for a
+headless box / test). Distinct from the SessionStart hook `cli.py hook open-dashboard`,
+which is once-per-boot. Fail-open: always exits 0.
 
 ## Why it doesn't auto-open every session
 
@@ -60,7 +62,7 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
 
 ## Served (http) vs static (file://) modes
 
-`engine/setup/np-dashboard-launch.sh` (`np_dashboard_url`) picks the URL from the
+`engine/setup/np_dashboard.py` (`dashboard_url()`) picks the URL from the
 `evaluator.dashboard_serve` param:
 
 - **`on` (default)** — starts the localhost-only backend `np-dashboard-server.py` on

@@ -1,9 +1,11 @@
-"""Direct unit tests for np_dashboard.py -- the new Python port of
-np-dashboard-launch.sh's URL/opener resolution, consumed by the new
-hooks/open_dashboard.py (Task 2). Ports the scenarios from
-test_dashboard_launch.sh and test_resolve_opener.sh. np-dashboard-launch.sh
-itself is NOT retired in this phase -- open-dashboard.sh (the manual open
-script, out of scope) still sources it directly."""
+"""Direct unit tests for np_dashboard.py -- the Python port of
+np-dashboard-launch.sh's URL/opener resolution (consumed by
+hooks/open_dashboard.py) AND open-dashboard.sh's manual open (open_manual(),
+consumed by cli.py open-dashboard). Ports the scenarios from
+test_dashboard_launch.sh, test_resolve_opener.sh, and test_open_dashboard_manual.sh.
+Both bash scripts are retired -- np_dashboard.py is the sole implementation."""
+import contextlib
+import io
 import os
 import socket
 import sys
@@ -139,6 +141,81 @@ class TestBootId(unittest.TestCase):
         with mock.patch("builtins.open", side_effect=_open_raises), \
              mock.patch.object(np_dashboard.subprocess, "run", side_effect=OSError("no sysctl")):
             self.assertEqual(np_dashboard.boot_id(), "unknown")
+
+
+class TestOpenManual(unittest.TestCase):
+    """Ports test_open_dashboard_manual.sh. Host-agnostic + hermetic: serve=off
+    keeps dashboard_url() on the cheap file:// path; subprocess.run is mocked so
+    neither the metrics rebuild nor the opener actually execute -- the assertions
+    ride the `command -v` gate (shutil.which/os.path.isfile), which is pure
+    Python, so both cases run on every lane including native Windows."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
+        # serve=off -> deterministic file:// URL, no server spawn.
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("evaluator|shared|runtime|on|dashboard_serve=off,dashboard_port=8787\n")
+        self._env = mock.patch.dict(os.environ, {
+            "NP_TOGGLES_CONF": self.toggles_conf,
+            "NP_TOGGLES_LOCAL": os.path.join(self.tmp, "local-none"),
+        }, clear=False)
+        self._env.start()
+        self.addCleanup(self._env.stop)
+        import shutil as _shutil
+        self.addCleanup(_shutil.rmtree, self.tmp, True)
+
+    def test_13_happy_resolvable_opener_prints_opened_and_returns_zero(self):
+        # A resolvable opener (sys.executable is always on PATH via shutil.which,
+        # harmless under the mock). Assert the file:// URL is what open_manual
+        # hands the opener, "opened <url>" is printed, and it returns 0.
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {"NP_DASH_OPENER": sys.executable}, clear=False), \
+             mock.patch.object(np_dashboard.subprocess, "run") as run, \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = np_dashboard.open_manual()
+        self.assertEqual(rc, 0)
+        expected = "file://%s/dashboard/index.html" % np_dashboard._ENGINE
+        self.assertIn("opened %s" % expected, out.getvalue())
+        self.assertEqual(err.getvalue(), "")
+        # Two subprocess.run calls: the metrics rebuild, then the opener with the URL.
+        opener_calls = [c for c in run.call_args_list
+                        if c.args and c.args[0] == [sys.executable, expected]]
+        self.assertEqual(len(opener_calls), 1)
+
+    def test_14_missing_opener_prints_no_opener_opens_nothing_returns_zero(self):
+        # A bogus NP_DASH_OPENER override -> fails the command -v gate -> "no
+        # opener", nothing opened, still exit 0 (fail-open). Host-agnostic: the
+        # bogus path is neither on PATH nor an existing file on any OS.
+        bogus = os.path.join(self.tmp, "does-not-exist-opener").replace("\\", "/")
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {"NP_DASH_OPENER": bogus}, clear=False), \
+             mock.patch.object(np_dashboard.subprocess, "run") as run, \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = np_dashboard.open_manual()
+        self.assertEqual(rc, 0)
+        self.assertIn("no opener", err.getvalue())
+        self.assertEqual(out.getvalue(), "")
+        # Only the metrics rebuild ran; the opener was never invoked.
+        opener_calls = [c for c in run.call_args_list
+                        if c.args and c.args[0] and c.args[0][0] == bogus]
+        self.assertEqual(opener_calls, [])
+
+
+class TestOpenManualDispatch(unittest.TestCase):
+    """The `cli.py open-dashboard` top-level command routes to open_manual()
+    and is distinct from `cli.py hook open-dashboard` (the SessionStart hook)."""
+
+    def test_15_cli_open_dashboard_routes_to_open_manual(self):
+        _ENGINE_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", ".."))
+        if _ENGINE_DIR not in sys.path:
+            sys.path.insert(0, _ENGINE_DIR)
+        from nervepack_engine import cli
+        with mock.patch.object(np_dashboard, "open_manual", return_value=0) as om:
+            rc = cli.main(["open-dashboard"])
+        self.assertEqual(rc, 0)
+        om.assert_called_once_with()
 
 
 if __name__ == "__main__":

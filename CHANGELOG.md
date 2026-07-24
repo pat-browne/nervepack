@@ -10,6 +10,24 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Changed
+- **Both dashboard open paths are now Python; `open-dashboard.sh` and
+  `np-dashboard-launch.sh` retired (phase 16 of the bash→Python migration).**
+  `np-dashboard-launch.sh`'s URL/opener resolution was already ported to
+  `engine/setup/np_dashboard.py` (`resolve_opener`/`is_listening`/`dashboard_url`/
+  `boot_id`, consumed by the SessionStart hook `open_dashboard.py`); phase 16 adds
+  `np_dashboard.open_manual()` — a full-parity port of the manual, on-demand open
+  (`open-dashboard.sh`): rebuild `metrics.js` (best-effort, passing
+  `WIKI_NAV`/`WIKI_MERMAID` from the `evaluator.wiki_nav`/`wiki_mermaid` params),
+  resolve the URL, `command -v`-gate the opener (`shutil.which` or an existing
+  path; a bogus `NP_DASH_OPENER` → `no opener (...) found` on stderr), open
+  best-effort, print `opened <url>`. Fail-open: always exits 0. A new top-level
+  `cli.py open-dashboard` command dispatches it, distinct from the once-per-boot
+  SessionStart hook `cli.py hook open-dashboard`. `np_dashboard.py` is now the
+  sole implementation for both paths; nothing sources the retired bash. The bash
+  tests (`test_open_dashboard_manual.sh`, `test_dashboard_launch.sh`) are deleted;
+  their scenarios are covered by `tests/evaluator/test_np_dashboard.py`
+  (host-agnostic + hermetic). `np-dashboard-server.py` (the served-mode HTTP
+  daemon) stays.
 - **The doctor is now a single in-process Python implementation; `np-doctor.sh`
   retired (phase 15 of the bash→Python migration).** `engine/setup/np_doctor.py`
   previously ran only the six deterministic core checks and reported `llm-cli` +
