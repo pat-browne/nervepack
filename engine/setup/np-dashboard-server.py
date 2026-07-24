@@ -60,7 +60,6 @@ _IMPLEMENT_OVERRIDE = os.environ.get("NP_IMPLEMENT")
 IMPLEMENT_ARGV = ([_IMPLEMENT_OVERRIDE] if _IMPLEMENT_OVERRIDE else
                   [sys.executable, os.path.join(os.path.dirname(HERE), "nervepack_engine", "cli.py"),
                    "implement-suggestion"])
-TOGGLES_LIB = os.path.join(HERE, "np-toggle-lib.sh")
 TOGGLE_CLI = os.path.join(HERE, "nervepack-toggle.sh")
 TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
 # Toggles the dashboard's OWN gating — flipping any of these from the panel would
@@ -118,12 +117,10 @@ def implement_status(text):
 
 
 def current_mode():
-    """Resolve evaluator.implement_mode via np_param (single source of truth). Default pr."""
+    """Resolve evaluator.implement_mode via np_toggle.param (single source of truth,
+    in-process — no bash). Default pr; coerce anything unexpected to pr."""
     try:
-        r = subprocess.run(
-            np_bashlib.argv(["bash", "-c", 'source "$0"; np_param evaluator.implement_mode pr', TOGGLES_LIB]),
-            capture_output=True, text=True, timeout=5)
-        m = (r.stdout or "").strip()
+        m = np_toggle.param("evaluator.implement_mode", "pr")
         return m if m in ("pr", "direct") else "pr"
     except Exception:
         return "pr"

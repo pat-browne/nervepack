@@ -80,14 +80,14 @@ class TestSessionFlush(unittest.TestCase):
         # rather than running the substeps synchronously.
         marker1 = os.path.join(self.tmp, "step1.done")
         marker2 = os.path.join(self.tmp, "step2.done")
-        stub1 = os.path.join(self.tmp, "stub1.sh")
-        stub2 = os.path.join(self.tmp, "stub2.sh")
+        # Every real substep is a .py entrypoint run via sys.executable (session_flush
+        # has no bash branch), so the detach-proof stubs are Python too.
+        stub1 = os.path.join(self.tmp, "stub1.py")
+        stub2 = os.path.join(self.tmp, "stub2.py")
         with open(stub1, "w") as fh:
-            fh.write("#!/usr/bin/env bash\nsleep 1\ntouch '%s'\n" % marker1)
+            fh.write("import time\ntime.sleep(1)\nopen(%r, 'w').close()\n" % marker1)
         with open(stub2, "w") as fh:
-            fh.write("#!/usr/bin/env bash\nsleep 1\ntouch '%s'\n" % marker2)
-        os.chmod(stub1, 0o755)
-        os.chmod(stub2, 0o755)
+            fh.write("import time\ntime.sleep(1)\nopen(%r, 'w').close()\n" % marker2)
 
         from nervepack_engine.hooks import session_flush
         with mock.patch.object(session_flush, "_STEP_PATHS", [stub1, stub2]):

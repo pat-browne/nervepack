@@ -75,50 +75,37 @@ def run(cmd, stdin=None, env=None):
 
 
 # --- toggle resolution ------------------------------------------------------
-# This long-running server resolves toggles IN-PROCESS via np_toggle.py (no bash
-# subprocess per request — the whole point on a git-for-windows-free host), while
-# the hot-path hooks/crons keep calling the bash np-toggle-lib.sh. The two are
-# parity-locked by tests/mcp/parity/test_toggle_parity.sh. NP_MCP_PURE_PYTHON=0
-# is the reversible escape hatch back to shelling out to bash.
+# The toggle / content / merge / episodic-match resolvers are FULLY ported to Python
+# (np_toggle.py / np_content.py / np_episodic_match.py, parity-locked by
+# tests/mcp/parity/*) and are the SINGLE call path — resolved in-process on every
+# host, no bash fallback. That's what lets this long-running server gate + recall
+# with no bash subprocess per request (the whole point on a git-for-windows-free host).
+#
+# USE_PY still governs the not-yet-fully-ported doctor / sync / toggle-write tools
+# below, which prefer bash when available and fall back to their partial Python
+# modules only when it isn't; NP_MCP_PURE_PYTHON=0 forces bash for those. Those
+# escape-hatch branches disappear as phases 14/15/17 finish their ports.
 USE_PY = os.environ.get("NP_MCP_PURE_PYTHON", "1") == "1"
 
 
-def _bash_enabled(feature):
-    lib = os.path.join(SETUP, "np-toggle-lib.sh")
-    rc, _, _ = run(["bash", "-c", 'source "$1"; np_enabled "$2"', "_", lib, feature])
-    return rc == 0
-
-
-def _bash_param(key, default):
-    lib = os.path.join(SETUP, "np-toggle-lib.sh")
-    _, out, _ = run(["bash", "-c", 'source "$1"; np_param "$2" "$3"', "_", lib, key, default])
-    return out.strip() or default
-
-
 def np_enabled(feature):
-    return np_toggle.enabled(feature) if USE_PY else _bash_enabled(feature)
+    return np_toggle.enabled(feature)
 
 
 def np_param(key, default):
-    return np_toggle.param(key, default) if USE_PY else _bash_param(key, default)
+    return np_toggle.param(key, default)
 
 
 _content_dir_cache = None
 _content_layers_cache = None
 _merge_mode_cache = None
 
-# Like the toggle resolver above, the content/team/merge resolution runs in-process
-# via np_content.py (bash-free, parity-locked by test_content_parity.sh) unless
-# NP_MCP_PURE_PYTHON=0 falls back to shelling out to the bash libs.
+# Content/team/merge resolution runs in-process via np_content.py (bash-free,
+# parity-locked by test_content_parity.sh) — the single call path, no bash fallback.
 def content_dir():
     global _content_dir_cache
     if _content_dir_cache is None:
-        if USE_PY:
-            _content_dir_cache = np_content.content_dir() or REPO
-        else:
-            lib = os.path.join(SETUP, "np-content-lib.sh")
-            rc, out, _ = run(["bash", "-c", 'source "$1"; np_content_dir', "_", lib])
-            _content_dir_cache = out.strip() or REPO
+        _content_dir_cache = np_content.content_dir() or REPO
     return _content_dir_cache
 
 
@@ -127,13 +114,7 @@ def _content_layers():
     Fail-open to [content_dir()] when the helper yields nothing. Cached per process."""
     global _content_layers_cache
     if _content_layers_cache is None:
-        if USE_PY:
-            roots = np_content.merge_roots()
-        else:
-            lib = os.path.join(SETUP, "np-layer-lib.sh")
-            _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_roots', "_", lib])
-            roots = [ln for ln in out.splitlines() if ln.strip()]
-        _content_layers_cache = roots or [content_dir()]
+        _content_layers_cache = np_content.merge_roots() or [content_dir()]
     return _content_layers_cache
 
 
@@ -141,13 +122,7 @@ def _merge_mode():
     """Validated team.merge mode (override|concatenate|team-only). Cached per process."""
     global _merge_mode_cache
     if _merge_mode_cache is None:
-        if USE_PY:
-            _merge_mode_cache = np_content.merge_mode()
-        else:
-            lib = os.path.join(SETUP, "np-layer-lib.sh")
-            _, out, _ = run(["bash", "-c", 'source "$1" 2>/dev/null; np_merge_mode', "_", lib])
-            m = out.strip()
-            _merge_mode_cache = m if m in ("override", "concatenate", "team-only") else "override"
+        _merge_mode_cache = np_content.merge_mode()
     return _merge_mode_cache
 
 
@@ -238,12 +213,9 @@ def _tool_recall(args):
             index = os.path.join(cd, d, "INDEX.md")
             if not os.path.exists(index):
                 continue
-            # In-process matcher (bash-free, parity-locked to episodic-match.sh).
-            if USE_PY:
-                topic_list = np_episodic_match.match(index, query)
-            else:
-                _, out, _ = run(["bash", os.path.join(SETUP, "episodic-match.sh"), index], stdin=query)
-                topic_list = [t for t in out.splitlines() if t.strip()]
+            # In-process matcher (bash-free, parity-locked to episodic-match.sh) —
+            # the single call path, no bash fallback.
+            topic_list = np_episodic_match.match(index, query)
             for topic in topic_list[:top]:
                 if mode != "concatenate" and topic in seen:
                     continue   # higher-precedence (team) layer already supplied this topic
