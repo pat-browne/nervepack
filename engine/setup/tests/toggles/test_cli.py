@@ -14,11 +14,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 CLI = os.path.normpath(os.path.join(SETUP, "..", "nervepack_engine", "cli.py"))
-LIB = os.path.join(SETUP, "np-toggle-lib.sh")
 if SETUP not in sys.path:
     sys.path.insert(0, SETUP)
 import np_toggle  # noqa: E402
@@ -69,15 +69,17 @@ class TestToggleCli(unittest.TestCase):
         return None
 
     def _np_param(self, key, default):
-        # Resolve via the bash lib (kept, phase 18) to prove the write took effect
-        # through the real resolver — mirrors the bash test's cross-check.
-        snippet = 'source "%s"; np_param "%s" "%s"' % (LIB, key, default)
-        r = subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, env=self._env())
-        return r.stdout.strip()
+        # Read back via the IN-PROCESS Python resolver (bash-free) to prove the write
+        # is visible to the same resolver the MCP/dashboard use. Not a bash shell-out:
+        # a bare `["bash", ...]` resolves to System32 WSL on the Windows lane and
+        # returns UTF-16 garbage (phase-13 lesson). np-toggle-lib.sh parity is covered
+        # separately by mcp/parity/test_toggle_parity.sh.
+        with mock.patch.dict(os.environ, self._env()):
+            return np_toggle.param(key, default)
 
     def _np_enabled(self, feature):
-        snippet = 'source "%s"; np_enabled "%s"' % (LIB, feature)
-        return subprocess.run(["bash", "-c", snippet], env=self._env()).returncode == 0
+        with mock.patch.dict(os.environ, self._env()):
+            return np_toggle.enabled(feature)
 
     # --- ported bash assertions --------------------------------------------
     def test_local_feature_writes_local_file(self):
