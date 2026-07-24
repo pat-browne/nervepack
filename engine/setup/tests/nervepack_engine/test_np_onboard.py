@@ -32,10 +32,12 @@ class _Recorder:
 
     def __call__(self, cmd, **kwargs):
         self.calls.append(cmd)
+        # The final verify step is now the in-process Python doctor via
+        # `cli.py doctor` (phase 15; np-doctor.sh retired), not a bash script.
+        if cmd and cmd[-1] == "doctor":
+            return _FakeResult(self.doctor_rc)
         if cmd and cmd[0] == "bash":
             base = os.path.basename(cmd[1])
-            if base == "np-doctor.sh":
-                return _FakeResult(self.doctor_rc)
             if base in self.fail_scripts:
                 return _FakeResult(1)
         return _FakeResult(0)
@@ -49,11 +51,7 @@ def _make_setup_dir(tmp, scripts):
         with open(path, "w") as fh:
             fh.write("#!/usr/bin/env bash\nexit 0\n")
         os.chmod(path, 0o755)
-    # np-doctor.sh must exist for the final verify step
-    doc = os.path.join(d, "np-doctor.sh")
-    if not os.path.exists(doc):
-        with open(doc, "w") as fh:
-            fh.write("#!/usr/bin/env bash\nexit 0\n")
+    # The final verify step is `cli.py doctor` (in-process Python), no script needed.
     return d
 
 
@@ -78,11 +76,11 @@ class TestOnboard(unittest.TestCase):
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
         self.assertIn("30-link-skills.sh", basenames)
         self.assertIn("58-install-mcp.sh", basenames)
-        self.assertIn("np-doctor.sh", basenames)
-        # link-dashboard-data + install-hooks are cli.py dispatches, not bash.
+        # link-dashboard-data + install-hooks + doctor are cli.py dispatches, not bash.
         cli_calls = [c for c in rec.calls if c[0] != "bash"]
         self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
         self.assertTrue(any("install-hooks" in c for c in cli_calls))
+        self.assertTrue(any(c[-1] == "doctor" for c in cli_calls))
 
         def _idx(pred):
             return next(i for i, c in enumerate(rec.calls) if pred(c))
@@ -90,7 +88,7 @@ class TestOnboard(unittest.TestCase):
         link_skills_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "30-link-skills.sh")
         dashboard_idx = _idx(lambda c: c[0] != "bash" and "link-dashboard-data" in c)
         hooks_idx = _idx(lambda c: c[0] != "bash" and "install-hooks" in c)
-        doctor_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "np-doctor.sh")
+        doctor_idx = _idx(lambda c: c[-1] == "doctor")
         # order: link-skills < dashboard-data < install-hooks < doctor
         self.assertLess(link_skills_idx, dashboard_idx)
         self.assertLess(dashboard_idx, hooks_idx)
@@ -121,8 +119,7 @@ class TestOnboard(unittest.TestCase):
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         cli_calls = [c for c in rec.calls if c[0] != "bash"]
         self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
-        basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
-        self.assertIn("np-doctor.sh", basenames)
+        self.assertTrue(any(c[-1] == "doctor" for c in cli_calls))
         self.assertEqual(rc, 0)  # doctor itself succeeded -- that's the return value
 
     def test_4_missing_step_script_is_skipped_not_fatal(self):
