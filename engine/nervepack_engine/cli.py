@@ -45,6 +45,7 @@ from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 import np_aggregate  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
+import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
 import np_instruction_block  # noqa: E402
 import np_link_dashboard_data  # noqa: E402
@@ -84,6 +85,7 @@ _SETUP = {
     "install-memory-cron": np_scheduler_install.install_cron,
     "install-memory-launchd": np_scheduler_install.install_launchd,
     "install-memory-schtasks": np_scheduler_install.install_schtasks,
+    "install-hooks": np_hook.install_hooks,
     "link-dashboard-data": np_link_dashboard_data.link,
     "install-apt-baseline": np_bootstrap.install_apt_baseline,
     "install-brew-baseline": np_bootstrap.install_brew_baseline,

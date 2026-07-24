@@ -1,0 +1,42 @@
+# nervepack lifecycle-hook registration manifest -- read by np_hook.install_hooks()
+# (dispatched as `cli.py setup install-hooks`). One pipe-delimited row per hook:
+#   event|matcher|command
+# Rows are registered in FILE ORDER; order matters within an event -- in
+# particular session-flush MUST be the LAST SessionEnd row so it runs after
+# episodic-capture + evaluator have written this session to the inboxes.
+# matcher is empty for all but the tool-scoped PreToolUse/PostToolUse hooks.
+# Backgrounded commands keep their `>/dev/null 2>&1 &` (or bare ` &`): the `&`
+# alone does NOT detach -- the child inherits the hook's stdout pipe and Claude
+# Code reads it to EOF, so an un-redirected backgrounded hook blocks session
+# start until the child exits. See np-kb-claude-headless-scripting.
+# Retired the 11 NN-install-*.sh installers + np-hook-lib.sh (phase 13).
+#
+# --- 50: sync + dashboard ---
+SessionStart||~/Code/nervepack/engine/setup/40-sync-nervepack.sh >/dev/null 2>&1 &
+SessionEnd||~/Code/nervepack/engine/setup/40-sync-nervepack.sh exit >/dev/null 2>&1 &
+SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
+# --- 51: consult-nervepack directive (synchronous) ---
+SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook session-directive
+# --- 52: episodic capture + recall ---
+SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture session-end &
+PreCompact||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture checkpoint
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-recall
+# --- 53: lessons layer (two lesson-guard matchers coexist via (matcher, base) dedup) ---
+PreToolUse|Bash|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Read|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-recall
+# --- 54: performance evaluator ---
+SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook evaluator &
+# --- 55: promotion flush (LAST SessionEnd row -- see header) ---
+SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook session-flush
+# --- 56: back-capture sweep (reliable capture path) ---
+SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook backcapture-sweep >/dev/null 2>&1 &
+# --- 57: struggle escalation ---
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook struggle-escalation
+# --- 59: skill-trigger recall ---
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook skill-trigger-recall
+# --- 61: resume pointer ---
+SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-sessionstart &
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-recall
+# --- 63: open artifact on write (Write-scoped) ---
+PostToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-artifact
