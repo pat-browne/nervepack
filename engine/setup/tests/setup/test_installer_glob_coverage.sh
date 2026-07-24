@@ -83,4 +83,20 @@ while IFS= read -r name; do
 done <<<"$handler_names"
 
 echo "PASS: hooks.manifest and cli.py _HOOKS are in bidirectional coverage"
+
+# --- C. lesson-guard PreToolUse matcher coverage (issue #152 regression) ---
+# Phase 2 (non-Bash tool_name matching) only ever runs for a tool name that
+# Claude Code was told to invoke this hook for -- a matcher missing from
+# hooks.manifest silently means "never fires," with no other signal. Pin the
+# full expected matcher set here so a future edit can't quietly drop one.
+lesson_guard_matchers="$(grep -E '^PreToolUse\|[^|]*\|.*hook lesson-guard' "$MANIFEST" \
+  | awk -F'|' '{print $2}' | sort -u)"
+[[ -n "$lesson_guard_matchers" ]] || fail "no PreToolUse lesson-guard rows found in the manifest"
+
+for expected in Bash Read Edit Write Skill 'mcp__.*'; do
+  grep -qxF "$expected" <<<"$lesson_guard_matchers" \
+    || fail "hooks.manifest is missing a PreToolUse lesson-guard row for matcher '$expected' (issue #152)"
+done
+echo "PASS: hooks.manifest registers lesson-guard for Bash/Read/Edit/Write/Skill/mcp__.* (issue #152)"
+
 echo "PASS test_installer_glob_coverage"

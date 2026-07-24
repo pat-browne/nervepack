@@ -211,6 +211,63 @@ class TestLessonGuard(unittest.TestCase):
         out = self._run({"tool_name": "Glob", "session_id": "s6", "tool_input": {}})
         self.assertEqual(out, "")
 
+    # --- issue #152: Phase 2 tool_name_match as regex (re.fullmatch), covering
+    # the MCP/Edit/Write/Skill matchers added to hooks.manifest ---
+    _CONCISE_TNM = (
+        r"^(Edit|Write|mcp__.*__(repo_create_pull_request|repo_reply_to_comment))$"
+    )
+
+    def test_14_phase2_regex_tool_name_match_fires_for_mcp_tool_family(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n")
+        self._write("concise-output.md",
+            "---\nname: concise-output\nprovenance: failure\n"
+            "enforce:\n  tool_name_match: \"%s\"\n  gate: warn\n---\n"
+            "**Do:** run np-flow-concise-output before the write completes.\n"
+            % self._CONCISE_TNM)
+        open(os.path.join(self.state, "s7-concise-output-gate-armed"), "a").close()
+        out = self._run({
+            "tool_name": "mcp__plugin_data-base_azure-devops__repo_create_pull_request",
+            "session_id": "s7",
+            "tool_input": {},
+        })
+        d = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(d["permissionDecision"], "allow")
+        self.assertIn("concise-output", d["additionalContext"])
+        # one-shot: the armed marker is consumed on fire
+        self.assertFalse(os.path.exists(os.path.join(self.state, "s7-concise-output-gate-armed")))
+
+    def test_15_phase2_regex_no_match_for_different_mcp_verb_silent(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n")
+        self._write("concise-output.md",
+            "---\nname: concise-output\nprovenance: failure\n"
+            "enforce:\n  tool_name_match: \"%s\"\n  gate: warn\n---\n"
+            "**Do:** run np-flow-concise-output before the write completes.\n"
+            % self._CONCISE_TNM)
+        open(os.path.join(self.state, "s8-concise-output-gate-armed"), "a").close()
+        out = self._run({
+            # a read-shaped MCP verb on the same server -- must NOT match the
+            # write-only alternation above.
+            "tool_name": "mcp__plugin_data-base_azure-devops__repo_list_pull_requests_by_repo_or_project",
+            "session_id": "s8",
+            "tool_input": {},
+        })
+        self.assertEqual(out, "")
+        # marker survives an unmatched call -- still armed for a later matching one
+        self.assertTrue(os.path.exists(os.path.join(self.state, "s8-concise-output-gate-armed")))
+
+    def test_16_phase2_invalid_regex_tool_name_match_fails_open(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n")
+        self._write("broken.md",
+            "---\nname: broken\nprovenance: failure\n"
+            "enforce:\n  tool_name_match: \"[unclosed\"\n  gate: warn\n---\n"
+            "**Do:** x\n")
+        open(os.path.join(self.state, "s9-broken-gate-armed"), "a").close()
+        out = self._run({"tool_name": "Edit", "session_id": "s9", "tool_input": {"file_path": "/x"}})
+        self.assertEqual(out, "")
+
 
 if __name__ == "__main__":
     unittest.main()
