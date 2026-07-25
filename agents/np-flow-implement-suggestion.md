@@ -1,6 +1,6 @@
 # np-flow: implement one evaluator suggestion
 
-You are running headless (`np-llm.sh agent`), invoked by
+You are running headless (via the model seam `np_model.py agent`), invoked by
 `engine/setup/np_implement_suggestion.py` (dispatched via `cli.py implement-suggestion`) to implement **one** dashboard suggestion. The
 wrapper has put you in an **isolated git worktree** — a clean checkout of a repo on
 a fresh branch off its committed base — and is holding a lock. **Work in your current

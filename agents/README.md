@@ -73,14 +73,14 @@ tail -50 ~/.cache/nervepack/compact.log
 
 ## Authentication notes
 
-- Local cron jobs run `np-llm.sh` (→ `claude -p` on the claude backend), which
+- Local cron jobs call the model seam `np_model.py` (→ `claude -p` on the claude backend), which
   uses the OAuth token in `~/.claude/.credentials.json`. Tokens auto-refresh
   while in use; if the box sits idle for weeks and the token lapses, the cron
   will fail silently. Check `~/.cache/nervepack/refine.log` /
   `~/.cache/nervepack/compact.log` after the first run to confirm authentication
   worked. Re-running `claude` interactively refreshes the token.
 - On a non-Claude host, set `NP_LLM_BACKEND=local` + `NP_LLM_AGENT_CMD` before
-  these crons run (see `engine/setup/np-llm.sh` for the backend contract).
+  these crons run (see `engine/setup/np_model.py` for the backend contract).
 
 ## Optional offload: cloud routines or OSS runners
 
