@@ -167,39 +167,32 @@ Record shapes (keep these stable; readers depend on them):
    and adds a row to `toggles.conf` (→ `specs/…feature-toggles`). Fail-open: unknown = on.
 4. **Cheap model by default.** Summarizers/judges → `claude-haiku-4-5-20251001`;
    agentic crons → `claude-sonnet-4-6`. Never Opus in automation. (→ CLAUDE.md §"Model selection")
-5. **Superseded: "Bash for glue, Python for parsing/logic."** The original split
-   (→ CLAUDE.md §"Harness language policy") kept hot-path hooks and OS-glue scripts
-   bash, reserving Python for parsing/logic off the hot path. The bash->Python CLI
-   consolidation (content overlay spec
-   `2026-07-15-nervepack-python-cli-consolidation-design.md`) overturns this: the
-   user accepted the ~20-70ms/call latency cost of a full Python port — including
-   hot-path hooks and OS-scheduler/bootstrap glue — in exchange for one language
+5. **Superseded: "Bash for glue, Python for parsing/logic." The bash→Python CLI
+   cutover is COMPLETE (phases 1–20, 2026-07).** The original split (→ CLAUDE.md
+   §"Harness language policy") kept hot-path hooks and OS-glue scripts bash; the
+   full-cutover roadmap (content overlay specs
+   `2026-07-15-nervepack-python-cli-consolidation-design.md` +
+   `2026-07-23-...full-cutover-roadmap-design.md`) overturned it: the user accepted
+   the ~20–70ms/call latency cost of a full Python port in exchange for one language
    everywhere, planning to reclaim performance in a later compiled-language phase
-   (Phase B, tracked in `ROADMAP.md`, not designed yet). Phases 1-7 are complete
-   (hooks, crons, scheduler installers, toolchain bootstrap, the onboard
-   orchestrator). Phase 8 (sourced-lib resolvers) was, it turns out, already done
-   before being formally tracked — `np_toggle.py`/`np_content.py` fully cover the
-   three former sourced bash libs, which phase 18 then deleted outright (every
-   caller had moved to the Python resolvers; the coverage was ported to in-process
-   Python tests first).
-   Phase 9 (`np-llm.sh`) ported both modes (`np_model.complete()`/`agent()`), and
-   phase 19 retired the now-vestigial bash wrapper outright — `np_model.py` is the
-   sole model seam; the `local` backend's `NP_LLM_AGENT_CMD` path shells `bash -c`
-   from within `np_model.agent()` (a user-configured command, not a re-implementable
-   script). Phase 10's script port (`np_implement_suggestion.py`) is done. Phase 13
-   retired `np-hook-lib.sh` and the 11 `NN-install-*.sh` hook installers: all
-   lifecycle-hook registration is now one declarative step —
-   `engine/setup/hooks.manifest` driven by `cli.py setup install-hooks`
-   (`engine/setup/np_hook.py`, the stdlib-json port of `np_register_hook`). Phase 11 is
-   done: the five remaining standalone scripts with no prior Python sibling
-   (`np-merge-wait.sh`, `np-suggestion-resolve.sh`, `np-instruction-block.sh`,
-   `np-architecture-freshness.sh`, `35-link-dashboard-data.sh`) are now ported and
-   their bash originals deleted; this does not touch the remaining
-   buckets (sourced-lib retirement, `np-llm.sh` retirement), which the design
-   spec calls out as explicitly out of
-   scope. Treat "which
-   language is this in" as a per-script fact you check in the feature catalog
-   above, not an inferable rule.
+   (Phase B, tracked in `ROADMAP.md`, not designed yet). **Every lifecycle hook,
+   cron, resolver, installer, and the model/doctor/sync/dashboard/toggle seams are
+   now Python, dispatched through `engine/nervepack_engine/cli.py`.** All of
+   `np-hook-lib.sh`, `np-toggle-lib.sh`, `np-content-lib.sh`, `np-layer-lib.sh`,
+   `np-doctor.sh`, `40-sync-nervepack.sh`, `30-link-skills.sh`, `60-generate-index.sh`,
+   `np-mcp-install.sh`, `open-dashboard.sh`, `np-dashboard-launch.sh`, the 11
+   `NN-install-*.sh` hook installers, `episodic-scrub.sh`, and `np-llm.sh` have been
+   deleted. See `docs/PYTHON-CUTOVER.md` for the full cutover guide + verification
+   checklist. **The bash that REMAINS is deliberate and enumerated** (see
+   PYTHON-CUTOVER.md §"What bash legitimately remains"): (a) `np_bashlib.argv()`-wrapped
+   shell-outs to git/native tools; (b) the two model-seam paths that run a
+   *user-configured* command — `np_model.agent()`'s local `NP_LLM_AGENT_CMD` and
+   `np_implement_suggestion`'s `IMPLEMENT_LLM` override (neither re-implementable); (c)
+   the OS-scheduler interop (`np_scheduler_install.py` shells cron/launchctl/schtasks —
+   invariant 16); (d) the served-mode HTTP server + a handful of thin `.sh` test/CI
+   entrypoints (`run-all.sh`); (e) the `np_hook.py` Windows `bash -lc` wrap. Treat
+   "which language is this in" as a per-script fact you check in the feature catalog
+   above, not an inferable rule — but the default is now Python.
 6. **Every script has a regression test** in `engine/setup/tests/` (stdlib `unittest` /
    plain bash; stub `claude` via `CLAUDE_BIN`). The whole suite runs via
    `engine/setup/tests/run-all.sh` (hermetic, zero third-party deps outside `e2e/`);
