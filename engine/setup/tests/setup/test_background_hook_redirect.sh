@@ -44,8 +44,8 @@ fi
 require() {
   grep -qF "$1" <<< "$commands" || { echo "FAIL: expected a backgrounded+redirected hook matching: $1"; exit 1; }
 }
-require "40-sync-nervepack.sh >/dev/null 2>&1 &"
-require "40-sync-nervepack.sh exit >/dev/null 2>&1 &"
+require "cli.py sync >/dev/null 2>&1 &"
+require "cli.py sync exit >/dev/null 2>&1 &"
 require "hook open-dashboard >/dev/null 2>&1 &"
 require "hook backcapture-sweep >/dev/null 2>&1 &"
 

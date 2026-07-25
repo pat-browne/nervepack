@@ -7,7 +7,7 @@ description: Sync ~/Code/nervepack with origin/main using strict-safe semantics 
 
 ## Behavior contract
 
-The underlying script (`~/Code/nervepack/engine/setup/40-sync-nervepack.sh`) is intentionally
+The underlying command (`cli.py sync`, engine/setup/np_sync.py) is intentionally
 *defensive*: it never modifies a dirty working tree, never autostashes, and
 never rebases. Every run produces one of five outcomes, written to
 `~/.cache/np-core-sync-status`:
@@ -40,7 +40,7 @@ state and act on it.
 
 2. **Run the sync** (idempotent, writes a fresh status):
    ```bash
-   ~/Code/nervepack/engine/setup/40-sync-nervepack.sh --verbose
+   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync --verbose
    ```
 
 3. **Branch on the outcome.**
