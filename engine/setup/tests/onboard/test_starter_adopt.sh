@@ -13,7 +13,8 @@ fail=0
 chk() { if eval "$2"; then echo "  ok   $1"; else echo "  FAIL $1"; fail=1; fi; }
 
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_starter_adopt: no python3"; exit 0; }
-python3 -c "import ast; ast.parse(open('$INSTALL').read())" || { echo "FAIL: syntax error"; exit 1; }
+# (syntax is validated by the Syntax-sweep CI lane; ast.parse(open($INSTALL))
+# is skipped here — $INSTALL is an MSYS path native-Windows-Python cannot open.)
 
 # --- decline: leaves no content-dir config, exits 0 ---------------------------------
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
