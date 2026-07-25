@@ -19,7 +19,7 @@ _FAST_RULES = [
     ), b"[IP]"),
     # Username component of Unix paths (/home/alice/ or /Users/Alice/)
     (re.compile(rb"/(?:home|Users)/[A-Za-z][A-Za-z0-9_\-]*/"), b"[PATH]/"),
-    # API tokens — same shapes as episodic-scrub.sh
+    # API tokens — same shapes as np_scrub.py (the retired episodic-scrub.sh's port)
     (re.compile(rb"sk-[A-Za-z0-9]{16,}"), b"[TOKEN]"),
     (re.compile(rb"gh[opusr]_[A-Za-z0-9]{20,}"), b"[TOKEN]"),
     (re.compile(rb"github_pat_[A-Za-z0-9_]{20,}"), b"[TOKEN]"),

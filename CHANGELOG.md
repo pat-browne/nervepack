@@ -10,6 +10,33 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Changed
+- **The install/sync/index family is now Python; `40-sync-nervepack.sh`,
+  `30-link-skills.sh`, `60-generate-index.sh`, `np-mcp-install.sh`, and
+  `episodic-scrub.sh` retired (phase 17 of the bash→Python migration — the
+  largest phase; unblocks phase 18's sourced-lib deletion).** The defensive engine
+  sync is now `engine/setup/np_sync.py` (`cli.py sync` / `cli.py sync exit`),
+  extended to FULL parity: the toggle gate, backup-vs-exit mode + `sync.interval`
+  throttle + dry-run/status-file writes, the five engine cases, the optional
+  team-layer fast-forward (armed only past the deliberate early-outs), and on a
+  successful fast-forward the in-process skill relink (`np_link_skills.link`),
+  hook re-registration (`np_hook.install_hooks`), and the `[56][0-9]-install-*.sh`
+  installer sweep from the synced target. `30-link-skills.sh` → `np_link_skills.py`
+  (`cli.py setup link-skills`) and `60-generate-index.sh` → `np_generate_index.py`
+  (`cli.py setup generate-index`), which regenerate the engine-only committed INDEX
+  and the merged overlay INDEX in-process; both resolve the target repo/overlay from
+  `NP_DIR`/`NP_CONTENT_DIR`/their own path (never an unconditional
+  `$HOME/Code/nervepack`), and every test runs hermetically so a run never touches
+  the real repo's INDEX.md. `np-mcp-install.sh` → `np_mcp_install.py`
+  (`cli.py setup mcp-install`; `engine/bin/nervepack-install` dispatches it). The
+  `hooks.manifest` SessionStart/SessionEnd sync rows now dispatch `cli.py sync` /
+  `cli.py sync exit`, and the MCP `_tool_sync` calls `np_sync.sync()`
+  unconditionally in-process — **sync was the last MCP bash hybrid, so no MCP tool
+  shells out to bash any more.** `episodic-scrub.sh` is retired outright — its
+  byte-exact port `np_scrub.py` was already the only runtime path. The sync and
+  scrub A/B parity tests were deleted with their bash originals; `np_sync.py` is now
+  covered hermetically by `tests/sync/test_np_sync.py` (five engine cases +
+  gate/throttle/dry-run/not-a-git) and `np_scrub.py` by
+  `tests/episodic/test_scrub{,_failure}.sh`.
 - **Both dashboard open paths are now Python; `open-dashboard.sh` and
   `np-dashboard-launch.sh` retired (phase 16 of the bash→Python migration).**
   `np-dashboard-launch.sh`'s URL/opener resolution was already ported to

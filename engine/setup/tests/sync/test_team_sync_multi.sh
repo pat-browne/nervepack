@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# _np_team_sync ff-syncs EVERY configured team repo, not just the first.
-# 40-sync-nervepack.sh sources its own libs and fires _np_team_sync via an EXIT
-# trap, so we RUN the script (not source it) with a non-git NP_SYNC_TARGET — the
-# engine sync bails on "not a git repo" and exits, firing the trap.
+# np-test: sync | happy
+# np_sync._team_sync ff-syncs EVERY configured team repo, not just the first.
+# We run np_sync.py with a non-git NP_SYNC_TARGET — the engine sync bails on "not a
+# git repo" (a real engine outcome past the early-outs), which fires the team sync.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$HERE/../.."
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so the comma-separated NP_TEAM_DIR survives MSYS
+# env conversion (which only auto-converts a SINGLE path) and both native Windows
+# Python (team_dirs) and git see resolvable paths. No-op off Windows (no cygpath).
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
 export HOME="$tmp"; mkdir -p "$tmp/.config/nervepack" "$tmp/notgit"
 export NP_TOGGLES_CONF="$S/toggles.conf"
 printf 'team=on\n' > "$tmp/.config/nervepack/toggles.local"
@@ -34,10 +38,11 @@ export NP_TEAM_DIR="$tmp/teamA,$tmp/teamB"
 expA="$(git -C "$tmp/teamA.up" rev-parse HEAD)"
 expB="$(git -C "$tmp/teamB.up" rev-parse HEAD)"
 
-# Run the sync: engine target is a non-git dir (bails fast); EXIT trap runs the
-# team sync over both team repos. NP_SYNC_MODE=exit bypasses the interval throttle.
-NP_SYNC_MODE=exit NP_SYNC_TARGET="$tmp/notgit" NP_SYNC_STATUS="$tmp/status" \
-  bash "$S/40-sync-nervepack.sh" >/dev/null 2>&1 || true
+# Run the sync: engine target is a non-git dir (bails fast); the team sync fires
+# over both team repos on that real (not-a-git) engine outcome. `exit` mode
+# bypasses the interval throttle.
+NP_SYNC_TARGET="$tmp/notgit" NP_SYNC_STATUS="$tmp/status" \
+  python3 "$S/np_sync.py" exit >/dev/null 2>&1 || true
 
 for r in teamA teamB; do
   case "$r" in teamA) exp="$expA" ;; teamB) exp="$expB" ;; esac

@@ -90,7 +90,7 @@ sources test, and the cross-tree lookup: references/classification.md
 5. **New engine skill only:** append `./skills/<name>` to the `skills` array
    in the engine's `.claude-plugin/plugin.json`. Overlay skills are picked up
    by the relink alone.
-6. **Relink + regenerate INDEX:** `~/Code/nervepack/engine/setup/30-link-skills.sh`
+6. **Relink + regenerate INDEX:** `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills`
    (handles new skills in every layer, prunes dangling symlinks, and re-runs
    `60-generate-index.sh`).
 7. **Diff:** `git -C "$REPO" diff` — show the user.

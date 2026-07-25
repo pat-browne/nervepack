@@ -20,7 +20,7 @@ this skill is the entry point.
 3. **Satisfy each capability** for your host (MUST: `knowledge`, `llm-cli`, `git-sync`,
    `toggles`; SHOULD: the session-start/end + scheduled-maint ones — wire what your host
    supports, mark the rest `unsupported`). For Claude Code the worked example is
-   `engine/setup/30-link-skills.sh` (knowledge) + `engine/setup/5x-install-*.sh` (hooks); reproduce the
+   `cli.py setup link-skills` (knowledge) + `engine/setup/5x-install-*.sh` (hooks); reproduce the
    equivalent for your host.
 4. **Configure the model:** set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`/`_AGENT`) so
    `printf hi | engine/setup/np-llm.sh complete` returns text. Claude is the default backend; a
