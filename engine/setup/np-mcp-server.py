@@ -81,11 +81,11 @@ def run(cmd, stdin=None, env=None):
 # host, no bash fallback. That's what lets this long-running server gate + recall
 # with no bash subprocess per request (the whole point on a git-for-windows-free host).
 #
-# Toggle writes joined that single call path in phase 14 (_tool_toggle is fully
-# in-process now). USE_PY still governs the not-yet-fully-ported doctor / sync tools
-# below, which prefer bash when available and fall back to their partial Python
-# modules only when it isn't; NP_MCP_PURE_PYTHON=0 forces bash for those. Those
-# escape-hatch branches disappear as phases 15/17 finish their ports.
+# Toggle writes joined that single call path in phase 14, the doctor in phase 15,
+# and sync in phase 17 (_tool_sync now calls np_sync.sync() unconditionally — the
+# last MCP bash hybrid removed). USE_PY / NP_MCP_PURE_PYTHON now only gate the
+# `_require_bash` refusal for the agent-mode maintenance crons (flush/maintain/
+# onboard) on a bash-free host; no tool prefers a bash original any more.
 USE_PY = os.environ.get("NP_MCP_PURE_PYTHON", "1") == "1"
 
 
@@ -273,12 +273,11 @@ TOOLS += [
 ]
 def _tool_sync(args):
     require_writes()
-    # Full bash sync when bash exists (also does the team-layer ff + skill relink);
-    # the bash-free Python engine-sync is the fallback on a host with no bash.
-    if USE_PY and not _bash_available():
-        return np_sync.sync()
-    rc, out, err = run(["bash", os.path.join(SETUP, "40-sync-nervepack.sh")])
-    return (out + err).strip() or f"sync exit {rc}"
+    # Single in-process call path (phase 17): np_sync.sync() runs the FULL defensive
+    # sync natively (the 5 engine cases + team-layer ff + on-ff skill relink /
+    # hook-reinstall / 5x-installer sweep) — 40-sync-nervepack.sh has been retired,
+    # and sync was the last MCP hybrid. Works identically on a bash-free host.
+    return np_sync.sync()
 
 
 def _tool_capture(args):

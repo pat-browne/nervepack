@@ -126,58 +126,67 @@ class TestContentDir(unittest.TestCase):
         r = resolve(home=tempfile.gettempdir())
         self.assertEqual(r.stdout.strip(), u(REPO))
 
+    @unittest.skipIf(os.name == "nt", "symlink creation privilege-gated on Windows")
     def test_link_skills_merges_engine_and_overlay(self):
-        # engine has its real skills; overlay adds np-kb-demo. Linker must link the overlay
-        # skill AND the engine's own skills into a temp DST, with the overlay skill pointing
-        # into the overlay dir.
-        # NERVEPACK is redirected to a tmp dir so that 60-generate-index.sh writes
-        # INDEX.md there instead of into the repo (test isolation).
+        # A fake engine (np-eng-demo) + an overlay (np-kb-demo). np_link_skills.link
+        # (phase 17: 30-link-skills.sh retired) must link BOTH into a temp DST, with
+        # the overlay skill pointing into the overlay dir. NP_DIR is a temp fake engine
+        # so INDEX.md and the engine-skill resolution stay hermetic (never the repo).
         with tempfile.TemporaryDirectory() as overlay, tempfile.TemporaryDirectory() as dst, \
              tempfile.TemporaryDirectory() as fake_np:
-            osk = os.path.join(overlay, "skills", "np-kb-demo")
-            os.makedirs(osk)
-            with open(os.path.join(osk, "SKILL.md"), "w") as fh:
-                fh.write("---\nname: np-kb-demo\ndescription: d\n---\n# demo\n")
+            for name, root in (("np-eng-demo", fake_np), ("np-kb-demo", overlay)):
+                d = os.path.join(root, "skills", name)
+                os.makedirs(d)
+                with open(os.path.join(d, "SKILL.md"), "w") as fh:
+                    fh.write("---\nname: %s\ndescription: d\n---\n# demo\n" % name)
             e = dict(os.environ); e.update({
                 "NP_CONTENT_DIR": u(overlay),
                 "NP_SKILLS_DST": u(dst),
-                "NERVEPACK": u(fake_np),   # redirect INDEX.md write away from the repo
+                "NP_DIR": u(fake_np),      # hermetic engine root (INDEX + engine skills)
+                "HOME": u(fake_np),
             })
-            sh(_setup_script("30-link-skills.sh"), capture_output=True, text=True, env=e)
+            e.pop("NP_TEAM_DIR", None)
+            subprocess.run([sys.executable, _setup_script("np_link_skills.py")],
+                           capture_output=True, text=True, env=e)
             links = set(os.listdir(dst))
             self.assertIn("np-kb-demo", links)      # overlay skill linked
-            self.assertIn("np-core-sync", links)     # engine skill still linked
+            self.assertIn("np-eng-demo", links)     # engine skill still linked
             self.assertTrue(os.path.realpath(os.path.join(dst, "np-kb-demo")).startswith(os.path.realpath(overlay)))
 
+    @unittest.skipIf(os.name == "nt", "symlink creation privilege-gated on Windows")
     def test_link_skills_overlay_missing_skills_dir_still_links_engine(self):
         # np-test: link-skills | failure
-        # Failure path for 30-link-skills.sh: the content overlay exists but has NO
-        # skills/ subdir. The linker guards each source base with `[[ -d "$base" ]] ||
-        # continue`, so it must still link the ENGINE's own skills (the overlay simply
-        # contributes nothing) — no crash, clean exit, and no broken/extra links from
-        # the absent overlay dir. Guards a regression where a missing overlay skills/
-        # aborts the whole link pass (and thus a session loses ALL skills).
+        # Failure path: the content overlay exists but has NO skills/ subdir. The linker
+        # guards each source base (skips a non-existent dir), so it must still link the
+        # ENGINE's own skills (the overlay simply contributes nothing) — no crash, clean
+        # exit, and no broken/extra links from the absent overlay dir.
         with tempfile.TemporaryDirectory() as overlay, tempfile.TemporaryDirectory() as dst, \
              tempfile.TemporaryDirectory() as fake_np:
             # overlay is a valid content dir (it exists) but has no skills/ child.
             self.assertFalse(os.path.exists(os.path.join(overlay, "skills")))
+            esk = os.path.join(fake_np, "skills", "np-eng-demo")
+            os.makedirs(esk)
+            with open(os.path.join(esk, "SKILL.md"), "w") as fh:
+                fh.write("---\nname: np-eng-demo\ndescription: d\n---\n# demo\n")
             e = dict(os.environ); e.update({
                 "NP_CONTENT_DIR": u(overlay),
                 "NP_SKILLS_DST": u(dst),
-                "NERVEPACK": u(fake_np),   # redirect INDEX.md write away from the repo
+                "NP_DIR": u(fake_np),      # hermetic engine root (INDEX + engine skills)
+                "HOME": u(fake_np),
             })
-            sh(_setup_script("30-link-skills.sh"), capture_output=True, text=True, env=e)
+            e.pop("NP_TEAM_DIR", None)
+            subprocess.run([sys.executable, _setup_script("np_link_skills.py")],
+                           capture_output=True, text=True, env=e)
             # The link pass must not blow up on the absent overlay skills/ dir
-            # (`[[ -d "$base" ]] || continue` guards each source base). Its real
-            # side effect: the ENGINE skills are still linked into dst. (The
-            # trailing best-effort INDEX regen runs under the fake NERVEPACK
-            # redirect, same as the happy test; its exit isn't the linker's
-            # contract — the LINKS are.)
+            # (each source base is skipped when it doesn't exist). Its real side
+            # effect: the ENGINE skills are still linked into dst. (The trailing
+            # best-effort INDEX regen runs under the hermetic NP_DIR redirect, same
+            # as the happy test; its exit isn't the linker's contract — the LINKS are.)
             links = set(os.listdir(dst))
             # Engine skills are still present...
-            self.assertIn("np-core-sync", links, f"engine skill missing; dst={links}")
+            self.assertIn("np-eng-demo", links, f"engine skill missing; dst={links}")
             # ...and every link points back into the ENGINE skills tree (not the overlay).
-            engine_skills = os.path.realpath(os.path.join(REPO, "skills"))
+            engine_skills = os.path.realpath(os.path.join(fake_np, "skills"))
             for name in links:
                 tgt = os.path.realpath(os.path.join(dst, name))
                 self.assertTrue(tgt.startswith(engine_skills),

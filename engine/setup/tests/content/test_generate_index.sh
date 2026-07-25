@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
-# Regression for setup/60-generate-index.sh in a split (engine + overlay) layout:
+# np-test: generate-index | happy
+# Regression for np_generate_index.py (phase 17 port of 60-generate-index.sh) in a
+# split (engine + overlay) layout:
 #   - the COMMITTED engine INDEX.md must list ENGINE skills ONLY (publishable
 #     surface — overlay/personal skills must not leak in; pii-guard depends on this);
 #   - a MERGED index (engine + overlay) is written to the overlay for local discovery;
 #   - in the legacy single-repo layout (content == engine) only one index is written.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GEN="$HERE/../../60-generate-index.sh"
-LIB="$HERE/../../np-content-lib.sh"
-TLIB="$HERE/../../np-toggle-lib.sh"
+SETUP="$(cd "$HERE/../.." && pwd)"
+GEN=(python3 "$SETUP/np_generate_index.py")
+
+command -v python3 >/dev/null 2>&1 || { echo "SKIP test_generate_index: no python3"; exit 0; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so paths handed to native Windows Python are
+# resolvable and survive MSYS env conversion. No-op off Windows (no cygpath).
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
+export HOME="$tmp/home"; mkdir -p "$HOME"        # hermetic: no real ~/.config/team-dir
 
-# Fake engine repo with the lib the generator sources + one engine skill.
+# Fake engine repo with one engine skill.
 eng="$tmp/engine-repo"
-mkdir -p "$eng/engine/setup" "$eng/skills/np-eng-demo" "$eng/archive"
-cp "$LIB" "$eng/engine/setup/np-content-lib.sh"
-cp "$TLIB" "$eng/engine/setup/np-toggle-lib.sh"
+mkdir -p "$eng/skills/np-eng-demo" "$eng/archive"
 cat > "$eng/skills/np-eng-demo/SKILL.md" <<'S'
 ---
 name: np-eng-demo
@@ -37,7 +42,7 @@ description: A personal skill pointing at example.test that must stay out of the
 S
 
 # --- split layout: NP_CONTENT_DIR points at the overlay --------------------
-NERVEPACK="$eng" NP_CONTENT_DIR="$ov" bash "$GEN" >/dev/null
+NP_DIR="$eng" NP_CONTENT_DIR="$ov" "${GEN[@]}" >/dev/null
 
 grep -q 'np-eng-demo' "$eng/INDEX.md" \
   || { echo "FAIL: engine INDEX missing the engine skill"; exit 1; }
@@ -50,7 +55,7 @@ grep -q 'np-eng-demo' "$ov/INDEX.md" && grep -q 'np-kb-personal-demo' "$ov/INDEX
 
 # --- legacy single-repo: content == engine, only one index, no overlay write -
 rm -f "$eng/INDEX.md" "$ov/INDEX.md"
-NERVEPACK="$eng" NP_CONTENT_DIR="$eng" bash "$GEN" >/dev/null
+NP_DIR="$eng" NP_CONTENT_DIR="$eng" "${GEN[@]}" >/dev/null
 grep -q 'np-eng-demo' "$eng/INDEX.md" \
   || { echo "FAIL(legacy): engine INDEX missing engine skill"; exit 1; }
 [[ ! -f "$ov/INDEX.md" ]] \

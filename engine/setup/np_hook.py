@@ -36,8 +36,13 @@ import tempfile
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _MANIFEST = os.path.join(_HERE, "hooks.manifest")
 
-# A CLI-dispatched hook dedups on the full "cli.py <group> <name>" tail.
-_CLI_TAIL = re.compile(r"nervepack_engine/cli\.py\s+[\w-]+\s+[\w-]+")
+# A CLI-dispatched hook dedups on the full "cli.py <group> <name>" tail. The second
+# token is optional so a TOP-LEVEL command (`cli.py sync` / `cli.py sync exit`,
+# phase 17) keys on "cli.py sync" (or "cli.py sync exit") rather than falling back to
+# the shared "cli.py" filename — which would collide with every other CLI hook. The
+# optional group is greedy, so a two-token hook (`cli.py hook <name>`) still keys on
+# the full three-token tail exactly as before.
+_CLI_TAIL = re.compile(r"nervepack_engine/cli\.py\s+[\w-]+(?:\s+[\w-]+)?")
 # Else the first *.sh / *.py filename token in the command.
 _SCRIPT = re.compile(r"[A-Za-z0-9._-]+\.(?:sh|py)")
 

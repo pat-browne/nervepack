@@ -2,4 +2,5 @@
 # One-line entry point for the guided nervepack MCP install. Thin wrapper so the
 # install command is short and stable regardless of where the setup scripts live.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "$HERE/../setup/np-mcp-install.sh" "$@"
+# Phase 17: np-mcp-install.sh was ported to Python — dispatch via the CLI.
+exec python3 "$HERE/../nervepack_engine/cli.py" setup mcp-install "$@"

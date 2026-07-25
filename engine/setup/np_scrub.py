@@ -1,11 +1,12 @@
-"""Bash-free byte-exact port of episodic-scrub.sh — redact secret-shaped
-substrings from stdin -> stdout. Defense-in-depth before an episodic note is
-written to the inbox; conservative (known token shapes), fail-open.
+"""Bash-free byte-exact port of the retired episodic-scrub.sh — redact
+secret-shaped substrings from stdin -> stdout. Defense-in-depth before an episodic
+note is written to the inbox; conservative (known token shapes), fail-open.
 
-Parity-locked to episodic-scrub.sh by tests/mcp/parity/test_scrub_parity.sh
-(byte-identical output). Operates on BYTES, per line (like sed under LC_ALL=C),
-so it never chokes on invalid-UTF-8 input. stdlib only. Used by the ported
-capture pipeline (np_capture) on a bash-free host. Slice 4 of #38.
+episodic-scrub.sh was retired in phase 17 of the bash->Python CLI migration
+(np_scrub is its only implementation now — the capture pipeline calls it directly;
+the full-presidio bash branch was unreachable). Operates on BYTES, per line (like
+sed under LC_ALL=C), so it never chokes on invalid-UTF-8 input. stdlib only. Used by
+the ported capture pipeline (np_capture).
 
 When NP_PII_FILTER=1, also applies structural PII regex rules (email, phone,
 SSN, private IP, path, token) matching np-pii-filter.py --mode fast patterns.

@@ -1,21 +1,36 @@
-"""Bash-free Python port of 40-sync-nervepack.sh's defensive engine sync.
+"""Bash-free Python port of 40-sync-nervepack.sh's defensive engine sync (phase 17
+of the bash->Python CLI migration — full parity; the last MCP hybrid removed).
 
 Fetches origin/main and fast-forwards the local clone ONLY when the working tree
 is clean AND local HEAD is a strict ancestor of origin/main — never autostashes,
-rebases, or touches a dirty tree. Uses native git (no bash). The MCP server's
-_tool_sync runs this as the bash-free fallback; when bash is available it runs the
-full 40-sync-nervepack.sh (which also does the team-layer ff + the Claude-Code
-skill relink — both out of scope here). Slice 4 of the git-for-windows-free MCP
-work (#38).
+rebases, or touches a dirty tree. Uses native git (no bash), routed via
+np_bashlib.argv() so it works under Git-bash on Windows.
+
+Full parity with the retired 40-sync-nervepack.sh:
+  * toggle gate (sync), backup-vs-exit mode + sync.interval throttle + NP_SYNC_STAMP,
+    NP_SYNC_DRYRUN, and the status-file writes (NP_SYNC_STATUS / ~/.cache/np-core-sync-status);
+  * the 5 engine cases (up-to-date clean/dirty, dirty+behind, ahead, fast-forward,
+    diverged), plus not-a-git and fetch-failed;
+  * on a successful fast-forward: relink skills (np_link_skills.link, in-process),
+    re-apply hook registration (np_hook.install_hooks, in-process), and re-run the
+    remaining non-hook [56][0-9]-install-*.sh installers from the SYNCED target;
+  * the optional team-layer ff (ff-only per configured team dir, one repo at a time),
+    armed AFTER the disabled/throttle/dry-run early-outs so a deliberate skip never
+    fires the team fetch — mirroring the bash EXIT-trap ordering.
 
 Parity-locked (status-message outcome, modulo the embedded UTC timestamp) to the
 bash original by tests/mcp/parity/test_sync_parity.sh. stdlib only.
 """
+import glob
+import io
 import os
 import subprocess
 import sys
 import time
 
+import np_bashlib
+import np_content
+import np_link_skills
 import np_toggle
 
 
@@ -28,7 +43,8 @@ def _now():
 
 
 def _git(target, *args):
-    return subprocess.run(["git", "-C", target, *args], capture_output=True, text=True)
+    return subprocess.run(np_bashlib.argv(["git", "-C", target, *args]),
+                          stdin=subprocess.DEVNULL, capture_output=True, text=True)
 
 
 def _is_ancestor(target, a, b):
@@ -51,40 +67,61 @@ def _is_dirty(target):
     return tracked_dirty or bool(untracked)
 
 
-def sync(mode="backup"):
-    """Run the defensive sync; return the single outcome line (matching what the
-    bash script echoes / writes to the status file)."""
-    if not np_toggle.enabled("sync"):
-        return "nervepack-sync: disabled via toggle — skipping"
+def _team_sync():
+    """Optional team layer: keep every configured team checkout current (strict-safe:
+    ff-only, one repo at a time, skip dirty/diverged). Mirrors bash _np_team_sync.
+    No-op when the `team` toggle is off. Non-fatal; stderr notes only."""
+    if not np_toggle.enabled("team"):
+        return
+    for td in np_content.team_dirs():
+        if not td:
+            continue
+        if _git(td, "rev-parse", "--is-inside-work-tree").returncode != 0:
+            continue
+        if _git(td, "status", "--porcelain").stdout.strip() == "":
+            ok = _git(td, "fetch", "--quiet", "origin").returncode == 0
+            if ok:
+                ok = _git(td, "merge", "--ff-only", "--quiet", "@{u}").returncode == 0
+            if not ok:
+                sys.stderr.write("np-core-sync: team layer %s not fast-forwarded "
+                                 "(diverged/dirty/no upstream) — left as-is\n" % td)
+        else:
+            sys.stderr.write("np-core-sync: team layer %s has local edits — skipping pull\n" % td)
 
-    stamp = os.environ.get("NP_SYNC_STAMP") or os.path.join(
-        _home(), ".cache", "nervepack", "last-sync")
-    if mode != "exit":
-        try:
-            interval = int(np_toggle.param("sync.interval", "86400") or "86400")
-        except ValueError:
-            interval = 86400
-        if os.path.isfile(stamp):
-            try:
-                last = int((open(stamp, encoding="utf-8").read().strip() or "0"))
-            except (ValueError, OSError):
-                last = 0
-            age = int(time.time()) - last
-            if age < interval:
-                return "nervepack-sync: within %ds interval (age %ds) — skipping (backup)" % (interval, age)
+
+def _post_ff_steps(target):
+    """After a successful fast-forward: relink skills + re-apply hook registration
+    (both in-process) and re-run the remaining non-hook [56][0-9]-install-*.sh
+    installers from the SYNCED target. All best-effort (bash `|| true` semantics)."""
     try:
-        os.makedirs(os.path.dirname(stamp), exist_ok=True)
-        with open(stamp, "w", encoding="utf-8") as f:
-            f.write(str(int(time.time())))
-    except OSError:
+        np_link_skills.link(np_dir=target, out=io.StringIO())
+    except Exception:
         pass
-    if os.environ.get("NP_SYNC_DRYRUN") == "1":
-        return "nervepack-sync: would sync now (mode=%s)" % mode
+    # Re-apply hook registration so a pulled change to a hook's registered command
+    # (or a new hook row) reaches settings.json — git pull alone updates the scripts
+    # on disk but never re-applies them (phase 13: install-hooks, in-process here).
+    try:
+        import np_hook
+        np_hook.install_hooks()
+    except Exception:
+        pass
+    # Re-run the remaining non-hook 5x/6x installers (58-install-mcp.sh +
+    # 62-install-scheduled-auth-token.sh post-consolidation) from the SYNCED target,
+    # so a pulled change to them re-applies too. Same [56][0-9]-install-*.sh glob as
+    # np_onboard's step 2b. Routed through np_bashlib.argv for the Windows lane.
+    setup_dir = os.path.join(target, "engine", "setup")
+    for f in sorted(glob.glob(os.path.join(setup_dir, "[56][0-9]-install-*.sh"))):
+        try:
+            subprocess.run(np_bashlib.argv(["bash", f]),
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
 
-    target = os.environ.get("NP_SYNC_TARGET") or os.path.join(_home(), "Code", "nervepack")
-    status_file = os.environ.get("NP_SYNC_STATUS") or os.path.join(
-        _home(), ".cache", "np-core-sync-status")
 
+def _engine_sync(target, status_file):
+    """The defensive engine sync (the 5 cases + not-a-git/fetch-fail). Writes the
+    outcome line to the status file and returns it."""
     def write_status(msg):
         try:
             os.makedirs(os.path.dirname(status_file), exist_ok=True)
@@ -121,6 +158,7 @@ def sync(mode="backup"):
         pulled = _count(target, "HEAD..origin/main")
         ff = _git(target, "merge", "--ff-only", "--quiet", "origin/main")
         if ff.returncode == 0:
+            _post_ff_steps(target)
             sh = _git(target, "rev-parse", "--short", "HEAD").stdout.strip()
             return write_status("np-core-sync: %s — fast-forwarded %s commit(s) to %s" % (_now(), pulled, sh))
         return write_status("np-core-sync: %s — ff-only merge failed: %s" % (_now(), ff.stderr.strip()))
@@ -130,8 +168,56 @@ def sync(mode="backup"):
                         % (_now(), _count(target, "origin/main..HEAD"), _count(target, "HEAD..origin/main")))
 
 
+def sync(mode="backup", verbose=False):
+    """Run the defensive sync; return the single outcome line (matching what the bash
+    script echoes / writes to the status file). `exit` mode always syncs; `backup`
+    mode is throttled by sync.interval. On a real engine-sync path (past the early
+    exits) the team layer is fast-forwarded too."""
+    if not np_toggle.enabled("sync"):
+        return "nervepack-sync: disabled via toggle — skipping"
+
+    stamp = os.environ.get("NP_SYNC_STAMP") or os.path.join(
+        _home(), ".cache", "nervepack", "last-sync")
+    if mode != "exit":
+        try:
+            interval = int(np_toggle.param("sync.interval", "86400") or "86400")
+        except ValueError:
+            interval = 86400
+        if os.path.isfile(stamp):
+            try:
+                last = int((open(stamp, encoding="utf-8").read().strip() or "0"))
+            except (ValueError, OSError):
+                last = 0
+            age = int(time.time()) - last
+            if age < interval:
+                return "nervepack-sync: within %ds interval (age %ds) — skipping (backup)" % (interval, age)
+    try:
+        os.makedirs(os.path.dirname(stamp), exist_ok=True)
+        with open(stamp, "w", encoding="utf-8") as f:
+            f.write(str(int(time.time())))
+    except OSError:
+        pass
+    if os.environ.get("NP_SYNC_DRYRUN") == "1":
+        return "nervepack-sync: would sync now (mode=%s)" % mode
+
+    # Past the deliberate early-outs (disabled / throttle / dry-run): the team pull
+    # is now armed. Every real engine-sync outcome below — including not-a-git and a
+    # status write — fires it, but the early skips above never did (they returned).
+    target = os.environ.get("NP_SYNC_TARGET") or os.path.join(_home(), "Code", "nervepack")
+    status_file = os.environ.get("NP_SYNC_STATUS") or os.path.join(
+        _home(), ".cache", "np-core-sync-status")
+    outcome = _engine_sync(target, status_file)
+    _team_sync()
+    return outcome
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", newline="\n")
-    mode = "exit" if "exit" in sys.argv[1:] else "backup"
-    sys.stdout.write(sync(mode) + "\n")
+    args = sys.argv[1:]
+    mode = "exit" if "exit" in args else "backup"
+    verbose = "--verbose" in args
+    # The engine-sync outcome always lands in the status file; echo it on stdout too
+    # so the CLI/skill/parity harness see it (the bash echoes only under --verbose,
+    # but its callers read the status file — the parity harness normalizes both).
+    sys.stdout.write(sync(mode, verbose) + "\n")

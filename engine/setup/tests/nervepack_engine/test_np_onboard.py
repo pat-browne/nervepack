@@ -65,19 +65,21 @@ class TestOnboard(unittest.TestCase):
 
     def test_1_runs_every_phase_in_order(self):
         # 58-install-mcp.sh is a REMAINING non-hook installer picked up by the
-        # step-2b glob; the lifecycle hooks are now a single `cli.py setup
-        # install-hooks` dispatch (phase 13), not per-installer bash scripts.
+        # step-2b glob; the lifecycle hooks are a single `cli.py setup install-hooks`
+        # dispatch (phase 13), and link-skills is now `cli.py setup link-skills`
+        # (phase 17: 30-link-skills.sh retired), not per-installer bash scripts.
         setup_dir = _make_setup_dir(self.tmp, [
-            "30-link-skills.sh", "58-install-mcp.sh",
+            "58-install-mcp.sh",
         ])
         rec = _Recorder()
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         self.assertEqual(rc, 0)
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
-        self.assertIn("30-link-skills.sh", basenames)
         self.assertIn("58-install-mcp.sh", basenames)
-        # link-dashboard-data + install-hooks + doctor are cli.py dispatches, not bash.
+        # link-skills + link-dashboard-data + install-hooks + doctor are cli.py
+        # dispatches, not bash scripts.
         cli_calls = [c for c in rec.calls if c[0] != "bash"]
+        self.assertTrue(any("link-skills" in c for c in cli_calls))
         self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
         self.assertTrue(any("install-hooks" in c for c in cli_calls))
         self.assertTrue(any(c[-1] == "doctor" for c in cli_calls))
@@ -85,7 +87,7 @@ class TestOnboard(unittest.TestCase):
         def _idx(pred):
             return next(i for i, c in enumerate(rec.calls) if pred(c))
 
-        link_skills_idx = _idx(lambda c: c[0] == "bash" and os.path.basename(c[1]) == "30-link-skills.sh")
+        link_skills_idx = _idx(lambda c: c[0] != "bash" and "link-skills" in c)
         dashboard_idx = _idx(lambda c: c[0] != "bash" and "link-dashboard-data" in c)
         hooks_idx = _idx(lambda c: c[0] != "bash" and "install-hooks" in c)
         doctor_idx = _idx(lambda c: c[-1] == "doctor")
@@ -114,8 +116,10 @@ class TestOnboard(unittest.TestCase):
         self.assertTrue(any("install-hooks" in c for c in cli_calls))
 
     def test_3_fail_soft_a_failing_step_does_not_abort_the_run(self):
-        setup_dir = _make_setup_dir(self.tmp, ["30-link-skills.sh"])
-        rec = _Recorder(fail_scripts={"30-link-skills.sh"})
+        # A failing bash installer (58-install-mcp.sh, picked up by the step-2b glob)
+        # must warn-and-continue, not abort the run.
+        setup_dir = _make_setup_dir(self.tmp, ["58-install-mcp.sh"])
+        rec = _Recorder(fail_scripts={"58-install-mcp.sh"})
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         cli_calls = [c for c in rec.calls if c[0] != "bash"]
         self.assertTrue(any("link-dashboard-data" in c for c in cli_calls))
@@ -123,12 +127,15 @@ class TestOnboard(unittest.TestCase):
         self.assertEqual(rc, 0)  # doctor itself succeeded -- that's the return value
 
     def test_4_missing_step_script_is_skipped_not_fatal(self):
-        setup_dir = _make_setup_dir(self.tmp, [])  # neither link script present
+        setup_dir = _make_setup_dir(self.tmp, [])  # no bash installer scripts present
         rec = _Recorder()
         rc = np_onboard.run(run_fn=rec, uname_fn=lambda: "Linux", setup_dir=setup_dir)
         self.assertEqual(rc, 0)
+        # link-skills is a cli.py dispatch (phase 17), always run — never a bash script.
+        cli_calls = [c for c in rec.calls if c[0] != "bash"]
+        self.assertTrue(any("link-skills" in c for c in cli_calls))
         basenames = [os.path.basename(c[1]) for c in rec.calls if c[0] == "bash"]
-        self.assertNotIn("30-link-skills.sh", basenames)  # never invoked -- didn't exist
+        self.assertNotIn("30-link-skills.sh", basenames)  # retired -- never a bash step
 
     def test_5_doctor_exit_code_is_the_return_value(self):
         setup_dir = _make_setup_dir(self.tmp, [])

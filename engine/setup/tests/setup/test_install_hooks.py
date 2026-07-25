@@ -54,14 +54,14 @@ class TestInstallHooks(unittest.TestCase):
     def test_full_inventory_present(self):
         s = self._install()
         ss = self._commands(s, "SessionStart")
-        self.assertTrue(any("40-sync-nervepack.sh >/dev/null 2>&1 &" in c for c in ss))
+        self.assertTrue(any("cli.py sync >/dev/null 2>&1 &" in c for c in ss))
         self.assertTrue(any("hook open-dashboard >/dev/null 2>&1 &" in c for c in ss))
         self.assertTrue(any(c.endswith("hook session-directive") for c in ss))
         self.assertTrue(any("hook backcapture-sweep >/dev/null 2>&1 &" in c for c in ss))
         self.assertTrue(any(c.endswith("hook resume-sessionstart &") for c in ss))
 
         se = self._commands(s, "SessionEnd")
-        self.assertTrue(any("40-sync-nervepack.sh exit >/dev/null 2>&1 &" in c for c in se))
+        self.assertTrue(any("cli.py sync exit >/dev/null 2>&1 &" in c for c in se))
         self.assertTrue(any("hook episodic-capture session-end &" in c for c in se))
         self.assertTrue(any(c.endswith("hook evaluator &") for c in se))
         self.assertTrue(any(c.endswith("hook session-flush") for c in se))
@@ -112,6 +112,20 @@ class TestInstallHooks(unittest.TestCase):
             # (matcher, command) pairs must be unique within an event
             pairs = _cmds(s, event)
             self.assertEqual(len(pairs), len(set(pairs)), "%s has duplicates: %s" % (event, pairs))
+
+    def test_sync_dedup_does_not_collapse_other_cli_hooks(self):
+        # Regression: the top-level `cli.py sync` row must dedup on its full
+        # "cli.py sync" tail, NOT the shared "cli.py" filename — otherwise
+        # re-registering it would purge every other cli.py-dispatched SessionStart
+        # hook (open-dashboard / session-directive / backcapture / resume). After
+        # two installs both sync AND all its cli.py siblings must survive exactly once.
+        self._install()
+        s = self._install()
+        ss = self._commands(s, "SessionStart")
+        self.assertEqual(sum("cli.py sync >/dev/null" in c for c in ss), 1)
+        for sibling in ("hook open-dashboard", "hook session-directive",
+                        "hook backcapture-sweep", "hook resume-sessionstart"):
+            self.assertEqual(sum(sibling in c for c in ss), 1, sibling)
 
     def test_legacy_purge_migration(self):
         # A pre-merge settings.json with playbook-guard/playbook-recall/

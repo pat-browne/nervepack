@@ -82,8 +82,9 @@ def run(run_fn=None, uname_fn=None, setup_dir=None, glob_fn=None):
     cli = _cli_path()
     glob_fn = glob_fn or glob.glob
 
-    # 1. Knowledge + the dashboard data bridge.
-    _step_script(setup_dir, "30-link-skills.sh", run_fn)
+    # 1. Knowledge + the dashboard data bridge. link-skills is Python now
+    #    (phase 17: 30-link-skills.sh retired -> np_link_skills.link via cli.py).
+    _step_cli(cli, ["setup", "link-skills"], run_fn)
     _step_cli(cli, ["setup", "link-dashboard-data"], run_fn)
 
     # 2. Every lifecycle hook, in one declarative step (phase 13). The 11

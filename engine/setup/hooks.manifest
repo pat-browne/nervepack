@@ -11,9 +11,9 @@
 # start until the child exits. See np-kb-claude-headless-scripting.
 # Retired the 11 NN-install-*.sh installers + np-hook-lib.sh (phase 13).
 #
-# --- 50: sync + dashboard ---
-SessionStart||~/Code/nervepack/engine/setup/40-sync-nervepack.sh >/dev/null 2>&1 &
-SessionEnd||~/Code/nervepack/engine/setup/40-sync-nervepack.sh exit >/dev/null 2>&1 &
+# --- 50: sync + dashboard (sync is cli.py-dispatched; 40-sync-nervepack.sh retired, phase 17) ---
+SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync >/dev/null 2>&1 &
+SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync exit >/dev/null 2>&1 &
 SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
 # --- 51: consult-nervepack directive (synchronous) ---
 SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook session-directive

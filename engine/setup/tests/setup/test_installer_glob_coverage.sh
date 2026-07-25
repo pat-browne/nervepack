@@ -3,8 +3,9 @@
 # Two coverage invariants, post phase-13 (hook installers consolidated into
 # engine/setup/hooks.manifest, driven by `cli.py setup install-hooks`):
 #
-#   A. The remaining-installer glob in np_onboard.py AND 40-sync-nervepack.sh
-#      still picks up the non-hook 5x/6x installers (58-install-mcp.sh,
+#   A. The remaining-installer glob in np_onboard.py AND np_sync.py (phase 17:
+#      40-sync-nervepack.sh retired) still picks up the non-hook 5x/6x installers
+#      (58-install-mcp.sh,
 #      62-install-scheduled-auth-token.sh) and still EXCLUDES the
 #      platform-specific 70-install-memory-* installers.
 #   B. Hook coverage now lives in hooks.manifest: every `cli.py hook <name>`
@@ -23,7 +24,7 @@ fail() { echo "FAIL test_installer_glob_coverage: $*"; exit 1; }
 [[ -e "$SETUP/58-install-mcp.sh" ]] \
   || fail "58-install-mcp.sh missing — remaining-installer fixture assumption broken"
 
-for driver in np_onboard.py 40-sync-nervepack.sh; do
+for driver in np_onboard.py np_sync.py; do
   path="$SETUP/$driver"
   [[ -e "$path" ]] || fail "$driver not found at $path"
   glob="$(grep -oE '(\[[0-9]+\]|[0-9])\[0-9\]-install-\*\.sh' "$path" | head -1)"

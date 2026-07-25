@@ -47,15 +47,19 @@ import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
 import np_dashboard  # noqa: E402
 import np_doctor  # noqa: E402
+import np_generate_index  # noqa: E402
 import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
 import np_instruction_block  # noqa: E402
 import np_link_dashboard_data  # noqa: E402
+import np_link_skills  # noqa: E402
+import np_mcp_install  # noqa: E402
 import np_merge_wait  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
+import np_sync  # noqa: E402
 import np_toggle  # noqa: E402
 
 _HOOKS = {
@@ -89,6 +93,8 @@ _SETUP = {
     "install-memory-launchd": np_scheduler_install.install_launchd,
     "install-memory-schtasks": np_scheduler_install.install_schtasks,
     "install-hooks": np_hook.install_hooks,
+    "link-skills": np_link_skills.link,
+    "generate-index": np_generate_index.generate,
     "link-dashboard-data": np_link_dashboard_data.link,
     "install-apt-baseline": np_bootstrap.install_apt_baseline,
     "install-brew-baseline": np_bootstrap.install_brew_baseline,
@@ -190,6 +196,14 @@ def main(argv=None):
         if len(argv) < 2:
             return 0
         name = argv[1]
+        if name == "mcp-install":
+            # The guided MCP install takes trailing args (--starter-only) unlike the
+            # other setup steps, so it is dispatched here with argv passthrough.
+            try:
+                return np_mcp_install.install(argv[2:])
+            except Exception as exc:
+                _bail("mcp-install", "unhandled exception: %r" % exc)
+                return 1
         fn = _SETUP.get(name)
         if fn is None:
             _bail("setup", "unknown setup step: %s" % name)
@@ -287,6 +301,22 @@ def main(argv=None):
         except Exception as exc:
             _bail("instruction-block", "unhandled exception: %r" % exc)
             return 1
+
+    if argv[0] == "sync":
+        # The defensive engine sync (np_sync.py, phase 17 — 40-sync-nervepack.sh
+        # retired). `cli.py sync` = backup mode (throttled); `cli.py sync exit` =
+        # exit mode (always syncs). Registered on SessionStart/SessionEnd via
+        # hooks.manifest and invoked by the np-core-sync skill. Fail-open like a
+        # hook: the SessionStart/SessionEnd rows background it and discard output.
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+        mode = "exit" if "exit" in argv[1:] else "backup"
+        verbose = "--verbose" in argv[1:]
+        try:
+            sys.stdout.write(np_sync.sync(mode, verbose) + "\n")
+        except Exception as exc:
+            _bail("sync", "unhandled exception: %r" % exc)
+        return 0
 
     if argv[0] == "open-dashboard":
         # The MANUAL, on-demand dashboard open -- a distinct top-level command

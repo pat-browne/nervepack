@@ -62,7 +62,8 @@ already injects the directive via a session-start hook (double-injection).
 
 ## Reference output
 
-The Claude Code adapter is reproduced by `engine/setup/30-link-skills.sh` (knowledge) and
+The Claude Code adapter is reproduced by `cli.py setup link-skills`
+(engine/setup/np_link_skills.py — knowledge) and
 `engine/setup/5x-install-*.sh` (the hooks). Read them as a worked example of what your
 adapter should achieve, then express the equivalent for your host. An example
 manifest lives at `engine/onboard/adapters/<host>.example.json`.

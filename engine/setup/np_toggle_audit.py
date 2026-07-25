@@ -30,7 +30,8 @@ _SH = re.compile(r"[A-Za-z0-9_-]+\.sh")
 # cli.py-dispatched <name> form and the legacy *.sh basenames the old audit knew
 # (kept so the existing .sh-form tests still pass).
 _MAP = {
-    # cli.py-dispatched hook/cron names (post-phase-13 reality)
+    # cli.py-dispatched top-level + hook/cron names (post-phase-13/17 reality)
+    "sync": "sync",                 # `cli.py sync` / `cli.py sync exit` (phase 17)
     "session-directive": "directive",
     "episodic-capture": "memory",
     "episodic-recall": "memory",
@@ -74,7 +75,11 @@ def _ignored(key):
     """Skip (not flag): installers/utilities + always-on infra with no toggle.
     Mirrors the bash `case` ignore-list, plus session-flush (inbox-promotion
     infra, always on by design)."""
-    if key in ("30-link-skills.sh", "60-generate-index.sh"):
+    # installers/utilities that carry no toggle by design — both the retired-.sh
+    # basenames and the phase-17 cli.py-dispatched forms (link-skills/generate-index
+    # regen INDEX/symlinks; mcp-install is a one-shot installer).
+    if key in ("30-link-skills.sh", "60-generate-index.sh",
+               "link-skills", "generate-index", "mcp-install"):
         return True
     if "install" in key:                        # *install*
         return True
@@ -86,8 +91,11 @@ def _ignored(key):
 
 
 def _extract_key(line):
-    """Extract the feature key from a hook/cron command line: the cli.py-dispatched
-    <name> first (post-13), else the first *.sh basename (legacy). '' if neither."""
+    """Extract the feature key from a hook/cron command line: a top-level cli.py
+    command (phase 17: `cli.py sync`), then the cli.py-dispatched hook/cron <name>
+    (post-13), else the first *.sh basename (legacy). '' if none."""
+    if re.search(r"nervepack_engine/cli\.py\s+sync(?:\s|$)", line):
+        return "sync"
     m = _CLI_TAIL.search(line)
     if m:
         return m.group(1)

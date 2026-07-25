@@ -161,7 +161,7 @@ non-Claude MCP client instead? See [`engine/onboard/MCP.md`](engine/onboard/MCP.
   └──────────────┘
 ```
 
-- **Pull** happens on the `SessionStart` hook (`40-sync-nervepack.sh`) and on demand
+- **Pull** happens on the `SessionStart` hook (`cli.py sync`, np_sync.py) and on demand
   with `/np-core-sync`.
 - **Push** happens through `/np-core-contribute` (which asks first) and the
   pre-authorized scheduled-refine agent.
@@ -170,7 +170,7 @@ non-Claude MCP client instead? See [`engine/onboard/MCP.md`](engine/onboard/MCP.
 
 Two ways to ship the same content.
 
-- **As user skills**, which is the day-to-day path. `30-link-skills.sh` symlinks each
+- **As user skills**, which is the day-to-day path. `cli.py setup link-skills` symlinks each
   `skills/*/SKILL.md` into `~/.claude/skills/`, so they're live in every session with
   no install step.
 - **As a plugin**, which is better for sharing. `.claude-plugin/plugin.json` lets
