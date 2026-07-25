@@ -1,11 +1,10 @@
-"""Pure-Python port of np-content-lib.sh + np-layer-lib.sh.
+"""Content-overlay + layer-stack resolver (formerly bash np-content-lib.sh +
+np-layer-lib.sh, both retired in phase 18 — this module is now the sole resolver).
 
-Parity-locked to the bash originals by tests/mcp/parity/test_content_parity.sh.
-The long-running MCP server resolves the content overlay root, the team>personal
-layer stack, and the merge mode IN-PROCESS via this module so it needs no bash;
-the bash libs stay the source of truth for hot-path hooks/crons. Reuses the
-already-ported np_toggle for the `team` / `team.merge` decisions. stdlib only.
-See the git-for-windows-free MCP design spec (overlay docs/superpowers/specs/).
+Resolves the content overlay root, the team>personal layer stack, and the merge
+mode. The long-running MCP server, the recall hooks, and the setup steps all
+import this in-process; there is no bash equivalent. Reuses np_toggle for the
+`team` / `team.merge` decisions. stdlib only.
 """
 import os
 import sys
@@ -36,7 +35,7 @@ def _first_line(path):
         return ""
 
 
-# --- content overlay (np-content-lib.sh) ------------------------------------
+# --- content overlay (formerly np-content-lib.sh) ---------------------------
 def _content_target():
     """Resolved path + origin, before the existence check. Mirrors the env ->
     config-first-line -> engine-root precedence."""
@@ -116,7 +115,7 @@ def team_origin():
     return "none"
 
 
-# --- layer stack (np-layer-lib.sh) ------------------------------------------
+# --- layer stack (formerly np-layer-lib.sh) ---------------------------------
 def content_layers():
     """np_content_layers: all team roots (precedence order, deduped vs personal)
     when the `team` toggle is on, then personal. [] if personal fails to resolve."""
@@ -147,9 +146,17 @@ def merge_roots():
     return roots
 
 
+def layer_roots(layer):
+    """np_layer_roots: one path per merge root, each suffixed memory/<layer>.
+    The merge-aware sibling of layer_dir() — recall hooks scan these for the
+    active team.merge mode. Keeps the memory/<layer> subpath in one place
+    (mirrors layer_dir; both append memory/<layer>)."""
+    return [os.path.join(r, "memory", layer) for r in merge_roots()]
+
+
 if __name__ == "__main__":
-    # CLI mirror used by the A/B parity harness. Each mirrors the matching bash
-    # function's stdout (trailing newline where bash uses printf '\n') and exit.
+    # CLI mirror (the setup steps + tests call these verbs). Each writes the
+    # matching function's stdout (trailing newline per line) and exit code.
     # Emit LF, not CRLF: native-Windows Python translates \n -> \r\n in text mode,
     # which would make every line differ from bash's LF output under Git-bash.
     if hasattr(sys.stdout, "reconfigure"):
@@ -185,7 +192,11 @@ if __name__ == "__main__":
     elif cmd == "merge_roots":
         for r in merge_roots():
             sys.stdout.write(r + "\n")
+    elif cmd == "layer_roots":
+        for r in layer_roots(sys.argv[2] if len(sys.argv) > 2 else ""):
+            sys.stdout.write(r + "\n")
     else:
         sys.stderr.write("usage: np_content.py {content_dir|content_origin|is_explicit|"
-                         "team_dir|team_dirs|team_origin|content_layers|merge_mode|merge_roots}\n")
+                         "team_dir|team_dirs|team_origin|content_layers|merge_mode|"
+                         "merge_roots|layer_roots <layer>}\n")
         sys.exit(2)
