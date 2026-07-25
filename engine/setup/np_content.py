@@ -10,12 +10,13 @@ import os
 import posixpath
 import sys
 
+import np_paths
 import np_toggle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Bash: _npc_engine="$_npc_setup/../.." — the engine repo root (this file's dir is
 # engine/setup, so two levels up is the repo root).
-_ENGINE = os.path.dirname(os.path.dirname(_HERE))
+_ENGINE = np_paths.REPO_ROOT
 
 
 def _home():
