@@ -107,30 +107,35 @@ they mark something worth writing later.
 
 ### Harness language policy (bash vs Python)
 
-The harness is deliberately **bilingual**, split on one question: *is there real
-logic here, or is this just glue?*
+**The harness is Python.** The bash→Python CLI cutover is COMPLETE (phases 1–20,
+2026-07 — see `docs/PYTHON-CUTOVER.md`). New harness code — hooks, crons, resolvers,
+installers, seams — is **Python (stdlib-only)**, dispatched through
+`engine/nervepack_engine/cli.py`. The old "bilingual, split on glue-vs-logic" rule is
+retired: the user accepted the ~20–70ms/call latency for one language everywhere
+(performance to be reclaimed in a future compiled-language Phase B, `ROADMAP.md`).
 
-- **Bash** — for latency-critical, low-logic glue: any script that's mostly
-  sequencing other CLIs (git, jq, crontab). Bash's ~5–10ms cold
-  start matters on these; Python's ~30–80ms does not.
-- **Python (stdlib-only)** — for parsing and data-structure assembly that runs
-  off the hot path (SessionEnd, cron): the evaluator's signal extraction, record
-  assembly, episodic distillation, aggregation. This is where bash's footguns
-  (`pipefail` turning a no-match `grep` into a hard failure, `grep -c` printing `0`
-  *and* exiting non-zero, word-splitting, SIGPIPE) cost real correctness — the same
-  class of bug bit the toggle CLI, the cron guards, *and* the signal extractor before
-  the port. **No third-party deps** (no `pip install`, no venv) — that dependency-free
-  property is the reason bash was chosen in the first place; don't trade it away.
-  Tests use stdlib `unittest`, not pytest, for the same reason.
-- **Single-source shared logic.** When a Python script needs a toggle decision, it
-  shells out to bash `np_enabled` (`np-eval-signals.py` does this) rather than
-  reimplement the resolver — the toggle resolver stays bash, owned in one place.
-- **Not Go/Rust/Deno.** Go would solve both latency *and* correctness, but committing
-  and distributing binaries fights the "clone and it bootstraps" ethos. Reconsider
-  only if hot-path latency ever becomes the dominant constraint.
+- **Python (stdlib-only)** is the default for everything. **No third-party deps** (no
+  `pip install`, no venv) — that dependency-free property is load-bearing (clone and it
+  bootstraps); don't trade it away. Tests use stdlib `unittest`, not pytest. This also
+  fixed a class of bash footguns (`pipefail` on a no-match `grep`, `grep -c` printing
+  `0` *and* exiting non-zero, word-splitting, SIGPIPE) that bit the toggle CLI, cron
+  guards, and the signal extractor before the port.
+- **The bash that remains is deliberate and enumerated** (PYTHON-CUTOVER.md §"What bash
+  legitimately remains"): `np_bashlib.argv()`-wrapped shell-outs to git/native tools;
+  the two model-seam paths running a *user-configured* command (`NP_LLM_AGENT_CMD`,
+  `IMPLEMENT_LLM`); the OS-scheduler interop (`np_scheduler_install.py` → cron/launchctl/
+  schtasks); the served HTTP server + thin `.sh` test/CI entrypoints; the `np_hook.py`
+  Windows `bash -lc` wrap. Adding a NEW `.sh` needs a stated reason from that list.
+- **Shell out to bash from Python** only via `engine/setup/np_bashlib.py` `argv()`
+  (runtime) or the test helpers (`tests/_lib/nptest.py` / a monkeypatch-to-capture) — a
+  bare `["bash", …]` resolves to System32 WSL on Windows and returns garbage.
+- **Not Go/Rust/Deno.** Go would solve latency *and* correctness, but committing/
+  distributing binaries fights the clone-and-bootstrap ethos. Reconsider only if
+  hot-path latency ever becomes the dominant constraint (that's Phase B).
 
 **Reference port:** `engine/setup/np-eval-signals.py` (+ `tests/evaluator/test_signals.py`)
-is the proof-of-concept for the pattern — copy its shape for new Python harness code.
+is the proof-of-concept — copy its shape for new Python harness code. For the
+cutover's full inventory + how to verify it, see `docs/PYTHON-CUTOVER.md`.
 
 **Running the suite:** `bash engine/setup/tests/run-all.sh` (whole suite, zero deps,
 excludes e2e); add `--with-e2e` to include the Playwright dashboard test (requires
@@ -138,11 +143,11 @@ excludes e2e); add `--with-e2e` to include the Playwright dashboard test (requir
 CI gates `main` on `syntax` + `regression` + `pii-guard`; `dashboard-e2e` is
 informational. See `engine/setup/tests/README.md`.
 
-**Standing rule — keep asking the question.** When you add a new harness script, or
-*substantially extend* an existing one, explicitly evaluate it against this rubric
-before writing — state the verdict ("staying bash: hot-path glue" / "Python: parsing
-logic") in one line. Migrate bash→Python *opportunistically* (when a script bites or
-you're already reworking it), never as a big-bang rewrite of working, tested code.
+**Standing rule — new harness code is Python.** When you add a new harness script,
+write it in Python (stdlib-only) dispatched via `cli.py`, unless it falls in the
+enumerated bash-remains list above — in which case state which exception applies in
+one line. The bash→Python migration itself is done (don't re-litigate it); a stray
+surviving `.sh` that should have been ported is a bug to file, not a rule.
 
 ### Model selection policy (which model to use)
 
