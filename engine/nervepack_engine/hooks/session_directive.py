@@ -6,8 +6,8 @@ injected LATER via UserPromptSubmit recall hooks, never interleaved here.
 
 Content-fed routing fragments (directive-routing.md) are appended from every merge
 root (team[0..n] > personal, highest-precedence first) via np_content.merge_roots()
--- the in-process Python mirror of np-layer-lib.sh's np_merge_roots, already used by
-lesson_recall.py/episodic_recall.py for the same purpose. Fail-open throughout: a
+-- the sole layer-stack resolver since the sourced bash layer lib was retired in
+phase 18, already used by lesson_recall.py/episodic_recall.py for the same purpose. Fail-open throughout: a
 disabled toggle, missing directive markdown, or a missing/errored merge root yields
 either "" or a narrower (but still valid) composed result -- never an exception.
 

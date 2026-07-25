@@ -1,13 +1,10 @@
-"""Pure-Python port of np-toggle-lib.sh's np_enabled / np_param.
+"""Feature-toggle resolver: np_enabled / np_param (formerly bash np-toggle-lib.sh,
+retired in phase 18 — this module is now the sole resolver).
 
-Parity-locked to the bash original by tests/mcp/parity/test_toggle_parity.sh:
-byte-identical decision + exit code across an input table. The long-running MCP
-server calls these in-process (`import np_toggle`) so it needs no bash subprocess
-per request; the bash lib stays the source of truth for hot-path hooks/crons.
-See the git-for-windows-free MCP design spec (overlay docs/superpowers/specs/).
-
-Mirrors the bash precedence exactly: ~/.config/nervepack/toggles.local
--> engine/setup/toggles.conf -> default-on. stdlib only.
+Everything that needs a toggle decision imports this in-process (`import
+np_toggle`), or calls `np_toggle.py enabled|param` from a shell step; there is no
+bash equivalent. Precedence: ~/.config/nervepack/toggles.local ->
+engine/setup/toggles.conf -> default-on. stdlib only.
 """
 import json
 import os
@@ -134,8 +131,8 @@ def param(key, default):
 
 def signal(sid, message):
     """np_signal: append a fire-marker line to the session signal log, gated
-    on evaluator.signals. Fail-open (any OSError -> no-op), mirroring the
-    bash original in np-toggle-lib.sh."""
+    on evaluator.signals. Fail-open (any OSError -> no-op). (Formerly the
+    np_signal function in the retired np-toggle-lib.sh.)"""
     if not enabled("evaluator.signals"):
         return
     d = os.environ.get("NP_SIGNAL_DIR") or os.path.join(
@@ -577,7 +574,7 @@ def cli(argv):
 
 
 if __name__ == "__main__":
-    # CLI mirror used by the A/B parity harness (and handy for debugging).
+    # CLI mirror (the setup steps call `enabled`; handy for debugging).
     #   np_toggle.py enabled <feature>      -> prints on/off, exits 0/1
     #   np_toggle.py param   <key> <default>-> prints value (no newline)
     # Emit LF, not CRLF: native-Windows Python translates \n -> \r\n in text mode,

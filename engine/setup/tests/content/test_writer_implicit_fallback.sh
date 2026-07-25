@@ -12,8 +12,8 @@
 # np_aggregate.py (the retired 73-aggregate-metrics.sh's Python replacement) is the
 # deterministic, no-LLM writer, so it's the one we can drive end-to-end without
 # stubbing a model. The guard it gains lives in the shared resolver (np_content.py,
-# the Python port of np-content-lib.sh), so proving it here proves the shared
-# mechanism the agentic writers (71/72/75) gate on too.
+# the sole content-dir resolver since phase 18), so proving it here proves the
+# shared mechanism the agentic writers (71/72/75) gate on too.
 #
 # Properties enforced:
 #   (A) IMPLICIT fallback (env unset + no config) => NO commit (engine stays clean).

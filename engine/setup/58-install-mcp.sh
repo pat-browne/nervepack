@@ -4,7 +4,6 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NP="$(cd "$HERE/../.." && pwd)"
-source "$HERE/np-toggle-lib.sh" 2>/dev/null || true
 command -v claude >/dev/null || { echo "58-install-mcp: claude CLI not found; skipping" >&2; exit 0; }
 
 if [[ "${1:-}" == "remove" ]]; then
@@ -13,7 +12,9 @@ if [[ "${1:-}" == "remove" ]]; then
   exit 0
 fi
 
-np_enabled mcp || { echo "58-install-mcp: mcp toggle off; skipping" >&2; exit 0; }
+# Toggle gate via the Python resolver (the sourced bash toggle lib was retired in
+# phase 18): `np_toggle.py enabled <feature>` prints on/off and exits 0/1 (fail-open).
+python3 "$HERE/np_toggle.py" enabled mcp >/dev/null || { echo "58-install-mcp: mcp toggle off; skipping" >&2; exit 0; }
 
 # Idempotent: remove any stale entry, then add the current path.
 claude mcp remove nervepack -s user >/dev/null 2>&1 || true

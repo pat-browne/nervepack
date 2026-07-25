@@ -33,10 +33,10 @@ Nervepack is split (`docs/ARCHITECTURE.md` § "Content seam"):
   skills, `engine/setup/`, `agents/`, its own docs.
 - **personal content overlay** — the default target for domain knowledge
   (`np-kb-*`/`np-env-*` skills, `wiki/`, `sources/`). Resolve it:
-  `CONTENT="$(source ~/Code/nervepack/engine/setup/np-content-lib.sh && np_content_dir)"`
+  `CONTENT="$(python3 ~/Code/nervepack/engine/setup/np_content.py content_dir)"`
   (single-repo layouts resolve to the engine root, so the same paths work).
 - **team overlay** — only for a shared team convention ("save to the team layer",
-  "this is a team rule", `--layer team`): resolve with `np_team_dir` (same lib).
+  "this is a team rule", `--layer team`): resolve with `np_content.py team_dir` (same resolver).
   If that errors, STOP and tell the user the team layer isn't configured
   (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`) — never silently fall back to
   personal. Team overlays have the same shape; relink/index are team-aware.

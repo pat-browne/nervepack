@@ -28,7 +28,7 @@ def _home():
 
 
 def _cfg_dir():
-    # np-content-lib resolves config from $HOME/.config/nervepack (not XDG) — match it.
+    # np_content resolves config from $HOME/.config/nervepack (not XDG) — match it.
     return os.path.join(_home(), ".config", "nervepack")
 
 

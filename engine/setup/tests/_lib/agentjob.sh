@@ -54,13 +54,11 @@ make_agent_sandbox() {
   # whichever of these dirs it actually needs at mutation time.
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
-  # The libs a sandboxed agentic job sources (no bash cron drivers remain — all
-  # four were ported to np_agentic_cron.py, whose Python tests build their own
-  # sandboxes; these libs still back make_agent_sandbox + stub_agent).
-  cp "$_AGENTJOB_SETUP/np-toggle-lib.sh" \
-     "$_AGENTJOB_SETUP/np-content-lib.sh" \
-     "$_AGENTJOB_SETUP/np-layer-lib.sh" \
-     "$_AGENTJOB_SETUP/np-llm.sh" \
+  # The model seam a sandboxed agentic job shells out to (no bash cron drivers
+  # remain — all four were ported to np_agentic_cron.py, whose Python tests build
+  # their own sandboxes; the former toggle/content/layer sourced libs were retired
+  # in phase 18, so only np-llm.sh is copied now).
+  cp "$_AGENTJOB_SETUP/np-llm.sh" \
      "$engine/engine/setup/"
   printf 'memory.promote|shared|runtime|on|\nmemory.maintain|shared|runtime|on|\nmaintain.refine|shared|runtime|on|\nmaintain.compact|shared|runtime|on|\n' \
     > "$engine/engine/setup/toggles.conf"

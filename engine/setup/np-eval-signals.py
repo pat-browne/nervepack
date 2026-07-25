@@ -5,9 +5,9 @@
 
 Log-authoritative for hook fires; tolerant transcript parse for skills/tool_calls.
 Stdlib only — no third-party deps (see CLAUDE.md § "Harness language policy").
-Toggle resolution is single-sourced through `np_toggle` (the in-process Python
-resolver, parity-locked to np-toggle-lib.sh) rather than reimplemented here — no
-bash shell-out (phase 12). Fail-open: any error degrades a field to its empty/zero
+Toggle resolution is single-sourced through `np_toggle` (the sole toggle
+resolver since the sourced bash toggle lib was retired in phase 18) rather than
+reimplemented here — no bash shell-out (phase 12). Fail-open: any error degrades a field to its empty/zero
 default; the script never raises out to the caller.
 
 This is the proof-of-concept port establishing the bash→Python pattern: the

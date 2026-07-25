@@ -499,10 +499,11 @@ it in. The new skill is live without a manual pull.
 **Purpose.** Every feature has an on/off switch (and tunable params), so nothing is
 load-bearing-without-escape and new behavior is always reversible.
 
-**Workflow.** `toggles.conf` (committed) is the manifest; `np-toggle-lib.sh` (bash
-runtime/cron guards) and `np_toggle.py` (the Python resolver + the whole write surface)
-both resolve `toggles.local → toggles.conf → default-on` (fail-open: unknown = on). Every
-runtime check goes through `np_enabled`/`np_param`. Users drive it with `cli.py toggle`
+**Workflow.** `toggles.conf` (committed) is the manifest; `np_toggle.py` (the sole
+resolver + the whole write surface since the sourced bash toggle lib was retired in
+phase 18) resolves `toggles.local → toggles.conf → default-on` (fail-open: unknown = on).
+Every runtime check goes through `np_toggle.enabled`/`param` (in-process for Python, or
+`np_toggle.py enabled|param` from a shell step). Users drive it with `cli.py toggle`
 (`status`/`<feature> on|off`/`param`/`audit`/`menu`), which dispatches to
 `np_toggle.cli()`; shared flips edit `toggles.conf` and path-limited-commit+push, local
 and managed writes land in `toggles.local` (managed also installs/removes the Claude
@@ -519,7 +520,7 @@ stays local, after a confirm dialog for shared flips), dotted params write local
 panel's own gating params (`dashboard_open`/`dashboard_serve`/`toggle_ui`). Gated by
 `evaluator.toggle_ui` (default on).
 
-**Assets.** `toggles.conf`, `np-toggle-lib.sh`, `np_toggle.py` + `np_toggle_audit.py`
+**Assets.** `toggles.conf`, `np_toggle.py` + `np_toggle_audit.py`
 (+ `cli.py toggle`), `np-core-toggle`, `toggle-schema.json`, `np_toggle_schema.py`,
 `np-dashboard-server.py` (`/api/toggles`).
 
@@ -611,13 +612,14 @@ private, and one resolver points every consumer at the right tree.
 
 **Workflow.** The engine repo holds machinery + generic skills; the overlay
 (`NP_CONTENT_DIR`) holds wiki (with co-located sources) / memory (episodic+lessons) / metrics + personal
-skills. `np-content-lib.sh` (`np_content_dir`) resolves the overlay for every consumer;
+skills. `np_content.py` (`content_dir`; the sole resolver since the sourced bash content
+lib was retired in phase 18) resolves the overlay for every consumer;
 unset falls back to the engine root (legacy single-repo).
 
-**Assets.** `np-content-lib.sh`, `NP_CONTENT_DIR`, the `nervepack-content-example` repo.
+**Assets.** `np_content.py`, `NP_CONTENT_DIR`, the `nervepack-content-example` repo.
 
 **Situational example.** The graduation detector needs to scan *your* lessons. It
-asks `np_content_dir`, gets your overlay path, and scans there. A public clone
+asks `np_content.content_dir`, gets your overlay path, and scans there. A public clone
 with no overlay simply finds nothing and no-ops.
 
 ## Team overlay — a shared layer above your personal content
@@ -632,8 +634,8 @@ engine`. That value may be a **comma-separated list of up to four team dirs**,
 highest-precedence first (`squad,division,org` → `squad > division > org > personal >
 engine`), so a nested org can layer shared content; more than four is a hard error and
 the session falls back to personal-only (the doctor's `team` check `WARN`s on such an
-invalid config rather than hiding it). `np-layer-lib.sh` builds that stack and every
-reader scans it highest-first.
+invalid config rather than hiding it). `np_content.py` (`content_layers`) builds that
+stack and every reader scans it highest-first.
 Skills are **override-only**, so a team `np-kb-branding` shadows your personal one of
 the same name. The topic layers (lessons, episodic, wiki) combine per the
 `team.merge` param, `override` (default, team wins on a name clash), `concatenate`
@@ -647,10 +649,10 @@ scores are never shared. Gated by the `team` toggle, which is dormant until a te
 dir resolves. Complete through Phase 3 (recall hooks, wiki index, dashboard
 learned-counts, and MCP recall all merge across layers).
 
-**Assets.** `np-layer-lib.sh` (`np_content_layers`/`np_merge_mode`/`np_merge_roots`/
-`np_layer_roots`) and its Python mirror `np_content.py` (`merge_roots`/`merge_mode`),
-`np_team_dirs`/`np_team_dir` (the comma-list parse/validate/cap
-resolver, and its highest-precedence first entry) in `np-content-lib.sh`, the two recall hooks
+**Assets.** `np_content.py` (`content_layers`/`merge_mode`/`merge_roots`/`layer_roots`,
+plus `team_dirs`/`team_dir` — the comma-list parse/validate/cap resolver and its
+highest-precedence first entry; the sole layer + content resolver since the sourced bash
+content/layer libs were retired in phase 18), the two recall hooks
 (`engine/nervepack_engine/hooks/episodic_recall.py`,
 `engine/nervepack_engine/hooks/lesson_recall.py` — both Python ports via `cli.py`
 dispatcher), `dashboard/build.py` (`wiki_index`,

@@ -21,10 +21,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_IN = os.path.join(HERE, "data", "metrics.jsonl")
 DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 
-# np_bashlib makes the bash shell-out below work under Git-bash on Windows (a bare
-# `bash` resolves to System32 WSL there). It lives in engine/setup/ — no-op off Windows.
+# The resolvers live in engine/setup/; import np_toggle in-process for toggle reads.
+# (The layer-stack resolver np_content.py is invoked as a native subprocess below.)
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
-import np_bashlib  # noqa: E402
 import np_toggle  # noqa: E402
 
 
@@ -162,7 +161,7 @@ def drop_resolved(records, resolved):
 
 
 def _content_dir():
-    """Resolve the content-overlay root, mirroring np-content-lib.sh's precedence:
+    """Resolve the content-overlay root, mirroring np_content.py's precedence:
     $NP_CONTENT_DIR -> ~/.config/nervepack/content-dir (first line) -> engine root.
     Since the engine/content split, memory/lessons/ lives in the overlay,
     not the engine repo, so a bare build.py (manual open-dashboard, MCP summary) must
@@ -177,14 +176,16 @@ def _content_dir():
     return d or os.path.join(HERE, "..")
 
 
-def _np_layer_lib():
-    return os.path.join(HERE, "..", "engine", "setup", "np-layer-lib.sh")
+def _np_content_py():
+    return os.path.join(HERE, "..", "engine", "setup", "np_content.py")
 
 
-def _np_layer_fn(fn):
-    """Run a np-layer-lib.sh function and return its stdout (empty string on any failure)."""
+def _np_content_fn(verb):
+    """Run `np_content.py <verb>` and return its stdout (empty on any failure). A
+    native Python-to-Python subprocess — np-layer-lib.sh was retired in phase 18,
+    so np_content.py is the sole layer-stack resolver (and this is now bash-free)."""
     try:
-        r = subprocess.run(np_bashlib.argv(["bash", "-c", 'source "$1" 2>/dev/null; %s' % fn, "_", _np_layer_lib()]),
+        r = subprocess.run([sys.executable, _np_content_py(), verb],
                            capture_output=True, text=True)
         return r.stdout
     except Exception:
@@ -193,13 +194,13 @@ def _np_layer_fn(fn):
 
 def _content_layers():
     """Overlay roots to scan (team then personal) for the current merge mode, via
-    np_merge_roots. Fail-open to [_content_dir()] when the helper yields nothing."""
-    roots = [ln for ln in _np_layer_fn("np_merge_roots").splitlines() if ln.strip()]
+    np_content.py merge_roots. Fail-open to [_content_dir()] when it yields nothing."""
+    roots = [ln for ln in _np_content_fn("merge_roots").splitlines() if ln.strip()]
     return roots or [_content_dir()]
 
 
 def _merge_mode():
-    m = _np_layer_fn("np_merge_mode").strip()
+    m = _np_content_fn("merge_mode").strip()
     return m if m in ("override", "concatenate", "team-only") else "override"
 
 
@@ -620,7 +621,7 @@ def learned_counts():
     for the chips). Layer-aware: with no explicit NP_LESSONS_DIR override, unions
     topic names across the team>personal overlays (a count can't double-count an
     identity, so dedup applies in every mode; team-only is handled by _content_layers
-    -> np_merge_roots)."""
+    -> np_content.py merge_roots)."""
     le_env = os.environ.get("NP_LESSONS_DIR")
     if le_env:
         fails, succ = _lesson_names_by_provenance(le_env)
