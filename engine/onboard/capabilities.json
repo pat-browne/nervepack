@@ -10,7 +10,7 @@
       "why": "The whole point: the model must see skills/ (and the consult-nervepack directive) or nervepack does nothing.",
       "accept": "Starting a fresh session, the model can name/use a known skill without being handed the file by the user.",
       "hints": {
-        "claude-code": "symlink each skills/*/SKILL.md into ~/.claude/skills/ (reference: setup/30-link-skills.sh).",
+        "claude-code": "symlink each skills/*/SKILL.md into ~/.claude/skills/ (reference: cli.py setup link-skills, engine/setup/np_link_skills.py).",
         "goose": "expose skills via .goosehints (point at INDEX.md) and/or a recipe that loads the skill dir.",
         "generic": "make the markdown under skills/ part of the model's standing/system context each session.",
         "cursor": "Cursor reads AGENTS.md + .cursor/rules/*.mdc natively (skills as standing context). For the consult-nervepack directive on a host without a session-start hook, append the managed block: cli.py instruction-block install <project>/AGENTS.md (or .cursor/rules/nervepack.mdc).",
@@ -112,7 +112,7 @@
         "claude-code": "SessionStart + UserPromptSubmit hooks in ~/.claude/settings.json, all registered by `cli.py setup install-hooks` from engine/setup/hooks.manifest (sync, directive, episodic-recall, lesson-recall, etc. — one declarative step).",
         "claude-code-windows": "Same SessionStart/UserPromptSubmit hooks, but Claude Code on Windows runs hook commands via PowerShell by default — so install-hooks routes each command through Git-bash. np_hook.py does this automatically on a MINGW/MSYS kernel (or force with NP_HOOK_WRAP=1): the stored command becomes `bash -lc '<original>'`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
         "goose": "SessionStart + UserPromptSubmit hooks in ~/.agents/plugins/nervepack/hooks/hooks.json (Open Plugins spec); map the recall hooks to your prompt-submit event.",
-        "generic": "wire your host's session-start event to run 40-sync-nervepack.sh + emit the directive, and its per-prompt event to run the recall hooks — `cli.py setup install-hooks` writes them all from engine/setup/hooks.manifest."
+        "generic": "wire your host's session-start event to run `cli.py sync` + emit the directive, and its per-prompt event to run the recall hooks — `cli.py setup install-hooks` writes them all from engine/setup/hooks.manifest."
       }
     },
     {

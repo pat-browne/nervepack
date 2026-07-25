@@ -43,15 +43,15 @@ domain how-to that you want to load into *every* session. Tiered by namespace:
 `np-flow-` (workflows). The **engine ships only the machinery tiers** (`np-core-` +
 `np-flow-merge-gate`); the `np-kb-`/`np-env-` domain skills are **content** — they live
 in your content overlay (or a starter), not the public engine (PR #89), and
-`30-link-skills.sh` merges both at link time.
+`cli.py setup link-skills` (np_link_skills.py) merges both at link time.
 
 **Workflow.** `skills/<name>/SKILL.md` carries frontmatter (`name` + `description`)
-and a lean body. `30-link-skills.sh` symlinks each into `~/.claude/skills/` (the
+and a lean body. `cli.py setup link-skills` symlinks each into `~/.claude/skills/` (the
 delivery mechanism) and regenerates `INDEX.md`. Descriptions load passively into the
 catalog; the SessionStart directive is the forcing function that makes sessions
 actually *invoke* them.
 
-**Assets.** `skills/`, `30-link-skills.sh`, `60-generate-index.sh`, `INDEX.md`,
+**Assets.** `skills/`, `np_link_skills.py` (`cli.py setup link-skills`), `np_generate_index.py` (`cli.py setup generate-index`), `INDEX.md`,
 `.claude-plugin/plugin.json`. Toggle: `skills`.
 
 **Situational example.** You decide a project's buttons should use the warm-light
@@ -488,7 +488,7 @@ any UI decision, so you reach for both instead of inventing a layout and a palet
 throttled backup (`sync.interval`, default 1 day). Strict-safe: fast-forward only,
 never auto-rebase or autostash. `np-core-sync` does it on demand.
 
-**Assets.** `40-sync-nervepack.sh`, `np-core-sync`. Toggle: `sync`.
+**Assets.** `np_sync.py` (`cli.py sync`), `np-core-sync`. Toggle: `sync`.
 
 **Situational example.** A cron pushed a new skill from your laptop overnight. You sit
 down at the desktop, start a session, and the SessionStart backup sync fast-forwards

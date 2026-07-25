@@ -81,11 +81,11 @@ def run(cmd, stdin=None, env=None):
 # host, no bash fallback. That's what lets this long-running server gate + recall
 # with no bash subprocess per request (the whole point on a git-for-windows-free host).
 #
-# Toggle writes joined that single call path in phase 14 (_tool_toggle is fully
-# in-process now). USE_PY still governs the not-yet-fully-ported doctor / sync tools
-# below, which prefer bash when available and fall back to their partial Python
-# modules only when it isn't; NP_MCP_PURE_PYTHON=0 forces bash for those. Those
-# escape-hatch branches disappear as phases 15/17 finish their ports.
+# Toggle writes joined that single call path in phase 14, the doctor in phase 15,
+# and sync in phase 17 (_tool_sync now calls np_sync.sync() unconditionally — the
+# last MCP bash hybrid removed). USE_PY / NP_MCP_PURE_PYTHON now only gate the
+# `_require_bash` refusal for the agent-mode maintenance crons (flush/maintain/
+# onboard) on a bash-free host; no tool prefers a bash original any more.
 USE_PY = os.environ.get("NP_MCP_PURE_PYTHON", "1") == "1"
 
 
