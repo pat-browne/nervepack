@@ -273,12 +273,11 @@ TOOLS += [
 ]
 def _tool_sync(args):
     require_writes()
-    # Full bash sync when bash exists (also does the team-layer ff + skill relink);
-    # the bash-free Python engine-sync is the fallback on a host with no bash.
-    if USE_PY and not _bash_available():
-        return np_sync.sync()
-    rc, out, err = run(["bash", os.path.join(SETUP, "40-sync-nervepack.sh")])
-    return (out + err).strip() or f"sync exit {rc}"
+    # Single in-process call path (phase 17): np_sync.sync() runs the FULL defensive
+    # sync natively (the 5 engine cases + team-layer ff + on-ff skill relink /
+    # hook-reinstall / 5x-installer sweep) — 40-sync-nervepack.sh has been retired,
+    # and sync was the last MCP hybrid. Works identically on a bash-free host.
+    return np_sync.sync()
 
 
 def _tool_capture(args):
