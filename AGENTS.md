@@ -255,7 +255,8 @@ lessons stay low-authority and reversible.
 ### Feature toggles (what they are)
 
 Every Nervepack feature has an on/off switch. `engine/setup/toggles.conf` (committed) is
-the manifest; `engine/setup/np-toggle-lib.sh` (and its Python peer `np_toggle.py`) resolve
+the manifest; `engine/setup/np_toggle.py` (the sole resolver since the sourced bash
+toggle lib was retired in phase 18) resolves
 `~/.config/nervepack/toggles.local → toggles.conf → default-on`. Flip via
 `cli.py toggle <feature> on|off` (dispatched through `engine/nervepack_engine/cli.py`;
 no args = interactive picker), or the [[np-core-toggle]] skill.
@@ -275,8 +276,9 @@ no args = interactive picker), or the [[np-core-toggle]] skill.
 **Convention — every new feature MUST be toggleable.** When you add a hook, cron,
 or managed config:
 1. Add a `toggles.conf` row (`feature|scope|enforce|state|param`).
-2. Wire enforcement: runtime/cron scripts source `np-toggle-lib.sh` and add
-   `np_enabled <feature> || exit 0` (fail-open); managed config gets an install +
+2. Wire enforcement: runtime/cron scripts gate on the resolver — a bash step runs
+   `python3 engine/setup/np_toggle.py enabled <feature> || exit 0` and Python code
+   calls `np_toggle.enabled(<feature>)` (fail-open); managed config gets an install +
    a paired remove.
 3. `cli.py toggle audit` flags hooks/cron missing a toggle family.
 
