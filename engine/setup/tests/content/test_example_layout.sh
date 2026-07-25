@@ -23,15 +23,19 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$(cd "$HERE/../.." && pwd)"
 REPO="$(cd "$SETUP/../.." && pwd)"
 FIX="$SETUP/tests/fixtures/example-layout"
+# Use a path form BOTH Git-bash and native-Windows Python resolve to the SAME
+# location (mixed C:/... on Windows), so the root the native np_content.py child
+# echoes back for `layer_roots` matches the bash-side assertion. No-op off Windows.
+if command -v cygpath >/dev/null 2>&1; then FIX="$(cygpath -m "$FIX")"; fi
 export NP_CONTENT_DIR="$FIX"
 
 command -v jq >/dev/null || { echo "SKIP: jq not available"; exit 0; }
 
 fail() { echo "FAIL: $1"; exit 1; }
 
-# 1. layer resolver maps to memory/<layer>
-out="$(bash -c 'source "'"$SETUP/np-layer-lib.sh"'"; np_layer_roots lessons')"
-[ "$out" = "$FIX/memory/lessons" ] || fail "np_layer_roots lessons -> [$out], want [$FIX/memory/lessons]"
+# 1. layer resolver maps to memory/<layer> (sourced bash layer lib retired, phase 18)
+out="$(python3 "$SETUP/np_content.py" layer_roots lessons)"
+[ "$out" = "$FIX/memory/lessons" ] || fail "layer_roots lessons -> [$out], want [$FIX/memory/lessons]"
 
 # 2. lesson-recall surfaces BOTH provenances of the fixture's merged demo.md from
 #    memory/lessons: the failure-provenance body (former playbook) with its

@@ -10,7 +10,8 @@ in the file (a plain whole-file check, intentionally NOT restricted to the
 first frontmatter block -- see lesson_guard.py's module docstring for the
 asymmetry this preserves). Fail-open: returns "" on any early-exit path.
 
-Uses np_content.merge_roots()/merge_mode() in-process (never np-layer-lib.sh).
+Uses np_content.merge_roots()/merge_mode() in-process (the sole layer-stack
+resolver since the sourced bash layer lib was retired in phase 18).
 PII filtering shells to np-pii-filter.py via sys.executable (Python-to-Python,
 still bash-free), matching episodic_recall.py's established pattern.
 """

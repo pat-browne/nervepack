@@ -1,10 +1,10 @@
 import os, subprocess, sys, tempfile, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
-from nptest import u, sh, bash_eval  # cross-platform: bash-invoke + Windows path form
+from nptest import u  # cross-platform Windows path form (no-op off Windows)
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-LIB = os.path.join(REPO, "engine", "setup", "np-content-lib.sh")
+NP_CONTENT = os.path.join(REPO, "engine", "setup", "np_content.py")
 
 
 def _setup_script(name):
@@ -20,75 +20,84 @@ def _doctor(env):
                           capture_output=True, text=True, env=env)
 
 
-def resolve(env=None, home=None):
-    """Run `source np-content-lib.sh; np_content_dir` with a custom env/HOME."""
+def _run(verb, env=None, home=None):
+    """Run `np_content.py <verb>` as a native subprocess (np-content-lib.sh retired,
+    phase 18 — np_content.py is the sole resolver). Native-form paths (no MSYS u()),
+    since np_content.py runs on sys.executable, not through bash — host-agnostic."""
     e = dict(os.environ)
     e.pop("NP_CONTENT_DIR", None)
     if home is not None:
-        e["HOME"] = u(home)
+        e["HOME"] = home
     if env:
         e.update(env)
-    return bash_eval(f'source "{u(LIB)}"; np_content_dir',
-                     capture_output=True, text=True, env=e)
+    return subprocess.run([sys.executable, NP_CONTENT, verb],
+                          capture_output=True, text=True, env=e)
+
+
+def resolve(env=None, home=None):
+    """np_content.py content_dir: prints the overlay root (exit 1 if it doesn't exist)."""
+    return _run("content_dir", env=env, home=home)
 
 
 def origin(env=None, home=None):
-    """Run `source np-content-lib.sh; np_content_dir_origin` with a custom env/HOME."""
-    e = dict(os.environ)
-    e.pop("NP_CONTENT_DIR", None)
-    if home is not None:
-        e["HOME"] = u(home)
-    if env:
-        e.update(env)
-    return bash_eval(f'source "{u(LIB)}"; np_content_dir_origin',
-                     capture_output=True, text=True, env=e)
+    """np_content.py content_origin: prints env | config | default."""
+    return _run("content_origin", env=env, home=home)
 
 
 def is_explicit(env=None, home=None):
-    """Run `source np-content-lib.sh; np_content_is_explicit; echo $?`."""
-    e = dict(os.environ)
-    e.pop("NP_CONTENT_DIR", None)
-    if home is not None:
-        e["HOME"] = u(home)
-    if env:
-        e.update(env)
-    return bash_eval(f'source "{u(LIB)}"; np_content_is_explicit; echo "rc=$?"',
-                     capture_output=True, text=True, env=e)
+    """np_content.py is_explicit: exits 0 when explicit (env/config), 1 on fallback."""
+    return _run("is_explicit", env=env, home=home)
 
 
 class TestContentDir(unittest.TestCase):
     def test_default_is_repo_root(self):
         r = resolve(home=tempfile.gettempdir())  # no env, no config file
         self.assertEqual(r.returncode, 0)
-        self.assertEqual(r.stdout.strip(), u(REPO))
+        self.assertEqual(r.stdout.strip(), REPO)
 
     def test_env_overrides(self):
         with tempfile.TemporaryDirectory() as d:
-            r = resolve(env={"NP_CONTENT_DIR": u(d)})
-            self.assertEqual(r.stdout.strip(), u(d))
+            r = resolve(env={"NP_CONTENT_DIR": d})
+            self.assertEqual(r.stdout.strip(), d)
 
     def test_config_file_used_when_env_unset(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as content:
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(u(content) + "\n")
+                fh.write(content + "\n")
             r = resolve(home=home)
-            self.assertEqual(r.stdout.strip(), u(content))
+            self.assertEqual(r.stdout.strip(), content)
+
+    def test_config_file_crlf_is_tolerated(self):
+        # A CRLF-terminated content-dir config file (common on Windows) must still
+        # resolve to the bare path — _first_line strips \r as well as \n, so the
+        # path isn't "<dir>\r" (which would fail os.path.isdir and return "").
+        # Regression for the Windows-lane content-resolution bug (phase 18).
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as content:
+            cfgdir = os.path.join(home, ".config", "nervepack")
+            os.makedirs(cfgdir)
+            with open(os.path.join(cfgdir, "content-dir"), "w", newline="") as fh:
+                fh.write(content + "\r\n")   # explicit CRLF, exercised on every OS
+            r = resolve(home=home)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout.strip(), content)
 
     def test_env_beats_config(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as c1, tempfile.TemporaryDirectory() as c2:
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(u(c1) + "\n")
-            r = resolve(env={"NP_CONTENT_DIR": u(c2)}, home=home)
-            self.assertEqual(r.stdout.strip(), u(c2))
+                fh.write(c1 + "\n")
+            r = resolve(env={"NP_CONTENT_DIR": c2}, home=home)
+            self.assertEqual(r.stdout.strip(), c2)
 
     def test_bad_explicit_path_errors(self):
+        # np_content.py content_dir exits non-zero with no stdout when an explicit
+        # path doesn't exist (the bash lib's loud "not found" stderr is retired).
         r = resolve(env={"NP_CONTENT_DIR": "/no/such/dir/xyz"})
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("not found", (r.stdout + r.stderr).lower())
+        self.assertEqual(r.stdout.strip(), "")
 
     # --- origin classification (issue #12): one source of truth for explicit-vs-implicit ---
     # np_content_dir's stdout (the resolved path) must stay byte-identical for every case;
@@ -98,9 +107,9 @@ class TestContentDir(unittest.TestCase):
 
     def test_origin_env_is_explicit(self):
         with tempfile.TemporaryDirectory() as d:
-            r = origin(env={"NP_CONTENT_DIR": u(d)})
+            r = origin(env={"NP_CONTENT_DIR": d})
             self.assertEqual(r.stdout.strip(), "env")
-            self.assertEqual(is_explicit(env={"NP_CONTENT_DIR": u(d)}).stdout.strip(), "rc=0")
+            self.assertEqual(is_explicit(env={"NP_CONTENT_DIR": d}).returncode, 0)
 
     def test_origin_config_is_explicit_even_at_engine_root(self):
         # A single-repo user opts in DELIBERATELY by writing the config file pointing at
@@ -109,22 +118,22 @@ class TestContentDir(unittest.TestCase):
             cfgdir = os.path.join(home, ".config", "nervepack")
             os.makedirs(cfgdir)
             with open(os.path.join(cfgdir, "content-dir"), "w") as fh:
-                fh.write(u(REPO) + "\n")   # config == engine root, set on purpose
+                fh.write(REPO + "\n")   # config == engine root, set on purpose
             r = origin(home=home)
             self.assertEqual(r.stdout.strip(), "config")
-            self.assertEqual(is_explicit(home=home).stdout.strip(), "rc=0")
+            self.assertEqual(is_explicit(home=home).returncode, 0)
 
     def test_origin_default_is_implicit(self):
         # NP_CONTENT_DIR unset AND no config file -> the silent engine-root fallback.
         # This is the accidental case; np_content_is_explicit must report NON-zero.
         r = origin(home=tempfile.gettempdir())
         self.assertEqual(r.stdout.strip(), "default")
-        self.assertNotEqual(is_explicit(home=tempfile.gettempdir()).stdout.strip(), "rc=0")
+        self.assertNotEqual(is_explicit(home=tempfile.gettempdir()).returncode, 0)
 
     def test_origin_does_not_change_resolved_path(self):
         # Backward-compat: adding origin detection must not move the resolved path.
         r = resolve(home=tempfile.gettempdir())
-        self.assertEqual(r.stdout.strip(), u(REPO))
+        self.assertEqual(r.stdout.strip(), REPO)
 
     @unittest.skipIf(os.name == "nt", "symlink creation privilege-gated on Windows")
     def test_link_skills_merges_engine_and_overlay(self):
