@@ -8,6 +8,10 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$HERE/../.."
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so the git target + team dir reach native
+# Windows Python (np_sync.py) resolvable and survive MSYS env conversion. No-op off
+# Windows (no cygpath).
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
 export HOME="$tmp"
 git config --global user.email t@t; git config --global user.name t; git config --global init.defaultBranch main
 

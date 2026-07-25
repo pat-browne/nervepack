@@ -17,7 +17,13 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP test_starter_adopt: no python
 # is skipped here — $INSTALL is an MSYS path native-Windows-Python cannot open.)
 
 # --- decline: leaves no content-dir config, exits 0 ---------------------------------
+# Windows/Git-bash: convert each temp dir to mixed form (C:/x) so paths reach native
+# Windows Python resolvable (os.path.isdir/exists) AND string-match what the installer
+# writes back to config-dir (native Python echoes the mixed form). Applies to values
+# passed via stdin too (which MSYS never auto-converts). No-op off Windows (no cygpath).
+_wmix() { command -v cygpath >/dev/null 2>&1 && cygpath -m "$1" || printf '%s' "$1"; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(_wmix "$tmp")"
 HOME="$tmp" NP_STARTER_ADOPT_FORCE=decline python3 "$INSTALL" --starter-only >/dev/null 2>&1
 rc=$?
 chk "decline exits 0"                 "[ $rc -eq 0 ]"
@@ -25,6 +31,7 @@ chk "decline writes no content-dir"   "[ ! -f '$tmp/.config/nervepack/content-di
 
 # --- adopt: network-free via a local git repo standing in for the example pack -----
 tmp2="$(mktemp -d)"; trap 'rm -rf "$tmp" "$tmp2"' EXIT
+tmp2="$(_wmix "$tmp2")"
 src="$tmp2/fake-content-example"
 mkdir -p "$src"
 git -C "$src" init -q
@@ -41,6 +48,7 @@ chk "adopt actually cloned the source into dest" "[ -d '$dest/.git' ]"
 
 # --- already-configured overlay: the offer is skipped even on force=adopt ----------
 tmp3="$(mktemp -d)"; trap 'rm -rf "$tmp" "$tmp2" "$tmp3"' EXIT
+tmp3="$(_wmix "$tmp3")"
 mkdir -p "$tmp3/.config/nervepack"
 printf '%s\n' "/already/configured" > "$tmp3/.config/nervepack/content-dir"
 HOME="$tmp3" NP_STARTER_ADOPT_FORCE=adopt python3 "$INSTALL" --starter-only >/dev/null 2>&1
@@ -60,6 +68,7 @@ chk "already-configured overlay: config left untouched" \
 # stub `claude` (used by 58-install-mcp.sh / the doctor's registration check)
 # rather than removing real PATH, mirroring test_mcp_install.sh.
 tmp4="$(mktemp -d)"; trap 'rm -rf "$tmp" "$tmp2" "$tmp3" "$tmp4"' EXIT
+tmp4="$(_wmix "$tmp4")"
 home4="$tmp4/home"; team4="$tmp4/team"; mkdir -p "$home4" "$team4" "$tmp4/bin"
 cat > "$tmp4/bin/claude" <<'STUB'
 #!/usr/bin/env bash

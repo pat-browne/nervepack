@@ -9,6 +9,7 @@ temp NP_SYNC_TARGET / NP_SYNC_STATUS / NP_SYNC_STAMP and a temp toggles conf —
 touches the real repo."""
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,22 @@ import unittest
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
 _PY = os.path.join(_SETUP, "np_sync.py")
+
+
+def _rmtree(path):
+    """Windows-safe recursive delete: git packs its object files read-only, so a
+    plain shutil.rmtree raises PermissionError (WinError 5) on Windows. On an error,
+    clear the read-only bit and retry. No-op difference off Windows."""
+    def _fix(func, p, exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except OSError:
+            pass
+    try:
+        shutil.rmtree(path, onexc=_fix)          # Python 3.12+
+    except TypeError:
+        shutil.rmtree(path, onerror=_fix)        # Python < 3.12
 
 
 def _git(cwd, *args, **kw):
@@ -31,7 +48,7 @@ def _git(cwd, *args, **kw):
 class NpSync(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.addCleanup(_rmtree, self.tmp)
         self.home = os.path.join(self.tmp, "home")
         os.makedirs(os.path.join(self.home, ".claude"))
         self.conf = os.path.join(self.tmp, "toggles.conf")
@@ -120,7 +137,7 @@ class NpSync(unittest.TestCase):
         self.assertIn("DIVERGED", out)
 
     def test_not_a_git_repo(self):
-        shutil.rmtree(os.path.join(self.target, ".git"))
+        _rmtree(os.path.join(self.target, ".git"))   # Windows: git objects are read-only
         out = self._run("exit")
         self.assertIn("is not a git repo", out)
 

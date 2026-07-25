@@ -13,6 +13,9 @@ SETUP="$(cd "$HERE/../.." && pwd)"
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_index_no_stray_write: no python3"; exit 0; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so paths handed to native Windows Python are
+# resolvable and survive MSYS env conversion. No-op off Windows (no cygpath).
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
 export HOME="$tmp/home"; mkdir -p "$HOME"
 
 # Decoy "real repo" at the historical default location. If the generator ever

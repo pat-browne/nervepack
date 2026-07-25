@@ -7,6 +7,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$HERE/../.."
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so the comma-separated NP_TEAM_DIR survives MSYS
+# env conversion (which only auto-converts a SINGLE path) and both native Windows
+# Python (team_dirs) and git see resolvable paths. No-op off Windows (no cygpath).
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
 export HOME="$tmp"; mkdir -p "$tmp/.config/nervepack" "$tmp/notgit"
 export NP_TOGGLES_CONF="$S/toggles.conf"
 printf 'team=on\n' > "$tmp/.config/nervepack/toggles.local"

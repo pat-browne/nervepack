@@ -4,6 +4,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC="$HERE/../../np_sync.py"          # phase 17: 40-sync-nervepack.sh retired
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_sync_throttle: no python3"; exit 0; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash: mixed form (C:/x) so the stamp/conf paths reach native Windows
+# Python (np_sync.py) resolvable and survive MSYS env conversion. No-op off Windows.
+command -v cygpath >/dev/null 2>&1 && tmp="$(cygpath -m "$tmp")"
 export NP_TOGGLES_CONF="$tmp/toggles.conf" NP_TOGGLES_LOCAL="$tmp/local" NP_SYNC_STAMP="$tmp/last-sync"
 printf 'sync|shared|runtime|on|interval=86400\n' > "$tmp/toggles.conf"
 export NP_SYNC_DRYRUN=1
