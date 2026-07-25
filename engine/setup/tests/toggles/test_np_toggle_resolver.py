@@ -86,6 +86,27 @@ class TestToggleResolver(unittest.TestCase):
     def test_param_default_fallback(self):
         self.assertEqual(np_toggle.param("no.such", "42"), "42")
 
+    # --- parser footguns the deleted A/B parity test pinned (phase-18 review
+    #     backfill): the resolver still implements these; guard them in-process. ---
+    def test_local_read_tolerates_crlf(self):
+        # A local file written with CRLF line endings must still resolve (the value
+        # must not carry a trailing \r). Write bytes so newline translation can't hide it.
+        with open(self.local, "wb") as fh:
+            fh.write(b"sync.interval=3600\r\nmemory=off\r\n")
+        self.assertEqual(np_toggle.param("sync.interval", "999"), "3600")
+        self.assertFalse(np_toggle.enabled("memory"))         # local override off honored
+
+    def test_param_value_with_embedded_equals_and_spaces(self):
+        # A value containing '=' / spaces must survive intact (split on the FIRST '=').
+        self._write_local("expr=a=b=c\ngreeting=hello world\n")
+        self.assertEqual(np_toggle.param("expr", "x"), "a=b=c")
+        self.assertEqual(np_toggle.param("greeting", "x"), "hello world")
+
+    def test_local_duplicate_key_last_wins_on_read(self):
+        # Two lines for the same key: the LAST wins on read (matches the write path).
+        self._write_local("foo=first\nfoo=second\n")
+        self.assertEqual(np_toggle.param("foo", "x"), "second")
+
 
 if __name__ == "__main__":
     unittest.main()
