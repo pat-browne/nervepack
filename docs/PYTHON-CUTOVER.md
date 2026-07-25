@@ -112,7 +112,8 @@ python3 engine/setup/tests/mcp/test_bashfree.py   # proves the ported surface wo
 ```
 
 **5. The full suite is green** (one known-local false positive only — the git-ignored
-`dashboard/data/metrics.js` `/home/pbrowne` path, clean on CI):
+`dashboard/data/metrics.js` contains a local `$HOME` path that the PII guard flags;
+it is never committed, so CI is clean):
 ```bash
 bash engine/setup/tests/run-all.sh            # Linux
 # The Windows/Git-bash lane is a required CI gate — native-Windows-Python portability.
