@@ -29,9 +29,9 @@ command -v jq >/dev/null || { echo "SKIP: jq not available"; exit 0; }
 
 fail() { echo "FAIL: $1"; exit 1; }
 
-# 1. layer resolver maps to memory/<layer>
-out="$(bash -c 'source "'"$SETUP/np-layer-lib.sh"'"; np_layer_roots lessons')"
-[ "$out" = "$FIX/memory/lessons" ] || fail "np_layer_roots lessons -> [$out], want [$FIX/memory/lessons]"
+# 1. layer resolver maps to memory/<layer> (sourced bash layer lib retired, phase 18)
+out="$(python3 "$SETUP/np_content.py" layer_roots lessons)"
+[ "$out" = "$FIX/memory/lessons" ] || fail "layer_roots lessons -> [$out], want [$FIX/memory/lessons]"
 
 # 2. lesson-recall surfaces BOTH provenances of the fixture's merged demo.md from
 #    memory/lessons: the failure-provenance body (former playbook) with its
