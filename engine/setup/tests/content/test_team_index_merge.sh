@@ -10,6 +10,14 @@ GEN=(python3 "$S/np_generate_index.py")
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_team_index_merge: no python3"; exit 0; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash lane: convert $tmp to mixed form (C:/Users/x) so the paths reach
+# native-Windows Python resolvable. A raw MSYS $tmp (/c/... or /tmp/...) is
+# auto-converted by MSYS for a SINGLE-path env var, but a comma-separated
+# NP_TEAM_DIR defeats that conversion (only the first segment converts → the second
+# team dir fails os.path.isdir → team_dirs() returns []). Mixed form is unmangled by
+# MSYS (no leading /) yet valid for both native Python and Git-bash. No-op off
+# Windows (no cygpath). Same fix as tests/mcp/parity/test_content_parity.sh.
+if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
 export HOME="$tmp"
 mkdir -p "$tmp/nervepack/skills/np-kb-x" \
          "$tmp/personal/skills/np-kb-x" "$tmp/team/skills/np-kb-x" "$tmp/.config/nervepack"
