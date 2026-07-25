@@ -16,6 +16,15 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP test_mcp_install: no python3"
 # is skipped here — $INSTALL is an MSYS path native-Windows-Python cannot open.)
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Windows/Git-bash lane runs NATIVE Windows Python: give it a mixed-form path
+# (C:/...) it can os.path.isdir/open, and which survives inside a comma-separated
+# env value (MSYS only auto-converts a single path). Same fix as team-index-merge.
+if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
+# On that lane the stub `claude` below is a bash-shebang script native Windows
+# Python's subprocess can't exec, so the `claude mcp add` registration can't be
+# observed here (the real host has a real `claude` binary). Skip only those two
+# assertions on Windows; every other side effect is still checked.
+WIN=0; case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) WIN=1 ;; esac
 home="$tmp/home"; content="$tmp/content"; team="$tmp/team"
 mkdir -p "$home" "$content" "$team" "$tmp/bin"
 
@@ -40,7 +49,7 @@ chk "team-dir written with the given path"    "[ \"\$(cat '$cfg/team-dir' 2>/dev
 # team is a shared, on-by-default toggle — the installer must NOT flip it (that would
 # commit to the engine repo); configuring team-dir is what activates the overlay.
 chk "installer did not write a local team toggle" "[ ! -f '$cfg/toggles.local' ] || ! grep -q 'team' '$cfg/toggles.local'"
-chk "MCP server registered (claude mcp add)"  "grep -q 'mcp add nervepack' '$tmp/claude-calls' 2>/dev/null"
+[ "$WIN" = 1 ] || chk "MCP server registered (claude mcp add)"  "grep -q 'mcp add nervepack' '$tmp/claude-calls' 2>/dev/null"
 chk "doctor ran (capability output present)"  "printf '%s' \"\$out\" | grep -qiE 'doctor|knowledge|llm-cli|capabilit'"
 chk "path check ran and the tree is clean"    "printf '%s' \"\$out\" | grep -q 'path references resolve'"
 
@@ -72,6 +81,6 @@ out2="$(printf '' | run 2>&1)"; rc=$?
 chk "empty stdin still exits 0"               "[ '$rc' = 0 ]"
 chk "no content-dir written on blank default" "[ ! -f '$home/.config/nervepack/content-dir' ]"
 chk "no team-dir written on blank default"    "[ ! -f '$home/.config/nervepack/team-dir' ]"
-chk "still registered the server"             "grep -q 'mcp add nervepack' '$tmp/claude-calls' 2>/dev/null"
+[ "$WIN" = 1 ] || chk "still registered the server"             "grep -q 'mcp add nervepack' '$tmp/claude-calls' 2>/dev/null"
 
 [ $fail -eq 0 ] && echo "PASS test_mcp_install" || { echo "FAIL test_mcp_install"; exit 1; }
