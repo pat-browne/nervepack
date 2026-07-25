@@ -7,11 +7,12 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$(cd "$HERE/../.." && pwd)"
-INSTALL="$SETUP/np-mcp-install.sh"
+INSTALL="$SETUP/np_mcp_install.py"
 fail=0
 chk() { if eval "$2"; then echo "  ok   $1"; else echo "  FAIL $1"; fail=1; fi; }
 
-bash -n "$INSTALL" || { echo "FAIL: syntax error"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP test_mcp_install: no python3"; exit 0; }
+python3 -c "import ast; ast.parse(open('$INSTALL').read())" || { echo "FAIL: syntax error"; exit 1; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 home="$tmp/home"; content="$tmp/content"; team="$tmp/team"
@@ -26,7 +27,7 @@ STUB
 chmod +x "$tmp/bin/claude"
 
 run() {  # stdin answers piped in by the caller
-  HOME="$home" PATH="$tmp/bin:$PATH" bash "$INSTALL"
+  HOME="$home" PATH="$tmp/bin:$PATH" python3 "$INSTALL"
 }
 
 # --- interactive path: content + team provided ---
