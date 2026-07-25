@@ -334,9 +334,10 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
 
 def _default_agent_fn(prompt, tools, cwd, timeout):
     """Default agent seam: IMPLEMENT_LLM (if set) shells out to that script's
-    `agent --tools <tools>` (test/override seam, matching np-llm.sh's own
-    contract exactly -- every real IMPLEMENT_LLM value, default or test-set,
-    is a bash script, so it's always invoked via `bash <script> ...` routed
+    `agent --tools <tools>` (a test/override seam -- an arbitrary user-supplied
+    override command, NOT the retired np-llm.sh -- every real IMPLEMENT_LLM
+    value, default or test-set, is a bash script, so it's always invoked via
+    `bash <script> ...` routed
     through np_bashlib.argv() for the right interpreter on Windows -- a bare
     native-Windows subprocess.run([override, ...]) can't exec a shebang script
     with no .exe/.bat extension); otherwise calls np_model.agent() in-process."""
