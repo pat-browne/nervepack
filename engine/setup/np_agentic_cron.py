@@ -160,7 +160,8 @@ def _run(cfg):
         return "skipped: %s disabled" % cfg.toggle
 
     # 2. Re-entrancy: bail if already running inside a nervepack agent context.
-    # np-llm.sh's own agent call sets NERVEPACK_AGENT=1; this explicit check
+    # the model seam's own agent call (np_model.agent) sets NERVEPACK_AGENT=1;
+    # this explicit check
     # mirrors the bash bodies' belt-and-suspenders guard, and matters when this
     # entrypoint is invoked directly (bypassing cli.py's own cron-dispatch guard).
     if os.environ.get("NERVEPACK_AGENT"):

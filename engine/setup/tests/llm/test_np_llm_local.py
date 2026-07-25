@@ -1,11 +1,20 @@
+"""Local-backend contract for the model seam, driven through np_model.py's CLI
+(`python3 np_model.py complete|agent`) -- the sole seam since np-llm.sh was retired
+(phase 19). np_model's `local` backend routes `complete` to np-llm-local.py (the
+OpenAI-compatible /chat/completions driver) and `agent` to the user-configured
+NP_LLM_AGENT_CMD via `bash -c`, exactly as the retired wrapper did, so these seven
+cases (content/system forwarding, HTTP-error + unreachable failure, agent passthrough
++ NP_LLM_TOOLS env, and the clear unset-agent error) still pin that behavior against
+the surviving implementation. Invoking np_model.py directly (not via bash) is also
+Windows-native-friendly. Stdlib unittest (no pytest), per CLAUDE.md."""
 import json, os, subprocess, sys, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
-from nptest import sh, u  # bash-invoke np-llm.sh + convert paths embedded in bash cmds
+from nptest import u  # convert paths embedded in bash -c NP_LLM_AGENT_CMD snippets
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-NPLLM = os.path.join(REPO, "engine", "setup", "np-llm.sh")
+NPMODEL = os.path.join(REPO, "engine", "setup", "np_model.py")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -41,8 +50,8 @@ class TestLocalBackend(unittest.TestCase):
                     "NP_LLM_MODEL_CHEAP": "m"})
         if extra:
             env.update(extra)
-        return sh(NPLLM, *args, input=prompt,
-                  capture_output=True, text=True, env=env)
+        return subprocess.run([sys.executable, NPMODEL, *args], input=prompt,
+                              capture_output=True, text=True, env=env)
 
     def test_complete_returns_content(self):
         r = self._run(["complete"])
@@ -55,14 +64,18 @@ class TestLocalBackend(unittest.TestCase):
         self._run(["complete", "--system", "SYS"])
         self.assertEqual(Handler.last_body["messages"][0], {"role": "system", "content": "SYS"})
 
-    def test_http_error_is_nonzero(self):
+    def test_http_error_yields_no_content(self):
+        # A backend failure surfaces to the in-process seam (np_model.complete) as
+        # empty stdout -- the runtime callers (np_capture/np_evaluator) fail-open on
+        # empty output. (The old np-llm.sh propagated the backend's nonzero exit; the
+        # in-process seam returns the string, so "no content" is the ported contract.)
         Handler.status = 500
         r = self._run(["complete"])
-        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
 
-    def test_unreachable_is_nonzero(self):
+    def test_unreachable_yields_no_content(self):
         r = self._run(["complete"], extra={"NP_LLM_BASE_URL": "http://127.0.0.1:1/v1"})
-        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
 
     def test_agent_passthrough_runs_cmd_with_prompt(self):
         import tempfile
@@ -86,8 +99,8 @@ class TestLocalBackend(unittest.TestCase):
         env = dict(os.environ)
         env.update({"NP_LLM_BACKEND": "local", "NP_LLM_BASE_URL": "x", "NP_LLM_MODEL_CHEAP": "m"})
         env.pop("NP_LLM_AGENT_CMD", None)
-        r = sh(NPLLM, "agent", "--tools", "Bash", input="t",
-               capture_output=True, text=True, env=env)
+        r = subprocess.run([sys.executable, NPMODEL, "agent", "--tools", "Bash"], input="t",
+                           capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 2)
         self.assertIn("NP_LLM_AGENT_CMD", r.stderr)
 

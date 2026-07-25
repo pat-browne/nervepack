@@ -593,13 +593,14 @@ over MCP and get the same episodic themes a Claude Code `/recall` would surface.
 **Purpose.** Let any agentic host (Goose, OpenHands, Cline, Continue) wire nervepack
 itself by reading a tool-neutral contract, and let any model back the automation.
 
-**Workflow.** `np-llm.sh` is the backend-neutral LLM-CLI seam (sets `NERVEPACK_AGENT=1`,
-swaps `claude` for any OpenAI-compatible endpoint). `np-core-onboard` reads
+**Workflow.** `np_model.py` is the backend-neutral model seam (sets `NERVEPACK_AGENT=1`,
+swaps `claude` for any OpenAI-compatible endpoint) — the in-process successor to the
+retired bash wrapper `np-llm.sh`. `np-core-onboard` reads
 `engine/onboard/ONBOARD.md`, wires the host, and proves it with `cli.py doctor`
 (in-process Python, `engine/setup/np_doctor.py`). Pre-flight gates check the
 *backend*, not the `claude` binary.
 
-**Assets.** `np-llm.sh`, `engine/onboard/`, `engine/setup/np_doctor.py` (`cli.py doctor`), `np-core-onboard`.
+**Assets.** `engine/setup/np_model.py` (the model seam; `np-llm-local.py` for the local backend), `engine/onboard/`, `engine/setup/np_doctor.py` (`cli.py doctor`), `np-core-onboard`.
 
 **Situational example.** On a Goose box with a local model, `/np-onboard` writes the
 adapter, points the seam at the local endpoint, and the doctor reports PASS. The

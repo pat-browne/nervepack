@@ -10,7 +10,7 @@
 # directly.
 #
 # The remaining three drivers share the same shape: read a prompt from
-# agents/np-flow-*.md, pipe it to np-llm.sh (which shells out to $CLAUDE_BIN), and
+# agents/np-flow-*.md, pass it to np_model.agent() (which shells out to $CLAUDE_BIN), and
 # expect the agent to edit + commit files IN WHICHEVER REPO IT WAS INVOKED FROM (72
 # cd's into the content overlay first via np_content_dir; 76/77 stay in the engine
 # repo, naming any extra overlay roots as text in the prompt). This helper stands up
@@ -54,12 +54,11 @@ make_agent_sandbox() {
   # whichever of these dirs it actually needs at mutation time.
   printf 'agentjob sandbox overlay\n' > "$overlay/README.md"
 
-  # The model seam a sandboxed agentic job shells out to (no bash cron drivers
-  # remain — all four were ported to np_agentic_cron.py, whose Python tests build
-  # their own sandboxes; the former toggle/content/layer sourced libs were retired
-  # in phase 18, so only np-llm.sh is copied now).
-  cp "$_AGENTJOB_SETUP/np-llm.sh" \
-     "$engine/engine/setup/"
+  # The model seam a sandboxed agentic job uses is np_model.py, imported from the
+  # REAL engine/setup on sys.path (it shells to the CLAUDE_BIN stub) — nothing needs
+  # copying into the sandbox. (np-llm.sh was retired in phase 19; the former
+  # toggle/content/layer sourced libs in phase 18. Bash cron drivers were all ported
+  # to np_agentic_cron.py, whose Python tests build their own sandboxes.)
   printf 'memory.promote|shared|runtime|on|\nmemory.maintain|shared|runtime|on|\nmaintain.refine|shared|runtime|on|\nmaintain.compact|shared|runtime|on|\n' \
     > "$engine/engine/setup/toggles.conf"
 

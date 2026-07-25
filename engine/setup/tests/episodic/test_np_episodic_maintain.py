@@ -268,7 +268,7 @@ class CommitRoutingTest(unittest.TestCase):
 
 class InvocationTest(unittest.TestCase):
     """Port of test_maintain_invocation.sh: a real (unmocked) end-to-end call
-    through np_llm_agent.run_agent -> np-llm.sh -> a stub CLAUDE_BIN, proving
+    through np_llm_agent.run_agent -> np_model.agent() -> a stub CLAUDE_BIN, proving
     the prompt reaches the agent over STDIN rather than being lost as a
     trailing positional after the variadic `--allowedTools` (the historical
     bug class -- see test_capture_invocation.sh's sibling note). Since the

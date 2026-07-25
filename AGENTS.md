@@ -111,7 +111,7 @@ The harness is deliberately **bilingual**, split on one question: *is there real
 logic here, or is this just glue?*
 
 - **Bash** — for latency-critical, low-logic glue: any script that's mostly
-  sequencing other CLIs (git, jq, `np-llm.sh`, crontab). Bash's ~5–10ms cold
+  sequencing other CLIs (git, jq, crontab). Bash's ~5–10ms cold
   start matters on these; Python's ~30–80ms does not.
 - **Python (stdlib-only)** — for parsing and data-structure assembly that runs
   off the hot path (SessionEnd, cron): the evaluator's signal extraction, record
@@ -146,7 +146,8 @@ you're already reworking it), never as a big-bang rewrite of working, tested cod
 
 ### Model selection policy (which model to use)
 
-Every feature that calls `np-llm.sh` (the tool-neutral model seam) must **pin a model**
+Every feature that calls `np_model.py` (the tool-neutral model seam; the bash wrapper
+`np-llm.sh` was retired in phase 19) must **pin a model**
 (never inherit the interactive default) and use the **cheapest model that does the job**.
 The split mirrors the language policy:
 
@@ -298,7 +299,7 @@ separate future feature. For wiring details see `docs/ARCHITECTURE.md`.
 `engine/setup/np_skill_maintain.py` (dispatched via `engine/nervepack_engine/cli.py` as
 `cli.py cron skill-maintain`, daily cron, 09:15) keeps skill bodies within budget,
 deterministic-first. A detector flags any `SKILL.md` over the hard `split_kb` limit;
-only then does a Sonnet model pass (via `np-llm.sh`) move overflow detail into
+only then does a Sonnet model pass (via the model seam `np_model.py`) move overflow detail into
 `skills/<name>/references/`. A deterministic gate enforces: body now under budget,
 frontmatter unchanged, no links dropped. Pass → commit (+push); fail → revert.
 The detector also flags when the always-loaded catalog crosses `skills.catalog_tok`
