@@ -3,7 +3,8 @@ session's first N prompts, inject episodic themes matching the prompt as
 low-authority background context. Keyword-only (no LLM call). Fail-open:
 returns "" on any early-exit path.
 
-Uses np_content.merge_roots()/merge_mode() (not np-layer-lib.sh) and
+Uses np_content.merge_roots()/merge_mode() (the sole layer-stack resolver since
+the sourced bash layer lib was retired in phase 18) and
 np_episodic_match.match() (not episodic-match.sh) in-process to stay
 bash-free. When pii_filter is on, shells to np-pii-filter.py via a
 sys.executable subprocess (Python-to-Python, still bash-free) rather than
