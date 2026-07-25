@@ -40,8 +40,8 @@ onboards through these same docs.
    `check:core` ones itself). `status` ∈ `wired | unsupported`. `verify` is a
    deterministic command that exits 0 when the capability is genuinely in place
    (e.g. Claude: `test -L ~/.claude/skills/np-core-sync`; `grep -q episodic-capture ~/.claude/settings.json`).
-4. **Configure `np-llm.sh`** for your model: set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`
-   / `NP_LLM_MODEL_AGENT`) so `printf 'hi' | engine/setup/np-llm.sh complete` returns text.
+4. **Configure the model seam** (`np_model.py`) for your model: set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`
+   / `NP_LLM_MODEL_AGENT`) so `printf 'hi' | python3 engine/setup/np_model.py complete` returns text.
    Claude Code is the default backend; for a local box use the goose/ollama backend.
 5. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor`. It reports each capability
    per tier (PASS / MISSING / UNSUPPORTED) and exits non-zero on any MUST failure.
@@ -97,7 +97,7 @@ export NP_LLM_BASE_URL=http://localhost:11434/v1   # full base incl. version pat
 export NP_LLM_API_KEY=...                            # optional (Open WebUI / hosted)
 export NP_LLM_MODEL_CHEAP=qwen2.5                    # model for summaries/verdicts
 # smoke test:
-echo ping | engine/setup/np-llm.sh complete
+echo ping | python3 engine/setup/np_model.py complete
 ```
 
 `complete` mode (capture + evaluator) works directly. `agent` mode (the weekly maintenance
@@ -110,7 +110,7 @@ crons report that an agentic host is required.
 ```bash
 printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
   NP_LLM_BASE_URL=<your-endpoint>/v1 NP_LLM_API_KEY=<key-if-any> \
-  NP_LLM_MODEL_CHEAP=<model> engine/setup/np-llm.sh complete
+  NP_LLM_MODEL_CHEAP=<model> python3 engine/setup/np_model.py complete
 # expect the model's text on stdout, exit 0
 ```
 
@@ -118,7 +118,7 @@ printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
 
 - Don't edit `engine/onboard/capabilities.json` to make the doctor pass. Fix the wiring.
 - Don't skip `git-sync` auth. The maintenance steps push to origin.
-- Don't drop the `NERVEPACK_AGENT` guard: any hook that triggers `np-llm.sh agent`
+- Don't drop the `NERVEPACK_AGENT` guard: any hook that triggers `np_model.py agent`
   (the maintenance/flush path) must bail when `NERVEPACK_AGENT` is set, or the
   model call's own session-end re-fires the hook forever. See
   `skills/np-kb-claude-headless-scripting` §7.

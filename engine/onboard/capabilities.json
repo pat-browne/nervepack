@@ -22,13 +22,13 @@
       "id": "llm-cli",
       "tier": "MUST",
       "check": "core",
-      "title": "np-llm.sh returns text for a stdin prompt",
-      "why": "Capture, evaluator and maintenance all summarize/judge/act through this one wrapper; if it can't reach a model, the runtime is dead.",
-      "accept": "echo a prompt | np-llm.sh complete -> non-empty text on stdout.",
+      "title": "the model seam returns text for a stdin prompt",
+      "why": "Capture, evaluator and maintenance all summarize/judge/act through this one seam (np_model.py); if it can't reach a model, the runtime is dead.",
+      "accept": "printf a prompt | python3 engine/setup/np_model.py complete -> non-empty text on stdout.",
       "hints": {
         "claude-code": "default backend; NP_LLM_BACKEND=claude, CLAUDE_BIN points at the claude CLI.",
-        "goose": "set NP_LLM_BACKEND=goose (or ollama) and the model env; np-llm.sh routes complete/agent to it.",
-        "generic": "set NP_LLM_BACKEND + NP_LLM_MODEL_CHEAP/_AGENT so np-llm.sh can shell out to your model. For a local model set NP_LLM_BACKEND=local + NP_LLM_BASE_URL (OpenAI-compatible) + NP_LLM_MODEL_CHEAP; agent mode needs NP_LLM_AGENT_CMD."
+        "goose": "set NP_LLM_BACKEND=goose (or ollama) and the model env; np_model.py routes complete/agent to it.",
+        "generic": "set NP_LLM_BACKEND + NP_LLM_MODEL_CHEAP/_AGENT so np_model.py can shell out to your model. For a local model set NP_LLM_BACKEND=local + NP_LLM_BASE_URL (OpenAI-compatible) + NP_LLM_MODEL_CHEAP; agent mode needs NP_LLM_AGENT_CMD."
       }
     },
     {

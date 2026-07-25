@@ -23,7 +23,7 @@ this skill is the entry point.
    `cli.py setup link-skills` (knowledge) + `engine/setup/5x-install-*.sh` (hooks); reproduce the
    equivalent for your host.
 4. **Configure the model:** set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`/`_AGENT`) so
-   `printf hi | engine/setup/np-llm.sh complete` returns text. Claude is the default backend; a
+   `printf hi | python3 engine/setup/np_model.py complete` returns text. Claude is the default backend; a
    local Ollama box uses the goose/ollama backend.
 5. **Record what you did** in `~/.config/nervepack/adapter.json` (per-machine): for each
    `check:adapter` capability, `{status: wired|unsupported, verify: "<cmd, exit 0 = ok>"}`.
@@ -36,7 +36,7 @@ this skill is the entry point.
 ## Hard rules
 
 - Never edit `capabilities.json` to make the doctor pass — fix the wiring.
-- Any hook that triggers `np-llm.sh agent` (the maintenance/flush path) MUST bail when
+- Any hook that triggers `np_model.py agent` (the maintenance/flush path) MUST bail when
   `NERVEPACK_AGENT` is set, or the model call's own session-end re-fires the hook forever
   → see [[np-kb-claude-headless-scripting]] §7.
 - A non-agentic host (plain chat) can't self-wire; it can only consume `skills/` as context.

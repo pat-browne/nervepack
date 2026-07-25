@@ -773,7 +773,7 @@
           const r = await api("/api/review", {});
           const rows = (r.rows || []).map(x => Object.assign({ ts: x.ts || "" }, x));
           renderSug(rows, r.degraded
-            ? "Ranked by confidence — model verdicts unavailable (np-llm seam offline)."
+            ? "Ranked by confidence — model verdicts unavailable (model seam offline)."
             : "Verdicts from a single Haiku pass — Implement or Reject each, or Clear all.");
         } catch (e) { review.disabled = false; review.textContent = "Review"; alert("Review failed: " + e.message); }
       });

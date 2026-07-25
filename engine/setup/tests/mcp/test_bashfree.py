@@ -183,8 +183,9 @@ class BashFreeReadSurface(unittest.TestCase):
         # (not "aggregate") -- aggregate is now np_aggregate.py, called in-process,
         # so it no longer needs bash and must NOT be refused on a bash-free host;
         # "promote" is now np_agentic_cron.memory_promote(), called in-process, but
-        # its agent call still shells to bash (np-llm.sh), so it stays gated like
-        # "skills" -- it's the representative job left in this refuse-cleanly gate.
+        # np_model.agent()'s local backend still shells to bash (the user's
+        # NP_LLM_AGENT_CMD), so it stays gated like "skills" -- it's the
+        # representative job left in this refuse-cleanly gate.
         c = self.client()
         c.initialize()
         for tool, arg in (("nervepack_flush", {}), ("nervepack_maintain", {"job": "promote"})):

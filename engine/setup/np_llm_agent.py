@@ -1,8 +1,7 @@
 """Shared seam for the backend-neutral agentic-call contract every maintenance
-cron needs (skill-maintain's Sonnet pass, memory-promote/refine/compact). As of
-phase 9 of the bash->Python CLI consolidation (content overlay spec
-2026-07-15-nervepack-python-cli-consolidation-design.md), this calls
-np_model.agent() in-process -- no more shelling to bash `np-llm.sh agent`.
+cron needs (skill-maintain's Sonnet pass, memory-promote/refine/compact). This calls
+np_model.agent() in-process -- np_model.py is the sole model seam (phase 9
+ported `agent` in-process; phase 19 retired the old bash wrapper `np-llm.sh`).
 This module's job is just to invoke it correctly and repeatably: prompt piped
 via stdin, `--tools` space-joined, and -- critically for any multi-repo
 caller -- the call runs with its cwd set to whatever the caller requests,

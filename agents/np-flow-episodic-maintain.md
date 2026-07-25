@@ -10,8 +10,8 @@ local inbox, so this has to stay local.
 spacing pattern the other nervepack agents use so no two push at once.
 
 **Invoked by:** the `episodic-maintain` cron — `cli.py cron episodic-maintain`
-(backed by `engine/setup/np_agentic_cron.py`, which invokes the agent via
-`np-llm.sh`), logs to `~/.cache/nervepack/episodic-maintain.log`.
+(backed by `engine/setup/np_agentic_cron.py`, which invokes the agent via the
+model seam `np_model.py`), logs to `~/.cache/nervepack/episodic-maintain.log`.
 
 **Standing mandate:** pre-authorized to commit + push to the `memory/episodic/`
 subtree only. This is the one subtree where the human-review gate is waived

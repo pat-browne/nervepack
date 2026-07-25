@@ -55,7 +55,7 @@ When `evaluator.dashboard_serve` is **on** (a param, default on — flip off wit
 `cli.py toggle evaluator.dashboard_serve off`), the dashboard is served from a
 local backend (`engine/setup/np-dashboard-server.py`) and its Suggestions panel gains
 buttons: **Resolve** (one item → `np_suggestion_resolve.py` (`cli.py suggestion-resolve`)), **Review** (a single
-Haiku verdict pass over the top-N, via `np-llm.sh`), and **Review & clear** (resolve
+Haiku verdict pass over the top-N, via the model seam `np_model.py`), and **Review & clear** (resolve
 all open). Same engine underneath — the buttons just call `/api/resolve|review|clear`.
 
 ## Notes

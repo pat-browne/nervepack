@@ -10,6 +10,22 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Changed
+- **The bash model-seam wrapper `np-llm.sh` is retired; `np_model.py` is the sole
+  model seam (phase 19 of the bash→Python migration — the highest-blast-radius seam,
+  ported last).** `np-llm.sh` had been vestigial since phase 9 put `np_model.py`
+  (`complete` + `agent`, both `claude` and `local` backends) on the runtime path;
+  nothing shelled it in production. The `NERVEPACK_AGENT=1` recursion guard and the
+  `CLAUDE_CODE_*` env strip stay centralized in `np_model._env()` for both modes; the
+  `local` backend's `NP_LLM_AGENT_CMD` path still shells `bash -c` from within
+  `np_model.agent()` (a user-configured agentic command, not a re-implementable
+  script), as does the `IMPLEMENT_LLM` override in `np_implement_suggestion.py`. The
+  wrapper's black-box argv/env contract — argv shape, recursion guard, env strip,
+  prompt-on-stdin, both backends, both modes — is now pinned host-agnostically by
+  `tests/llm/test_np_model_contract.py` (a monkeypatch-capture test that needs no
+  executable stub, so it runs on the native-Windows lane too). The bash contract test
+  `test_np_llm.sh` and the A/B parity tests `test_{model,agent}_parity.sh` were
+  retired with the wrapper; `test_np_llm_local.py` was repointed at the `np_model.py`
+  CLI.
 - **The install/sync/index family is now Python; `40-sync-nervepack.sh`,
   `30-link-skills.sh`, `60-generate-index.sh`, `np-mcp-install.sh`, and
   `episodic-scrub.sh` retired (phase 17 of the bash→Python migration — the

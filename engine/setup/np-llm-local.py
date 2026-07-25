@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """nervepack 'local' LLM backend — drives an OpenAI-compatible /chat/completions endpoint
-(Ollama /v1, Open WebUI, LM Studio, vLLM, ...). Called by np-llm.sh's `local` backend.
+(Ollama /v1, Open WebUI, LM Studio, vLLM, ...). Invoked by np_model.py's `local`
+backend `complete` path (`[python3, np-llm-local.py, complete]`); np_model.py is the
+sole model seam since the bash wrapper np-llm.sh was retired (phase 19).
 
 Usage: np-llm-local.py complete [--system S]   (prompt on stdin -> text on stdout)
 Env: NP_LLM_BASE_URL (full base incl. version path), NP_LLM_API_KEY (optional),
