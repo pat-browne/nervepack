@@ -30,7 +30,10 @@ class TestToggleResolver(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.conf = os.path.join(self.tmp, "toggles.conf")
         self.local = os.path.join(self.tmp, "local")
-        with open(self.conf, "w") as fh:
+        # Force LF: the committed toggles.conf is always LF, but a text-mode write
+        # on the Windows lane would emit CRLF, leaving a trailing \r on the last
+        # column's value (interval=86400\r != 86400). Match the real file's form.
+        with open(self.conf, "w", newline="\n") as fh:
             fh.write(CONF)
         # A clean env so no ambient toggle file leaks in; HOME points nowhere real.
         self.env = mock.patch.dict(os.environ, {
