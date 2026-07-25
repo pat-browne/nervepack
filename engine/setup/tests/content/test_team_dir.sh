@@ -8,6 +8,10 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="$HERE/../../np_content.py"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# Use a path form BOTH Git-bash and native-Windows Python resolve to the SAME
+# location, so the dirs the native np_content.py child echoes back (C:/Users/...)
+# match the bash-side assertions. On Windows that's the mixed form; no-op off it.
+if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
 export HOME="$tmp"   # isolate ~/.config
 mkdir -p "$tmp/team" "$tmp/cfgteam" "$tmp/.config/nervepack"
 

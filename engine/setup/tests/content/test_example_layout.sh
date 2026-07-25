@@ -23,6 +23,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$(cd "$HERE/../.." && pwd)"
 REPO="$(cd "$SETUP/../.." && pwd)"
 FIX="$SETUP/tests/fixtures/example-layout"
+# Use a path form BOTH Git-bash and native-Windows Python resolve to the SAME
+# location (mixed C:/... on Windows), so the root the native np_content.py child
+# echoes back for `layer_roots` matches the bash-side assertion. No-op off Windows.
+if command -v cygpath >/dev/null 2>&1; then FIX="$(cygpath -m "$FIX")"; fi
 export NP_CONTENT_DIR="$FIX"
 
 command -v jq >/dev/null || { echo "SKIP: jq not available"; exit 0; }
