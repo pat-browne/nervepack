@@ -25,4 +25,20 @@ echo "$pw" | grep -q 'Sup3rSecretValue' && { echo "FAIL: password value leaked: 
 br="$(printf 'header Bearer abcdef123456ghijklmno end\n' | python3 "$SCRUB")"
 echo "$br" | grep -q 'abcdef123456ghijkl' && { echo "FAIL: bearer token leaked: $br"; exit 1; }
 
+# Shapes whose direct coverage moved here when test_scrub_parity.sh was retired
+# in phase 17 (JWT, private-key header, token=, api_key=) — np_scrub.py still
+# carries these rules; guard against a future regression.
+jwt="$(printf 'auth eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2QT end\n' | python3 "$SCRUB")"
+echo "$jwt" | grep -q 'eyJhbGciOiJIUzI1' && { echo "FAIL: JWT leaked: $jwt"; exit 1; }
+echo "$jwt" | grep -q 'REDACTED-JWT' || { echo "FAIL: JWT not redacted: $jwt"; exit 1; }
+
+pk="$(printf -- '-----BEGIN RSA PRIVATE KEY-----\n' | python3 "$SCRUB")"
+echo "$pk" | grep -q 'REDACTED-KEY' || { echo "FAIL: private-key header not redacted: $pk"; exit 1; }
+
+tok="$(printf 'cfg token=abcdef123456 end\n' | python3 "$SCRUB")"
+echo "$tok" | grep -q 'abcdef123456' && { echo "FAIL: token= value leaked: $tok"; exit 1; }
+
+ak="$(printf 'cfg api_key=abcdef123456 end\n' | python3 "$SCRUB")"
+echo "$ak" | grep -q 'abcdef123456' && { echo "FAIL: api_key= value leaked: $ak"; exit 1; }
+
 echo "PASS test_scrub"
