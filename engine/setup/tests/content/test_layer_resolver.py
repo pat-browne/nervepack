@@ -11,6 +11,7 @@ now-deleted A/B parity test: no-team, team + toggle on, team-only, invalid
 mode -> override, toggle-off drops team, and multi-team ordering.
 """
 import os
+import posixpath
 import shutil
 import sys
 import tempfile
@@ -32,8 +33,10 @@ class TestLayerResolver(unittest.TestCase):
             os.makedirs(d)
         self.conf = os.path.join(self.tmp, "toggles.conf")   # empty -> team default-on
         self.local = os.path.join(self.tmp, "local")
-        open(self.conf, "w").close()
-        open(self.local, "w").close()
+        # LF-forced writes: text mode would emit CRLF on Windows, and a trailing
+        # \r on a conf param value would break byte-exact comparisons downstream.
+        open(self.conf, "w", newline="\n").close()
+        open(self.local, "w", newline="\n").close()
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -50,7 +53,7 @@ class TestLayerResolver(unittest.TestCase):
         return mock.patch.dict(os.environ, env, clear=True)
 
     def _write_local(self, text):
-        with open(self.local, "w") as fh:
+        with open(self.local, "w", newline="\n") as fh:
             fh.write(text)
 
     # --- no team -> layers = [personal]; override; roots = [personal] -------
@@ -101,8 +104,11 @@ class TestLayerResolver(unittest.TestCase):
             "NP_TOGGLES_LOCAL": self.local,
         }
         with mock.patch.dict(os.environ, env, clear=True):
+            # layer_roots joins with forward slashes (posix) to match the retired
+            # bash it replaces — assert the same form, not os.path.join (backslash
+            # on Windows).
             self.assertEqual(np_content.layer_roots("playbooks"),
-                             [os.path.join(ov, "memory", "playbooks")])
+                             [posixpath.join(ov, "memory", "playbooks")])
 
     # --- layer_dir is the single-root form ----------------------------------
     def test_layer_dir_single_root(self):

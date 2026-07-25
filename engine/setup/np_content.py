@@ -7,6 +7,7 @@ import this in-process; there is no bash equivalent. Reuses np_toggle for the
 `team` / `team.merge` decisions. stdlib only.
 """
 import os
+import posixpath
 import sys
 
 import np_toggle
@@ -26,11 +27,15 @@ def _cfg(name):
 
 
 def _first_line(path):
-    # Mirror `d="$(head -n1 "$path")"`: first line, trailing \n stripped, \r kept
-    # (so a CRLF config behaves identically to bash, including its dir-not-found).
+    # First line with the trailing EOL stripped. Strip BOTH \r and \n so a
+    # CRLF-terminated config file (common on Windows — an editor, or a file
+    # copied from Windows) resolves to the bare path, not "<path>\r" which would
+    # fail os.path.isdir() and silently break content-dir/team-dir resolution.
+    # (The retired bash lib kept the \r via `head -n1`; that was a latent bug the
+    # Python resolver, now the sole one, fixes.)
     try:
         with open(path, "r", newline="") as f:
-            return f.readline().rstrip("\n")
+            return f.readline().rstrip("\r\n")
     except OSError:
         return ""
 
@@ -149,9 +154,11 @@ def merge_roots():
 def layer_roots(layer):
     """np_layer_roots: one path per merge root, each suffixed memory/<layer>.
     The merge-aware sibling of layer_dir() — recall hooks scan these for the
-    active team.merge mode. Keeps the memory/<layer> subpath in one place
-    (mirrors layer_dir; both append memory/<layer>)."""
-    return [os.path.join(r, "memory", layer) for r in merge_roots()]
+    active team.merge mode. Joined with FORWARD slashes (posixpath), byte-for-byte
+    matching the retired bash `np_layer_roots` (`printf '%s/memory/%s'`), since the
+    output is a line-oriented text list consumed as display/paths that Python opens
+    fine either way — os.path.join would emit backslashes on Windows and diverge."""
+    return [posixpath.join(r, "memory", layer) for r in merge_roots()]
 
 
 if __name__ == "__main__":

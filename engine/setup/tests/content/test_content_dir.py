@@ -69,6 +69,20 @@ class TestContentDir(unittest.TestCase):
             r = resolve(home=home)
             self.assertEqual(r.stdout.strip(), content)
 
+    def test_config_file_crlf_is_tolerated(self):
+        # A CRLF-terminated content-dir config file (common on Windows) must still
+        # resolve to the bare path — _first_line strips \r as well as \n, so the
+        # path isn't "<dir>\r" (which would fail os.path.isdir and return "").
+        # Regression for the Windows-lane content-resolution bug (phase 18).
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as content:
+            cfgdir = os.path.join(home, ".config", "nervepack")
+            os.makedirs(cfgdir)
+            with open(os.path.join(cfgdir, "content-dir"), "w", newline="") as fh:
+                fh.write(content + "\r\n")   # explicit CRLF, exercised on every OS
+            r = resolve(home=home)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout.strip(), content)
+
     def test_env_beats_config(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as c1, tempfile.TemporaryDirectory() as c2:
             cfgdir = os.path.join(home, ".config", "nervepack")
