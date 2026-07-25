@@ -33,8 +33,9 @@ import subprocess
 import sys
 import tempfile
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_MANIFEST = os.path.join(_HERE, "hooks.manifest")
+import np_paths
+
+_MANIFEST = os.path.join(np_paths.SETUP_DIR, "hooks.manifest")
 
 # A CLI-dispatched hook dedups on the full "cli.py <group> <name>" tail. The second
 # token is optional so a TOP-LEVEL command (`cli.py sync` / `cli.py sync exit`,
