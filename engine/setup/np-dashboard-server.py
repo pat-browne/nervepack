@@ -228,6 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         return None  # path traversal attempt
 
     def do_GET(self):
+        if not self._host_ok():  # anti-DNS-rebinding: GET reads are loopback-Host only
+            return self._json({"error": "forbidden"}, 403)
         try:
             if self.path.split("?")[0] == "/api/health":
                 return self._json({"ok": True})
@@ -256,15 +258,21 @@ class Handler(BaseHTTPRequestHandler):
             try: self._json({"error": str(exc)}, 500)
             except Exception: pass
 
-    def _origin_ok(self):
-        """CSRF/DNS-rebinding guard for the state-changing POST routes. Even though
-        the server binds to loopback, a web page the user visits could POST to
-        127.0.0.1:<port>. Require: a loopback Host (defeats DNS-rebinding, where Host
-        is the attacker's name), a loopback Origin when one is sent, and a custom
-        header the dashboard JS sets — which a simple cross-origin form POST cannot
-        add without a preflight this server never approves."""
+    def _host_ok(self):
+        """Loopback-Host check — the anti-DNS-rebinding piece. A rebinding page
+        sees the server as same-origin, but the browser still sends the attacker's
+        hostname in Host, so requiring a loopback Host defeats it. Applied to BOTH
+        GET (data reads: metrics/config/toggles/static) and POST (state changes) —
+        previously only POST was guarded, leaking local data to a rebinding page."""
         host = (self.headers.get("Host") or "").split(":")[0]
-        if host not in ("127.0.0.1", "localhost"):
+        return host in ("127.0.0.1", "localhost")
+
+    def _origin_ok(self):
+        """CSRF guard for the state-changing POST routes: a loopback Host
+        (_host_ok, defeats DNS-rebinding), a loopback Origin when one is sent, and a
+        custom header the dashboard JS sets — which a simple cross-origin form POST
+        cannot add without a preflight this server never approves."""
+        if not self._host_ok():
             return False
         origin = self.headers.get("Origin") or ""
         if origin and not origin.startswith(("http://127.0.0.1:", "http://localhost:")):
