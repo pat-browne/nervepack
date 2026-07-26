@@ -179,7 +179,7 @@ def _content_dir():
 
 
 def _np_content_py():
-    return os.path.join(HERE, "..", "engine", "setup", "np_content.py")
+    return os.path.join(HERE, "..", "engine", "nervepack_engine", "np_content.py")
 
 
 def _np_content_fn(verb):
