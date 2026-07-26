@@ -106,6 +106,35 @@ class TestValidateDirectImport(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("np-core-sync", reason)
 
+    _SECTIONED = ("---\nname: demo\ndescription: a demo skill\n---\n"
+                  "# Title\nintro [[other-skill]] [[np-core-sync]]\n\n"
+                  "## Keep\nkeep body\n\n## Drop Me\ndropped detail\n")
+
+    def test_truncating_split_dropping_a_section_fails_in_process(self):
+        # #170: a split that DELETES a section to get under budget (rather than
+        # relocating it) must be rejected -- even though references/ is non-empty,
+        # the cross-links are preserved, and the body is under budget.
+        write(self.orig, self._SECTIONED)
+        write(os.path.join(self.dir, "SKILL.md"),
+              "---\nname: demo\ndescription: a demo skill\n---\n"
+              "# Title\nintro [[other-skill]] [[np-core-sync]]\n\n"
+              "## Keep\nkeep body\nSee references/x.md\n")
+        write(os.path.join(self.dir, "references", "x.md"), "unrelated ref content\n")
+        ok, reason = np_skill_validate.validate(self.dir, self.orig)
+        self.assertFalse(ok)
+        self.assertIn("Drop Me", reason)
+
+    def test_split_relocating_the_section_passes_in_process(self):
+        # The same section MOVED into references/ (not deleted) is a valid split.
+        write(self.orig, self._SECTIONED)
+        write(os.path.join(self.dir, "SKILL.md"),
+              "---\nname: demo\ndescription: a demo skill\n---\n"
+              "# Title\nintro [[other-skill]] [[np-core-sync]]\n\n"
+              "## Keep\nkeep body\nDetail in references/x.md\n")
+        write(os.path.join(self.dir, "references", "x.md"), "## Drop Me\ndropped detail\n")
+        ok, reason = np_skill_validate.validate(self.dir, self.orig)
+        self.assertTrue(ok, reason)
+
 
 if __name__ == "__main__":
     unittest.main()

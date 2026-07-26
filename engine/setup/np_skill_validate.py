@@ -25,6 +25,20 @@ def _links(text):
     return set(LINK.findall(FENCE.sub("", text)))
 
 
+def _headings(text):
+    """Markdown heading lines (`#`..`######`) in prose, with fenced code stripped
+    first so a shell `# comment` inside a ```block isn't mistaken for a heading.
+    Used for the content-conservation check: every pre-edit section heading must
+    survive in the edited body or a reference file, proving a split RELOCATED the
+    overflow rather than deleting it."""
+    out = []
+    for line in FENCE.sub("", text).splitlines():
+        s = line.strip()
+        if s.startswith("#"):
+            out.append(s)
+    return out
+
+
 def _int_env(name, default):
     try:
         return int(os.environ.get(name, default))
@@ -69,17 +83,30 @@ def validate(skill_dir, original):
         if _field(after, field) != _field(before, field):
             return False, "frontmatter %s changed" % field
     after_links = _links(after)
+    ref_texts = []
     ref_md = []
     if os.path.isdir(refs_dir):
         ref_md = [f for f in os.listdir(refs_dir) if f.endswith(".md")]
         for fn in ref_md:
             try:
-                after_links |= _links(_read(os.path.join(refs_dir, fn)))
+                t = _read(os.path.join(refs_dir, fn))
             except OSError:
-                pass
+                continue
+            ref_texts.append(t)
+            after_links |= _links(t)
     missing = _links(before) - after_links
     if missing:
         return False, "dropped cross-links: %s" % ",".join(sorted(missing))
+    # Content-conservation: a split must MOVE overflow into references/, not delete
+    # it. Every heading present in the pre-edit body must survive in the edited body
+    # or a reference file; a truncating split that discards a section (dropping its
+    # content to get under budget) is caught here even when references/ is non-empty.
+    after_headings = set(_headings(after))
+    for t in ref_texts:
+        after_headings |= set(_headings(t))
+    dropped = [h for h in _headings(before) if h not in after_headings]
+    if dropped:
+        return False, "dropped section(s) not relocated to references/: %s" % "; ".join(dropped[:3])
     nonempty = any(os.path.getsize(os.path.join(refs_dir, f)) > 0 for f in ref_md)
     if not nonempty:
         return False, "references/ missing or empty"
