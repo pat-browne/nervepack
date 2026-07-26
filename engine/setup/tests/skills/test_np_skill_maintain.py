@@ -358,5 +358,15 @@ class SplitLoopTest(unittest.TestCase):
         self.assertEqual(int(self._count(self.np)), int(base) + 1)
 
 
+class ArchitectureFreshnessGuardTest(unittest.TestCase):
+    def test_check_raising_does_not_propagate(self):
+        # #173: _architecture_freshness is advisory ("Never blocks"); if the drift
+        # check raises, it must be swallowed, not abort the maintain cron before the
+        # budget scan/split runs.
+        with mock.patch.object(np_skill_maintain.np_architecture_freshness, "check",
+                               side_effect=RuntimeError("boom")):
+            np_skill_maintain._architecture_freshness()  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()
