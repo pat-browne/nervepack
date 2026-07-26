@@ -370,7 +370,11 @@ def md_to_html(md, meta=None, link_map=None, here=""):
     if has_mermaid and os.environ.get("WIKI_MERMAID", "on") != "off":
         mermaid_js = (
             '<script src="' + up + 'vendor/mermaid.min.js"></script>\n'
-            "<script>mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script>\n"
+            # securityLevel:'strict' (Mermaid default): diagram labels are HTML-escaped
+            # and click/href/call directives are ignored. 'loose' would re-parse the
+            # <pre class="mermaid"> textContent as live HTML, defeating the build-time
+            # html.escape() of the fenced block -> stored XSS from model-authored pages. (#167)
+            "<script>mermaid.initialize({startOnLoad:true,securityLevel:'strict'});</script>\n"
         )
     return (
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
