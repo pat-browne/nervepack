@@ -60,13 +60,58 @@ It only ever touches its own `nervepack:begin`/`end` fence. Record the verify in
 adapter: `"verify": "grep -q nervepack:begin <file>"`. Do NOT use this on a host that
 already injects the directive via a session-start hook (double-injection).
 
+### One-shot onboard (Claude Code and hosts that reproduce its wiring)
+
+If your host wires the same way Claude Code does (skill symlinks + lifecycle hooks
+in a settings file + OS-scheduler crons), the whole sequence is one command:
+
+    python3 engine/nervepack_engine/cli.py onboard
+
+It runs, in order: `setup link-skills` (knowledge) → `setup link-dashboard-data`
+→ `setup install-hooks` (all lifecycle hooks, from `engine/setup/hooks.manifest`)
+→ `58-install-mcp.sh` (MCP registration) → `62-install-scheduled-auth-token.sh` (the
+manual token step; skipped non-interactively) → `setup install-memory-{cron,launchd,schtasks}`
+(per-OS scheduler) → the doctor (its exit code is the onboard's). Idempotent — safe
+to re-run. **Re-running it also repairs stale wiring**: e.g. a machine whose hooks were
+registered before a command changed (a renamed hook, a script retired for a `cli.py`
+dispatch) gets the current `hooks.manifest` re-applied, replacing the stale entries.
+A quick way to prove an install works end-to-end is to remove the wiring and re-run
+`cli.py onboard`, then confirm the doctor is green.
+
 ## Reference output
 
 The Claude Code adapter is reproduced by `cli.py setup link-skills`
-(engine/setup/np_link_skills.py — knowledge) and
-`engine/setup/5x-install-*.sh` (the hooks). Read them as a worked example of what your
-adapter should achieve, then express the equivalent for your host. An example
-manifest lives at `engine/onboard/adapters/<host>.example.json`.
+(engine/setup/np_link_skills.py — knowledge) and `cli.py setup install-hooks`
+(engine/nervepack_engine/np_hook.py, applying `engine/setup/hooks.manifest` — the
+lifecycle hooks). Read them as a worked example of what your adapter should achieve, then
+express the equivalent for your host. An example manifest lives at
+`engine/onboard/adapters/<host>.example.json`.
+
+### Optional: the full (Presidio) PII filter — `pii_filter_full`
+
+The doctor's `pii_filter_full` check (SHOULD) is the one nervepack feature that wants a
+third-party dependency (`presidio-analyzer` + a spaCy model) for NER-based PII detection.
+It is **opt-in** (the `pii_filter` toggle is default-off) and the always-on regex scrub
+covers the common secret shapes without it — so this check WARNs/FAILs harmlessly if you
+skip it. To set it up: `python3 engine/nervepack_engine/cli.py setup install-pii-deps`.
+
+**Modern Debian/Ubuntu gotcha (PEP 668):** on an externally-managed Python (Ubuntu 24.04+),
+`pip install` to the system/user site is blocked, so `install-pii-deps` fails and even
+`--user` won't help. The doctor checks `import presidio_analyzer` in the *system* `python3`
+(nervepack runs there — hooks/crons/cli), so a plain venv doesn't satisfy it either. The
+working path is an explicit override into system Python:
+
+```bash
+python3 -m pip install --break-system-packages presidio-analyzer presidio-anonymizer
+# presidio's default AnalyzerEngine() loads spaCy's en_core_web_lg — install the model wheel too:
+python3 -m pip install --break-system-packages \
+  "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl"
+```
+
+`--break-system-packages` writes into system Python (apt-conflict risk) — acceptable on a
+personal dev box (verify after with `python3 -m pip check` + `python3 -c "import apt_pkg"`),
+but weigh it against the feature being optional. It pulls a large dep tree (spaCy, numpy)
+plus a ~400 MB model.
 
 ## Satisfying capabilities via MCP
 
