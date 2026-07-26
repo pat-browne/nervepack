@@ -195,7 +195,7 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
 
     token_prefix_fn = token_prefix_fn or np_token_lib.claude_token_env_prefix
     launchctl_fn = launchctl_fn or _default_launchctl
-    cli = _cli_path(os.path.dirname(setup_dir))
+    cli = _cli_path(os.path.dirname(os.path.dirname(setup_dir)))  # setup_dir -> engine -> repo root (_cli_path re-adds engine/)
 
     for suffix, hour, minute, cron_name in _LAUNCHD_JOBS:
         label = "com.nervepack.%s" % suffix
@@ -242,7 +242,7 @@ def install_schtasks(setup_dir=None, force=None, uname_fn=None, schtasks_fn=None
 
     setup_dir = setup_dir or os.environ.get("NP_SCHTASKS_SETUP_DIR") or os.path.join(
         _home(), "Code", "nervepack", "engine", "setup")
-    cli = _cli_path(os.path.dirname(setup_dir))
+    cli = _cli_path(os.path.dirname(os.path.dirname(setup_dir)))  # setup_dir -> engine -> repo root (_cli_path re-adds engine/)
     schtasks_fn = schtasks_fn or _default_schtasks_create
 
     bash_path = (bash_path_fn or (lambda: shutil.which("bash")))() or "bash"
