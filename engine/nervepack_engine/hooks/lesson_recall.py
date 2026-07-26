@@ -41,6 +41,13 @@ def _state_dir():
     return os.environ.get("EPISODIC_STATE_DIR") or "/tmp/nervepack-playbook-recall"
 
 
+def _counter_path(state_dir, sid):
+    # Feature-namespaced ("ls-") so a shared EPISODIC_STATE_DIR override can't merge
+    # the lesson- and episodic-recall per-session counters into ONE file. See
+    # episodic_recall._counter_path (which uses "ep-"). (#171)
+    return os.path.join(state_dir, "ls-" + sid.replace("/", "_"))
+
+
 def _layer_roots():
     override = os.environ.get("EPISODIC_LESSON_DIR")
     if override:
@@ -115,7 +122,7 @@ def run(payload_text, pii_filter_fn=None):
         os.makedirs(state_dir, exist_ok=True)
     except OSError:
         return ""
-    counter = os.path.join(state_dir, sid.replace("/", "_"))
+    counter = _counter_path(state_dir, sid)
     try:
         with open(counter, encoding="utf-8") as fh:
             count = int(fh.read().strip() or "0")
