@@ -90,6 +90,54 @@ class TestScan(unittest.TestCase):
             r = run_scan(d)
             self.assertEqual(r.returncode, 0, f"{ip} must not block:\n{r.stderr}")
 
+    def test_modern_secret_shapes_block(self):
+        # #169: the guard now catches common vendor key formats it previously missed.
+        # Each token is stored split (prefix, body) so the literal secret never
+        # appears in this source file -- GitHub secret-scanning push protection would
+        # otherwise block the commit. It is reassembled at runtime and written to the
+        # scanned tree, so the scanner under test still sees the whole token.
+        cases = {
+            "stripe-key":   ("sk_", "live_0123456789ABCDEFabcdefKLM"),
+            "stripe-whsec": ("whsec", "_0123456789ABCDEFabcdef"),
+            "google-api":   ("AIza", "0123456789abcdefghijklmnopqABCDEFxyz"),
+            "slack-token":  ("xoxb", "-123456789012-abcdEFGHijkl"),
+            "gh-pat":       ("github_pat", "_11ABCDE0000abcdefghij1234567890"),
+            "gh-refresh":   ("ghr", "_0123456789ABCDEFabcdefGHIJ"),
+            "jwt":          ("eyJ", "hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcDEF123456"),
+            "aws-asia":     ("ASIA", "ABCDEFGHIJKLMNOP"),
+        }
+        for rule, (pre, rest) in cases.items():
+            token = pre + rest
+            d = self._tree({"x.md": "SECRET=" + token + "\n"})
+            r = run_scan(d)
+            self.assertEqual(r.returncode, 1, f"{rule} should block: {token}\n{r.stdout}")
+            self.assertIn(rule, r.stderr, f"{token} should flag {rule}")
+
+    def test_openai_project_key_blocks(self):
+        # Regression: the interior '-' of sk-proj-... must not truncate the match
+        # below the length floor (the old sk-[A-Za-z0-9]{20,} rule missed it). Split
+        # in source (see note above) so push protection doesn't flag the fixture.
+        token = "sk-" + "proj-abcdefghijklmnopqrstuvwxyz1234"
+        d = self._tree({"x.py": 'KEY = "' + token + '"\n'})
+        r = run_scan(d)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("openai-sk", r.stderr)
+
+    def test_pii_is_case_insensitive_and_covers_macos_home(self):
+        for content in ("cd /Users/pbrowne/Code", "author PATRICK.BROWNE", "path /HOME/PBROWNE/x"):
+            d = self._tree({"x.sh": content + "\n"})
+            self.assertEqual(run_scan(d).returncode, 1, f"{content!r} should block")
+
+    def test_missing_target_is_setup_error_not_pass(self):
+        # Fail CLOSED: a wrong/absent target must be an error (2), never a clean pass.
+        r = run_scan(os.path.join(tempfile.gettempdir(), "np-scan-does-not-exist-zzz"))
+        self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_empty_target_is_setup_error_not_pass(self):
+        d = tempfile.mkdtemp()  # empty
+        r = run_scan(d)
+        self.assertEqual(r.returncode, 2, r.stderr)
+
     def test_git_worktree_pointer_file_is_skipped(self):
         # In a git worktree the repo `.git` is a FILE (a `gitdir:` pointer) holding a
         # /home/... path that the home-path rule would otherwise flag. It is git
