@@ -3,11 +3,16 @@
 no bash parity needed since all_params has no bash-CLI equivalent to mirror)."""
 import importlib.util
 import os
+import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETUP = os.path.join(HERE, "..", "..")
+# np_toggle imports its sibling np_paths (the filesystem anchor), so engine/setup
+# must be importable when we load np_toggle by file path below (provisioning only).
+if SETUP not in sys.path:
+    sys.path.insert(0, SETUP)
 
 
 def _load_np_toggle():

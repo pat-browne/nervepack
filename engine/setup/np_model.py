@@ -19,8 +19,7 @@ import os
 import sys
 
 import np_bashlib
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
+import np_paths
 
 # Long-lived nervepack processes (the dashboard server, backgrounded SessionStart
 # hooks) are spawned from inside an interactive Claude Code session and inherit its
@@ -72,7 +71,7 @@ def complete(prompt, system=None, timeout=None):
         if system:
             argv += ["--append-system-prompt", system]
     elif backend == "local":
-        argv = [sys.executable, os.path.join(_HERE, "np-llm-local.py"), "complete"]
+        argv = [sys.executable, os.path.join(np_paths.SETUP_DIR, "np-llm-local.py"), "complete"]
         if system:
             argv += ["--system", system]
     else:

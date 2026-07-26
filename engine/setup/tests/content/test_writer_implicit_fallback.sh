@@ -29,7 +29,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # Minimal nervepack-shaped repo (mirrors test_aggregate_commit_scope.sh's shape).
 NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/dashboard/data"
 cp "$SETUP/np_aggregate.py" "$SETUP/np_toggle.py" \
-   "$SETUP/np_content.py" "$NP/engine/setup/"
+   "$SETUP/np_content.py" "$SETUP/np_paths.py" "$NP/engine/setup/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
 printf 'evaluator.dashboard=off\n' > "$tmp/local"   # no build.py in this minimal repo
 ORIGIN="$tmp/origin.git"; git init -q --bare "$ORIGIN"

@@ -13,13 +13,15 @@ import subprocess
 import sys
 import tempfile
 
+import np_paths
+
 _WS = " \t\r\v\f"            # POSIX [[:space:]] minus the per-line newline
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _conf_path():
     # Bash default: "$_np_dir/toggles.conf" where _np_dir is the lib's dir (engine/setup).
-    return os.environ.get("NP_TOGGLES_CONF") or os.path.join(_HERE, "toggles.conf")
+    return os.environ.get("NP_TOGGLES_CONF") or os.path.join(np_paths.SETUP_DIR, "toggles.conf")
 
 
 def _local_path():
@@ -352,7 +354,7 @@ def commit_shared(message, np_root=None):
     if os.environ.get("NP_TOGGLE_NO_COMMIT") == "1":
         return
     import np_bashlib
-    np = np_root or os.path.normpath(os.path.join(_HERE, "..", ".."))
+    np = np_root or np_paths.REPO_ROOT
     conf = _conf_path()
 
     def _git(args):
@@ -371,7 +373,7 @@ def commit_shared(message, np_root=None):
 
 # --- managed allowlist (90/91-*.sh ported to stdlib json) -------------------
 def _allowlist_path():
-    return os.path.join(_HERE, "allowlist-entries.txt")
+    return os.path.join(np_paths.SETUP_DIR, "allowlist-entries.txt")
 
 
 def _settings_path():
