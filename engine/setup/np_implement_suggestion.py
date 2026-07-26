@@ -517,14 +517,24 @@ def _default_resolve(text):
     resolve_dir = (root_r.stdout or "").strip() if root_r.returncode == 0 else ""
     resolve_dir = resolve_dir or os.environ.get("IMPLEMENT_REPO") or _NP
 
-    for f in ("dashboard/data/resolved-suggestions.txt", "dashboard/data/metrics.js"):
-        if os.path.exists(os.path.join(resolve_dir, f)):
-            _git(resolve_dir, "add", "--", f)
-    staged = _git(resolve_dir, "diff", "--cached", "--quiet")
-    if staged.returncode != 0:  # non-zero == there IS a staged diff
+    ledger_files = [f for f in ("dashboard/data/resolved-suggestions.txt",
+                                "dashboard/data/metrics.js")
+                    if os.path.exists(os.path.join(resolve_dir, f))]
+    for f in ledger_files:
+        _git(resolve_dir, "add", "--", f)
+    if not ledger_files:
+        return
+    # Path-limit BOTH the staged-check and the commit to the ledger files. This
+    # job runs detached/async against a shared working tree; a pathspec-less
+    # `git diff --cached`/`git commit` would see and sweep a concurrent session's
+    # unrelated staged changes into this commit -- and then push them to origin,
+    # bypassing the PR/CI gate. (issues #165 / #11.)
+    staged = _git(resolve_dir, "diff", "--cached", "--quiet", "--", *ledger_files)
+    if staged.returncode != 0:  # non-zero == there IS a staged ledger diff
         cbase_r = _git(resolve_dir, "rev-parse", "--abbrev-ref", "HEAD")
         cbase = (cbase_r.stdout or "").strip() or "main"
-        _git(resolve_dir, "commit", "-q", "-m", "evaluator(suggestions): resolve implemented suggestion")
+        _git(resolve_dir, "commit", "-q", "-m",
+             "evaluator(suggestions): resolve implemented suggestion", "--", *ledger_files)
         if _git(resolve_dir, "remote", "get-url", "origin").returncode == 0:
             _git(resolve_dir, "push", "-q", "origin", "HEAD:%s" % cbase)
 
