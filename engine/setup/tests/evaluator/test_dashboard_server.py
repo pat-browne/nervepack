@@ -156,7 +156,7 @@ class TestServer(unittest.TestCase):
         """Raw socket so the client can't normalize away the ../ — the server's
         _safe_path must refuse anything outside the dashboard root."""
         s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
-        s.sendall(b"GET /../../np-suggestions-review.py HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        s.sendall(b"GET /../../np-suggestions-review.py HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
         resp = b""
         while True:
             chunk = s.recv(4096)
@@ -179,7 +179,7 @@ class TestServer(unittest.TestCase):
         canonical-data allowance must not become a traversal hole."""
         s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
         s.sendall(b"GET /data/../../content-dashboard-data/../np-dashboard-server.py "
-                  b"HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+                  b"HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
         resp = b""
         while True:
             chunk = s.recv(4096)
@@ -187,6 +187,37 @@ class TestServer(unittest.TestCase):
             resp += chunk
         s.close()
         self.assertIn(b"404", resp.split(b"\r\n", 1)[0])
+
+    def test_get_with_foreign_host_is_forbidden_dns_rebinding(self):
+        """Regression for #166: a GET whose Host is not loopback (the DNS-rebinding
+        vector) must be refused BEFORE any data is served. Previously do_GET had no
+        Host check, so a rebinding page could read /data/metrics.js, /api/toggles,
+        /api/config. Raw socket so the client can't rewrite Host to the target."""
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+        s.sendall(b"GET /data/metrics.js HTTP/1.1\r\nHost: evil.example\r\n"
+                  b"Connection: close\r\n\r\n")
+        resp = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk: break
+            resp += chunk
+        s.close()
+        self.assertIn(b"403", resp.split(b"\r\n", 1)[0])
+        self.assertNotIn(b"window.METRICS", resp.split(b"\r\n\r\n", 1)[-1])
+
+    def test_api_get_with_foreign_host_is_forbidden(self):
+        """The API GET routes (/api/toggles, /api/config) are data too and must
+        also reject a non-loopback Host."""
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+        s.sendall(b"GET /api/config HTTP/1.1\r\nHost: attacker.test\r\n"
+                  b"Connection: close\r\n\r\n")
+        resp = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk: break
+            resp += chunk
+        s.close()
+        self.assertIn(b"403", resp.split(b"\r\n", 1)[0])
 
     def test_resolve_writes_ledger(self):
         status, body = self._post("/api/resolve", {"text": "Do beta"})
