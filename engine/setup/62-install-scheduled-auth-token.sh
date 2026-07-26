@@ -11,7 +11,7 @@
 #                                                  runs if missing or in the
 #                                                  rotation window
 #   62-install-scheduled-auth-token.sh --status    non-interactive status line
-#                                                  (used by np-doctor.sh)
+#                                                  (used by the doctor, cli.py doctor)
 #   62-install-scheduled-auth-token.sh --rotate    force the walkthrough even
 #                                                  if the current token is
 #                                                  still fresh

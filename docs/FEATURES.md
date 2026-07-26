@@ -105,9 +105,9 @@ write notes; the daily `episodic-maintain` cron drains them into `memory/episodi
 and auto-commits (the one subtree exempt from the human-review gate). *Recall*
 injects matching themes on a session's first prompts.
 
-**Assets.** `episodic-capture.sh`, `engine/nervepack_engine/hooks/episodic_recall.py`
+**Assets.** `engine/nervepack_engine/hooks/episodic_capture.py`, `engine/nervepack_engine/hooks/episodic_recall.py`
 (Python port via `cli.py` dispatcher; registered via `cli.py setup install-hooks` from `engine/setup/hooks.manifest`), `episodic-match.sh`,
-`np-backcapture-sweep.sh`, `agents/np-flow-episodic-maintain.md`, `memory/episodic/` (overlay).
+`engine/nervepack_engine/hooks/backcapture_sweep.py`, `agents/np-flow-episodic-maintain.md`, `memory/episodic/` (overlay).
 Toggle: `memory`.
 
 **Situational example.** You spend a session migrating a box's network to a new
@@ -694,7 +694,7 @@ credentials onto a machine without the secret values entering the model context
 `np-env-secrets-refresh` pulls from Bitwarden and applies to aws-vault / get-secret.sh
 out-of-band.
 
-**Assets.** `90/91-…-permissions.sh`, `np-env-secrets-refresh`. Toggle: `allowlist`.
+**Assets.** `engine/nervepack_engine/np_toggle.py` (`install_permissions`/`remove_permissions`, via `cli.py toggle`), `np-env-secrets-refresh`. Toggle: `allowlist`.
 
 **Situational example.** You ask to "refresh AWS creds." The skill pulls the secret
 from Bitwarden and writes the profile with `umask 077` + `chmod 600`. The value

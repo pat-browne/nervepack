@@ -31,7 +31,7 @@ runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no
 
 | Check | What it verifies | Fix |
 |---|---|---|
-| `knowledge` | Skill symlinks exist (`~/.claude/skills/np-core-sync/SKILL.md`) | Re-run `30-link-skills.sh` |
+| `knowledge` | Skill symlinks exist (`~/.claude/skills/np-core-sync/SKILL.md`) | Re-run `cli.py setup link-skills` |
 | `llm-cli` | the model seam (`np_model.py complete`) returns output | Auth: set `ANTHROPIC_API_KEY` or run `claude /login`; path: check `CLAUDE_BIN` |
 | `git-sync` | Repo has a remote | `git remote add origin <url>` |
 | `toggles` | `np_toggle.py enabled` resolves | Check `python3 engine/nervepack_engine/np_toggle.py enabled <feature>` runs in the failing hook/script |

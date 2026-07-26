@@ -92,7 +92,7 @@ sources test, and the cross-tree lookup: references/classification.md
    by the relink alone.
 6. **Relink + regenerate INDEX:** `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills`
    (handles new skills in every layer, prunes dangling symlinks, and re-runs
-   `60-generate-index.sh`).
+   `cli.py setup generate-index`).
 7. **Diff:** `git -C "$REPO" diff` — show the user.
 8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions"),
    staging explicit paths (never `-A` — a cron or second session may share the tree):
