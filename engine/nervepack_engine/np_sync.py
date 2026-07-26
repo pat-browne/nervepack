@@ -141,7 +141,10 @@ def _engine_sync(target, status_file):
             pass
         return msg
 
-    if not os.path.isdir(os.path.join(target, ".git")):
+    # `rev-parse --is-inside-work-tree` (not `.git` isdir) so a linked git worktree —
+    # where `.git` is a FILE, not a dir — is correctly recognized as a repo. Matches
+    # the worktree-correct checks in _team_sync and np_doctor._git_ok. (#172)
+    if _git(target, "rev-parse", "--is-inside-work-tree").returncode != 0:
         return write_status("np-core-sync: %s — %s is not a git repo" % (_now(), target))
 
     fetch = _git(target, "fetch", "--quiet", "origin", "main")

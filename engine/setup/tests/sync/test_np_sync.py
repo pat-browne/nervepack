@@ -74,12 +74,12 @@ class NpSync(unittest.TestCase):
         _git(self.seed, "commit", "-q", "--allow-empty", "-m", msg)
         _git(self.seed, "push", "-q", "origin", "main")
 
-    def _run(self, *args, dryrun=False, sync_off=False, fresh_stamp=False):
+    def _run(self, *args, dryrun=False, sync_off=False, fresh_stamp=False, target=None):
         env = dict(os.environ)
         env["HOME"] = self.home
         env["NP_TOGGLES_CONF"] = self.conf
         env["NP_TOGGLES_LOCAL"] = self.local
-        env["NP_SYNC_TARGET"] = self.target
+        env["NP_SYNC_TARGET"] = target or self.target
         env["NP_SYNC_STATUS"] = self.status
         env["NP_SYNC_STAMP"] = self.stamp
         env["CLAUDE_SETTINGS"] = os.path.join(self.home, ".claude", "settings.json")
@@ -101,6 +101,19 @@ class NpSync(unittest.TestCase):
         self.assertIn("up to date (", out)
         with open(self.status) as fh:
             self.assertIn("up to date (", fh.read())
+
+    def test_linked_worktree_is_recognized_as_a_repo(self):
+        # #172: a linked git worktree has a `.git` FILE (a gitdir pointer), not a
+        # dir, so the old `.git`-isdir check wrongly reported "is not a git repo" and
+        # never synced. A worktree shares its parent's origin, so it must sync like
+        # any checkout. (A first-class workflow in this repo per CLAUDE.md.)
+        wt = os.path.join(self.tmp, "wt")
+        r = _git(self.target, "worktree", "add", "-q", "--detach", wt, "HEAD")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(wt, ".git")))  # FILE, not dir
+        out = self._run("exit", target=wt)
+        self.assertNotIn("is not a git repo", out)
+        self.assertIn("up to date", out)
 
     def test_up_to_date_dirty(self):
         with open(os.path.join(self.target, "dirty.txt"), "w") as fh:
