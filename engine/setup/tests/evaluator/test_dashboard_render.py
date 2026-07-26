@@ -129,6 +129,16 @@ class TestRenderer(unittest.TestCase):
         finally:
             del os.environ["WIKI_MERMAID"]
 
+    def test_mermaid_uses_strict_security_level(self):
+        """Regression for #167: Mermaid must init with securityLevel:'strict'.
+        'loose' re-parses the diagram's textContent as live HTML, defeating the
+        build-time html.escape() of the fence -> stored XSS from a model-authored
+        wiki page (which can then drive same-origin /api/* on the local dashboard)."""
+        out = build.md_to_html("```mermaid\nerDiagram\n  A ||--o{ B : x\n```", here="wiki/topics/x")
+        self.assertIn("mermaid.initialize", out)
+        self.assertIn("securityLevel:'strict'", out)
+        self.assertNotIn("'loose'", out)
+
 
 BUILD_PY = os.path.join(HERE, "..", "..", "..", "..", "dashboard", "build.py")
 
