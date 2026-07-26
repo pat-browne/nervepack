@@ -297,7 +297,7 @@ class TestInstallLaunchd(unittest.TestCase):
         # dirname(setup_dir) (=.../engine) to _cli_path, which re-prepends engine/.
         self._run()
         with open(os.path.join(self.la_dir, "com.nervepack.memory-promote.plist")) as fh:
-            content = fh.read()
+            content = fh.read().replace("\\", "/")  # os.path.join -> backslashes on the Windows lane
         self.assertIn("/opt/nervepack/engine/nervepack_engine/cli.py cron memory-promote", content)
         self.assertNotIn("engine/engine", content)
 
@@ -383,7 +383,7 @@ class TestInstallSchtasks(unittest.TestCase):
         # doubled <root>/engine/engine/... . setup_dir="/opt/nervepack/engine/setup"
         # => repo root "/opt/nervepack".
         self._run()
-        tr = self.calls[0][self.calls[0].index("//TR") + 1]
+        tr = self.calls[0][self.calls[0].index("//TR") + 1].replace("\\", "/")  # os.path.join -> backslashes on the Windows lane
         self.assertIn("/opt/nervepack/engine/nervepack_engine/cli.py cron memory-promote", tr)
         self.assertNotIn("engine/engine", tr)
 
