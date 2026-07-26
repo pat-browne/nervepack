@@ -78,13 +78,16 @@ class _Env(unittest.TestCase):
         import shutil
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
-    def _run(self, sid_payload="none"):
+    def _run(self, sid_payload="none", capture_ok=True):
         from nervepack_engine.hooks import backcapture_sweep
         captured, evaluated = [], []
         backcapture_sweep.run(
             json.dumps({"session_id": sid_payload}),
             capture_fn=lambda payload, mode: captured.append((payload, mode)),
             evaluate_fn=lambda payload: evaluated.append(payload),
+            # Default: capture "succeeds" (records a note). Tests that exercise the
+            # transient-failure retry path pass capture_ok=False.
+            capture_ok_fn=lambda payload: capture_ok,
         )
         return captured, evaluated
 
@@ -197,6 +200,28 @@ class TestBackcaptureSweep(_Env):
         open(os.path.join(self.seen_dir, "aaaaaaaa-claimed"), "a").close()
         captured, _ = self._run()
         self.assertEqual(captured, [])
+
+    def test_11_transient_capture_failure_releases_claim_for_retry(self):
+        """#168: when capture does NOT record a note (a transient model failure),
+        the claim is released so a later sweep retries — instead of the session
+        being permanently marked seen and silently dropped on the reliable path."""
+        _mktranscript(self.projects_dir, "bbbbbbbb-transient", ago=600)
+        captured, _ = self._run(capture_ok=False)
+        self.assertEqual(len(captured), 1)  # capture WAS attempted
+        self.assertFalse(os.path.exists(os.path.join(self.seen_dir, "bbbbbbbb-transient")))  # not marked seen
+        captured2, _ = self._run(capture_ok=False)
+        self.assertEqual(len(captured2), 1)  # ...and the next sweep retries it
+
+    def test_12_gives_up_after_max_attempts(self):
+        """A genuinely un-capturable transcript must not retry forever: after
+        _MAX_ATTEMPTS failed passes it is marked seen and no longer retried."""
+        from nervepack_engine.hooks import backcapture_sweep
+        _mktranscript(self.projects_dir, "cccccccc-badforever", ago=600)
+        for _ in range(backcapture_sweep._MAX_ATTEMPTS):
+            self._run(capture_ok=False)
+        self.assertTrue(os.path.exists(os.path.join(self.seen_dir, "cccccccc-badforever")))
+        captured, _ = self._run(capture_ok=False)
+        self.assertEqual(captured, [])  # permanently seen -> no longer retried
 
 
 if __name__ == "__main__":
