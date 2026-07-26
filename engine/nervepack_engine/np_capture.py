@@ -63,6 +63,24 @@ def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def was_captured(payload):
+    """True iff capture() has recorded a note for this payload's CURRENT
+    transcript (its per-session capture-seen marker equals the transcript size).
+    capture() writes that marker only on the success path, so this lets a
+    best-effort caller (the backcapture sweep) distinguish a real capture from a
+    transient bail (empty/non-JSON model output) WITHOUT changing capture()'s
+    status-string return. Read-only; never raises."""
+    sid = payload.get("session_id") or "unknown"
+    transcript = payload.get("transcript_path") or ""
+    seen_dir = os.environ.get("EPISODIC_SEEN_DIR") or os.path.join(
+        _home(), ".cache", "nervepack", "capture-seen")
+    seen_file = os.path.join(seen_dir, re.sub(r'[^A-Za-z0-9._-]', '_', sid))
+    try:
+        return open(seen_file, encoding="utf-8").read() == str(os.path.getsize(transcript))
+    except OSError:
+        return False
+
+
 def capture(payload, mode="session-end"):
     """Summarize `payload` (dict: transcript_path, cwd, session_id) into an inbox
     note. Returns a short status string; never raises (fail-open)."""
