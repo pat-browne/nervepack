@@ -27,9 +27,13 @@ SETUP="$(cd "$HERE/../.." && pwd)"     # engine/setup/
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 # Minimal nervepack-shaped repo (mirrors test_aggregate_commit_scope.sh's shape).
-NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/dashboard/data"
-cp "$SETUP/np_aggregate.py" "$SETUP/np_toggle.py" \
-   "$SETUP/np_content.py" "$SETUP/np_paths.py" "$NP/engine/setup/"
+NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/engine/nervepack_engine" "$NP/dashboard/data"
+# np_aggregate + np_paths stay in engine/setup; np_toggle + np_content were relocated
+# into engine/nervepack_engine (phase 20b-2). Mirror that split so np_aggregate's
+# self-bootstrap finds them under ../nervepack_engine.
+cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$NP/engine/setup/"
+cp "$SETUP/../nervepack_engine/np_toggle.py" "$SETUP/../nervepack_engine/np_content.py" \
+   "$NP/engine/nervepack_engine/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
 printf 'evaluator.dashboard=off\n' > "$tmp/local"   # no build.py in this minimal repo
 ORIGIN="$tmp/origin.git"; git init -q --bare "$ORIGIN"

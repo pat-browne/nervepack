@@ -41,7 +41,7 @@ class TestScanPaths(unittest.TestCase):
         self.assertEqual(elc.scan_paths([
             "docs/ARCHITECTURE.md",
             "docs/FEATURES.md",
-            "engine/setup/np_doctor.py",
+            "engine/nervepack_engine/np_doctor.py",
             "skills/np-kb-x/SKILL.md",
             "engine/setup/tests/docs/test_engine_layout.py",
             "engine/setup/tests/fixtures/specs/nested.md",

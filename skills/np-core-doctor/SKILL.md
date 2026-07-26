@@ -12,7 +12,7 @@ python3 ~/Code/nervepack/engine/nervepack_engine/cli.py doctor
 ```
 
 Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI). The doctor
-runs entirely in-process (Python, `engine/setup/np_doctor.py`) — no bash required.
+runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no bash required.
 
 ## Output format
 
@@ -34,7 +34,7 @@ runs entirely in-process (Python, `engine/setup/np_doctor.py`) — no bash requi
 | `knowledge` | Skill symlinks exist (`~/.claude/skills/np-core-sync/SKILL.md`) | Re-run `30-link-skills.sh` |
 | `llm-cli` | the model seam (`np_model.py complete`) returns output | Auth: set `ANTHROPIC_API_KEY` or run `claude /login`; path: check `CLAUDE_BIN` |
 | `git-sync` | Repo has a remote | `git remote add origin <url>` |
-| `toggles` | `np_toggle.py enabled` resolves | Check `python3 engine/setup/np_toggle.py enabled <feature>` runs in the failing hook/script |
+| `toggles` | `np_toggle.py enabled` resolves | Check `python3 engine/nervepack_engine/np_toggle.py enabled <feature>` runs in the failing hook/script |
 | `content` | `NP_CONTENT_DIR` resolves to a real dir | Set `NP_CONTENT_DIR` or write `~/.config/nervepack/content-dir`; single-repo users: write the path to the engine root |
 
 ### SHOULD tier

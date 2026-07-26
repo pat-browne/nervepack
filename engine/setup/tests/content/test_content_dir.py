@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from nptest import u  # cross-platform Windows path form (no-op off Windows)
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-NP_CONTENT = os.path.join(REPO, "engine", "setup", "np_content.py")
+NP_CONTENT = os.path.join(REPO, "engine", "nervepack_engine", "np_content.py")
 
 
 def _setup_script(name):

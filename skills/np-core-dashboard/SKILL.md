@@ -36,7 +36,7 @@ re-fire → reopen feedback loop (~150 sessions in seconds). The boot marker sev
 So "it didn't launch on session start" is almost always **expected** — it already
 launched on the first session after the last reboot. To diagnose, compare the
 marker against the current boot id — computed the same way
-`engine/setup/np_dashboard.py`'s `boot_id()` does (Linux path checked first, macOS
+`engine/nervepack_engine/np_dashboard.py`'s `boot_id()` does (Linux path checked first, macOS
 fallback second):
 
 ```bash
@@ -62,7 +62,7 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
 
 ## Served (http) vs static (file://) modes
 
-`engine/setup/np_dashboard.py` (`dashboard_url()`) picks the URL from the
+`engine/nervepack_engine/np_dashboard.py` (`dashboard_url()`) picks the URL from the
 `evaluator.dashboard_serve` param:
 
 - **`on` (default)** — starts the localhost-only backend `np-dashboard-server.py` on

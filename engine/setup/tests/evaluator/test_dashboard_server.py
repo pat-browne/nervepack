@@ -354,7 +354,7 @@ class TestServer(unittest.TestCase):
         # the conf file changed (np_toggle.enabled() must check "maintain.refine"'s
         # OWN conf row before falling back to a truncated "maintain" family row).
         env = dict(os.environ, NP_TOGGLES_CONF=self.toggles_conf, NP_TOGGLES_LOCAL=self.toggles_local)
-        r = subprocess.run(["python3", os.path.join(SETUP, "np_toggle.py"), "enabled", "maintain.refine"],
+        r = subprocess.run(["python3", os.path.join(SETUP, "..", "nervepack_engine", "np_toggle.py"), "enabled", "maintain.refine"],
                             env=env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 1, "resolver still reports maintain.refine as on after the flip")
         self.assertEqual(r.stdout, "off")

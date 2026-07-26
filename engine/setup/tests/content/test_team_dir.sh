@@ -6,7 +6,7 @@
 #   team_origin  -> env | config | none
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="$HERE/../../np_content.py"
+PY="$HERE/../../../nervepack_engine/np_content.py"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # Use a path form BOTH Git-bash and native-Windows Python resolve to the SAME
 # location, so the dirs the native np_content.py child echoes back (C:/Users/...)

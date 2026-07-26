@@ -40,6 +40,12 @@ NP = os.path.dirname(os.path.dirname(HERE))
 # Make the bash/.sh shell-outs below run under Git-bash on Windows (a bare `bash`
 # resolves to System32 WSL; .sh can't be exec'd directly). No-op off Windows.
 sys.path.insert(0, HERE)
+# np_model / np_toggle were relocated into engine/nervepack_engine/ in phase 20b-2;
+# add that package dir so their flat imports resolve (HERE/setup stays on sys.path
+# for np_bashlib + np_toggle_schema + np_suggestion_resolve).
+_ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
+if _ENGINE_PKG not in sys.path:
+    sys.path.insert(0, _ENGINE_PKG)
 import np_bashlib  # noqa: E402
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402

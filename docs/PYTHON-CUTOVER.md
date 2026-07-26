@@ -128,6 +128,15 @@ coverage is enforced by `engine/setup/tests/setup/test_installer_glob_coverage.s
 
 - **Phase B** (compiled-language rewrite to reclaim the latency) — future, tracked in
   `ROADMAP.md`, not designed yet.
-- The `np_*.py` modules live in `engine/setup/`; whether to relocate them into
-  `engine/nervepack_engine/` proper is code-organization only (the cutover is
-  functionally complete regardless) — see `docs/ROADMAP.md`.
+- The 12 genuinely-complete library modules (`np_toggle`, `np_content`,
+  `np_episodic_match`, `np_doctor`, `np_sync`, `np_model`, `np_scrub`, `np_capture`,
+  `np_evaluator`, `np_dashboard`, `np_hook`, `np_token_lib`/`np_token_status`) were
+  **relocated from `engine/setup/` into the package `engine/nervepack_engine/` in phase
+  20b** (config resolution was decoupled from location first, via the `np_paths` anchor
+  that stays in `engine/setup/`). Each relocated module self-bootstraps `engine/setup/`
+  onto `sys.path` so it still resolves `np_paths`/`np_bashlib`/config and its stayed
+  siblings. The remaining `np_*.py` still in `engine/setup/` (helpers, installers,
+  resolvers that keep bash siblings) stay put. **Follow-up:** the modules still use flat
+  imports (`import np_toggle`) plus `sys.path` bootstraps rather than absolute-package
+  imports (`from nervepack_engine import np_toggle`); a full package-import conversion is
+  a future refinement — see `docs/ROADMAP.md`.

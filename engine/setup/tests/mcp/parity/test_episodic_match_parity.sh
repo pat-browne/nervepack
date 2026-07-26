@@ -10,7 +10,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$(cd "$HERE/../../.." && pwd)"          # engine/setup
 SH="$SETUP/episodic-match.sh"
-PY="$SETUP/np_episodic_match.py"
+PY="$SETUP/../nervepack_engine/np_episodic_match.py"
 
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_episodic_match_parity: no python3"; exit 0; }
 

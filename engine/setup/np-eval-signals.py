@@ -22,6 +22,11 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# np_toggle was relocated into engine/nervepack_engine/ in phase 20b-2; this helper is
+# invoked standalone as a subprocess (sys.path[0] = setup), so add the package dir too.
+_ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
+if _ENGINE_PKG not in sys.path:
+    sys.path.insert(0, _ENGINE_PKG)
 import np_toggle  # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 
 

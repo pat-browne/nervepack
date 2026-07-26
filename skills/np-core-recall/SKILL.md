@@ -24,7 +24,7 @@ Episodic lives in the **content overlay** under `memory/episodic/`, not the
 engine repo. Resolve the roots (merge-aware, team > personal):
 
 ```bash
-python3 ~/Code/nervepack/engine/setup/np_content.py layer_roots episodic  # one dir per overlay root
+python3 ~/Code/nervepack/engine/nervepack_engine/np_content.py layer_roots episodic  # one dir per overlay root
 ```
 
 For each root: `ls <root>/*.md` (available themes) and `sed -n '1,80p'

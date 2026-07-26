@@ -16,7 +16,7 @@ if SETUP not in sys.path:
 
 
 def _load_np_toggle():
-    spec = importlib.util.spec_from_file_location("np_toggle", os.path.join(SETUP, "np_toggle.py"))
+    spec = importlib.util.spec_from_file_location("np_toggle", os.path.join(SETUP, "..", "nervepack_engine", "np_toggle.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

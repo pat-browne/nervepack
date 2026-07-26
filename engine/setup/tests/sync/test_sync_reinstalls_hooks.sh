@@ -39,7 +39,7 @@ chmod +x "$up/engine/setup/59-install-test-marker.sh"
 
 NP_SYNC_TARGET="$local_repo" NP_SYNC_STATUS="$tmp/status" \
   NP_TOGGLES_CONF="$tmp/nope.conf" NP_TOGGLES_LOCAL="$tmp/nope.local" \
-  python3 "$S/np_sync.py" exit >"$tmp/out.log" 2>&1 || true
+  python3 "$S/../nervepack_engine/np_sync.py" exit >"$tmp/out.log" 2>&1 || true
 
 local_head="$(git -C "$local_repo" rev-parse HEAD)"
 up_head="$(git -C "$up" rev-parse HEAD)"

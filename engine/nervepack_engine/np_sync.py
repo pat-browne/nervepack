@@ -21,6 +21,16 @@ Full parity with the retired 40-sync-nervepack.sh:
 Parity-locked (status-message outcome, modulo the embedded UTC timestamp) to the
 bash original by tests/mcp/parity/test_sync_parity.sh. stdlib only.
 """
+import os
+import sys
+# self-bootstrap (phase 20b-2): engine/setup holds np_paths, np_bashlib, the config
+# files, and the stayed sibling modules; add it so this relocated module resolves them
+# whether imported in-process or run standalone. Its own dir (nervepack_engine) is
+# already on sys.path[0] when run directly, so moved-sibling imports resolve too.
+_SETUP = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "setup"))
+if _SETUP not in sys.path:
+    sys.path.insert(0, _SETUP)
+
 import glob
 import io
 import os

@@ -13,6 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:
     sys.path.insert(0, _ENGINE_SETUP)
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "nervepack_engine")))  # phase 20b-2: relocated library modules
 
 import np_token_status  # noqa: E402
 
@@ -78,7 +79,7 @@ class TestTokenStatusCli(unittest.TestCase):
 
     def test_cli_missing(self):
         out = subprocess.run(
-            ["python3", os.path.join(_ENGINE_SETUP, "np_token_status.py"), "/no/such/file"],
+            ["python3", os.path.join(_ENGINE_SETUP, "..", "nervepack_engine", "np_token_status.py"), "/no/such/file"],
             capture_output=True, text=True, check=True,
         ).stdout.strip()
         self.assertEqual(out, "missing")
@@ -91,7 +92,7 @@ class TestTokenStatusCli(unittest.TestCase):
         with open(token_file + ".issued", "w") as f:
             f.write((date.today() - timedelta(days=5)).strftime("%Y-%m-%d"))
         out = subprocess.run(
-            ["python3", os.path.join(_ENGINE_SETUP, "np_token_status.py"), token_file,
+            ["python3", os.path.join(_ENGINE_SETUP, "..", "nervepack_engine", "np_token_status.py"), token_file,
              "--ttl-days", "10", "--warn-days", "5"],
             capture_output=True, text=True, check=True,
         ).stdout.strip()

@@ -380,7 +380,7 @@ read on trends, wins, and struggles.
 into committed `dashboard/data/metrics.jsonl`;
 `build.py` renders `metrics.js` for `dashboard/index.html`. The `cli.py hook
 open-dashboard` SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard.py`,
-backed by `engine/setup/np_dashboard.py`) opens it once per boot (guarded against
+backed by `engine/nervepack_engine/np_dashboard.py`) opens it once per boot (guarded against
 the reconnect loop).
 
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
@@ -402,7 +402,7 @@ a diagram — the dashboard's no-external-fetch invariant holds), gated by
 `dashboard/build.py` (`wiki_index()`),
 `dashboard/index.html`, `dashboard/vendor/mermaid.min.js`,
 `engine/nervepack_engine/hooks/open_dashboard.py` (dispatched as `cli.py hook
-open-dashboard`, backed by `engine/setup/np_dashboard.py`),
+open-dashboard`, backed by `engine/nervepack_engine/np_dashboard.py`),
 `np_dashboard.open_manual()` (the manual open, `cli.py open-dashboard`),
 `np-core-dashboard`.
 Toggle: `evaluator` (`dashboard_open`, `dashboard_serve`, `dashboard_port`, `wiki_nav`,
@@ -597,10 +597,10 @@ itself by reading a tool-neutral contract, and let any model back the automation
 swaps `claude` for any OpenAI-compatible endpoint) — the in-process successor to the
 retired bash wrapper `np-llm.sh`. `np-core-onboard` reads
 `engine/onboard/ONBOARD.md`, wires the host, and proves it with `cli.py doctor`
-(in-process Python, `engine/setup/np_doctor.py`). Pre-flight gates check the
+(in-process Python, `engine/nervepack_engine/np_doctor.py`). Pre-flight gates check the
 *backend*, not the `claude` binary.
 
-**Assets.** `engine/setup/np_model.py` (the model seam; `np-llm-local.py` for the local backend), `engine/onboard/`, `engine/setup/np_doctor.py` (`cli.py doctor`), `np-core-onboard`.
+**Assets.** `engine/nervepack_engine/np_model.py` (the model seam; `np-llm-local.py` for the local backend), `engine/onboard/`, `engine/nervepack_engine/np_doctor.py` (`cli.py doctor`), `np-core-onboard`.
 
 **Situational example.** On a Goose box with a local model, `/np-onboard` writes the
 adapter, points the seam at the local endpoint, and the doctor reports PASS. The

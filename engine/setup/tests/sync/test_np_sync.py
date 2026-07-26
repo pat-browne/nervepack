@@ -18,7 +18,7 @@ import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
-_PY = os.path.join(_SETUP, "np_sync.py")
+_PY = os.path.normpath(os.path.join(_SETUP, "..", "nervepack_engine", "np_sync.py"))
 
 
 def _rmtree(path):
