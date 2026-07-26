@@ -23,10 +23,10 @@ import subprocess
 import sys
 import time
 
+import np_paths
 import np_toggle
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ENGINE = os.path.dirname(os.path.dirname(_HERE))  # engine/setup -> engine -> repo root
+_ENGINE = np_paths.REPO_ROOT  # the repo root (contains dashboard/, engine/, …)
 
 _POLL_ATTEMPTS = 10
 _POLL_INTERVAL = 0.2
@@ -74,7 +74,7 @@ def dashboard_url():
     # time out, so only re-probe when we actually attempted a spawn.
     listening = is_listening(port)
     if not listening:
-        server = os.path.join(_HERE, "np-dashboard-server.py")
+        server = os.path.join(np_paths.SETUP_DIR, "np-dashboard-server.py")
         env = dict(os.environ)
         env["NP_DASH_PORT"] = str(port)
         env["NP_SUGGESTIONS_TOP"] = str(top)

@@ -20,12 +20,11 @@ import os
 import subprocess
 import sys
 
+import np_paths
 import np_toggle
 import np_content
 import np_model
 import np_token_lib
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _load_json(path):
@@ -35,7 +34,7 @@ def _load_json(path):
 
 def _np_dir():
     # Mirror np-doctor.sh: NP="${NP_DIR:-<repo root>}".
-    return os.environ.get("NP_DIR") or os.path.dirname(os.path.dirname(_HERE))
+    return os.environ.get("NP_DIR") or np_paths.REPO_ROOT
 
 
 def _caps_path():
