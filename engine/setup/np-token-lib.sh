@@ -19,7 +19,7 @@
 # so rotating the token later is just overwriting the file; no
 # reinstall/reload of any scheduled job is needed.
 NP_CLAUDE_TOKEN_FILE="${NP_CLAUDE_TOKEN_FILE:-$HOME/.config/nervepack/claude-oauth-token}"
-NP_TOKEN_STATUS_PY="${NP_TOKEN_STATUS_PY:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/np_token_status.py}"
+NP_TOKEN_STATUS_PY="${NP_TOKEN_STATUS_PY:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../nervepack_engine/np_token_status.py}"
 
 np_claude_token_file() { printf '%s\n' "$NP_CLAUDE_TOKEN_FILE"; }
 

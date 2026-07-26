@@ -14,7 +14,7 @@ fi
 
 # Toggle gate via the Python resolver (the sourced bash toggle lib was retired in
 # phase 18): `np_toggle.py enabled <feature>` prints on/off and exits 0/1 (fail-open).
-python3 "$HERE/np_toggle.py" enabled mcp >/dev/null || { echo "58-install-mcp: mcp toggle off; skipping" >&2; exit 0; }
+python3 "$HERE/../nervepack_engine/np_toggle.py" enabled mcp >/dev/null || { echo "58-install-mcp: mcp toggle off; skipping" >&2; exit 0; }
 
 # Idempotent: remove any stale entry, then add the current path.
 claude mcp remove nervepack -s user >/dev/null 2>&1 || true
