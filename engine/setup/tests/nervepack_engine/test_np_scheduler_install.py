@@ -289,6 +289,18 @@ class TestInstallLaunchd(unittest.TestCase):
             content = fh.read()
         self.assertIn("f=/x &amp;&amp; export Y", content)
 
+    def test_9_cli_path_is_repo_root_not_doubled(self):
+        # Regression for issue #164: the plist exec command must target
+        # <root>/engine/nervepack_engine/cli.py, NOT a doubled
+        # <root>/engine/engine/... . setup_dir="/opt/nervepack/engine/setup"
+        # => repo root "/opt/nervepack". Before the fix, launchd/schtasks passed
+        # dirname(setup_dir) (=.../engine) to _cli_path, which re-prepends engine/.
+        self._run()
+        with open(os.path.join(self.la_dir, "com.nervepack.memory-promote.plist")) as fh:
+            content = fh.read()
+        self.assertIn("/opt/nervepack/engine/nervepack_engine/cli.py cron memory-promote", content)
+        self.assertNotIn("engine/engine", content)
+
 
 class TestInstallSchtasks(unittest.TestCase):
     def setUp(self):
@@ -364,6 +376,16 @@ class TestInstallSchtasks(unittest.TestCase):
         for args in self.calls:
             tr = args[args.index("//TR") + 1]
             self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", tr)
+
+    def test_10_cli_path_is_repo_root_not_doubled(self):
+        # Regression for issue #164 (schtasks half of the same bug): the //TR
+        # command must target <root>/engine/nervepack_engine/cli.py, not a
+        # doubled <root>/engine/engine/... . setup_dir="/opt/nervepack/engine/setup"
+        # => repo root "/opt/nervepack".
+        self._run()
+        tr = self.calls[0][self.calls[0].index("//TR") + 1]
+        self.assertIn("/opt/nervepack/engine/nervepack_engine/cli.py cron memory-promote", tr)
+        self.assertNotIn("engine/engine", tr)
 
 
 if __name__ == "__main__":
