@@ -21,9 +21,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_IN = os.path.join(HERE, "data", "metrics.jsonl")
 DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 
-# The resolvers live in engine/setup/; import np_toggle in-process for toggle reads.
-# (The layer-stack resolver np_content.py is invoked as a native subprocess below.)
+# np_toggle was relocated into engine/nervepack_engine/ in phase 20b-2; import it from
+# there in-process for toggle reads. (The layer-stack resolver np_content.py is invoked
+# as a native subprocess below; engine/setup stays on the path for its stayed siblings.)
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
+sys.path.insert(0, os.path.join(HERE, "..", "engine", "nervepack_engine"))
 import np_toggle  # noqa: E402
 
 

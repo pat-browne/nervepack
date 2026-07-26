@@ -13,6 +13,15 @@ a closed/empty stdin == "accept the default" for every prompt. Idempotent and
 re-runnable. Reads answers line-by-line from stdin. stdlib only.
 """
 import os
+import sys
+# self-bootstrap (phase 20b-2): np_toggle/np_content/np_model and the other library
+# modules were relocated into engine/nervepack_engine/; add that package dir so this
+# script's flat imports of them resolve whether run standalone or imported.
+_ENGINE_PKG = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nervepack_engine"))
+if _ENGINE_PKG not in sys.path:
+    sys.path.insert(0, _ENGINE_PKG)
+
+import os
 import shutil
 import subprocess
 import sys
