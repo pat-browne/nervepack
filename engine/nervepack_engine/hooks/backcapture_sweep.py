@@ -37,6 +37,12 @@ import np_toggle
 
 _CWD_RE = re.compile(r'"cwd":"([^"]*)"')
 
+# Transient capture failures (empty/non-JSON model output) release the claim so a
+# later sweep retries; after this many failed passes we give up and mark the
+# session permanently seen, so a genuinely un-capturable transcript can't burn a
+# model call on every SessionStart forever.
+_MAX_ATTEMPTS = 5
+
 
 def _home():
     return os.environ.get("HOME") or os.path.expanduser("~")
@@ -150,6 +156,40 @@ def _write_queue_file(path, sid, mt, tpath, cwd):
         pass
 
 
+def _release_claim(seen_dir, sid):
+    """Undo a _claim() so a later sweep can retry (used when capture failed
+    transiently). The committed-metrics dedup + capture()'s own per-session
+    marker keep a *successful* session from being re-captured after release."""
+    try:
+        os.remove(os.path.join(seen_dir, sid))
+    except OSError:
+        pass
+
+
+def _bump_attempts(seen_dir, sid):
+    """Increment and return the per-session transient-failure attempt count."""
+    path = os.path.join(seen_dir, sid + ".attempts")
+    try:
+        n = int(open(path, encoding="utf-8").read() or "0")
+    except (OSError, ValueError):
+        n = 0
+    n += 1
+    try:
+        os.makedirs(seen_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(str(n))
+    except OSError:
+        pass
+    return n
+
+
+def _clear_attempts(seen_dir, sid):
+    try:
+        os.remove(os.path.join(seen_dir, sid + ".attempts"))
+    except OSError:
+        pass
+
+
 def _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, metrics_path, now):
     cutoff = now - days * 86400
     for root, _dirs, files in os.walk(projects_dir):
@@ -181,7 +221,8 @@ def _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, met
             _write_queue_file(queue_file, sid, mt, tpath, cwd)
 
 
-def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evaluate_fn):
+def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evaluate_fn,
+             capture_ok_fn):
     pending = []
     try:
         names = os.listdir(queue_dir)
@@ -231,12 +272,25 @@ def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evalu
             evaluate_fn(payload)
         except Exception:
             pass
-        processed += 1
-        _log("back-captured %s (project %s)" % (sid, os.path.basename(cwd)))
+        # Keep the permanent claim only if capture actually recorded a note (or a
+        # metrics row already exists). On a transient failure (model returned
+        # empty/non-JSON), release the claim so a later sweep retries -- up to
+        # _MAX_ATTEMPTS, after which we give up and leave the claim in place.
+        # Previously the claim was written unconditionally before capture, so a
+        # single transient failure dropped the session forever (#168).
+        if capture_ok_fn(payload) or _already_in_metrics(sid, metrics_path):
+            _clear_attempts(seen_dir, sid)
+            processed += 1
+            _log("back-captured %s (project %s)" % (sid, os.path.basename(cwd)))
+        elif _bump_attempts(seen_dir, sid) >= _MAX_ATTEMPTS:
+            _log("gave up on %s after %d capture attempts (still queued->seen)" % (sid, _MAX_ATTEMPTS))
+        else:
+            _release_claim(seen_dir, sid)
+            _log("retry-queued %s (transient capture failure)" % sid)
     return processed
 
 
-def run(payload_text, capture_fn=None, evaluate_fn=None):
+def run(payload_text, capture_fn=None, evaluate_fn=None, capture_ok_fn=None):
     """Entry point called by cli.py. `capture_fn`/`evaluate_fn` default to the
     real np_capture.capture / np_evaluator.evaluate; tests inject stubs."""
     if os.environ.get("NERVEPACK_AGENT"):        # re-entry guard — invariant 2
@@ -270,7 +324,8 @@ def run(payload_text, capture_fn=None, evaluate_fn=None):
     now = int(time.time())
     _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, metrics_path, now)
     processed = _process(queue_dir, seen_dir, metrics_path, max_per_sweep,
-                          capture_fn or np_capture.capture, evaluate_fn or np_evaluator.evaluate)
+                          capture_fn or np_capture.capture, evaluate_fn or np_evaluator.evaluate,
+                          capture_ok_fn or np_capture.was_captured)
 
     if processed > 0:
         pending = 0
