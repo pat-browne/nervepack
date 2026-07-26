@@ -7,7 +7,7 @@ description: Sync ~/Code/nervepack with origin/main using strict-safe semantics 
 
 ## Behavior contract
 
-The underlying command (`cli.py sync`, engine/setup/np_sync.py) is intentionally
+The underlying command (`cli.py sync`, engine/nervepack_engine/np_sync.py) is intentionally
 *defensive*: it never modifies a dirty working tree, never autostashes, and
 never rebases. Every run produces one of five outcomes, written to
 `~/.cache/np-core-sync-status`:

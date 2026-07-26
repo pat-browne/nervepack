@@ -30,7 +30,7 @@ It does not track any individual user's personal content overlay.
   `30-link-skills.sh`, `60-generate-index.sh`, `np-mcp-install.sh`, and
   `episodic-scrub.sh` retired (phase 17 of the bash→Python migration — the
   largest phase; unblocks phase 18's sourced-lib deletion).** The defensive engine
-  sync is now `engine/setup/np_sync.py` (`cli.py sync` / `cli.py sync exit`),
+  sync is now `engine/nervepack_engine/np_sync.py` (`cli.py sync` / `cli.py sync exit`),
   extended to FULL parity: the toggle gate, backup-vs-exit mode + `sync.interval`
   throttle + dry-run/status-file writes, the five engine cases, the optional
   team-layer fast-forward (armed only past the deliberate early-outs), and on a
@@ -56,7 +56,7 @@ It does not track any individual user's personal content overlay.
 - **Both dashboard open paths are now Python; `open-dashboard.sh` and
   `np-dashboard-launch.sh` retired (phase 16 of the bash→Python migration).**
   `np-dashboard-launch.sh`'s URL/opener resolution was already ported to
-  `engine/setup/np_dashboard.py` (`resolve_opener`/`is_listening`/`dashboard_url`/
+  `engine/nervepack_engine/np_dashboard.py` (`resolve_opener`/`is_listening`/`dashboard_url`/
   `boot_id`, consumed by the SessionStart hook `open_dashboard.py`); phase 16 adds
   `np_dashboard.open_manual()` — a full-parity port of the manual, on-demand open
   (`open-dashboard.sh`): rebuild `metrics.js` (best-effort, passing
@@ -72,7 +72,7 @@ It does not track any individual user's personal content overlay.
   (host-agnostic + hermetic). `np-dashboard-server.py` (the served-mode HTTP
   daemon) stays.
 - **The doctor is now a single in-process Python implementation; `np-doctor.sh`
-  retired (phase 15 of the bash→Python migration).** `engine/setup/np_doctor.py`
+  retired (phase 15 of the bash→Python migration).** `engine/nervepack_engine/np_doctor.py`
   previously ran only the six deterministic core checks and reported `llm-cli` +
   every adapter capability as **N/A** (the bash-free MCP fallback), deferring to
   `np-doctor.sh` for the full run. It now runs **all 16 capabilities** in-process:
