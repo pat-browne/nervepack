@@ -15,14 +15,26 @@ ALLOWLIST = os.path.join(HERE, "scan-allowlist.txt")
 
 RULES = {
     "aws-akia":    re.compile(r"AKIA[0-9A-Z]{16}"),
+    "aws-asia":    re.compile(r"ASIA[0-9A-Z]{16}"),                  # temporary/session creds
     "gh-token":    re.compile(r"gh[opsu]_[A-Za-z0-9]{20,}"),
-    "openai-sk":   re.compile(r"sk-[A-Za-z0-9]{20,}"),
+    "gh-pat":      re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),      # fine-grained PAT
+    "gh-refresh":  re.compile(r"ghr_[A-Za-z0-9]{20,}"),
+    # `sk-[A-Za-z0-9_-]{20,}` (not `{A-Za-z0-9}`) so the interior `-` of an OpenAI
+    # project key (sk-proj-...) doesn't truncate the run below the length floor.
+    "openai-sk":   re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
+    "stripe-key":  re.compile(r"[sr]k_(?:live|test)_[0-9A-Za-z]{10,}"),
+    "stripe-whsec":re.compile(r"whsec_[0-9A-Za-z]{16,}"),
+    "google-api":  re.compile(r"AIza[0-9A-Za-z_-]{35}"),
+    "slack-token": re.compile(r"xox[baprs]-[0-9A-Za-z-]{10,}|xapp-[0-9A-Za-z-]{10,}"),
+    "jwt":         re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}"),
     "private-key": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    "pii-email":   re.compile(r"pmb21656|[A-Za-z0-9._%+-]+@gmail\.com"),
-    "pii-user":    re.compile(r"/home/pbrowne|patrick\.browne"),
+    # PII rules are case-insensitive so a mixed-case identifier / macOS-home variant
+    # can't slip past; the primary Linux home + gmail address are covered exactly.
+    "pii-email":   re.compile(r"pmb21656|[A-Za-z0-9._%+-]+@gmail\.com", re.IGNORECASE),
+    "pii-user":    re.compile(r"/home/pbrowne|/Users/pbrowne|patrick\.browne", re.IGNORECASE),
     # pat-browne is the PUBLIC repo owner (project identity), intentionally NOT flagged —
     # see docs/superpowers/specs/2026-06-10-nervepack-genericization-design.md §5.
-    "pii-handle":  re.compile(r"pbrowne\.net"),
+    "pii-handle":  re.compile(r"pbrowne\.net", re.IGNORECASE),
     # RFC1918 private LAN addresses (a real home/office box) are infra residue that
     # must not ship publicly. Matches 10/8, 172.16/12, and 192.168/16 only — never
     # loopback (127.0.0.1), 0.0.0.0, the 172.16–31 boundary neighbors, TEST-NET doc
@@ -93,8 +105,19 @@ def main(argv):
     if len(argv) < 2:
         print("usage: np-publish-scan.py <staged-dir>", file=sys.stderr)
         return 2
+    target = argv[1]
+    # Fail CLOSED: a publish gate must never "pass" because it was handed a wrong
+    # or empty target (a typo'd path, an unset var expanding empty, a half-failed
+    # staging step). A scan that finds nothing because there was nothing to scan is
+    # a setup error, not a clean tree.
+    if not os.path.isdir(target):
+        print(f"[scan] ERROR: target is not a directory: {target!r}", file=sys.stderr)
+        return 2
+    if not os.listdir(target):
+        print(f"[scan] ERROR: target directory is empty: {target!r}", file=sys.stderr)
+        return 2
     allow = load_allowlist(ALLOWLIST)
-    findings = scan(argv[1], allow)
+    findings = scan(target, allow)
     if allow:
         print(f"[scan] {len(allow)} allowlisted false-positive(s) in effect:")
         for rel, txt in sorted(allow):
