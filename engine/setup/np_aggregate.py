@@ -11,6 +11,15 @@ Consumed in-process by hooks/session_flush.py, hooks/open_dashboard.py, and
 np-mcp-server.py's _tool_maintain aggregate job. Has its own __main__ entry
 point for the `cli.py cron aggregate-metrics` dispatch. stdlib only.
 """
+import os
+import sys
+# self-bootstrap (phase 20b-2): np_toggle/np_content/np_model and the other library
+# modules were relocated into engine/nervepack_engine/; add that package dir so this
+# script's flat imports of them resolve whether run standalone or imported.
+_ENGINE_PKG = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nervepack_engine"))
+if _ENGINE_PKG not in sys.path:
+    sys.path.insert(0, _ENGINE_PKG)
+
 import datetime
 import json
 import os

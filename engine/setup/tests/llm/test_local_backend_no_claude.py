@@ -20,6 +20,7 @@ NO_CLAUDE = "/nonexistent/np-no-claude-binary"
 
 if SETUP not in sys.path:
     sys.path.insert(0, SETUP)
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "nervepack_engine")))  # phase 20b-2: relocated library modules
 import np_capture  # noqa: E402
 import np_evaluator  # noqa: E402
 

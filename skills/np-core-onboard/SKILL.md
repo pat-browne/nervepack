@@ -23,7 +23,7 @@ this skill is the entry point.
    `cli.py setup link-skills` (knowledge) + `engine/setup/5x-install-*.sh` (hooks); reproduce the
    equivalent for your host.
 4. **Configure the model:** set `NP_LLM_BACKEND` (+ `NP_LLM_MODEL_CHEAP`/`_AGENT`) so
-   `printf hi | python3 engine/setup/np_model.py complete` returns text. Claude is the default backend; a
+   `printf hi | python3 engine/nervepack_engine/np_model.py complete` returns text. Claude is the default backend; a
    local Ollama box uses the goose/ollama backend.
 5. **Record what you did** in `~/.config/nervepack/adapter.json` (per-machine): for each
    `check:adapter` capability, `{status: wired|unsupported, verify: "<cmd, exit 0 = ok>"}`.

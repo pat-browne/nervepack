@@ -4,7 +4,7 @@
 # (the sourced bash toggle lib was retired in phase 18): `np_toggle.py param <key> <default>`.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="$HERE/../../np_toggle.py"
+PY="$HERE/../../../nervepack_engine/np_toggle.py"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 cat > "$tmp/toggles.conf" <<'CONF'

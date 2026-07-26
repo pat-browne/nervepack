@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SYNC="$HERE/../../np_sync.py"          # phase 17: 40-sync-nervepack.sh retired
+SYNC="$HERE/../../../nervepack_engine/np_sync.py"          # phase 17: 40-sync-nervepack.sh retired
 command -v python3 >/dev/null 2>&1 || { echo "SKIP test_sync_throttle: no python3"; exit 0; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # Windows/Git-bash: mixed form (C:/x) so the stamp/conf paths reach native Windows

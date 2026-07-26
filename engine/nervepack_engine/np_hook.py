@@ -26,6 +26,16 @@ Linux/macOS commands verbatim. Wrapping happens AFTER computing `base` so the
 dedup key stays the script basename (the wrapper still contains it). nervepack's
 own hook commands are single-quote-free, so single-quote wrapping is safe.
 """
+import os
+import sys
+# self-bootstrap (phase 20b-2): engine/setup holds np_paths, np_bashlib, the config
+# files, and the stayed sibling modules; add it so this relocated module resolves them
+# whether imported in-process or run standalone. Its own dir (nervepack_engine) is
+# already on sys.path[0] when run directly, so moved-sibling imports resolve too.
+_SETUP = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "setup"))
+if _SETUP not in sys.path:
+    sys.path.insert(0, _SETUP)
+
 import json
 import os
 import re

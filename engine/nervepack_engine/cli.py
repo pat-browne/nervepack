@@ -23,7 +23,10 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_DIR = os.path.normpath(os.path.join(_HERE, ".."))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", "setup"))
-for _p in (_ENGINE_DIR, _ENGINE_SETUP):
+# _HERE (engine/nervepack_engine) is on the list so flat `import np_toggle`/np_doctor/
+# np_sync/np_dashboard/np_hook (relocated into the package in phase 20b-2) resolve; the
+# staying setup modules cli.py imports still resolve via _ENGINE_SETUP.
+for _p in (_HERE, _ENGINE_DIR, _ENGINE_SETUP):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

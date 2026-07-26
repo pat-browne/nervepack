@@ -42,7 +42,7 @@ expB="$(git -C "$tmp/teamB.up" rev-parse HEAD)"
 # over both team repos on that real (not-a-git) engine outcome. `exit` mode
 # bypasses the interval throttle.
 NP_SYNC_TARGET="$tmp/notgit" NP_SYNC_STATUS="$tmp/status" \
-  python3 "$S/np_sync.py" exit >/dev/null 2>&1 || true
+  python3 "$S/../nervepack_engine/np_sync.py" exit >/dev/null 2>&1 || true
 
 for r in teamA teamB; do
   case "$r" in teamA) exp="$expA" ;; teamB) exp="$expB" ;; esac

@@ -45,6 +45,12 @@ def error(mid, code, message):
 # `bash` would resolve to System32 WSL, and .sh/backslash paths break). No-op off
 # Windows. HERE is on sys.path (this runs as a script), so a plain import resolves it.
 import np_bashlib  # noqa: E402
+# The library modules below were relocated into engine/nervepack_engine/ in phase
+# 20b-2; add that package dir so their flat imports resolve (HERE/setup stays on
+# sys.path for np_bashlib + the other stayed siblings).
+_ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
+if _ENGINE_PKG not in sys.path:
+    sys.path.insert(0, _ENGINE_PKG)
 import np_toggle    # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 import np_content   # noqa: E402  in-process content/team/merge resolver (bash-free)
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
