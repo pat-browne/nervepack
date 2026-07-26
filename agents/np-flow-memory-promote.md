@@ -141,7 +141,7 @@ git -C "$NP" commit -m "promote: weekly memory→engine ($(date -u +%F))" -m "- 
 git -C "$NP" push
 ```
 
-`30-link-skills.sh` regenerates `INDEX.md` in the engine, so stage `INDEX.md` only in
+`cli.py setup link-skills` regenerates `INDEX.md` in the engine, so stage `INDEX.md` only in
 the engine commit. If nothing changed: exit silently. No empty commits.
 
 ### 6. Report

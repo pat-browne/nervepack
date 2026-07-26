@@ -94,7 +94,7 @@ For any `SKILL.md` over 300 lines:
 ### 6. Regenerate INDEX.md
 
 ```bash
-./setup/60-generate-index.sh
+python3 engine/nervepack_engine/cli.py setup generate-index
 ```
 
 ### 7. Commit + push

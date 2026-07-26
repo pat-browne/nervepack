@@ -121,10 +121,10 @@
       "check": "adapter",
       "title": "the session is captured to the episodic inbox on exit",
       "why": "Immediate working-memory capture so the next session can recall where you left off (cron is only a backup).",
-      "accept": "Ending a session runs episodic-capture.sh against the transcript and writes an inbox note.",
+      "accept": "Ending a session runs cli.py hook episodic-capture against the transcript and writes an inbox note.",
       "hints": {
-        "claude-code": "SessionEnd hook -> episodic-capture.sh session-end (reference: 52 install script).",
-        "goose": "SessionEnd hook (Open Plugins spec) -> episodic-capture.sh, mapping the host payload to {transcript_path,cwd,session_id}.",
+        "claude-code": "SessionEnd hook -> cli.py hook episodic-capture session-end (reference: cli.py setup install-hooks).",
+        "goose": "SessionEnd hook (Open Plugins spec) -> cli.py hook episodic-capture, mapping the host payload to {transcript_path,cwd,session_id}.",
         "generic": "if your host has no session-end event, wrap it: run the host, then run episodic-capture after it exits."
       }
     },
@@ -136,7 +136,7 @@
       "why": "Scores the session and promotes inbox -> episodic themes + metrics immediately; crons become backup.",
       "accept": "Ending a session runs cli.py hook evaluator and cli.py hook session-flush.",
       "hints": {
-        "claude-code": "SessionEnd hooks -> cli.py hook evaluator and cli.py hook session-flush (reference: 54/55 install scripts).",
+        "claude-code": "SessionEnd hooks -> cli.py hook evaluator and cli.py hook session-flush (reference: cli.py setup install-hooks).",
         "generic": "same trigger as capture; the flush carries the NERVEPACK_AGENT guard so it won't recurse. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs."
       }
     },
@@ -146,12 +146,12 @@
       "check": "adapter",
       "title": "promote / aggregate / skill-maintain / refine / compact run on a schedule",
       "why": "The backup cadence that consolidates memory, metrics and skill budgets even if on-exit promotion is missed; refine/compact keep skills lint-clean and deduped.",
-      "accept": "A scheduler (cron or host-native) runs 71/72/73/75/76/77 on their cadences.",
+      "accept": "A scheduler (cron or host-native) runs the maintenance crons (cli.py cron memory-promote / aggregate-metrics / skill-maintain / refine / compact) on their cadences.",
       "hints": {
-        "claude-code": "user crontab (reference: cli.py setup install-memory-cron). 76 (refine, Sunday) and 77 (compact, Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
+        "claude-code": "user crontab (reference: cli.py setup install-memory-cron). refine (Sunday) and compact (Wednesday) are default-on via maintain.refine / maintain.compact toggles.",
         "claude-code-macos": "launchd LaunchAgents, not crontab (reference: cli.py setup install-memory-launchd); verify with `launchctl list | grep com.nervepack`. Adapter: onboard/adapters/claude-code-macos.example.json.",
         "claude-code-windows": "Windows Task Scheduler, not crontab (reference: cli.py setup install-memory-schtasks; runs under Git-bash, shells to schtasks.exe); verify with `schtasks //Query //FO LIST | grep -i nervepack`. Requires Git for Windows. Adapter: onboard/adapters/claude-code-windows.example.json.",
-        "generic": "any scheduler that can run the 7x scripts; they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: 76/77 can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
+        "generic": "any scheduler that can run the maintenance crons (cli.py cron <name>); they self-gate on toggles and are idempotent. Set NP_GIT_AUTHOR_NAME/NP_GIT_AUTHOR_EMAIL for commit attribution on headless/cloud runs. Optional offload: refine/compact can also run as cloud routines or OSS runners instead of local crons — see https://github.com/pat-browne/nervepack/issues/16 for the planned NP_SCHED_BACKEND seam."
       }
     },
     {
