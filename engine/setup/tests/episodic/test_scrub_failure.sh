@@ -5,7 +5,7 @@
 # (runs under `set -euo pipefail`) — it must exit 0 and still not leak a secret.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRUB="$HERE/../../np_scrub.py"
+SCRUB="$HERE/../../../nervepack_engine/np_scrub.py"
 
 [[ -f "$SCRUB" ]] || { echo "FAIL: scrub not executable: $SCRUB"; exit 1; }
 

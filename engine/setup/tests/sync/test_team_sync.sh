@@ -30,7 +30,7 @@ behind_before="$(git -C "$tmp/team" rev-parse --short HEAD)"
 export NP_TEAM_DIR="$tmp/team" NP_TOGGLES_CONF="$S/toggles.conf"
 
 # (1) Real engine-sync path: team clone fast-forwards.
-python3 "$S/np_sync.py" >/dev/null 2>&1 || true
+python3 "$S/../nervepack_engine/np_sync.py" >/dev/null 2>&1 || true
 after="$(git -C "$tmp/team" rev-parse --short HEAD)"
 [[ "$after" != "$behind_before" ]] || { echo "FAIL: team repo did not fast-forward on a real engine-sync path ($after)"; exit 1; }
 
@@ -40,7 +40,7 @@ after="$(git -C "$tmp/team" rev-parse --short HEAD)"
 off_before="$(git -C "$tmp/team" rev-parse --short HEAD)"
 [[ "$off_before" == "$behind_before" ]] || { echo "FAIL: setup — could not reset team behind ($off_before)"; exit 1; }
 mkdir -p "$tmp/.config/nervepack"; printf 'sync=off\n' > "$tmp/.config/nervepack/toggles.local"
-python3 "$S/np_sync.py" >/dev/null 2>&1 || true
+python3 "$S/../nervepack_engine/np_sync.py" >/dev/null 2>&1 || true
 off_after="$(git -C "$tmp/team" rev-parse --short HEAD)"
 [[ "$off_after" == "$off_before" ]] || { echo "FAIL: team repo was pulled on the disabled-toggle early-out ($off_after); team sync must not run on deliberate skips"; exit 1; }
 

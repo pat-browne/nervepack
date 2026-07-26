@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from nptest import u  # convert paths embedded in bash -c NP_LLM_AGENT_CMD snippets
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-NPMODEL = os.path.join(REPO, "engine", "setup", "np_model.py")
+NPMODEL = os.path.join(REPO, "engine", "nervepack_engine", "np_model.py")
 
 
 class Handler(BaseHTTPRequestHandler):

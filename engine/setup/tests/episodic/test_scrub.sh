@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRUB="$HERE/../../np_scrub.py"
+SCRUB="$HERE/../../../nervepack_engine/np_scrub.py"
 
 out="$(printf 'use sk-ABCDEFGHIJKLMNOPQRSTUV and ghp_ABCDEFGHIJKLMNOPQRSTU now\n' | python3 "$SCRUB")"
 echo "$out" | grep -q 'REDACTED' || { echo "FAIL: secret not redacted: $out"; exit 1; }

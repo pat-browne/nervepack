@@ -258,6 +258,11 @@ class TestMethods(unittest.TestCase):
         staged_repo = self._mktmp()
         os.makedirs(os.path.join(staged_repo, "engine"))
         shutil.move(stage, os.path.join(staged_repo, "engine", "setup"))
+        # The library modules the server imports live in engine/nervepack_engine/ since
+        # phase 20b-2 — stage them too or the server can't import np_toggle et al.
+        shutil.copytree(os.path.join(REPO, "engine", "nervepack_engine"),
+                        os.path.join(staged_repo, "engine", "nervepack_engine"),
+                        ignore=shutil.ignore_patterns("tests"))
         shutil.copytree(os.path.join(REPO, "engine", "bin"), os.path.join(staged_repo, "engine", "bin"))
         shutil.copytree(os.path.join(REPO, "dashboard"), os.path.join(staged_repo, "dashboard"))
         shutil.copy(os.path.join(REPO, "INDEX.md"), os.path.join(staged_repo, "INDEX.md"))
@@ -331,6 +336,11 @@ class TestMethods(unittest.TestCase):
         staged_repo = self._mktmp()
         os.makedirs(os.path.join(staged_repo, "engine"))
         shutil.move(stage, os.path.join(staged_repo, "engine", "setup"))
+        # The library modules the server imports live in engine/nervepack_engine/ since
+        # phase 20b-2 — stage them too or the server can't import np_toggle et al.
+        shutil.copytree(os.path.join(REPO, "engine", "nervepack_engine"),
+                        os.path.join(staged_repo, "engine", "nervepack_engine"),
+                        ignore=shutil.ignore_patterns("tests"))
         shutil.copytree(os.path.join(REPO, "engine", "bin"), os.path.join(staged_repo, "engine", "bin"))
         shutil.copytree(os.path.join(REPO, "dashboard"), os.path.join(staged_repo, "dashboard"))
         shutil.copy(os.path.join(REPO, "INDEX.md"), os.path.join(staged_repo, "INDEX.md"))

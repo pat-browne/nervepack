@@ -24,8 +24,10 @@ fail() { echo "FAIL test_installer_glob_coverage: $*"; exit 1; }
 [[ -e "$SETUP/58-install-mcp.sh" ]] \
   || fail "58-install-mcp.sh missing — remaining-installer fixture assumption broken"
 
-for driver in np_onboard.py np_sync.py; do
-  path="$SETUP/$driver"
+# np_onboard stays in engine/setup; np_sync was relocated into engine/nervepack_engine
+# (phase 20b-2) — carry full paths so each resolves at its real location.
+for path in "$SETUP/np_onboard.py" "$SETUP/../nervepack_engine/np_sync.py"; do
+  driver="$(basename "$path")"
   [[ -e "$path" ]] || fail "$driver not found at $path"
   glob="$(grep -oE '(\[[0-9]+\]|[0-9])\[0-9\]-install-\*\.sh' "$path" | head -1)"
   [[ -n "$glob" ]] || fail "$driver: no remaining-installer glob (NN-install-*.sh) found"
