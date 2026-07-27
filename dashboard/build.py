@@ -454,6 +454,40 @@ def wiki_index():
                 "last_updated": p["last_updated"], "sources": p["sources"],
                 "html": html, "root": root}
 
+    def _concept_synth(p, html, root):
+        return {"name": p["name"], "kind": "concept", "excerpt": p["excerpt"],
+                "last_updated": p["last_updated"], "sources": p["sources"],
+                "html": html, "root": root}
+
+    def _index_container(container, kind, subdir, name, root, entry, claimed, synth_fn):
+        """Walk one topic/concept container dir (recursively), mutating `entry`
+        (its 'synthesis' + 'sources') and `claimed` (the page-name dedup set). Shared
+        by the topic and concept passes -- the caller owns the cross-layer
+        entry/claimed/override-skip state, so this walk (which was duplicated verbatim
+        for topics and concepts) lives once. `synth_fn(page, html, root)` builds the
+        synthesis entry; `subdir` is 'topics'/'concepts' for the HTML path. (#176)"""
+        for dirpath, dirnames, filenames in os.walk(container):
+            dirnames.sort()
+            sub = os.path.relpath(dirpath, container)
+            sub = "" if sub == "." else sub.replace(os.sep, "/")
+            for f in sorted(filenames):
+                if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                    continue
+                p = _parse_wiki_page(os.path.join(dirpath, f))
+                if not p:
+                    continue
+                rel = (sub + "/" + p["name"]) if sub else p["name"]
+                html = "data/wiki/%s/%s/%s.html" % (subdir, name, rel)
+                if p["kind"] == kind and sub == "":     # synthesis page at the root only
+                    if entry["synthesis"] is None:
+                        entry["synthesis"] = synth_fn(p, html, root)
+                        claimed.add(p["name"])
+                    continue
+                if p["name"] in claimed:
+                    continue                            # page-level dedup across layers + subdirs
+                claimed.add(p["name"])
+                entry["sources"].append(_src_entry(p, name, sub, html, root))
+
     topics = {}             # topic -> entry (accumulated across layers)
     taken = {}              # topic -> set of page names already claimed (dedup)
     cmap = {}; ctaken = {}; seen_concept = set()
@@ -472,30 +506,8 @@ def wiki_index():
             if topic not in topics:
                 topics[topic] = {"topic": topic, "synthesis": None, "sources": []}
                 taken[topic] = set()
-            entry, claimed = topics[topic], taken[topic]
-            # Walk the topic dir recursively: the relative subdir IS the nesting path.
-            for dirpath, dirnames, filenames in os.walk(td):
-                dirnames.sort()
-                sub = os.path.relpath(dirpath, td)
-                sub = "" if sub == "." else sub.replace(os.sep, "/")
-                for f in sorted(filenames):
-                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
-                        continue
-                    p = _parse_wiki_page(os.path.join(dirpath, f))
-                    if not p:
-                        continue
-                    rel = (sub + "/" + p["name"]) if sub else p["name"]
-                    html = "data/wiki/topics/%s/%s.html" % (topic, rel)
-                    # synthesis page: kind:topic at the topic root only
-                    if p["kind"] == "topic" and sub == "":
-                        if entry["synthesis"] is None:
-                            entry["synthesis"] = _synth_entry(p, html, cd)
-                            claimed.add(p["name"])
-                        continue
-                    if p["name"] in claimed:
-                        continue   # page-level dedup across layers + subdirs
-                    claimed.add(p["name"])
-                    entry["sources"].append(_src_entry(p, topic, sub, html, cd))
+            _index_container(td, "topic", "topics", topic, cd,
+                             topics[topic], taken[topic], _synth_entry)
 
         croot = os.path.join(cd, "wiki", "concepts")
         try:
@@ -511,30 +523,8 @@ def wiki_index():
             if concept not in cmap:
                 cmap[concept] = {"name": concept, "synthesis": None, "sources": []}
                 ctaken[concept] = set()
-            centry, cclaimed = cmap[concept], ctaken[concept]
-            for dirpath, dirnames, filenames in os.walk(ccd):
-                dirnames.sort()
-                sub = os.path.relpath(dirpath, ccd)
-                sub = "" if sub == "." else sub.replace(os.sep, "/")
-                for f in sorted(filenames):
-                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
-                        continue
-                    p = _parse_wiki_page(os.path.join(dirpath, f))
-                    if not p:
-                        continue
-                    rel = (sub + "/" + p["name"]) if sub else p["name"]
-                    html = "data/wiki/concepts/%s/%s.html" % (concept, rel)
-                    if p["kind"] == "concept" and sub == "":
-                        if centry["synthesis"] is None:
-                            centry["synthesis"] = {"name": p["name"], "kind": "concept",
-                                "excerpt": p["excerpt"], "last_updated": p["last_updated"],
-                                "sources": p["sources"], "html": html, "root": cd}
-                            cclaimed.add(p["name"])
-                        continue
-                    if p["name"] in cclaimed:
-                        continue
-                    cclaimed.add(p["name"])
-                    centry["sources"].append(_src_entry(p, concept, sub, html, cd))
+            _index_container(ccd, "concept", "concepts", concept, cd,
+                             cmap[concept], ctaken[concept], _concept_synth)
             seen_concept.add(concept)
 
     for entry in topics.values():
