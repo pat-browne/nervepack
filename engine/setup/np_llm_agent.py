@@ -27,12 +27,12 @@ if _HERE not in sys.path:
 import np_model  # noqa: E402
 
 
-def run_agent(prompt, tools, cwd=None):
+def run_agent(prompt, tools, cwd=None, timeout=None):
     """Invoke np_model.agent() with `prompt`, `tools`, cd'd into `cwd` (defaults
-    to the caller's current directory). Returns True iff it exited 0; never
-    raises."""
+    to the caller's current directory), bounded by `timeout` seconds (None = no
+    bound). Returns True iff it exited 0; never raises."""
     try:
-        returncode, _out, _err = np_model.agent(prompt, tools, cwd=cwd)
+        returncode, _out, _err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
         return returncode == 0
     except (OSError, ValueError):
         return False

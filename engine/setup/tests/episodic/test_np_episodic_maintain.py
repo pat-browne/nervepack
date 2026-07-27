@@ -231,7 +231,7 @@ class CommitRoutingTest(unittest.TestCase):
                                capture_output=True, text=True).stdout
 
     def _episodic_drain_stub(self):
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             base = cwd or self.overlay
             os.makedirs(os.path.join(base, "memory", "episodic"), exist_ok=True)
             note = os.path.join(base, "memory", "episodic", "stub-topic.md")

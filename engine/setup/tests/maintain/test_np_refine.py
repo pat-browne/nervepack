@@ -227,7 +227,7 @@ class EngineCommitRoutingTest(unittest.TestCase):
                               capture_output=True, text=True).stdout.strip()
 
     def _lintfix_stub(self):
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             base = cwd or self.np
             skill = os.path.join(base, "skills", "np-stub-lintfix")
             os.makedirs(skill, exist_ok=True)
@@ -338,7 +338,7 @@ class OverlayRetargetTest(unittest.TestCase):
         real agent to do. No such phrasing -> no overlay commit."""
         import re
 
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             self.captured["prompt"] = prompt
             m = re.search(r"rooted at `([^`]*)`", prompt)
             if m and os.path.isdir(os.path.join(m.group(1), ".git")):

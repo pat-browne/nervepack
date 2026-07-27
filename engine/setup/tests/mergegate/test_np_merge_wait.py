@@ -117,6 +117,19 @@ class TestMergeWait(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown arg", result.stderr)
 
+    def test_7_missing_base_ref_reported_distinctly_not_as_conflict(self):
+        # #173: an unresolvable base (e.g. an unfetched origin/main) makes
+        # `merge-tree --write-tree` exit nonzero -- that must be reported as a missing
+        # base, NOT fabricated as a merge conflict blocking a branch that merges clean.
+        repo = os.path.join(self.tmp, "r7")
+        _build_repo(repo, "clean")  # 'feature' merges cleanly into 'main'
+        code, lines = np_merge_wait.wait_and_check(
+            repo, branch="feature", base="origin/main", interval=0, settle=2, timeout=5)
+        joined = "\n".join(lines)
+        self.assertEqual(code, 2)                     # ISSUES
+        self.assertIn("base ref not found", joined)
+        self.assertNotIn("conflict", joined.lower())  # not a fabricated conflict
+
 
 if __name__ == "__main__":
     unittest.main()

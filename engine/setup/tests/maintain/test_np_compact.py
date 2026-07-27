@@ -239,7 +239,7 @@ class TwoCommitContractTest(unittest.TestCase):
                               capture_output=True, text=True).stdout.strip()
 
     def _dedup_two_commit_stub(self):
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             base = cwd or self.np
             # Commit A: archive the duplicate (skill( prefix)
             a = os.path.join(base, "archive", "np-stub-dup")
@@ -365,7 +365,7 @@ class OverlayRetargetTest(unittest.TestCase):
     def _recording_retarget_stub(self):
         import re
 
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             self.captured["prompt"] = prompt
             m = re.search(r"rooted at `([^`]*)`", prompt)
             if m and os.path.isdir(os.path.join(m.group(1), ".git")):

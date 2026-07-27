@@ -82,15 +82,21 @@ def wait_and_check(repo, branch=None, base="origin/main", interval=60,
 
     issues = []
 
-    # 1) Conflict check via merge-tree (git >=2.38 --write-tree exits nonzero
-    #    on conflict).
-    r = _git(repo, "merge-tree", "--write-tree", base, branch)
-    if r.returncode != 0:
-        issues.append("merge conflicts vs %s" % base)
-
-    # 2) Forbidden AI-attribution trailers in the branch range.
+    # 0) Base ref must exist locally FIRST. `git merge-tree --write-tree` also exits
+    #    nonzero when `base` is unresolvable (an unfetched origin/main) or when git
+    #    <2.38 lacks --write-tree -- so running the conflict check before verifying
+    #    base would fabricate a "merge conflict" for a branch that merges cleanly, and
+    #    the gate would block/escalate it. Verify base, then check conflicts. (#173)
     verify = _git(repo, "rev-parse", "--verify", "--quiet", base)
-    if verify.returncode == 0:
+    if verify.returncode != 0:
+        issues.append("base ref not found locally: %s (fetch origin first?)" % base)
+    else:
+        # 1) Conflict check via merge-tree (git >=2.38 --write-tree exits nonzero on conflict).
+        r = _git(repo, "merge-tree", "--write-tree", base, branch)
+        if r.returncode != 0:
+            issues.append("merge conflicts vs %s" % base)
+
+        # 2) Forbidden AI-attribution trailers in the branch range.
         log = _git(repo, "log", "%s..%s" % (base, branch), "--format=%B")
         body = log.stdout or ""
         trailers = len(re.findall(r"co-authored-by: claude|generated with .*claude", body, re.IGNORECASE))

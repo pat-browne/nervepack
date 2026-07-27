@@ -161,6 +161,18 @@ def _resolve_commit_dir(cfg):
     return np_content.content_dir()
 
 
+def _agent_timeout():
+    """Per-run wall-clock bound (seconds) for the maintenance agent call, so a hung
+    or idle headless stream can't wedge the daily cron indefinitely (the OS scheduler
+    won't reap it, and the next day's run is a separate process). Toggle param
+    maintain.agent_timeout, default 600s; 0 disables the bound. (#173)"""
+    try:
+        secs = int(np_toggle.param("maintain.agent_timeout", "600") or "600")
+    except (TypeError, ValueError):
+        secs = 600
+    return secs if secs > 0 else None
+
+
 def _run(cfg):
     """Shared 8-step agentic-cron body. Returns a short status string; never
     raises (ARCHITECTURE invariant 1 -- fail-open)."""
@@ -222,7 +234,8 @@ def _run(cfg):
     if not target:
         _log(cfg, "ERROR: commit target could not be resolved")
         return "skipped: commit target unresolved"
-    ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target)
+    ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
+                                timeout=_agent_timeout())
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"
