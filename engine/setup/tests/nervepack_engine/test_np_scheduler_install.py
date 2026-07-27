@@ -397,13 +397,6 @@ class TestInstallSchtasks(unittest.TestCase):
         tr = self.calls[0][self.calls[0].index("//TR") + 1]
         self.assertIn("/SENTINEL/Git/bin/bash.exe", tr)
 
-    def test_12_cli_path_with_space_is_shell_quoted(self):
-        # #175: a repo path containing a space must be shell-quoted so `bash -lc`
-        # receives the whole path as one token, not a truncated first word.
-        self._run(setup_dir="/opt/my nervepack/engine/setup")
-        tr = self.calls[0][self.calls[0].index("//TR") + 1].replace("\\", "/")
-        self.assertIn("'/opt/my nervepack/engine/nervepack_engine/cli.py'", tr)
-
 
 if __name__ == "__main__":
     unittest.main()

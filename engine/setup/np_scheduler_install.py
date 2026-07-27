@@ -24,7 +24,6 @@ if _ENGINE_PKG not in sys.path:
 
 import os
 import re
-import shlex
 import shutil
 import subprocess
 
@@ -149,7 +148,7 @@ def install_cron(nervepack_root=None, crontab_list_fn=None, crontab_set_fn=None,
     lines = [ln for ln in crontab_list_fn().splitlines() if ln.strip()]
 
     for marker, schedule, cron_name in _CRON_JOBS:
-        line = "%s %spython3 %s cron %s # %s" % (schedule, token_prefix_fn(), shlex.quote(cli), cron_name, marker)
+        line = "%s %spython3 %s cron %s # %s" % (schedule, token_prefix_fn(), cli, cron_name, marker)
         lines = _install_line(lines, marker, line)
         print("Installed cron entry: %s" % line)
 
@@ -161,7 +160,7 @@ def install_cron(nervepack_root=None, crontab_list_fn=None, crontab_set_fn=None,
         cron_min = np_toggle.param("resume.cron_min", "5").strip()
         if not cron_min.isdigit():
             cron_min = "5"
-        line = "*/%s * * * * python3 %s resume-write --active --throttle # %s" % (cron_min, shlex.quote(cli), resume_marker)
+        line = "*/%s * * * * python3 %s resume-write --active --throttle # %s" % (cron_min, cli, resume_marker)
         lines = _install_line(lines, resume_marker, line)
         print("Installed cron entry: %s" % line)
     else:
@@ -203,7 +202,7 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
         label = "com.nervepack.%s" % suffix
         plist_path = os.path.join(la_dir, "%s.plist" % label)
         log_path = os.path.join(log_dir, "%s.log" % suffix)
-        exec_cmd = "%sexec python3 %s cron %s" % (token_prefix_fn(), shlex.quote(cli), cron_name)
+        exec_cmd = "%sexec python3 %s cron %s" % (token_prefix_fn(), cli, cron_name)
         content = _PLIST_TEMPLATE % (label, _xml_escape(exec_cmd), hour, minute, log_path, log_path)
         with open(plist_path, "w", encoding="utf-8") as fh:
             fh.write(content)
@@ -255,7 +254,7 @@ def install_schtasks(setup_dir=None, force=None, uname_fn=None, schtasks_fn=None
 
     for suffix, sched, day, time_, cron_name in _SCHTASKS_JOBS:
         tn = "nervepack\\%s" % suffix
-        exec_cmd = "exec python3 %s cron %s" % (shlex.quote(cli), cron_name)
+        exec_cmd = "exec python3 %s cron %s" % (cli, cron_name)
         tr = "\"%s\" -lc \"%s\"" % (bash_win, exec_cmd)
         args = ["//Create", "//TN", tn, "//TR", tr, "//SC", sched]
         if sched == "WEEKLY":
