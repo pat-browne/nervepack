@@ -34,6 +34,7 @@
     .shell { flex-direction:column; }
     .wikinav { position:static; flex-basis:auto; width:100%; max-height:none; }
     .content { max-width:none; }
+    .grid { grid-template-columns:1fr; }   /* stack the two-up panels on narrow/phone viewports */
   }
   .wikinav .lbl { display:block; margin-bottom:8px; }
   .wikisearch { width:100%; font:inherit; font-size:13px; padding:7px 10px;
@@ -98,6 +99,7 @@
         background:var(--viz-line); transform:translate(-50%,-50%); opacity:.5;
         box-shadow:0 0 0 1px var(--surface); pointer-events:none; }
   .pt.on { opacity:1; width:11px; height:11px; box-shadow:0 0 0 2px var(--surface); }
+  .pt:focus-visible { opacity:1; outline:2px solid var(--accent-sage); outline-offset:2px; }
   .tip { position:absolute; z-index:5; pointer-events:none; background:var(--surface);
          border:1px solid var(--border); border-radius:var(--radius-md);
          box-shadow:var(--shadow); padding:8px 10px; font-size:12px; min-width:130px;
@@ -248,6 +250,10 @@
     return String(s == null ? "" : s).replace(/[&<>"]/g,
       c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
   }
+  // plain-text of a tooltip's HTML, for a screen-reader aria-label on each data point.
+  function plain(s) {
+    return String(s == null ? "" : s).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  }
   function avg(nums) {
     return nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
   }
@@ -322,7 +328,8 @@
     const dots = points.map((p, i) => {
       const left = Number.isFinite(p.vx) ? (p.vx / W * 100) : 0;
       const top  = Number.isFinite(p.vy) ? p.vy : (H - pad);
-      return `<span class="pt" data-i="${i}" style="left:${left.toFixed(2)}%;` +
+      return `<span class="pt" data-i="${i}" tabindex="0" role="img" ` +
+        `aria-label="${esc(plain(p.tip))}" style="left:${left.toFixed(2)}%;` +
         `top:${top.toFixed(1)}px;${p.color ? `background:${p.color};` : ""}"></span>`;
     }).join("");
     return `<div class="chartwrap">
@@ -361,6 +368,12 @@
       show(Math.max(0, Math.min(n - 1, i)));
     });
     wrap.addEventListener("mouseleave", hide);
+    // Keyboard/AT access: each dot is focusable (tabindex + aria-label); reveal the
+    // same visual tooltip on focus so keyboard and touch users get the detail too.
+    dots.forEach((el, i) => {
+      el.addEventListener("focus", () => show(i));
+      el.addEventListener("blur", hide);
+    });
   }
 
   function legend(keys) {
