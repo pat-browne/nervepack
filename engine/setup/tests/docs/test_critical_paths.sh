@@ -60,4 +60,15 @@ out5="$(python3 "$CHECK" "$NP" 2>&1)" && rc5=0 || rc5=$?
 [[ $rc5 -eq 0 ]] || fail "Case 5: the engine tree has stale/broken path references:\n$out5"
 echo "  Case 5 OK: real engine tree is clean"
 
+# --- Case 6: nested worktree — a linked git worktree's stale docs are not flagged. ---
+# A worktree's `.git` is a FILE with a `gitdir:` pointer (not a directory like a normal
+# checkout); fabricate that shape without a real `git worktree add` to prove the
+# checker recognizes and skips it, regardless of how stale its docs are.
+d6="$tmp/nested-worktree"; mkdir -p "$d6/.claude/worktrees/agent-fake/docs"
+printf 'gitdir: /somewhere/else/.git/worktrees/agent-fake\n' > "$d6/.claude/worktrees/agent-fake/.git"
+printf 'bad `setup/w.sh`\n' > "$d6/.claude/worktrees/agent-fake/docs/doc.md"
+out6="$(python3 "$CHECK" "$d6" 2>&1)" && rc6=0 || rc6=$?
+[[ $rc6 -eq 0 ]] || fail "Case 6: nested worktree contents should not be scanned, got $rc6; output: $out6"
+echo "  Case 6 OK: nested git worktree's stale path references are not flagged"
+
 echo "PASS test_critical_paths"
