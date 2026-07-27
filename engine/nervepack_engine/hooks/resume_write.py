@@ -18,6 +18,7 @@ import sys
 import time
 
 import np_toggle
+import np_transcripts
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TRANSCRIPT_EXTRACT = os.path.normpath(os.path.join(_HERE, "..", "..", "setup", "np-transcript-extract.py"))
@@ -78,26 +79,9 @@ def _discover_active(active_window):
         mt = _mtime(path) or 0
         if now - mt >= active_window:
             return None, None, None  # stale sole candidate -> no active session
-        cwd = _extract_cwd(path)
+        cwd = np_transcripts.extract_cwd(path)
         return sid, path, cwd
     return None, None, None
-
-
-def _extract_cwd(path):
-    import re
-    pat = re.compile(r'"cwd":"([^"]*)"')
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                m = pat.search(line)
-                if m:
-                    try:
-                        return json.loads('"' + m.group(1) + '"')
-                    except ValueError:
-                        return m.group(1)
-    except OSError:
-        pass
-    return None
 
 
 def _git_field(cwd, *args):
