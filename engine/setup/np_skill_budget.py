@@ -28,28 +28,18 @@ import json
 import os
 import sys
 
+import np_frontmatter
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SKILLS = os.path.join(HERE, "..", "skills")
 
 
 def _int_env(name, default):
-    try:
-        return int(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
+    return np_frontmatter.int_env(name, default)
 
 
 def _description(text):
-    """Value of the frontmatter `description:` (first block); '' if none."""
-    if not text.startswith("---"):
-        return ""
-    end = text.find("\n---", 3)
-    if end == -1:
-        return ""
-    for line in text[3:end].splitlines():
-        if line.startswith("description:"):
-            return line[len("description:"):].strip()
-    return ""
+    return np_frontmatter.field(text, "description", "")
 
 
 def scan(skills_dirs):
