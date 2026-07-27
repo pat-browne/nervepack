@@ -107,6 +107,17 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
   (the sync re-runs `cli.py setup install-hooks`, which registers every row from
   it). Only non-hook setup scripts outside the `[56][0-9]-install-*.sh` glob
   would still need a manual re-run.
+- **Does not re-install the OS scheduler** (launchd / schtasks / cron) — that is
+  [[np-core-onboard]]'s step 3, or `cli.py setup install-memory-{cron,launchd,schtasks}`.
+  The load-bearing gotcha: **sync updates *code* but never rewrites an OS artifact that
+  was already installed on disk.** So a pull that fixes the code which *generates* an
+  installed artifact — a plist / crontab / schtasks entry, a managed config file — does
+  NOT reach the live entry via sync: git pull updates the source, but the stale generated
+  artifact persists until it is re-installed. When such a change lands, point *existing*
+  machines at `cli.py onboard` (idempotent; it re-runs the scheduler + doctor), not just
+  sync. Concrete case: the 2026-07 doubled-`engine/engine`-path fix in the scheduler
+  installers left macOS/Windows scheduled-maintenance jobs silently dead until a re-onboard
+  regenerated the plists/tasks — a plain sync would have left them broken.
 
 ## Why this is safe across many session starts before cron runs
 
