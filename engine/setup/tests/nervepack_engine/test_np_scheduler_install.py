@@ -387,6 +387,16 @@ class TestInstallSchtasks(unittest.TestCase):
         self.assertIn("/opt/nervepack/engine/nervepack_engine/cli.py cron memory-promote", tr)
         self.assertNotIn("engine/engine", tr)
 
+    def test_11_default_bash_resolver_is_np_bashlib_not_raw_which(self):
+        # #175: with no injected bash_path_fn, resolution must go through
+        # np_bashlib.bash() (prefers Git-for-Windows over the System32 WSL stub),
+        # not a raw shutil.which("bash").
+        with mock.patch.object(np_scheduler_install.np_bashlib, "bash",
+                               return_value="/SENTINEL/Git/bin/bash.exe"):
+            self._run(bash_path_fn=None, cygpath_fn=lambda p: p)
+        tr = self.calls[0][self.calls[0].index("//TR") + 1]
+        self.assertIn("/SENTINEL/Git/bin/bash.exe", tr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ import re
 import shutil
 import subprocess
 
+import np_bashlib
 import np_toggle
 import np_token_lib
 
@@ -245,7 +246,9 @@ def install_schtasks(setup_dir=None, force=None, uname_fn=None, schtasks_fn=None
     cli = _cli_path(os.path.dirname(os.path.dirname(setup_dir)))  # setup_dir -> engine -> repo root (_cli_path re-adds engine/)
     schtasks_fn = schtasks_fn or _default_schtasks_create
 
-    bash_path = (bash_path_fn or (lambda: shutil.which("bash")))() or "bash"
+    # np_bashlib.bash() prefers a Git-for-Windows bash over the System32 WSL stub
+    # that bare `shutil.which("bash")` returns when System32 precedes Git on PATH. (#175)
+    bash_path = (bash_path_fn or np_bashlib.bash)() or "bash"
     cygpath_fn = cygpath_fn or _default_cygpath
     bash_win = cygpath_fn(bash_path) or bash_path
 
