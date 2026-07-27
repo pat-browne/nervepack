@@ -151,6 +151,30 @@ class TestInstallHooks(unittest.TestCase):
         ups = self._commands(s, "UserPromptSubmit")
         self.assertEqual(sum(1 for c in ups if "hook lesson-recall" in c), 1)
 
+    def test_legacy_purge_migration_sync_script(self):
+        # Phase 17 retired 40-sync-nervepack.sh for np_sync.py (`cli.py sync`).
+        # A settings.json registered before that phase must migrate cleanly:
+        # the old script-based SessionStart/SessionEnd entries gone, replaced
+        # by exactly one `cli.py sync` entry each -- no leftover duplicate that
+        # silently no-ops (dead script) every session.
+        seed = {"hooks": {
+            "SessionStart": [
+                {"matcher": "", "hooks": [{"type": "command",
+                 "command": "~/Code/nervepack/engine/setup/40-sync-nervepack.sh >/dev/null 2>&1 &"}]},
+            ],
+            "SessionEnd": [
+                {"matcher": "", "hooks": [{"type": "command",
+                 "command": "~/Code/nervepack/engine/setup/40-sync-nervepack.sh exit >/dev/null 2>&1 &"}]},
+            ],
+        }}
+        s = self._install(seed=seed)
+        blob = json.dumps(s)
+        self.assertNotIn("40-sync-nervepack.sh", blob)
+        ss = self._commands(s, "SessionStart")
+        se = self._commands(s, "SessionEnd")
+        self.assertEqual(sum("cli.py sync >/dev/null" in c for c in ss), 1)
+        self.assertEqual(sum("cli.py sync exit >/dev/null" in c for c in se), 1)
+
     def test_every_hook_name_dispatches_to_a_real_handler(self):
         # Non-vacuity for the glob-coverage guard: every `cli.py hook <name>` in
         # the manifest must map to a registered handler in cli.py's _HOOKS.

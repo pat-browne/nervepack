@@ -62,6 +62,15 @@ _SCRIPT = re.compile(r"[A-Za-z0-9._-]+\.(?:sh|py)")
 _LEGACY_PURGES = (
     ("PreToolUse", ("playbook-guard.sh", "lesson-guard.sh")),
     ("UserPromptSubmit", ("playbook-recall.sh", "strategy-recall.sh", "lesson-recall.sh")),
+    # Phase 17 retired 40-sync-nervepack.sh for np_sync.py (`cli.py sync`). The
+    # dedup key changed from a script basename to a "cli.py sync" tail, so
+    # register-by-basename never recognized the old SessionStart/SessionEnd
+    # entries as the same hook -- any host that onboarded before phase 17 and
+    # then fast-forwarded past it was left running BOTH the dead script (a
+    # silent no-op each session) and the new cli.py hook, until a manual
+    # `cli.py setup install-hooks` (or an explicit purge) cleaned it up.
+    ("SessionStart", ("40-sync-nervepack.sh",)),
+    ("SessionEnd", ("40-sync-nervepack.sh",)),
 )
 
 
