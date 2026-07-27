@@ -27,15 +27,13 @@ on a real machine keeps working after cutover. stdlib only.
 """
 import json
 import os
-import re
 import time
 
 import np_capture
 import np_content
 import np_evaluator
 import np_toggle
-
-_CWD_RE = re.compile(r'"cwd":"([^"]*)"')
+import np_transcripts
 
 # Transient capture failures (empty/non-JSON model output) release the claim so a
 # later sweep retries; after this many failed passes we give up and mark the
@@ -110,21 +108,6 @@ def _already_in_metrics(sid, metrics_path):
     except OSError:
         pass
     return False
-
-
-def _extract_cwd(tpath):
-    try:
-        with open(tpath, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                m = _CWD_RE.search(line)
-                if m:
-                    try:
-                        return json.loads('"' + m.group(1) + '"')
-                    except ValueError:
-                        return m.group(1)
-    except OSError:
-        pass
-    return None
 
 
 def _touch(path):
@@ -217,7 +200,7 @@ def _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, met
             if _already_in_metrics(sid, metrics_path):
                 _touch(seen_marker)
                 continue
-            cwd = _extract_cwd(tpath) or _home()
+            cwd = np_transcripts.extract_cwd(tpath) or _home()
             _write_queue_file(queue_file, sid, mt, tpath, cwd)
 
 
