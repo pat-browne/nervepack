@@ -31,32 +31,42 @@ import np_bashlib
 import np_toggle
 import np_token_lib
 
-_CRON_JOBS = [
-    ("nervepack-memory-promote", "0 8 * * *", "memory-promote"),
-    ("nervepack-episodic-maintain", "30 8 * * *", "episodic-maintain"),
-    ("nervepack-aggregate-metrics", "0 9 * * *", "aggregate-metrics"),
-    ("nervepack-skill-maintain", "15 9 * * *", "skill-maintain"),
-    ("nervepack-refine", "30 9 * * 0", "refine"),
-    ("nervepack-compact", "0 10 * * 3", "compact"),
+# One canonical schedule -- (name, hour, minute, weekly) -- rendered into each
+# backend's row shape by the _*_rows() generators below. Previously the same six jobs
+# and times were transcribed into three separate per-backend tables; that triplication
+# is how the #164 doubled-cli-path divergence (cron correct, launchd/schtasks wrong)
+# went unnoticed. This stays the single source of truth. `weekly` is None for a daily
+# job, else (cron_dow, schtasks_day). (#176)
+_JOBS = [
+    ("memory-promote",     8,  0, None),
+    ("episodic-maintain",  8, 30, None),
+    ("aggregate-metrics",  9,  0, None),
+    ("skill-maintain",     9, 15, None),
+    ("refine",             9, 30, ("0", "SUN")),
+    ("compact",           10,  0, ("3", "WED")),
 ]
 
-_LAUNCHD_JOBS = [
-    ("memory-promote", 8, 0, "memory-promote"),
-    ("episodic-maintain", 8, 30, "episodic-maintain"),
-    ("aggregate-metrics", 9, 0, "aggregate-metrics"),
-    ("skill-maintain", 9, 15, "skill-maintain"),
-    ("refine", 9, 30, "refine"),
-    ("compact", 10, 0, "compact"),
-]
 
-_SCHTASKS_JOBS = [
-    ("memory-promote", "DAILY", None, "08:00", "memory-promote"),
-    ("episodic-maintain", "DAILY", None, "08:30", "episodic-maintain"),
-    ("aggregate-metrics", "DAILY", None, "09:00", "aggregate-metrics"),
-    ("skill-maintain", "DAILY", None, "09:15", "skill-maintain"),
-    ("refine", "WEEKLY", "SUN", "09:30", "refine"),
-    ("compact", "WEEKLY", "WED", "10:00", "compact"),
-]
+def _cron_rows():
+    """(marker, cron-expr, cron_name) per job."""
+    for name, hh, mm, weekly in _JOBS:
+        dow = weekly[0] if weekly else "*"
+        yield ("nervepack-%s" % name, "%d %d * * %s" % (mm, hh, dow), name)
+
+
+def _launchd_rows():
+    """(suffix, hour, minute, cron_name) per job."""
+    for name, hh, mm, _weekly in _JOBS:
+        yield (name, hh, mm, name)
+
+
+def _schtasks_rows():
+    """(suffix, schedule, day, HH:MM, cron_name) per job."""
+    for name, hh, mm, weekly in _JOBS:
+        if weekly:
+            yield (name, "WEEKLY", weekly[1], "%02d:%02d" % (hh, mm), name)
+        else:
+            yield (name, "DAILY", None, "%02d:%02d" % (hh, mm), name)
 
 _PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -147,7 +157,7 @@ def install_cron(nervepack_root=None, crontab_list_fn=None, crontab_set_fn=None,
 
     lines = [ln for ln in crontab_list_fn().splitlines() if ln.strip()]
 
-    for marker, schedule, cron_name in _CRON_JOBS:
+    for marker, schedule, cron_name in _cron_rows():
         line = "%s %spython3 %s cron %s # %s" % (schedule, token_prefix_fn(), cli, cron_name, marker)
         lines = _install_line(lines, marker, line)
         print("Installed cron entry: %s" % line)
@@ -198,7 +208,7 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
     launchctl_fn = launchctl_fn or _default_launchctl
     cli = _cli_path(os.path.dirname(os.path.dirname(setup_dir)))  # setup_dir -> engine -> repo root (_cli_path re-adds engine/)
 
-    for suffix, hour, minute, cron_name in _LAUNCHD_JOBS:
+    for suffix, hour, minute, cron_name in _launchd_rows():
         label = "com.nervepack.%s" % suffix
         plist_path = os.path.join(la_dir, "%s.plist" % label)
         log_path = os.path.join(log_dir, "%s.log" % suffix)
@@ -252,7 +262,7 @@ def install_schtasks(setup_dir=None, force=None, uname_fn=None, schtasks_fn=None
     cygpath_fn = cygpath_fn or _default_cygpath
     bash_win = cygpath_fn(bash_path) or bash_path
 
-    for suffix, sched, day, time_, cron_name in _SCHTASKS_JOBS:
+    for suffix, sched, day, time_, cron_name in _schtasks_rows():
         tn = "nervepack\\%s" % suffix
         exec_cmd = "exec python3 %s cron %s" % (cli, cron_name)
         tr = "\"%s\" -lc \"%s\"" % (bash_win, exec_cmd)
