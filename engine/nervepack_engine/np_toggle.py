@@ -236,7 +236,10 @@ def set_local(key, value):
     _set_local byte-for-byte: kept lines verbatim, then the new line appended last."""
     path = _local_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    pat = re.compile(r'^[' + _WS + r']*(?:' + key + r')[' + _WS + r']*=')
+    try:                                        # mirror _local_get: a key with regex
+        pat = re.compile(r'^[' + _WS + r']*(?:' + key + r')[' + _WS + r']*=')
+    except re.error:                            # metachars (or a '.' wildcard) must
+        pat = re.compile(r'^[' + _WS + r']*(?:' + re.escape(key) + r')[' + _WS + r']*=')  # not crash the write path (#172)
     kept = []
     if os.path.isfile(path):
         with open(path, "r", newline="") as f:
