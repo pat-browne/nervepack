@@ -11,13 +11,11 @@ the bash original).
 """
 import json
 import os
-import re
 import time
 
 import np_toggle
+import np_transcripts
 from nervepack_engine.hooks import resume_write
-
-_CWD_RE = re.compile(r'"cwd":"([^"]*)"')
 
 
 def _home():
@@ -36,21 +34,6 @@ def _mtime(path):
         return int(os.stat(path).st_mtime)
     except OSError:
         return None
-
-
-def _extract_cwd(path):
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                m = _CWD_RE.search(line)
-                if m:
-                    try:
-                        return json.loads('"' + m.group(1) + '"')
-                    except ValueError:
-                        return m.group(1)
-    except OSError:
-        pass
-    return None
 
 
 def run(payload_text):
@@ -95,7 +78,7 @@ def run(payload_text):
     if not prior_sid:
         return ""
 
-    prior_cwd = _extract_cwd(prior_tpath) or cur_cwd or _home()
+    prior_cwd = np_transcripts.extract_cwd(prior_tpath) or cur_cwd or _home()
 
     try:
         resume_write.write(session=prior_sid, transcript=prior_tpath, cwd=prior_cwd)
