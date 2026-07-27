@@ -55,6 +55,16 @@ def is_asset(tail):
     return tail.endswith(ASSET_EXT) or "/" in tail or bool(PLACEHOLDER.search(tail))
 
 
+def is_nested_worktree(path):
+    """True when `path` is itself a separate git worktree/checkout (e.g. a linked
+    worktree under .claude/worktrees/). A worktree's `.git` is a FILE containing a
+    `gitdir:` pointer, unlike a normal checkout where `.git` is a directory. Such a
+    tree may be pinned to a different commit with its own (possibly stale, from
+    this tree's point of view) docs/skills, so its path references describe THAT
+    checkout's history, not this one — don't descend into it."""
+    return os.path.isfile(os.path.join(path, ".git"))
+
+
 def resolvable(sub, tail, roots):
     if PLACEHOLDER.search(tail):
         return True  # can't resolve a glob/placeholder — don't flag it
@@ -106,7 +116,11 @@ def main(argv):
             print(f"np-path-check: not a directory: {root}", file=sys.stderr)
             return 2
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in SKIP_SEGMENTS]
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in SKIP_SEGMENTS
+                and not is_nested_worktree(os.path.join(dirpath, d))
+            ]
             for fn in filenames:
                 if fn.endswith(".md"):
                     p = os.path.join(dirpath, fn)

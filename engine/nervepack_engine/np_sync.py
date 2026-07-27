@@ -72,6 +72,16 @@ def _porcelain_count(target):
 
 
 def _is_dirty(target):
+    # Refresh the stat cache before trusting diff-index: right after a checkout,
+    # reset, or any other index-touching op in the same process/session, git can
+    # have stale cached stat info and `diff-index --quiet` reports a false
+    # positive until something (e.g. `git status`) forces a real content compare.
+    # Observed live during a manual re-onboard: a `git checkout -- <file>` and a
+    # `git checkout <branch>` immediately followed by a sync both produced a
+    # SKIPPED/DIVERGED status on a tree `git status --short` showed as clean.
+    # `update-index --refresh` is the standard remedy and is a no-op on an
+    # already-settled tree, so it's safe to run unconditionally.
+    _git(target, "update-index", "-q", "--refresh")
     tracked_dirty = _git(target, "diff-index", "--quiet", "HEAD", "--").returncode != 0
     untracked = _git(target, "ls-files", "--others", "--exclude-standard").stdout.strip()
     return tracked_dirty or bool(untracked)

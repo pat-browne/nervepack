@@ -72,11 +72,57 @@ It runs, in order: `setup link-skills` (knowledge) → `setup link-dashboard-dat
 → `58-install-mcp.sh` (MCP registration) → `62-install-scheduled-auth-token.sh` (the
 manual token step; skipped non-interactively) → `setup install-memory-{cron,launchd,schtasks}`
 (per-OS scheduler) → the doctor (its exit code is the onboard's). Idempotent — safe
-to re-run. **Re-running it also repairs stale wiring**: e.g. a machine whose hooks were
-registered before a command changed (a renamed hook, a script retired for a `cli.py`
-dispatch) gets the current `hooks.manifest` re-applied, replacing the stale entries.
+to re-run. **Re-running it also repairs stale wiring** — e.g. a machine whose hooks were
+registered before a command changed (a renamed script, a path move) gets the current
+`hooks.manifest` re-applied, replacing the stale entries — **but only when the old and
+new commands share the same dedup key** (`register()`'s "base": a script basename, or
+a full `cli.py <group> <name>` tail). A hook whose *dispatch mechanism itself* changes
+(a `.sh` script retired for a `cli.py` subcommand, say) gets a **different** base, so
+`install-hooks` adds the new entry alongside the old one instead of replacing it — the
+dead script now runs (and silently no-ops) on every session start/end, forever, until
+someone notices. **Any commit that changes what command a manifest row runs must ship
+a matching row in `np_hook.py`'s `_LEGACY_PURGES`** so already-onboarded hosts get the
+old entry purged on their next sync/onboard, not just new hosts wired for the first
+time. The doctor's `hook-scripts` SHOULD check is the tripwire for a missed one — see
+"Known upgrade gotchas" below (found live during the #149→0bedc5e upgrade, 2026-07-27).
 A quick way to prove an install works end-to-end is to remove the wiring and re-run
 `cli.py onboard`, then confirm the doctor is green.
+
+## Known upgrade gotchas (from a real re-onboard)
+
+Surfaced doing a 31-commit catch-up sync on an already-onboarded machine
+(2026-07-27); worth checking every time a sync jumps more than a few commits.
+
+- **A hook-command *rename that changes mechanism* leaves a live duplicate.**
+  See the caveat above — `install-hooks` re-running on a fast-forward is not
+  by itself a guarantee the old entry is gone. After any sync that lands
+  behind you, run the doctor's SHOULD tier too, not just MUST — `hook-scripts`
+  reports exactly this ("N missing script(s)" naming the dead path still
+  wired). Fix: add the retired command's substring to `_LEGACY_PURGES` for the
+  right event(s), or call `np_hook.purge(event, [substring])` directly for a
+  one-off local repair.
+- **`git diff-index --quiet HEAD --` can misreport "dirty" right after a
+  checkout/reset in the same process** (a stale stat-cache read, not a real
+  content difference) — `np_sync.py`'s `_is_dirty()` now runs
+  `git update-index -q --refresh` first specifically to close this gap, but
+  if you're driving git yourself in a custom host adapter and see a sync
+  falsely SKIPPED/DIVERGED against a tree `git status --short` shows clean,
+  refresh the index (or just re-run) before assuming real divergence.
+- **The engine sync compares against `origin/main` specifically.** If your
+  local checkout is sitting on a feature branch (including one with real
+  unpushed commits — a prior session's WIP), the sync reports DIVERGED
+  relative to `main`, not "up to date," even though the feature branch itself
+  is fine. `git checkout main` is non-destructive (the feature branch and its
+  commits stay exactly where they are — nothing is discarded), so it's safe
+  to switch, sync main, and leave the WIP branch for later. Never `reset`,
+  `rebase`, or discard a branch with unpushed commits to force a clean sync.
+- **A team-layer capability reporting PASS doesn't mean it pulled anything
+  this run.** A configured `team` dir with local uncommitted edits is skipped
+  ("has local edits — skipping pull", to stderr, non-fatal) rather than
+  fast-forwarded — by design, since the team pull is strict-safe (never
+  autostash/rebase, same as the engine sync itself). If you expected fresh
+  team content and didn't get it, check for exactly that stderr line before
+  assuming the sync is broken.
 
 ## Reference output
 
