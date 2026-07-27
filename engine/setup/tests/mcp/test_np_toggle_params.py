@@ -75,5 +75,34 @@ class TestAllParams(unittest.TestCase):
         self.assertEqual(np_toggle.all_params("directive"), {})
 
 
+class TestSetLocalRegexSafety(unittest.TestCase):
+    """#172: set_local() builds a regex from the raw key; a key with regex
+    metacharacters must not crash the write path (its read twin _local_get already
+    guards this). Otherwise an otherwise fail-open harness dies on a bad key."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.local = os.path.join(self.tmp.name, "toggles.local")
+        self._prev = os.environ.get("NP_TOGGLES_LOCAL")
+        os.environ["NP_TOGGLES_LOCAL"] = self.local
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("NP_TOGGLES_LOCAL", None)
+        else:
+            os.environ["NP_TOGGLES_LOCAL"] = self._prev
+
+    def test_key_with_regex_metachars_does_not_crash(self):
+        np_toggle.set_local("a[b", "x")   # unbalanced '[' -> re.error without the guard
+        with open(self.local, encoding="utf-8") as fh:
+            self.assertIn("a[b=x", fh.read())
+
+    def test_normal_dotted_key_still_written(self):
+        np_toggle.set_local("sync.interval", "42")
+        with open(self.local, encoding="utf-8") as fh:
+            self.assertIn("sync.interval=42", fh.read())
+
+
 if __name__ == "__main__":
     unittest.main()
