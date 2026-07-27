@@ -398,5 +398,28 @@ class TestInstallSchtasks(unittest.TestCase):
         self.assertIn("/SENTINEL/Git/bin/bash.exe", tr)
 
 
+class TestCanonicalScheduleSingleSource(unittest.TestCase):
+    """#176: the three backend row-sets are derived from ONE _JOBS table, so a schedule
+    change can't diverge across cron/launchd/schtasks -- the class of drift that let the
+    #164 doubled-cli-path divergence survive."""
+
+    def test_all_backends_cover_the_same_jobs_in_order(self):
+        names = [j[0] for j in np_scheduler_install._JOBS]
+        self.assertEqual([r[2] for r in np_scheduler_install._cron_rows()], names)
+        self.assertEqual([r[0] for r in np_scheduler_install._launchd_rows()], names)
+        self.assertEqual([r[0] for r in np_scheduler_install._schtasks_rows()], names)
+
+    def test_times_are_consistent_across_backends(self):
+        for (name, hh, mm, weekly), cron, la, st in zip(
+                np_scheduler_install._JOBS,
+                np_scheduler_install._cron_rows(),
+                np_scheduler_install._launchd_rows(),
+                np_scheduler_install._schtasks_rows()):
+            self.assertEqual(cron[1], "%d %d * * %s" % (mm, hh, weekly[0] if weekly else "*"))
+            self.assertEqual((la[1], la[2]), (hh, mm))
+            self.assertEqual(st[3], "%02d:%02d" % (hh, mm))
+            self.assertEqual((st[1], st[2]), ("WEEKLY", weekly[1]) if weekly else ("DAILY", None))
+
+
 if __name__ == "__main__":
     unittest.main()
