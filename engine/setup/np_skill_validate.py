@@ -13,6 +13,8 @@ import os
 import re
 import sys
 
+import np_frontmatter
+
 LINK = re.compile(r"\[\[([^\]]+)\]\]")
 FENCE = re.compile(r"```.*?```", re.DOTALL)
 
@@ -40,22 +42,11 @@ def _headings(text):
 
 
 def _int_env(name, default):
-    try:
-        return int(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
+    return np_frontmatter.int_env(name, default)
 
 
 def _field(text, field):
-    if not text.startswith("---"):
-        return None
-    end = text.find("\n---", 3)
-    if end == -1:
-        return None
-    for line in text[3:end].splitlines():
-        if line.startswith(field + ":"):
-            return line[len(field) + 1:].strip()
-    return None
+    return np_frontmatter.field(text, field)
 
 
 def _read(path):

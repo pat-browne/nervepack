@@ -26,28 +26,18 @@ import json
 import os
 import sys
 
+import np_frontmatter
+
 SKIP_NAMES = {"INDEX.md", "README.md"}
 DONE_STATUS = {"graduated", "promoted", "archived"}
 
 
 def _int_env(name, default):
-    try:
-        return int(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
+    return np_frontmatter.int_env(name, default)
 
 
 def _frontmatter_field(text, field):
-    """Value of frontmatter `<field>:` (first block); '' if none."""
-    if not text.startswith("---"):
-        return ""
-    end = text.find("\n---", 3)
-    if end == -1:
-        return ""
-    for line in text[3:end].splitlines():
-        if line.startswith(field + ":"):
-            return line[len(field) + 1:].strip()
-    return ""
+    return np_frontmatter.field(text, field, "")
 
 
 def _scan_dir(d, seen_min, byte_min):
