@@ -74,6 +74,18 @@ class TestAllParams(unittest.TestCase):
     def test_family_with_no_params_returns_empty(self):
         self.assertEqual(np_toggle.all_params("directive"), {})
 
+    def test_iter_conf_rows_skips_comments_and_splits(self):
+        # #176: the shared row generator the five readers delegate to must skip
+        # comment rows (incl. indented) and yield the '|'-split fields.
+        with open(self.conf, "w", newline="") as fh:
+            fh.write("# a comment\n")
+            fh.write("   # indented comment\n")
+            fh.write("evaluator|shared|runtime|on|dashboard_port=8787\n")
+        rows = list(np_toggle._iter_conf_rows())
+        self.assertEqual(len(rows), 1)                     # both comments skipped
+        self.assertEqual(rows[0][0], "evaluator")
+        self.assertEqual(rows[0][4], "dashboard_port=8787")
+
 
 class TestSetLocalRegexSafety(unittest.TestCase):
     """#172: set_local() builds a regex from the raw key; a key with regex

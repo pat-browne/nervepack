@@ -65,20 +65,28 @@ def _local_get(key):
     return val
 
 
-def _conf_state(feature):
-    """Mirror _np_conf_state: first non-comment row whose col1 == feature -> col4."""
+def _iter_conf_rows():
+    """Yield the '|'-split `fields` list for each non-comment row of toggles.conf.
+    The row format lives here once -- open newline='' (raw; the file is LF-pinned via
+    .gitattributes), strip the trailing newline, skip comment rows (leading '#'), split
+    on '|' -- so the five readers below don't each re-implement it (drift between
+    all_params and _conf_param would silently desync rendering from resolution). (#176)"""
     path = _conf_path()
     if not os.path.isfile(path):
-        return ""
+        return
     with open(path, "r", newline="") as f:
         for line in f:
             line = line.rstrip("\n")
             if re.match(r'^[' + _WS + r']*#', line):
                 continue
-            fields = line.split("|")
-            if fields and fields[0] == feature:
-                col = fields[3] if len(fields) > 3 else ""
-                return col.strip(" ")              # gsub(/^ +| +$/) — spaces only
+            yield line.split("|")
+
+
+def _conf_state(feature):
+    """Mirror _np_conf_state: first non-comment row whose col1 == feature -> col4."""
+    for fields in _iter_conf_rows():
+        if fields and fields[0] == feature:
+            return (fields[3] if len(fields) > 3 else "").strip(" ")  # spaces only
     return ""
 
 
@@ -88,24 +96,16 @@ def _conf_param(key):
         feat, p = key.split(".", 1)
     else:
         feat = p = key
-    path = _conf_path()
-    if not os.path.isfile(path):
-        return ""
-    with open(path, "r", newline="") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if re.match(r'^[' + _WS + r']*#', line):
+    for fields in _iter_conf_rows():
+        if not fields or fields[0] != feat:
+            continue
+        params = fields[4] if len(fields) > 4 else ""
+        for tok in re.split(r'[ ,]+', params):
+            if not tok:
                 continue
-            fields = line.split("|")
-            if not fields or fields[0] != feat:
-                continue
-            params = fields[4] if len(fields) > 4 else ""
-            for tok in re.split(r'[ ,]+', params):
-                if not tok:
-                    continue
-                kv = tok.split("=")                # awk split on '=', take kv[2]
-                if kv[0].strip(" ") == p:
-                    return kv[1] if len(kv) > 1 else ""
+            kv = tok.split("=")                # awk split on '=', take kv[2]
+            if kv[0].strip(" ") == p:
+                return kv[1] if len(kv) > 1 else ""
     return ""
 
 
@@ -167,34 +167,18 @@ def signal(sid, message):
 # flip(), managed(), install_permissions()/remove_permissions().
 def scope(family):
     """The conf 'scope' column ($2) for a family, or '' if absent. Mirrors _scope."""
-    path = _conf_path()
-    if not os.path.isfile(path):
-        return ""
-    with open(path, "r", newline="") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if re.match(r'^[' + _WS + r']*#', line):
-                continue
-            fields = line.split("|")
-            if fields and fields[0] == family:
-                return fields[1].strip(" ") if len(fields) > 1 else ""
+    for fields in _iter_conf_rows():
+        if fields and fields[0] == family:
+            return fields[1].strip(" ") if len(fields) > 1 else ""
     return ""
 
 
 def features():
     """Declared feature names (conf rows with >=4 columns). Mirrors _features."""
-    path = _conf_path()
     out = []
-    if not os.path.isfile(path):
-        return out
-    with open(path, "r", newline="") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if re.match(r'^[' + _WS + r']*#', line):
-                continue
-            fields = line.split("|")
-            if len(fields) >= 4:
-                out.append(fields[0].strip(" "))
+    for fields in _iter_conf_rows():
+        if len(fields) >= 4:
+            out.append(fields[0].strip(" "))
     return out
 
 
@@ -205,29 +189,21 @@ def all_params(family):
     not 'evaluator.dashboard_port'). Mirrors _conf_param's parsing but for every
     key of one family at once — param() only fetches a single key, which is
     enough for a runtime check but not for rendering an entire panel."""
-    path = _conf_path()
     out = {}
-    if not os.path.isfile(path):
-        return out
-    with open(path, "r", newline="") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if re.match(r'^[' + _WS + r']*#', line):
+    for fields in _iter_conf_rows():
+        if not fields or fields[0] != family:
+            continue
+        params = fields[4] if len(fields) > 4 else ""
+        for tok in re.split(r'[ ,]+', params):
+            if not tok:
                 continue
-            fields = line.split("|")
-            if not fields or fields[0] != family:
+            kv = tok.split("=")
+            key = kv[0].strip(" ")
+            if not key:
                 continue
-            params = fields[4] if len(fields) > 4 else ""
-            for tok in re.split(r'[ ,]+', params):
-                if not tok:
-                    continue
-                kv = tok.split("=")
-                key = kv[0].strip(" ")
-                if not key:
-                    continue
-                conf_val = kv[1] if len(kv) > 1 else ""
-                out[key] = _local_get(family + "." + key) or conf_val
-            break
+            conf_val = kv[1] if len(kv) > 1 else ""
+            out[key] = _local_get(family + "." + key) or conf_val
+        break                                  # only the first matching family row
     return out
 
 
