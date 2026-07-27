@@ -97,7 +97,11 @@ def _architecture_freshness():
     -- np_architecture_freshness.check()), log its last line, and mirror its
     STALE verdict into ~/.cache/nervepack/architecture-stale (written on
     drift, removed when clean). Never blocks."""
-    lines = np_architecture_freshness.check()
+    try:                                     # advisory-only: a drift-check error must
+        lines = np_architecture_freshness.check()  # not abort the maintain cron before
+    except Exception as exc:                 # the budget scan/split runs (#173)
+        _log("architecture-freshness check failed: %s" % exc)
+        return
     _log(lines[-1] if lines else "")
     stale = [ln for ln in lines if ln.startswith("STALE:")]
     marker = os.path.join(_home(), ".cache", "nervepack", "architecture-stale")

@@ -224,7 +224,7 @@ class CommitRoutingTest(unittest.TestCase):
                                capture_output=True, text=True).stdout
 
     def _promote_stub(self):
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the timeout kwarg (#173)
             base = cwd or self.overlay
             skill = os.path.join(base, "skills", "np-stub-promoted")
             os.makedirs(skill, exist_ok=True)

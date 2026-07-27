@@ -24,7 +24,7 @@ class TestRunAgent(unittest.TestCase):
     def test_1_success_returns_true_and_forwards_args(self):
         calls = []
 
-        def fake_agent(prompt, tools, cwd=None):
+        def fake_agent(prompt, tools, cwd=None, timeout=None):
             calls.append((prompt, tools, cwd))
             return (0, "", "")
 
@@ -47,7 +47,7 @@ class TestRunAgent(unittest.TestCase):
     def test_4_cwd_none_forwarded_as_none(self):
         calls = []
 
-        def fake_agent(prompt, tools, cwd=None):
+        def fake_agent(prompt, tools, cwd=None, timeout=None):
             calls.append(cwd)
             return (0, "", "")
 
@@ -61,6 +61,19 @@ class TestRunAgent(unittest.TestCase):
                                 side_effect=OSError("simulated exec failure")):
             ok = np_llm_agent.run_agent("do the thing", "Read Write Edit", cwd="/tmp")
         self.assertFalse(ok)
+
+    def test_6_timeout_forwarded_to_agent(self):
+        # #173: the maintenance seam must be able to bound the agent call so a hung
+        # headless stream can't wedge the cron. Forward the timeout to np_model.agent.
+        got = {}
+
+        def fake_agent(prompt, tools, cwd=None, timeout=None):
+            got["timeout"] = timeout
+            return (0, "", "")
+
+        with mock.patch.object(np_llm_agent.np_model, "agent", side_effect=fake_agent):
+            np_llm_agent.run_agent("p", "Read", cwd="/tmp", timeout=42)
+        self.assertEqual(got["timeout"], 42)
 
 
 if __name__ == "__main__":
