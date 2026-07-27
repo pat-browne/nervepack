@@ -399,16 +399,35 @@ TOOLS += [
 ]
 
 
+_SAFE_SEG = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+
+
+def _seg_ok(s):
+    """A single safe path segment: non-empty, only [A-Za-z0-9._-], and not '.'/'..'.
+    Confines a contribute arg to its intended subtree so it can't traverse ('..') or
+    span directories ('/') to clobber e.g. the append-only log.md or another skill."""
+    return bool(s) and s not in (".", "..") and all(c in _SAFE_SEG for c in s)
+
+
 def _tool_contribute(args):
     require_contribute()
     kind = args["kind"]            # skill | source | wiki
     name = args["name"]
     body = args["body"]
     topic = args.get("topic", "misc")
+    wiki_kind = args.get("wiki_kind", "concepts")
+    # _safe_path confines to the content dir but NOT to the intended subtree; validate
+    # each interpolated segment so a prompt-injected tool call can't use '..' to escape
+    # skills/<name>, sources/<topic>/<name>, wiki/<wiki_kind>/<name>. (#174)
+    for label, seg in (("name", name), ("topic", topic), ("wiki_kind", wiki_kind)):
+        if not _seg_ok(seg):
+            return (f"refused: invalid {label} {seg!r} -- must be a single path "
+                    f"segment ([A-Za-z0-9._-], no '/' or '..')")
     rel = {
         "skill": f"skills/{name}/SKILL.md",
         "source": f"sources/{topic}/{name}.md",
-        "wiki": f"wiki/{args.get('wiki_kind', 'concepts')}/{name}.md",
+        "wiki": f"wiki/{wiki_kind}/{name}.md",
     }[kind]
     cd = content_dir()
     full = _safe_path(rel, base=cd)

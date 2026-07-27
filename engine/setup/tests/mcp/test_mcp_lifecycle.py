@@ -356,6 +356,24 @@ class TestLifecycle(unittest.TestCase):
         log = subprocess.run(["git", "-C", cd, "log", "--oneline"], capture_output=True, text=True)
         self.assertIn("np-kb-test", log.stdout)
 
+    def test_contribute_rejects_traversal_in_name(self):
+        # #174: a '..'/'/' name must be refused, not allowed to escape the wiki/
+        # subtree and overwrite the append-only log.md.
+        cd = tempfile.mkdtemp()
+        subprocess.run(["git", "-C", cd, "init", "-q"], check=True)
+        subprocess.run(["git", "-C", cd, "config", "user.email", "t@example.test"], check=True)
+        subprocess.run(["git", "-C", cd, "config", "user.name", "test"], check=True)
+        with open(os.path.join(cd, "log.md"), "w") as fh:  # must NOT be clobbered
+            fh.write("ORIGINAL\n")
+        c = self._client({"NP_TOGGLES_LOCAL": _fix("contribute-on.local"),
+                          "NP_CONTENT_DIR": cd})
+        r = c.tool("nervepack_contribute",
+                   {"kind": "wiki", "wiki_kind": "concepts", "name": "../../log", "body": "PWNED"})
+        text = r["result"]["content"][0]["text"]
+        self.assertIn("refused", text.lower())
+        with open(os.path.join(cd, "log.md")) as fh:
+            self.assertEqual(fh.read(), "ORIGINAL\n")
+
     # --- suggestions implement happy -----------------------------------
     def test_suggestions_implement_started_when_contribute_on(self):
         # contribute=on unblocks the spawn; evaluator.implement=off makes the
