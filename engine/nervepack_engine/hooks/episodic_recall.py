@@ -13,22 +13,15 @@ injectable for tests.
 """
 import json
 import os
-import subprocess
-import sys
 
 import np_content
 import np_episodic_match
+import np_recall_common
 import np_toggle
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_PII_FILTER_SCRIPT = os.path.normpath(os.path.join(_HERE, "..", "..", "setup", "np-pii-filter.py"))
 
 
 def _max_prompts():
-    try:
-        return int(os.environ.get("EPISODIC_RECALL_MAX", "2"))
-    except ValueError:
-        return 2
+    return np_recall_common.max_prompts()
 
 
 def _top():
@@ -59,14 +52,7 @@ def _layer_roots():
 
 
 def _default_pii_filter(text):
-    try:
-        result = subprocess.run(
-            [sys.executable, _PII_FILTER_SCRIPT, "--mode", "fast"],
-            input=text, capture_output=True, text=True,
-        )
-        return result.stdout if result.returncode == 0 else text
-    except OSError:
-        return text
+    return np_recall_common.default_pii_filter(text)
 
 
 def run(payload_text, pii_filter_fn=None):

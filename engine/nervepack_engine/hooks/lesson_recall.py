@@ -18,23 +18,17 @@ still bash-free), matching episodic_recall.py's established pattern.
 import json
 import os
 import re
-import subprocess
-import sys
 
 import np_content
+import np_recall_common
 import np_toggle
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_PII_FILTER_SCRIPT = os.path.normpath(os.path.join(_HERE, "..", "..", "setup", "np-pii-filter.py"))
 _HEADER_RE = re.compile(r'^\*\*(Symptom|Why|Do|Avoid|Title|When):')
 _TOOL_NAME_MATCH_RE = re.compile(r'^  tool_name_match:', re.MULTILINE)
 
 
 def _max_prompts():
-    try:
-        return int(os.environ.get("EPISODIC_RECALL_MAX", "2"))
-    except ValueError:
-        return 2
+    return np_recall_common.max_prompts()
 
 
 def _state_dir():
@@ -91,14 +85,7 @@ def _lesson_blocks(path):
 
 
 def _default_pii_filter(text):
-    try:
-        result = subprocess.run(
-            [sys.executable, _PII_FILTER_SCRIPT, "--mode", "fast"],
-            input=text, capture_output=True, text=True,
-        )
-        return result.stdout if result.returncode == 0 else text
-    except OSError:
-        return text
+    return np_recall_common.default_pii_filter(text)
 
 
 def run(payload_text, pii_filter_fn=None):
