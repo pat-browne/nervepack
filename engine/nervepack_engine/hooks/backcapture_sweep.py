@@ -95,6 +95,17 @@ def _lock_path():
 
 
 def _pid_alive(pid):
+    if os.name == "nt":
+        # os.kill(pid, 0) is NOT a safe no-op probe on Windows: signal 0 maps to
+        # TerminateProcess(handle, 0), so a live pid would actually be killed.
+        # Query-only via OpenProcess instead (no kill rights requested).
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
