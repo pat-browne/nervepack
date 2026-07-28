@@ -242,16 +242,20 @@ class TestBackcaptureSweep(_Env):
 
     def test_14_stale_lock_from_dead_pid_is_reclaimed(self):
         """A lock left by a crashed/killed sweep must not permanently wedge
-        future sweeps off -- a dead holder pid gets reclaimed."""
-        import subprocess
-        proc = subprocess.Popen(["true"])
-        dead_pid = proc.pid
-        proc.wait()
+        future sweeps off -- a dead holder pid gets reclaimed. Stubs
+        _pid_alive rather than spawning + waiting on a real subprocess: a
+        real pid's liveness right after exit is OS/timing-fragile (e.g. on
+        Windows a lingering Python-side process handle can keep a fully-
+        exited pid's kernel object alive long enough for OpenProcess to
+        still succeed) -- the reclaim logic is what's under test here, not
+        the OS's process-table semantics."""
+        from nervepack_engine.hooks import backcapture_sweep
         _mktranscript(self.projects_dir, "11111111-old", ago=600)
         os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
         with open(self.lock_path, "w") as fh:
-            fh.write(str(dead_pid))
-        captured, _ = self._run()
+            fh.write("999999")  # arbitrary pid; liveness is stubbed below
+        with mock.patch.object(backcapture_sweep, "_pid_alive", return_value=False):
+            captured, _ = self._run()
         self.assertEqual(len(captured), 1)
 
     def test_15_lock_released_after_sweep_completes(self):
