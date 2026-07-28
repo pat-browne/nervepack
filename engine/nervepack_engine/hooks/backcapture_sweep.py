@@ -20,6 +20,19 @@ Two phases, exactly mirroring the bash original:
     sweep. Claim atomically (os.O_EXCL) before capturing so a concurrent sweep
     can't double-process the same session.
 
+Whole-sweep lock: the per-session claim above only stops two sweeps
+double-processing the SAME session -- it does nothing to stop many sweeps
+running at once against DIFFERENT sessions. SessionStart fires once per
+Claude Code session, so a large fleet of parallel sessions each starting
+around the same time previously fanned out one `claude -p` capture+evaluate
+loop per sweep, all concurrently (observed: dozens of live `claude` child
+processes driving sustained CPU load / thermal throttling). `_acquire_lock`
+serializes sweeps to one at a time system-wide (PID-stamped, same
+os.O_EXCL idiom as `_claim`, stale-PID reclaim so a crashed holder can't
+wedge future sweeps); a sweep that loses the race just exits (fail open,
+invariant 1) -- the persistent queue means the next sweep to win picks up
+the backlog, nothing is lost.
+
 Queue-file JSON shape ({"sid","mtime","transcript_path","cwd"}) and the
 ~/.cache/nervepack/backcapture-{seen,queue} directory layout are byte-
 compatible with the bash version, so a live queue populated by the bash sweep
@@ -74,6 +87,72 @@ def _seen_dir():
 def _queue_dir():
     return os.environ.get("BACKCAPTURE_QUEUE_DIR") or os.path.join(
         _home(), ".cache", "nervepack", "backcapture-queue")
+
+
+def _lock_path():
+    return os.environ.get("BACKCAPTURE_LOCK") or os.path.join(
+        _home(), ".cache", "nervepack", "backcapture-sweep.lock")
+
+
+def _pid_alive(pid):
+    if os.name == "nt":
+        # os.kill(pid, 0) is NOT a safe no-op probe on Windows: signal 0 maps to
+        # TerminateProcess(handle, 0), so a live pid would actually be killed.
+        # Query-only via OpenProcess instead (no kill rights requested).
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True  # e.g. EPERM (owned by another user) -- assume alive, don't steal it
+    return True
+
+
+def _acquire_lock(path):
+    """One sweep at a time, system-wide. Returns False (never blocks/raises) if
+    another live sweep already holds it -- caller must fail open, per invariant 1."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError:
+        return True  # can't even make the cache dir -- fail open rather than block
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        pass
+    except OSError:
+        return True  # unexpected lock-file error -- fail open
+    try:
+        with open(path, encoding="utf-8") as fh:
+            held_pid = int((fh.read() or "0").strip())
+    except (OSError, ValueError):
+        held_pid = 0
+    if held_pid and _pid_alive(held_pid):
+        return False
+    try:  # stale lock (holder crashed/killed) -- reclaim once
+        os.remove(path)
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except OSError:
+        return False  # lost the reclaim race to another sweep -- let it run
+
+
+def _release_lock(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def _metrics_path():
@@ -285,39 +364,47 @@ def run(payload_text, capture_fn=None, evaluate_fn=None, capture_ok_fn=None):
     if not os.path.isdir(projects_dir):
         return
 
-    seen_dir = _seen_dir()
-    queue_dir = _queue_dir()
-    try:
-        os.makedirs(seen_dir, exist_ok=True)
-        os.makedirs(queue_dir, exist_ok=True)
-    except OSError:
+    lock_path = _lock_path()
+    if not _acquire_lock(lock_path):
+        _log("sweep skipped: another sweep already running")
         return
 
-    metrics_path = _metrics_path()
-    days = _param_int("memory.backcapture_days", 7)
-    max_per_sweep = _param_int("memory.backcapture_max", 5)
-    min_age_sec = _min_age_sec()
-
     try:
-        payload = json.loads(payload_text or "{}")
-    except ValueError:
-        payload = {}
-    cur_sid = payload.get("session_id") or ""
-
-    now = int(time.time())
-    _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, metrics_path, now)
-    processed = _process(queue_dir, seen_dir, metrics_path, max_per_sweep,
-                          capture_fn or np_capture.capture, evaluate_fn or np_evaluator.evaluate,
-                          capture_ok_fn or np_capture.was_captured)
-
-    if processed > 0:
-        pending = 0
+        seen_dir = _seen_dir()
+        queue_dir = _queue_dir()
         try:
-            names = os.listdir(queue_dir)
+            os.makedirs(seen_dir, exist_ok=True)
+            os.makedirs(queue_dir, exist_ok=True)
         except OSError:
-            names = []
-        for name in names:
-            if os.path.isfile(os.path.join(queue_dir, name)) and not os.path.exists(
-                    os.path.join(seen_dir, name)):
-                pending += 1
-        _log("sweep done: %d session(s) captured, %d still queued" % (processed, pending))
+            return
+
+        metrics_path = _metrics_path()
+        days = _param_int("memory.backcapture_days", 7)
+        max_per_sweep = _param_int("memory.backcapture_max", 5)
+        min_age_sec = _min_age_sec()
+
+        try:
+            payload = json.loads(payload_text or "{}")
+        except ValueError:
+            payload = {}
+        cur_sid = payload.get("session_id") or ""
+
+        now = int(time.time())
+        _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, metrics_path, now)
+        processed = _process(queue_dir, seen_dir, metrics_path, max_per_sweep,
+                              capture_fn or np_capture.capture, evaluate_fn or np_evaluator.evaluate,
+                              capture_ok_fn or np_capture.was_captured)
+
+        if processed > 0:
+            pending = 0
+            try:
+                names = os.listdir(queue_dir)
+            except OSError:
+                names = []
+            for name in names:
+                if os.path.isfile(os.path.join(queue_dir, name)) and not os.path.exists(
+                        os.path.join(seen_dir, name)):
+                    pending += 1
+            _log("sweep done: %d session(s) captured, %d still queued" % (processed, pending))
+    finally:
+        _release_lock(lock_path)

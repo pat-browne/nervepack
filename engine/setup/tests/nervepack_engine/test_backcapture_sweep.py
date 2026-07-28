@@ -58,6 +58,7 @@ class _Env(unittest.TestCase):
         self.seen_dir = os.path.join(self.tmp, "bc-seen")
         self.queue_dir = os.path.join(self.tmp, "bc-queue")
         self.metrics = os.path.join(self.tmp, "metrics.jsonl")
+        self.lock_path = os.path.join(self.tmp, "bc.lock")
         self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
         self.toggles_local = os.path.join(self.tmp, "local")
         with open(self.toggles_conf, "w") as fh:
@@ -71,6 +72,7 @@ class _Env(unittest.TestCase):
             "BACKCAPTURE_METRICS": self.metrics,
             "BACKCAPTURE_MIN_AGE_SEC": "120",
             "BACKCAPTURE_LOG": os.path.join(self.tmp, "bc.log"),
+            "BACKCAPTURE_LOCK": self.lock_path,
         })
         self._env_patch.start()
         os.environ.pop("NERVEPACK_AGENT", None)
@@ -222,6 +224,46 @@ class TestBackcaptureSweep(_Env):
         self.assertTrue(os.path.exists(os.path.join(self.seen_dir, "cccccccc-badforever")))
         captured, _ = self._run(capture_ok=False)
         self.assertEqual(captured, [])  # permanently seen -> no longer retried
+
+    def test_13_concurrent_sweep_lock_blocks_second_sweep(self):
+        """The bug this guards against: many parallel Claude Code sessions each
+        firing their own SessionStart previously ran their own full sweep
+        concurrently, each fanning out its own claude-subprocess capture+evaluate
+        loop. A live-held lock must make a second sweep skip entirely (not just
+        skip one session) -- it never even reaches discovery."""
+        _mktranscript(self.projects_dir, "11111111-old", ago=600)
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+        with open(self.lock_path, "w") as fh:
+            fh.write(str(os.getpid()))  # this test process -- definitely alive
+        captured, evaluated = self._run()
+        self.assertEqual(captured, [])
+        self.assertEqual(evaluated, [])
+        self.assertFalse(os.path.isdir(self.queue_dir))
+
+    def test_14_stale_lock_from_dead_pid_is_reclaimed(self):
+        """A lock left by a crashed/killed sweep must not permanently wedge
+        future sweeps off -- a dead holder pid gets reclaimed. Stubs
+        _pid_alive rather than spawning + waiting on a real subprocess: a
+        real pid's liveness right after exit is OS/timing-fragile (e.g. on
+        Windows a lingering Python-side process handle can keep a fully-
+        exited pid's kernel object alive long enough for OpenProcess to
+        still succeed) -- the reclaim logic is what's under test here, not
+        the OS's process-table semantics."""
+        from nervepack_engine.hooks import backcapture_sweep
+        _mktranscript(self.projects_dir, "11111111-old", ago=600)
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+        with open(self.lock_path, "w") as fh:
+            fh.write("999999")  # arbitrary pid; liveness is stubbed below
+        with mock.patch.object(backcapture_sweep, "_pid_alive", return_value=False):
+            captured, _ = self._run()
+        self.assertEqual(len(captured), 1)
+
+    def test_15_lock_released_after_sweep_completes(self):
+        """A successful sweep must release its lock so the next one isn't
+        blocked forever."""
+        _mktranscript(self.projects_dir, "11111111-old", ago=600)
+        self._run()
+        self.assertFalse(os.path.exists(self.lock_path))
 
 
 if __name__ == "__main__":
