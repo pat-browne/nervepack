@@ -21,9 +21,13 @@ cat > "$tmp/tests/beta/test_bad.sh" <<'T'
 echo "FAIL: intentional"; exit 1
 T
 
+# The inner runner auto-discovers $NP_CONTENT_DIR/engine/setup/tests too, so a machine
+# with the content overlay present would add the overlay's real tests to the fixture
+# suite and blow the expected counts. Unset just that one var in a subshell (not `env
+# -i`, which breaks Git-bash's own bootstrap on Windows — np-kb-testing-ci §9).
 report="$tmp/report.md"
 set +e
-NP_TESTS_ROOT="$tmp/tests" bash "$RUNNER" --report "$report" >"$tmp/out" 2>&1
+( unset NP_CONTENT_DIR; NP_TESTS_ROOT="$tmp/tests" bash "$RUNNER" --report "$report" ) >"$tmp/out" 2>&1
 code=$?
 set -e
 
@@ -34,7 +38,7 @@ grep -q "alpha" "$report"   || { echo "FAIL: report missing 'alpha' functionalit
 
 rm -rf "$tmp/tests/beta"
 set +e
-NP_TESTS_ROOT="$tmp/tests" bash "$RUNNER" >"$tmp/out2" 2>&1
+( unset NP_CONTENT_DIR; NP_TESTS_ROOT="$tmp/tests" bash "$RUNNER" ) >"$tmp/out2" 2>&1
 code2=$?
 set -e
 [[ $code2 -eq 0 ]] || { echo "FAIL: runner exited nonzero with all-passing children"; cat "$tmp/out2"; exit 1; }
