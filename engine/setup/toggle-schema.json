@@ -31,7 +31,12 @@
  "evaluator.dashboard_sessions": {
   "type": "number",
   "min": 1,
-  "description": "How many recent sessions the dashboard trend windows to."
+  "description": "Ceiling on how many sessions the dashboard renders (the day window is the primary selector)."
+ },
+ "evaluator.dashboard_days": {
+  "type": "number",
+  "min": 0,
+  "description": "Days of activity the dashboard renders, anchored to the newest session. 0 = no time bound."
  },
  "evaluator.dashboard_open": {
   "type": "bool",

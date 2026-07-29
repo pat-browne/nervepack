@@ -40,6 +40,27 @@ def run(payload_text, aggregate_fn=None, opener_fn=None):
     if np_toggle.param("evaluator.dashboard_open", "on") != "on":
         return ""
 
+    # --- every session: refresh the data and make sure the backend is up ------
+    # Neither step is a GUI side effect, so neither belongs behind the
+    # once-per-boot marker. Invariant 8 added that guard to stop a *browser
+    # window* reopening in a loop; bounding the server's lifetime to one boot
+    # was collateral. On a host that suspends rather than reboots, boot_id is
+    # stable for weeks, so this hook returned early every session and nothing
+    # ever spawned np-dashboard-server.py -- leaving the dashboard with no
+    # backend (observed: 7 weeks of uptime, nothing listening on the configured
+    # port, so every Implement/Reject click POSTed into the void and failed
+    # silently). dashboard_url() is itself idempotent: it probes the port first
+    # and only spawns when nothing answers.
+    try:
+        (aggregate_fn or _default_aggregate)()
+    except Exception:
+        pass
+    try:
+        url = np_dashboard.dashboard_url()
+    except Exception:
+        return ""
+
+    # --- once per boot: actually open a browser window ------------------------
     marker = os.environ.get("NP_DASH_MARKER") or os.path.join(
         os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "dashboard-open-boot")
     boot = np_dashboard.boot_id()
@@ -49,6 +70,15 @@ def run(payload_text, aggregate_fn=None, opener_fn=None):
                 return ""
     except OSError:
         pass
+
+    # Gate on a resolvable opener BEFORE calling opener_fn -- this must hold
+    # even when opener_fn is test-injected (not just the real _default_opener),
+    # so "no opener available" fails open regardless of which opener callable
+    # is in play. Checked before the marker is written so a box that grows an
+    # opener later still gets its first open.
+    if not np_dashboard.resolve_opener():
+        return ""
+
     try:
         os.makedirs(os.path.dirname(marker), exist_ok=True)
         with open(marker, "w", encoding="utf-8") as fh:
@@ -56,22 +86,6 @@ def run(payload_text, aggregate_fn=None, opener_fn=None):
     except OSError:
         pass
 
-    try:
-        (aggregate_fn or _default_aggregate)()
-    except Exception:
-        pass
-
-    # Gate on a resolvable opener BEFORE calling opener_fn -- this must hold
-    # even when opener_fn is test-injected (not just the real _default_opener),
-    # so "no opener available" fails open regardless of which opener callable
-    # is in play.
-    if not np_dashboard.resolve_opener():
-        return ""
-
-    try:
-        url = np_dashboard.dashboard_url()
-    except Exception:
-        return ""
     try:
         (opener_fn or _default_opener)(url)
     except Exception:

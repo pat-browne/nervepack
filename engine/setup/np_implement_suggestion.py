@@ -101,7 +101,38 @@ def _status_key(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def _is_zombie(pid):
+    """True iff `pid` is an exited-but-unreaped process. Fail-open: when the
+    state can't be read, return False (treat as alive) so we never steal a
+    live owner's lock on an unfamiliar platform."""
+    try:
+        with open("/proc/%d/stat" % pid, encoding="utf-8") as fh:
+            # comm (field 2) is parenthesised and may itself contain spaces/parens,
+            # so split after the LAST ')' -- state is the first field after it.
+            return fh.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        pass
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(["ps", "-o", "state=", "-p", str(pid)],
+                                 capture_output=True, text=True, timeout=5).stdout
+            return out.strip().startswith("Z")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return False
+
+
 def _pid_alive(pid):
+    """Is the lock's recorded owner still running?
+
+    A zombie must count as DEAD. It has exited but keeps its pid-table entry
+    until reaped, so os.kill(pid, 0) succeeds for it — which made
+    _acquire_lock()'s self-heal a no-op in exactly the case it exists for.
+    np-dashboard-server.py Popen()s implement jobs detached and never wait()s
+    on them, so a job killed before its own cleanup leaves a lock owned by an
+    unreapable-looking pid, and every later Implement click logs
+    "busy: another implement is running" and does nothing for as long as the
+    server stays up (observed 2026-06-11 and reproduced 2026-07-29)."""
     if os.name == "nt":
         return _pid_alive_windows(pid)
     try:
@@ -112,7 +143,7 @@ def _pid_alive(pid):
         return True
     except OSError:
         return False
-    return True
+    return not _is_zombie(pid)
 
 
 def _pid_alive_windows(pid):

@@ -143,7 +143,8 @@ def aggregate():
     if np_toggle.enabled("evaluator.dashboard"):
         metrics_js = os.path.join(content, "dashboard", "data", "metrics.js")
         env = dict(os.environ)
-        env["DASHBOARD_SESSIONS"] = np_toggle.param("evaluator.dashboard_sessions", "5")
+        env["DASHBOARD_SESSIONS"] = np_toggle.param("evaluator.dashboard_sessions", "50")
+        env["DASHBOARD_DAYS"] = np_toggle.param("evaluator.dashboard_days", "7")
         env["WIKI_NAV"] = np_toggle.param("evaluator.wiki_nav", "on")
         env["WIKI_MERMAID"] = np_toggle.param("evaluator.wiki_mermaid", "on")
         env["NP_CONTENT_DIR"] = content
