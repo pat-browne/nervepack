@@ -8,6 +8,7 @@ per the harness language policy in CLAUDE.md.
 Usage: build.py [input.jsonl] [output.js]
 Defaults: dashboard/data/metrics.jsonl -> dashboard/data/metrics.js
 """
+import calendar
 import html
 import json
 import os
@@ -662,14 +663,65 @@ def drop_agent_sessions(records):
 
 
 def window_size():
-    """How many most-recent sessions to render. From env DASHBOARD_SESSIONS (the
+    """Ceiling on how many sessions to render. From env DASHBOARD_SESSIONS (the
     cron resolves it from the `evaluator.dashboard_sessions` toggle param); default
-    5; <=0 means all. Windowing the rendered metrics.js gives the dashboard a recent
-    performance picture and bounds the file's growth — metrics.jsonl stays full."""
+    50; <=0 means no cap. This is now a *bound*, not the primary selector — see
+    window_days(). Windowing the rendered metrics.js bounds the file's growth;
+    metrics.jsonl stays full."""
     try:
-        return int(os.environ.get("DASHBOARD_SESSIONS", 5))
+        return int(os.environ.get("DASHBOARD_SESSIONS", 50))
     except (TypeError, ValueError):
-        return 5
+        return 50
+
+
+def window_days():
+    """How many days of activity to render. From env DASHBOARD_DAYS (the cron
+    resolves it from the `evaluator.dashboard_days` toggle param); default 7;
+    <=0 means no time bound.
+
+    Time, not count, is the primary selector because sessions do not arrive at a
+    steady rate. The back-capture sweep replays whole batches of old transcripts
+    seconds apart, so a fixed "last N records" window collapses onto one sweep:
+    observed live, the rendered window was 5 sessions spanning 73 seconds, four
+    of them near-empty sweep artifacts, while 711 records sat in metrics.jsonl.
+    A day-based window can't be crowded out that way."""
+    try:
+        return int(os.environ.get("DASHBOARD_DAYS", 7))
+    except (TypeError, ValueError):
+        return 7
+
+
+def _ts_epoch(rec):
+    """Parse a record's ts to epoch seconds; None when absent/unparseable."""
+    raw = str(rec.get("ts") or "")
+    try:
+        return calendar.timegm(time.strptime(raw, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+
+
+def window_records(records, days=None, cap=None):
+    """Apply the render window: keep sessions within `days` of the NEWEST record,
+    then cap at `cap` most-recent.
+
+    Anchored to the newest record rather than wall-clock on purpose: after a few
+    days away from the machine a wall-clock window would render an empty
+    dashboard, which reads exactly like the breakage this window was added to
+    fix. Anchoring means "the last N days you actually worked".
+
+    Records with an unparseable ts are kept (fail-open) — the cap still bounds them.
+    """
+    days = window_days() if days is None else days
+    cap = window_size() if cap is None else cap
+    if days > 0 and records:
+        stamps = [t for t in (_ts_epoch(r) for r in records) if t is not None]
+        if stamps:
+            cutoff = max(stamps) - days * 86400
+            records = [r for r in records
+                       if (_ts_epoch(r) is None or _ts_epoch(r) >= cutoff)]
+    if cap > 0:
+        records = records[-cap:]   # load_records sorts ts asc -> last N = newest
+    return records
 
 
 def tokens_saved(records):
@@ -700,9 +752,7 @@ def main(argv):
     out = argv[2] if len(argv) > 2 else DEFAULT_OUT
     records = load_records(inp)
     records = drop_agent_sessions(records)  # internal subagent runs skew the panels
-    n = window_size()
-    if n > 0:
-        records = records[-n:]  # load_records sorts by ts asc -> last N = most recent
+    records = window_records(records)   # last N days of activity, capped at N sessions
     resolved = load_resolved(os.environ.get("NP_RESOLVED_SUGGESTIONS", default_resolved()))
     records = drop_resolved(records, resolved)
     payload = json.dumps(records, indent=2) if records else "[]"
