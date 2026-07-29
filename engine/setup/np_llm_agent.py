@@ -27,12 +27,39 @@ if _HERE not in sys.path:
 import np_model  # noqa: E402
 
 
-def run_agent(prompt, tools, cwd=None, timeout=None):
+def _append(log_path, *chunks):
+    """Append the agent's own output to the caller's cron log, mirroring the
+    retired bash bodies' `>> "$LOG" 2>&1`. Best-effort: logging must never break
+    a maintenance run (ARCHITECTURE invariant 1)."""
+    text = "".join(c for c in chunks if c)
+    if not text:
+        return
+    try:
+        parent = os.path.dirname(log_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(text if text.endswith("\n") else text + "\n")
+    except OSError:
+        pass
+
+
+def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None):
     """Invoke np_model.agent() with `prompt`, `tools`, cd'd into `cwd` (defaults
     to the caller's current directory), bounded by `timeout` seconds (None = no
-    bound). Returns True iff it exited 0; never raises."""
+    bound). Returns True iff it exited 0; never raises.
+
+    `log_path` (optional): append the agent's stdout+stderr there. The bash cron
+    bodies this replaced ended `... | np-llm.sh agent ... >> "$LOG" 2>&1`, so the
+    maintenance agent's report — and any error it printed — landed in the cron
+    log. The phase-9 port dropped both, leaving every run as a bare
+    `=== <name> run ===` header: a healthy run and a dead one looked identical,
+    which is how ~a week of no-op memory-promote runs went unnoticed. Callers
+    that own a log should pass it."""
     try:
-        returncode, _out, _err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
-        return returncode == 0
+        returncode, out, err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
     except (OSError, ValueError):
         return False
+    if log_path:
+        _append(log_path, out, err)
+    return returncode == 0

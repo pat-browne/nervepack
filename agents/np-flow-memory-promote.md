@@ -1,9 +1,9 @@
 # memory-promote
 
 Local weekly task that promotes durable learnings out of the Claude memory
-store (`~/.claude/projects/<your-project>/memory/`) and into `~/Code/nervepack`. Runs
-as a user cron job — cloud agents can't see local memory, so this has to
-stay local.
+store (`~/.claude/projects/*/memory/` — one dir per project, all of them in
+scope) and into `~/Code/nervepack`. Runs as a user cron job — cloud agents
+can't see local memory, so this has to stay local.
 
 **Cadence:** Sunday 08:00 local (before the Sunday cloud `nervepack-refine`
 fires at 09:00 — order matters because anything promoted here might be
@@ -45,11 +45,17 @@ promotion" and exit. The next session can resolve.
 
 ### 2. Read the memory store
 
+The memory store is **per project** — one dir per project Claude has run in.
+Scan them all, not just the one matching your cwd (you run cd'd into the
+content overlay, which is almost never where the entries actually are):
+
 ```bash
-ls ~/.claude/projects/<your-project>/memory/*.md 2>/dev/null
+ls ~/.claude/projects/*/memory/*.md 2>/dev/null
 ```
 
-For each file (except `MEMORY.md` itself, which is the index):
+Skip any path under `.local/share/Trash` — those are deleted projects.
+
+For each file (except `MEMORY.md` itself, which is each dir's own index):
 
 - Read it.
 - Classify into one of three buckets:
@@ -85,9 +91,9 @@ Use the [[np-core-contribute]] decision tree to pick the right target file:
 
 **Check `INDEX.md` before creating any new skill.** Extend over create.
 
-Make the edit, then:
-- Delete the memory file: `rm ~/.claude/projects/<your-project>/memory/<name>.md`
-- Remove its line from `~/.claude/projects/<your-project>/memory/MEMORY.md`
+Make the edit, then, **in the same project dir the entry came from**:
+- Delete the memory file: `rm <that-dir>/<name>.md`
+- Remove its line from `<that-dir>/MEMORY.md`
 
 ### 4. For each "stale" entry
 

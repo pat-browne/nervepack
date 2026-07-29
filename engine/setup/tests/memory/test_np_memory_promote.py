@@ -257,6 +257,46 @@ class CommitRoutingTest(unittest.TestCase):
         self.assertEqual(overlay_before, self._head(self.overlay))
         self.assertEqual(result, "ok: agent run completed")
 
+    def test_agent_report_is_logged_not_discarded(self):
+        """The bash body appended the agent's stdout+stderr to the cron log
+        (`>> "$LOG" 2>&1`); the phase-9 port dropped it, so a healthy run and a
+        dead one both left only a bare `=== memory-promote run ===` header.
+        `_run` must hand run_agent the cron's own log path."""
+        got = {}
+
+        def _capture(prompt, tools, cwd=None, **kw):
+            got["log_path"] = kw.get("log_path")
+            return True
+
+        with mock.patch.object(np_agentic_cron.np_llm_agent, "run_agent",
+                               side_effect=_capture):
+            np_agentic_cron.memory_promote()
+        expected = os.path.join(self.home, ".cache", "nervepack", "memory-promote.log")
+        self.assertEqual(got["log_path"], expected)
+
+
+class PromptMemoryPathTest(unittest.TestCase):
+    """Issue #15. The shipped prompt told the agent to read
+    `~/.claude/projects/<your-project>/memory/`. The cron runs with cwd set to the
+    content overlay, so the agent resolved `<your-project>` to the overlay's own
+    project dir -- which is empty -- and every run reported "memory store is
+    empty, nothing to promote" while the real entries sat in other project dirs.
+    The prompt must enumerate every project's memory dir instead."""
+
+    def setUp(self):
+        repo = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+        with open(os.path.join(repo, "agents", "np-flow-memory-promote.md"),
+                  encoding="utf-8") as fh:
+            self.prompt = fh.read()
+
+    def test_no_single_project_placeholder(self):
+        self.assertNotIn("<your-project>", self.prompt,
+                         "the placeholder resolves to the cron's cwd project, which is "
+                         "not where the memory store lives")
+
+    def test_enumerates_every_project_memory_dir(self):
+        self.assertIn("~/.claude/projects/*/memory/", self.prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
