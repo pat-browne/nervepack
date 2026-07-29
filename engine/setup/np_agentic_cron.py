@@ -235,7 +235,7 @@ def _run(cfg):
         _log(cfg, "ERROR: commit target could not be resolved")
         return "skipped: commit target unresolved"
     ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
-                                timeout=_agent_timeout())
+                                timeout=_agent_timeout(), log_path=_log_path(cfg))
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"

@@ -235,7 +235,7 @@ class SplitLoopTest(unittest.TestCase):
 
     def _good_split(self, repo):
         """A fake agent that performs a valid split under <repo>/skills/big."""
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the log_path kwarg
             base = cwd or repo
             refs = os.path.join(base, "skills", "big", "references")
             os.makedirs(refs, exist_ok=True)
@@ -248,7 +248,7 @@ class SplitLoopTest(unittest.TestCase):
 
     def _bad_split(self, repo):
         """A fake agent that changes the description -> validator must reject."""
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the log_path kwarg
             base = cwd or repo
             refs = os.path.join(base, "skills", "big", "references")
             os.makedirs(refs, exist_ok=True)
@@ -335,7 +335,7 @@ class SplitLoopTest(unittest.TestCase):
         _git(self.np, "add", "-A")
         _git(self.np, "commit", "-qm", "seed")
         base = self._count(self.np)
-        def _run(prompt, tools, cwd=None):
+        def _run(prompt, tools, cwd=None, **_kw):  # **_kw tolerates the log_path kwarg
             # split whichever skill the prompt targets
             import re
             m = re.search(r"TARGET SKILL DIRECTORY: skills/(\S+)", prompt)
