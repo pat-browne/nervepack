@@ -35,6 +35,7 @@ import np_toggle
 import np_content
 import np_model
 import np_token_lib
+import np_maintenance_freshness
 
 
 def _load_json(path):
@@ -132,6 +133,12 @@ def _core_check(cap_id, np):
         return ("WARN (no scheduled-auth token — run engine/setup/"
                 "62-install-scheduled-auth-token.sh; scheduled memory-promote/refine/"
                 "compact crons fail 'Not logged in' without it)")
+    if cap_id == "maintenance-freshness":
+        # Advisory: every maintenance cron is fail-open, so a suspended host, an
+        # expired headless credential (#201) and a mis-resolved input path (#15)
+        # all die silently and identically. "When did each job last run?" is the
+        # one observable that catches all three.
+        return np_maintenance_freshness.report()
     if cap_id == "pii_filter_full":
         try:
             import presidio_analyzer  # noqa: F401
