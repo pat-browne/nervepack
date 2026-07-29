@@ -364,7 +364,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": str(exc)}, 500)
 
 
+def _autoreap_children():
+    """Reap detached children (the implement jobs) as they exit.
+
+    We Popen() those jobs fire-and-forget and never wait() on them, so each one
+    lingers as a zombie for the server's whole lifetime. A zombie keeps its
+    pid-table entry, so a lock left behind by a job that died before cleanup
+    looks permanently owned and every later Implement click bails "busy".
+    _pid_alive() now detects zombies directly; this stops producing them at all.
+    POSIX only — SIGCHLD does not exist on Windows. Fail-open."""
+    if os.name == "nt":
+        return
+    try:
+        import signal
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    except (ImportError, OSError, ValueError, AttributeError):
+        pass
+
+
 def main():
+    _autoreap_children()
     httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     log(f"serving dashboard on http://127.0.0.1:{PORT}/ (top={TOP})")
     try:

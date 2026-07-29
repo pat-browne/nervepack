@@ -79,14 +79,50 @@ class TestBuild(unittest.TestCase):
         text = '{"session_id":"a","ts":"2026-06-01T10:00:00Z"}\n'
         self.assertEqual(run_build(text), run_build(text))
 
-    def test_default_window_is_last_5(self):
-        recs = parse_records(run_build(_seven()))  # no env -> default 5
+    def test_default_window_keeps_a_week_of_activity(self):
+        # 7 records one day apart, all within the 7-day default and under the
+        # 50-session ceiling -> all of them render.
+        recs = parse_records(run_build(_seven()))
         self.assertEqual([r["session_id"] for r in recs],
-                         ["s3", "s4", "s5", "s6", "s7"])
+                         ["s1", "s2", "s3", "s4", "s5", "s6", "s7"])
 
     def test_window_is_tunable(self):
         recs = parse_records(run_build(_seven(), DASHBOARD_SESSIONS=3))
         self.assertEqual([r["session_id"] for r in recs], ["s5", "s6", "s7"])
+
+    def test_days_window_drops_records_older_than_the_span(self):
+        recs = parse_records(run_build(_seven(), DASHBOARD_DAYS=2))
+        # anchored to the newest record (s7 = Jun 07): keep Jun 05..07
+        self.assertEqual([r["session_id"] for r in recs], ["s5", "s6", "s7"])
+
+    def test_days_window_zero_means_no_time_bound(self):
+        recs = parse_records(run_build(_seven(), DASHBOARD_DAYS=0))
+        self.assertEqual(len(recs), 7)
+
+    def test_days_window_is_anchored_to_newest_record_not_wall_clock(self):
+        """After time away from the machine, a wall-clock window would render an
+        empty dashboard — which looks exactly like the breakage the window was
+        added to fix. Anchor to the newest record: 'the last N days you worked'.
+        These fixtures are from 2026-06 and must still render whenever the suite runs."""
+        recs = parse_records(run_build(_seven(), DASHBOARD_DAYS=7))
+        self.assertEqual(len(recs), 7)
+
+    def test_back_capture_burst_cannot_crowd_out_real_sessions(self):
+        """The live failure this window replaces: the back-capture sweep replays
+        batches of transcripts seconds apart, so a fixed 'last N records' window
+        collapsed onto one sweep — 5 sessions spanning 73 seconds, while 711
+        records sat in metrics.jsonl. A day-based window keeps the real work."""
+        real = "".join(
+            '{"session_id":"real%d","ts":"2026-06-0%dT10:00:00Z"}\n' % (i, i)
+            for i in range(1, 6))                     # Jun 01..05, one per day
+        burst = "".join(
+            '{"session_id":"sweep%d","ts":"2026-06-05T10:0%d:00Z"}\n' % (i, i)
+            for i in range(1, 9))                     # 8 sweep records, same minute
+        recs = parse_records(run_build(real + burst))
+        ids = [r["session_id"] for r in recs]
+        self.assertEqual(len(ids), 13, "nothing inside the 7-day span should be dropped")
+        for i in range(1, 6):
+            self.assertIn("real%d" % i, ids)
 
     def test_window_zero_means_all(self):
         recs = parse_records(run_build(_seven(), DASHBOARD_SESSIONS=0))

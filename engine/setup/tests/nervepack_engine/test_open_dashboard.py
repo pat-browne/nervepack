@@ -57,6 +57,43 @@ class TestOpenDashboard(unittest.TestCase):
         self._run(aggregate_fn=lambda: None, opener_fn=lambda url: calls.append(url))
         self.assertEqual(calls, [])
 
+    def test_2b_backend_is_ensured_even_when_marker_matches(self):
+        """Invariant 8's once-per-boot guard exists to stop a *browser window*
+        reopening in a loop. Ensuring the local server is listening is not a GUI
+        side effect and must not sit behind that guard: on a host that suspends
+        instead of rebooting, boot_id is stable for weeks, so the old placement
+        left the dashboard with no backend for that whole time (observed: 7
+        weeks of uptime, nothing listening, every Implement click POSTing into
+        the void)."""
+        with open(self.marker, "w", encoding="utf-8") as fh:
+            fh.write(np_dashboard.boot_id())
+        opened, ensured = [], []
+        with mock.patch.object(np_dashboard, "dashboard_url",
+                                side_effect=lambda: ensured.append(1) or "file:///x"):
+            self._run(aggregate_fn=lambda: None, opener_fn=lambda url: opened.append(url))
+        self.assertEqual(opened, [], "browser must still open only once per boot")
+        self.assertEqual(len(ensured), 1, "the backend must be ensured every session")
+
+    def test_2c_metrics_refresh_runs_even_when_marker_matches(self):
+        # Same reasoning: regenerating metrics.js is not a GUI side effect, and
+        # gating it on boot left the rendered data refreshed only by the daily cron.
+        with open(self.marker, "w", encoding="utf-8") as fh:
+            fh.write(np_dashboard.boot_id())
+        agg = []
+        self._run(aggregate_fn=lambda: agg.append(1), opener_fn=lambda url: None)
+        self.assertEqual(len(agg), 1)
+
+    def test_2d_backend_ensured_even_with_no_opener(self):
+        # A headless box (no opener) should still get a served dashboard it can
+        # be port-forwarded to; the old order returned before ever spawning it.
+        ensured = []
+        with mock.patch.dict(os.environ, {"NP_DASH_OPENER": ""}, clear=False), \
+             mock.patch.object(np_dashboard, "resolve_opener", return_value=""), \
+             mock.patch.object(np_dashboard, "dashboard_url",
+                                side_effect=lambda: ensured.append(1) or "file:///x"):
+            self._run(aggregate_fn=lambda: None, opener_fn=lambda url: None)
+        self.assertEqual(len(ensured), 1)
+
     def test_3_toggle_off_does_not_open(self):
         with open(self.toggles_conf, "w") as fh:
             fh.write("evaluator|shared|runtime|on|dashboard_open=off\n")
