@@ -33,6 +33,8 @@ import subprocess
 import sys
 import time
 
+import np_toggle          # resolved via cli.py's sys.path setup, as in the sibling hooks
+
 _ENGINE_SETUP_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "setup"))
 _CLI_PATH = os.path.normpath(
@@ -62,6 +64,96 @@ def _log(msg):
         pass
 
 
+def _stamp_path():
+    return os.environ.get("SESSION_FLUSH_STAMP") or os.path.join(
+        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "last-flush")
+
+
+def _lock_path():
+    return os.environ.get("SESSION_FLUSH_LOCK") or os.path.join(
+        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "session-flush.lock")
+
+
+def _throttle_ok():
+    """True (and stamps) iff at least memory.flush_interval has passed since the
+    last flush. SessionEnd fires far more often than there is work to drain --
+    unthrottled it ran ~640x/day (#202). The daily/weekly crons remain the
+    backstop, so a skipped flush only delays promotion, never drops it."""
+    try:
+        interval = int(np_toggle.param("memory.flush_interval", "900") or "900")
+    except ValueError:
+        interval = 900
+    stamp = _stamp_path()
+    try:
+        last = int((open(stamp, encoding="utf-8").read().strip() or "0"))
+    except (OSError, ValueError):
+        last = 0
+    age = int(time.time()) - last
+    if last and age < interval:
+        _log("skip: within %ds flush interval (age %ds)" % (interval, age))
+        return False
+    try:
+        os.makedirs(os.path.dirname(stamp), exist_ok=True)
+        with open(stamp, "w", encoding="utf-8") as fh:
+            fh.write(str(int(time.time())))
+    except OSError:
+        pass                                   # fail open: an unstampable flush still runs
+    return True
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _acquire_lock(path):
+    """One flush at a time. Both substeps commit into a shared git working tree,
+    so concurrent flushes are a multi-writer hazard (AGENTS.md "concurrent
+    session"). Fail open on any unexpected error -- never block the hook."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError:
+        return True
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        pass
+    except OSError:
+        return True
+    try:
+        with open(path, encoding="utf-8") as fh:
+            held = int((fh.read() or "0").strip())
+    except (OSError, ValueError):
+        held = 0
+    if held and _pid_alive(held):
+        return False
+    try:                                       # stale lock -- reclaim once
+        os.remove(path)
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except OSError:
+        return False                           # lost the reclaim race -- let the winner run
+
+
+def _release_lock(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 def _default_step_fn(path):
     def _call():
         # Both real substeps (np_aggregate.py, np_agentic_cron.py) run in their own
@@ -77,6 +169,11 @@ def _default_step_fn(path):
 
 
 def run(payload_text, step_fns=None):
+    # Throttle in the PARENT only: the detached child re-enters run() and would
+    # otherwise be blocked by the stamp its own parent just wrote. Checking here
+    # also means a throttled flush never pays for the fork.
+    if not os.environ.get("NP_FLUSH_DETACHED") and not _throttle_ok():
+        return ""
     if not os.environ.get("NP_FLUSH_DETACHED") and os.environ.get("NP_FLUSH_NODETACH") != "1":
         env = dict(os.environ)
         env["NP_FLUSH_DETACHED"] = "1"
@@ -96,17 +193,25 @@ def run(payload_text, step_fns=None):
             pass
         return ""
 
+    lock = _lock_path()
+    if not _acquire_lock(lock):
+        _log("skip: another flush is already running")
+        return ""
+
     _log("flush start")
-    if step_fns is not None:
-        fns = step_fns
-    else:
-        override = os.environ.get("NP_FLUSH_STEP_PATHS")
-        paths = override.split(os.pathsep) if override else _STEP_PATHS
-        fns = [_default_step_fn(p) for p in paths]
-    for fn in fns:
-        try:
-            fn()
-        except Exception:
-            pass
-    _log("flush done")
+    try:
+        if step_fns is not None:
+            fns = step_fns
+        else:
+            override = os.environ.get("NP_FLUSH_STEP_PATHS")
+            paths = override.split(os.pathsep) if override else _STEP_PATHS
+            fns = [_default_step_fn(p) for p in paths]
+        for fn in fns:
+            try:
+                fn()
+            except Exception:
+                pass
+        _log("flush done")
+    finally:
+        _release_lock(lock)
     return ""
