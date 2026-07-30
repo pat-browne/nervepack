@@ -58,6 +58,7 @@ class _Env(unittest.TestCase):
         self.seen_dir = os.path.join(self.tmp, "bc-seen")
         self.queue_dir = os.path.join(self.tmp, "bc-queue")
         self.metrics = os.path.join(self.tmp, "metrics.jsonl")
+        self.own_dir = os.path.join(self.tmp, "own-sessions")
         self.lock_path = os.path.join(self.tmp, "bc.lock")
         self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
         self.toggles_local = os.path.join(self.tmp, "local")
@@ -70,6 +71,7 @@ class _Env(unittest.TestCase):
             "BACKCAPTURE_SEEN_DIR": self.seen_dir,
             "BACKCAPTURE_QUEUE_DIR": self.queue_dir,
             "BACKCAPTURE_METRICS": self.metrics,
+            "NP_OWN_SESSIONS_DIR": self.own_dir,
             "BACKCAPTURE_MIN_AGE_SEC": "120",
             "BACKCAPTURE_LOG": os.path.join(self.tmp, "bc.log"),
             "BACKCAPTURE_LOCK": self.lock_path,
@@ -266,6 +268,32 @@ class TestBackcaptureSweep(_Env):
                          "auth failure must not mark the session permanently seen")
         captured, _ = self._run()                # auth restored
         self.assertEqual(len(captured), 1, "session must still be capturable")
+
+    def test_18_own_headless_child_transcript_is_never_discovered(self):
+        """#202 bug 2: each capture/evaluate call is itself a headless `claude -p`
+        run that writes its OWN transcript into the same projects tree. The sweep
+        used to re-discover those as new work, feeding its queue faster than it
+        could drain it. A session nervepack minted is not a user session."""
+        import np_model
+        _mktranscript(self.projects_dir, "797ba623-46bc-49f9-a3e7-2f3f884009b7", ago=600)
+        os.makedirs(self.own_dir, exist_ok=True)
+        open(os.path.join(self.own_dir, "797ba623-46bc-49f9-a3e7-2f3f884009b7"), "a").close()
+        self.assertTrue(np_model.is_own_session("797ba623-46bc-49f9-a3e7-2f3f884009b7"))
+        captured, _ = self._run()
+        self.assertEqual(captured, [], "the sweep must not capture its own child")
+        self.assertFalse(os.path.exists(
+            os.path.join(self.queue_dir, "797ba623-46bc-49f9-a3e7-2f3f884009b7")),
+            "and must not even enqueue it")
+
+    def test_19_real_user_session_still_discovered_alongside_own_children(self):
+        """The exclusion must be by identity, not a blanket filter: a genuine
+        session sitting next to nervepack's own children is still captured."""
+        _mktranscript(self.projects_dir, "797ba623-46bc-49f9-a3e7-2f3f884009b7", ago=600)
+        os.makedirs(self.own_dir, exist_ok=True)
+        open(os.path.join(self.own_dir, "797ba623-46bc-49f9-a3e7-2f3f884009b7"), "a").close()
+        _mktranscript(self.projects_dir, "99999999-real", ago=600)
+        captured, _ = self._run()
+        self.assertEqual([c[0]["session_id"] for c in captured], ["99999999-real"])
 
     def test_13_concurrent_sweep_lock_blocks_second_sweep(self):
         """The bug this guards against: many parallel Claude Code sessions each
