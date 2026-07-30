@@ -45,6 +45,7 @@ import time
 import np_capture
 import np_content
 import np_evaluator
+import np_model
 import np_toggle
 import np_transcripts
 
@@ -326,12 +327,24 @@ def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evalu
         if not _claim(seen_dir, sid):
             continue
         payload = {"session_id": sid, "transcript_path": tpath, "cwd": cwd}
+        # An auth failure fails every remaining session identically, so retrying
+        # the queue burns each one's budget on a condition no retry can fix
+        # (#201). Release the claim and stop the sweep; it resumes once auth is
+        # restored.
         try:
             capture_fn(payload, "session-end")
+        except np_model.AuthError as exc:
+            _release_claim(seen_dir, sid)
+            _log("aborting sweep: backend auth failed (%s)" % exc)
+            break
         except Exception:
             pass
         try:
             evaluate_fn(payload)
+        except np_model.AuthError as exc:
+            _release_claim(seen_dir, sid)
+            _log("aborting sweep: backend auth failed (%s)" % exc)
+            break
         except Exception:
             pass
         # Keep the permanent claim only if capture actually recorded a note (or a

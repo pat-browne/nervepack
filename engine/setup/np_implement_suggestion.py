@@ -300,6 +300,8 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
     except subprocess.TimeoutExpired:
         _log(log_path, "agent pass timed out after %ss" % timeout)
         return ""
+    except np_model.AuthError:
+        raise                      # #211: not a no-op -- the caller must not fail open
     except Exception as exc:
         _log(log_path, "agent pass raised: %r" % exc)
         return ""
@@ -389,6 +391,7 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
         # subprocess.run's own timeout can hang forever on Windows here.
         r = np_bashlib.run_killtree(np_bashlib.argv(["bash", override, "agent", "--tools", tools]),
                                     input=prompt, cwd=cwd, timeout=timeout)
+        np_model.check_auth(r.stdout)   # override bypasses agent(), so guard here too
         return r.returncode, r.stdout, r.stderr
     return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
 
@@ -434,18 +437,29 @@ def implement(text, repo=None, log_path=None, lock_path=None, status_dir=None,
         branch = "np-suggest/%s" % slug
         prompt = _build_prompt(prompt_file, text)
 
-        engine = _attempt_repo(repo, "engine", branch, prompt, agent_fn, log_path)
         land_repo = land_label = base = base_sha = agent_sha = ""
         content = None
 
-        if engine.state == "implemented":
-            land_repo, land_label = repo, "engine"
-            base, base_sha, agent_sha = engine.base, engine.base_sha, engine.agent_sha
-        elif content_repo:
-            content = _attempt_repo(content_repo, "content overlay", branch, prompt, agent_fn, log_path)
-            if content.state == "implemented":
-                land_repo, land_label = content_repo, "content"
-                base, base_sha, agent_sha = content.base, content.base_sha, content.agent_sha
+        # An auth failure is not a verdict on the suggestion: it fails both repos
+        # identically, so stop after the first rather than burning the content
+        # attempt on a credential that cannot work (#211).
+        try:
+            engine = _attempt_repo(repo, "engine", branch, prompt, agent_fn, log_path)
+
+            if engine.state == "implemented":
+                land_repo, land_label = repo, "engine"
+                base, base_sha, agent_sha = engine.base, engine.base_sha, engine.agent_sha
+            elif content_repo:
+                content = _attempt_repo(content_repo, "content overlay", branch, prompt, agent_fn, log_path)
+                if content.state == "implemented":
+                    land_repo, land_label = content_repo, "content"
+                    base, base_sha, agent_sha = content.base, content.base_sha, content.agent_sha
+        except np_model.AuthError as exc:
+            reason = ("backend auth failed (%s) -- re-login with `claude setup-token`, "
+                      "or refresh the scheduled-auth token, then retry" % exc)[:300]
+            _write_status(status_dir, key, "failed", reason)
+            _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
+            return 0
 
         if not land_repo:
             both_not_implementable = engine.state == "not_implementable" and (

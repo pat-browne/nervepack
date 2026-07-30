@@ -47,7 +47,9 @@ def _append(log_path, *chunks):
 def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None):
     """Invoke np_model.agent() with `prompt`, `tools`, cd'd into `cwd` (defaults
     to the caller's current directory), bounded by `timeout` seconds (None = no
-    bound). Returns True iff it exited 0; never raises.
+    bound). Returns True iff it exited 0. Raises only np_model.AuthError: auth is
+    not a run outcome, and returning False would file it under "the agent tried
+    and failed", which is what kept #201 invisible for two weeks.
 
     `log_path` (optional): append the agent's stdout+stderr there. The bash cron
     bodies this replaced ended `... | np-llm.sh agent ... >> "$LOG" 2>&1`, so the
@@ -58,6 +60,10 @@ def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None):
     that own a log should pass it."""
     try:
         returncode, out, err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
+    except np_model.AuthError as exc:
+        if log_path:
+            _append(log_path, "", "auth failed: %s\n" % exc)
+        raise
     except (OSError, ValueError):
         return False
     if log_path:

@@ -45,6 +45,35 @@ _STRIP_ENV_VARS = (
 )
 
 
+class AuthError(RuntimeError):
+    """The backend could not authenticate. Its own type because the CLI reports
+    this on stdout with exit 0, so callers that fail open on a generic failure
+    would otherwise read it as a benign empty result (#201, #211)."""
+
+
+# The CLI emits one of these as the whole of stdout when auth fails. Matched
+# against the first line only -- a legitimate response may quote the text.
+_AUTH_SIGNATURES = (
+    "failed to authenticate",
+    "not logged in",
+    "oauth session expired",
+    "invalid api key",
+)
+
+
+def check_auth(text):
+    if not text:
+        return
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        low = line.lower()
+        if any(low.startswith(sig) for sig in _AUTH_SIGNATURES):
+            raise AuthError(line)
+        return                                     # only the first line counts
+
+
 def _claude_bin():
     return os.environ.get("CLAUDE_BIN") or os.path.join(
         os.path.expanduser("~"), ".local", "bin", "claude")
@@ -92,6 +121,7 @@ def complete(prompt, system=None, timeout=None):
     # np_bashlib.run_killtree's docstring (confirmed via CPython's own
     # subprocess.run source, not a guess).
     r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, env=env, timeout=timeout)
+    check_auth(r.stdout)
     return r.stdout
 
 
@@ -125,6 +155,7 @@ def agent(prompt, tools, cwd=None, timeout=None):
     # agent backend is even more exposed since it's tools-enabled and can
     # itself spawn arbitrary child processes (git, a local agentic host).
     r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, cwd=cwd, env=env, timeout=timeout)
+    check_auth(r.stdout)
     return r.returncode, r.stdout, r.stderr
 
 

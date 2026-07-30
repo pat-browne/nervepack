@@ -301,4 +301,24 @@ echo "$reason" | grep -qi "content overlay" || { echo "FAIL: failure reason does
 CONTENT_OVERRIDE="$content" MODE_OVERRIDE="" LLM="$tmp/llm-noimpl" run "both say not implementable"
 [[ "$(status_of "both say not implementable")" == "not_implementable" ]] || { echo "FAIL: both-not-implementable status should stay 'not_implementable', got: $(status_of "both say not implementable")"; exit 1; }
 
+# 14. expired OAuth (#211): the CLI prints an auth error to stdout and exits 0, which
+#     is structurally identical to a deliberate no-op. It must NOT read as the benign
+#     "agent produced no commit", and must not burn the second repo attempt on a
+#     credential that cannot work.
+cat > "$tmp/llm-auth" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+echo call >> "$tmp/auth-calls"
+echo "Failed to authenticate: OAuth session expired and could not be refreshed "
+EOF
+chmod +x "$tmp/llm-auth"
+: > "$tmp/auth-calls"; : > "$tmp/resolved.txt"; git -C "$repo" checkout -q "$base" 2>/dev/null
+CONTENT_OVERRIDE="$content" MODE_OVERRIDE="" LLM="$tmp/llm-auth" run "auth is dead"
+reason="$(reason_of "auth is dead")"
+echo "$reason" | grep -qi "auth" || { echo "FAIL: auth failure not named in the status reason: $reason"; exit 1; }
+echo "$reason" | grep -qi "produced no commit" && { echo "FAIL: auth failure still masked as the benign no-commit state: $reason"; exit 1; }
+calls="$(wc -l < "$tmp/auth-calls" | tr -d ' ')"
+[[ "$calls" -eq 1 ]] || { echo "FAIL: expected exactly 1 agent attempt under auth failure, got $calls"; exit 1; }
+resolved "auth is dead" && { echo "FAIL: auth failure must leave the suggestion unresolved/retryable"; exit 1; }
+
 echo "PASS test_implement"
