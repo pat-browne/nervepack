@@ -225,6 +225,48 @@ class TestBackcaptureSweep(_Env):
         captured, _ = self._run(capture_ok=False)
         self.assertEqual(captured, [])  # permanently seen -> no longer retried
 
+    def _run_raising(self, exc, sids):
+        """Sweep where capture raises `exc`, over pre-made transcripts `sids`."""
+        from nervepack_engine.hooks import backcapture_sweep
+        attempts = []
+
+        def _capture(payload, mode):
+            attempts.append(payload["session_id"])
+            raise exc
+
+        backcapture_sweep.run(json.dumps({"session_id": "none"}),
+                              capture_fn=_capture,
+                              evaluate_fn=lambda payload: None,
+                              capture_ok_fn=lambda payload: False)
+        return attempts
+
+    def test_16_auth_failure_aborts_the_whole_sweep(self):
+        """#201/#202: under an expired OAuth session every capture fails, and the
+        old loop walked the ENTIRE queue retrying a condition no retry can fix
+        (observed: 97,231 entries in one continuous run, because `processed`
+        only counted successes). An auth failure must stop the sweep at the
+        first session, not attempt the rest."""
+        import np_model
+        for sid in ("dddddddd-one", "eeeeeeee-two", "ffffffff-three"):
+            _mktranscript(self.projects_dir, sid, ago=600)
+        attempts = self._run_raising(np_model.AuthError("OAuth session expired"),
+                                     ("dddddddd-one", "eeeeeeee-two", "ffffffff-three"))
+        self.assertEqual(len(attempts), 1,
+                         "sweep must abort on auth failure, not walk the queue")
+
+    def test_17_auth_failure_does_not_burn_a_retry_attempt(self):
+        """An unauthenticated sweep must leave the session retryable: no claim
+        left behind and no attempt counted, so it captures normally once auth is
+        restored rather than having spent its budget on a doomed condition."""
+        import np_model
+        _mktranscript(self.projects_dir, "dddddddd-one", ago=600)
+        for _ in range(6):                       # more than _MAX_ATTEMPTS
+            self._run_raising(np_model.AuthError("OAuth session expired"), ("dddddddd-one",))
+        self.assertFalse(os.path.exists(os.path.join(self.seen_dir, "dddddddd-one")),
+                         "auth failure must not mark the session permanently seen")
+        captured, _ = self._run()                # auth restored
+        self.assertEqual(len(captured), 1, "session must still be capturable")
+
     def test_13_concurrent_sweep_lock_blocks_second_sweep(self):
         """The bug this guards against: many parallel Claude Code sessions each
         firing their own SessionStart previously ran their own full sweep

@@ -35,6 +35,7 @@ import sys
 
 import np_content
 import np_llm_agent
+import np_model
 import np_toggle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))       # engine/setup/
@@ -234,8 +235,15 @@ def _run(cfg):
     if not target:
         _log(cfg, "ERROR: commit target could not be resolved")
         return "skipped: commit target unresolved"
-    ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
-                                timeout=_agent_timeout(), log_path=_log_path(cfg))
+    try:
+        ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
+                                    timeout=_agent_timeout(), log_path=_log_path(cfg))
+    except np_model.AuthError as exc:
+        # Distinct from "exited non-zero": no cron run can succeed until a human
+        # re-authenticates, so name the remedy instead of logging a generic error.
+        _log(cfg, "ERROR: backend auth failed (%s) -- re-login with `claude setup-token` "
+                  "or refresh ~/.config/nervepack/claude-oauth-token" % exc)
+        return "auth failed"
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"
