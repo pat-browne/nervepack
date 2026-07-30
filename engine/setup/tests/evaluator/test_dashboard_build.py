@@ -79,8 +79,8 @@ class TestBuild(unittest.TestCase):
         text = '{"session_id":"a","ts":"2026-06-01T10:00:00Z"}\n'
         self.assertEqual(run_build(text), run_build(text))
 
-    def test_default_window_keeps_a_week_of_activity(self):
-        # 7 records one day apart, all within the 7-day default and under the
+    def test_default_window_keeps_recent_activity(self):
+        # 7 records one day apart, all inside the default day window and under the
         # 50-session ceiling -> all of them render.
         recs = parse_records(run_build(_seven()))
         self.assertEqual([r["session_id"] for r in recs],
@@ -94,6 +94,37 @@ class TestBuild(unittest.TestCase):
         recs = parse_records(run_build(_seven(), DASHBOARD_DAYS=2))
         # anchored to the newest record (s7 = Jun 07): keep Jun 05..07
         self.assertEqual([r["session_id"] for r in recs], ["s5", "s6", "s7"])
+
+    def test_zero_tool_call_sessions_dropped_from_the_trend(self):
+        """Sessions where nothing happened (opened a window, typed nothing, exited)
+        are noise in a "did Nervepack help" trend — they score ~0 correctly and
+        drag the average down. Measured live: they went from 48% to 83% of the
+        scored population once back-capture began evaluating every prior session,
+        taking the rendered average from 38.0 to 16.6."""
+        text = (
+            '{"session_id":"idle","ts":"2026-06-01T10:00:00Z","signals":{"tool_calls":0}}\n'
+            '{"session_id":"real","ts":"2026-06-02T10:00:00Z","signals":{"tool_calls":42}}\n'
+        )
+        recs = parse_records(run_build(text))
+        self.assertEqual([r["session_id"] for r in recs], ["real"])
+
+    def test_min_tool_calls_is_tunable_and_zero_keeps_everything(self):
+        text = (
+            '{"session_id":"idle","ts":"2026-06-01T10:00:00Z","signals":{"tool_calls":0}}\n'
+            '{"session_id":"small","ts":"2026-06-02T10:00:00Z","signals":{"tool_calls":3}}\n'
+            '{"session_id":"real","ts":"2026-06-03T10:00:00Z","signals":{"tool_calls":42}}\n'
+        )
+        self.assertEqual([r["session_id"] for r in parse_records(
+            run_build(text, DASHBOARD_MIN_TOOL_CALLS=0))], ["idle", "small", "real"])
+        self.assertEqual([r["session_id"] for r in parse_records(
+            run_build(text, DASHBOARD_MIN_TOOL_CALLS=10))], ["real"])
+
+    def test_record_without_signals_is_kept(self):
+        """Fail-open: a legacy/minimal record carries no signals dict at all —
+        absent telemetry is not proof the session was idle, so keep it."""
+        text = '{"session_id":"legacy","ts":"2026-06-01T10:00:00Z"}\n'
+        recs = parse_records(run_build(text))
+        self.assertEqual([r["session_id"] for r in recs], ["legacy"])
 
     def test_days_window_zero_means_no_time_bound(self):
         recs = parse_records(run_build(_seven(), DASHBOARD_DAYS=0))
