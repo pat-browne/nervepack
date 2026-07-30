@@ -79,6 +79,75 @@ class TestNpAggregate(unittest.TestCase):
         self.assertIn("evaluator(metrics): daily batch", log)
         self.assertFalse(os.path.isdir(self.inbox) and os.listdir(self.inbox))
 
+    def _dashboard_on(self):
+        """The other tests run with dashboard=off, so metrics.js is never built --
+        which is exactly why #202 bug 3 went unnoticed. These need it ON."""
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("evaluator|shared|runtime|on|dashboard=on\n")
+            fh.write("memory|shared|runtime|on|backcapture_days=7\n")
+
+    def test_8_volatile_dashboard_field_alone_does_not_trigger_a_commit(self):
+        """#202 bug 3: metrics.js is regenerated every run and embeds
+        resolved_last_24h -- a rolling count that changes on its own as
+        back-capture seen-markers age past 24h. The commit guard diffed
+        metrics.js too, so a run with ZERO new records still saw a diff and
+        committed, producing near-duplicate 'daily batch — 0 record(s)' commits
+        every 30-90s instead of the documented daily cadence."""
+        self._dashboard_on()
+        seen_dir = os.path.join(self.tmp, "bc-seen")
+        os.makedirs(seen_dir, exist_ok=True)
+        for name in ("aaaa", "bbbb"):
+            open(os.path.join(seen_dir, name), "a").close()
+
+        with mock.patch.dict(os.environ, {
+                "BACKCAPTURE_SEEN_DIR": seen_dir,
+                "BACKCAPTURE_QUEUE_DIR": os.path.join(self.tmp, "bc-queue")}):
+            self._write_inbox_record()
+            self.assertEqual(np_aggregate.aggregate(), "aggregated")
+            before = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
+                                    capture_output=True, text=True).stdout
+
+            # Age one marker past the 24h window: resolved_last_24h drops 2 -> 1,
+            # so metrics.js genuinely changes while metrics.jsonl does not.
+            old = time.time() - 86400 * 2
+            os.utime(os.path.join(seen_dir, "aaaa"), (old, old))
+
+            status = np_aggregate.aggregate()          # empty inbox this time
+            after = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
+                                   capture_output=True, text=True).stdout
+
+        self.assertEqual(before, after,
+                         "a derived-artifact-only change must not produce a commit")
+        self.assertIn("no", status)
+
+    def test_9_no_op_run_leaves_nothing_staged(self):
+        """The guard must not stage metrics.js on the way to deciding not to
+        commit -- a shared index means the next writer would sweep it up
+        (AGENTS.md 'concurrent session')."""
+        self._dashboard_on()
+        self._write_inbox_record()
+        np_aggregate.aggregate()
+        np_aggregate.aggregate()                       # second run: nothing new
+        staged = subprocess.run(["git", "-C", self.repo, "diff", "--cached", "--name-only"],
+                                capture_output=True, text=True).stdout.strip()
+        self.assertEqual(staged, "", "no-op run left files staged in a shared index")
+
+    def test_10_a_real_metrics_change_still_commits(self):
+        """The guard must not over-correct: genuine new records still land."""
+        self._dashboard_on()
+        self._write_inbox_record()
+        self.assertEqual(np_aggregate.aggregate(), "aggregated")
+        self._write_inbox_record()
+        before = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
+                                capture_output=True, text=True).stdout
+        self.assertEqual(np_aggregate.aggregate(), "aggregated")
+        after = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
+                               capture_output=True, text=True).stdout
+        self.assertNotEqual(before, after, "new records must still produce a commit")
+        files = subprocess.run(["git", "-C", self.repo, "log", "-1", "--name-only", "--format="],
+                               capture_output=True, text=True).stdout
+        self.assertIn("metrics.js", files, "the derived artifact must still ride along")
+
     def test_2_empty_inbox_no_commit(self):
         before = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
                                  capture_output=True, text=True).stdout
