@@ -25,7 +25,16 @@ class TestSessionFlush(unittest.TestCase):
         import tempfile
         self.tmp = tempfile.mkdtemp()
         self.log = os.path.join(self.tmp, "session-flush.log")
-        self._env = mock.patch.dict(os.environ, {"SESSION_FLUSH_LOG": self.log}, clear=False)
+        # Per-test stamp/lock so the throttle and the single-flush lock are
+        # hermetic -- otherwise every test after the first would be throttled by
+        # the previous one's stamp in the real cache dir.
+        self.stamp = os.path.join(self.tmp, "last-flush")
+        self.lock = os.path.join(self.tmp, "session-flush.lock")
+        self._env = mock.patch.dict(os.environ, {
+            "SESSION_FLUSH_LOG": self.log,
+            "SESSION_FLUSH_STAMP": self.stamp,
+            "SESSION_FLUSH_LOCK": self.lock,
+        }, clear=False)
         self._env.start()
         self.addCleanup(self._env.stop)
         os.environ.pop("NP_FLUSH_DETACHED", None)
@@ -106,6 +115,83 @@ class TestSessionFlush(unittest.TestCase):
             time.sleep(0.2)
         self.assertTrue(os.path.isfile(marker1), "detached substep 1 never completed")
         self.assertTrue(os.path.isfile(marker2), "detached substep 2 never completed")
+
+
+class TestSessionFlushThrottleAndLock(TestSessionFlush):
+    """#202 bug 4: session_flush ran on EVERY SessionEnd with no interval and no
+    lock -- ~640 flushes in one day, occasionally 3 concurrent, all writing to
+    one shared git working tree."""
+
+    def setUp(self):
+        super().setUp()
+        self.conf = os.path.join(self.tmp, "toggles.conf")
+        with open(self.conf, "w") as fh:
+            fh.write("memory|shared|runtime|on|flush_interval=900\n")
+        p = mock.patch.dict(os.environ, {
+            "NP_TOGGLES_CONF": self.conf,
+            "NP_TOGGLES_LOCAL": os.path.join(self.tmp, "local"),
+        }, clear=False)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_5_second_flush_inside_the_interval_is_skipped(self):
+        ran = []
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[lambda: ran.append("a")])
+            self.assertEqual(ran, ["a"])
+            self._run(step_fns=[lambda: ran.append("b")])
+        self.assertEqual(ran, ["a"], "a flush inside the interval must not do work")
+
+    def test_6_flush_runs_again_once_the_interval_has_passed(self):
+        ran = []
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[lambda: ran.append("a")])
+            old = int(time.time()) - 901
+            with open(self.stamp, "w") as fh:
+                fh.write(str(old))
+            self._run(step_fns=[lambda: ran.append("b")])
+        self.assertEqual(ran, ["a", "b"])
+
+    def test_7_throttle_short_circuits_before_spawning_a_detached_child(self):
+        """The cheap win: don't even fork when we know the work will be skipped."""
+        from nervepack_engine.hooks import session_flush
+        with open(self.stamp, "w") as fh:
+            fh.write(str(int(time.time())))
+        with mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(session_flush.subprocess, "Popen") as popen:
+            os.environ.pop("NP_FLUSH_NODETACH", None)
+            session_flush.run("")
+            popen.assert_not_called()
+
+    def test_8_a_live_lock_holder_blocks_a_concurrent_flush(self):
+        ran = []
+        os.makedirs(os.path.dirname(self.lock), exist_ok=True)
+        with open(self.lock, "w") as fh:
+            fh.write(str(os.getpid()))          # this test process: definitely alive
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[lambda: ran.append("a")])
+        self.assertEqual(ran, [], "a second concurrent flush must not run the substeps")
+
+    def test_9_lock_is_released_so_the_next_flush_can_run(self):
+        ran = []
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[lambda: ran.append("a")])
+        self.assertFalse(os.path.exists(self.lock), "lock leaked after a completed flush")
+
+    def test_10_lock_is_released_even_when_a_substep_raises(self):
+        def _boom():
+            raise RuntimeError("boom")
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[_boom])
+        self.assertFalse(os.path.exists(self.lock), "lock leaked after a failing substep")
+
+    def test_11_stale_lock_from_a_dead_pid_is_reclaimed(self):
+        ran = []
+        with open(self.lock, "w") as fh:
+            fh.write("999999999")               # not a live pid
+        with mock.patch.dict(os.environ, {"NP_FLUSH_NODETACH": "1"}):
+            self._run(step_fns=[lambda: ran.append("a")])
+        self.assertEqual(ran, ["a"], "a crashed holder's lock must not wedge flushing forever")
 
 
 if __name__ == "__main__":
