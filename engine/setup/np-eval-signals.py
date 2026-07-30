@@ -46,13 +46,25 @@ def signal_log_path(sid):
 
 def count_markers(log_path):
     """Count fire markers by prefix. Missing file -> all zero (fail-open).
-    Returns (lesson_guard, lesson_recall, episodic_recall).
+    Returns (lesson_guard, lesson_recall, episodic_recall, present).
+
+    `present` is True iff the marker file was actually readable. Without it a
+    missing file is indistinguishable from a session whose hooks genuinely
+    never fired, and the judge scores the zeros as "Nervepack sat idle".
+    Measured over 712 real records: substantive sessions (>=10 tool calls) with
+    a marker average 53-62, those without average ~30 — a ~25-point penalty for
+    absent telemetry rather than absent help. The marker dir is machine-local
+    and never synced while metrics.jsonl is committed and shared, so every
+    record scored on another machine lands in the shared series zeroed out.
+
     lesson-recall REPLACES the old playbook-recall/strategy-recall markers —
     those hooks were merged into engine/setup/lesson-recall.sh and no longer
     exist, so their branches are gone rather than kept dead alongside this."""
     pg = lr = er = 0
+    present = False
     try:
         with open(log_path, encoding="utf-8", errors="replace") as fh:
+            present = True
             for line in fh:
                 if line.startswith("lesson-guard"):
                     pg += 1
@@ -62,7 +74,7 @@ def count_markers(log_path):
                     er += 1
     except OSError:
         pass
-    return pg, lr, er
+    return pg, lr, er, present
 
 
 def gated_fingerprints(log_path):
@@ -205,7 +217,7 @@ def main():
     transcript = sys.argv[2] if len(sys.argv) > 2 else ""
 
     log_path = signal_log_path(sid)
-    pg, lr, er = count_markers(log_path)
+    pg, lr, er, signals_present = count_markers(log_path)
     tool_calls, skills, tokens, exec_fps = parse_transcript(transcript)
     # heeded = guarded commands the session did NOT then run (intervention worked).
     heeded = len(gated_fingerprints(log_path) - exec_fps)
@@ -215,6 +227,9 @@ def main():
         "playbook_fires": pg,
         "playbook_heeded": heeded,
         "recall_injections": lr + er,
+        # Whether the fire-time marker existed at all. False => the hook-fire
+        # counts above are "unknown", not "zero" (see count_markers).
+        "signals_present": signals_present,
         "directive_present": directive_present(),
         "directive_tokens": directive_tokens(),
         "struggles": episodic_struggles(sid),
