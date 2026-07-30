@@ -8,6 +8,7 @@ per the harness language policy in CLAUDE.md.
 Usage: build.py [input.jsonl] [output.js]
 Defaults: dashboard/data/metrics.jsonl -> dashboard/data/metrics.js
 """
+import calendar
 import html
 import json
 import os
@@ -661,15 +662,110 @@ def drop_agent_sessions(records):
     return [r for r in records if not str(r.get("project", "")).startswith("agent-")]
 
 
-def window_size():
-    """How many most-recent sessions to render. From env DASHBOARD_SESSIONS (the
-    cron resolves it from the `evaluator.dashboard_sessions` toggle param); default
-    5; <=0 means all. Windowing the rendered metrics.js gives the dashboard a recent
-    performance picture and bounds the file's growth — metrics.jsonl stays full."""
+def min_tool_calls():
+    """Fewest tool calls a session needs to appear in the rendered trend. From
+    env DASHBOARD_MIN_TOOL_CALLS (the cron resolves it from the
+    `evaluator.min_tool_calls` toggle param); default 1; <=0 keeps everything."""
     try:
-        return int(os.environ.get("DASHBOARD_SESSIONS", 5))
+        return int(os.environ.get("DASHBOARD_MIN_TOOL_CALLS", 1))
     except (TypeError, ValueError):
-        return 5
+        return 1
+
+
+def drop_idle_sessions(records, floor=None):
+    """Exclude sessions that did no work from the rendered window.
+
+    A session with zero tool calls is one where a window was opened and nothing
+    substantive happened. It scores ~0 correctly — Nervepack had nothing to
+    contribute — but it is noise in a "did Nervepack help" trend. These went from
+    48% to 83% of the scored population once the back-capture sweep began
+    evaluating every prior session rather than only the ones SessionEnd caught,
+    dragging the rendered average from 38.0 to 16.6 with no change in how much
+    the pack actually helped. metrics.jsonl stays full; this only shapes what the
+    dashboard renders (same contract as drop_agent_sessions).
+
+    Fail-open: a record carrying no `signals` dict at all is KEPT — absent
+    telemetry is not evidence the session was idle (see np-eval-signals.py's
+    signals_present)."""
+    floor = min_tool_calls() if floor is None else floor
+    if floor <= 0:
+        return records
+    kept = []
+    for r in records:
+        sig = r.get("signals")
+        if not isinstance(sig, dict) or "tool_calls" not in sig:
+            kept.append(r)
+            continue
+        try:
+            if int(sig.get("tool_calls") or 0) >= floor:
+                kept.append(r)
+        except (TypeError, ValueError):
+            kept.append(r)
+    return kept
+
+
+def window_size():
+    """Ceiling on how many sessions to render. From env DASHBOARD_SESSIONS (the
+    cron resolves it from the `evaluator.dashboard_sessions` toggle param); default
+    50; <=0 means no cap. This is now a *bound*, not the primary selector — see
+    window_days(). Windowing the rendered metrics.js bounds the file's growth;
+    metrics.jsonl stays full."""
+    try:
+        return int(os.environ.get("DASHBOARD_SESSIONS", 50))
+    except (TypeError, ValueError):
+        return 50
+
+
+def window_days():
+    """How many days of activity to render. From env DASHBOARD_DAYS (the cron
+    resolves it from the `evaluator.dashboard_days` toggle param); default 14;
+    <=0 means no time bound. 14 rather than 7 because drop_idle_sessions() removes
+    ~80% of records: on real data a 7-day window left 9 sessions across 3 distinct
+    days, where 14 gives 30 across 7 — enough for a trend to mean anything.
+
+    Time, not count, is the primary selector because sessions do not arrive at a
+    steady rate. The back-capture sweep replays whole batches of old transcripts
+    seconds apart, so a fixed "last N records" window collapses onto one sweep:
+    observed live, the rendered window was 5 sessions spanning 73 seconds, four
+    of them near-empty sweep artifacts, while 711 records sat in metrics.jsonl.
+    A day-based window can't be crowded out that way."""
+    try:
+        return int(os.environ.get("DASHBOARD_DAYS", 14))
+    except (TypeError, ValueError):
+        return 14
+
+
+def _ts_epoch(rec):
+    """Parse a record's ts to epoch seconds; None when absent/unparseable."""
+    raw = str(rec.get("ts") or "")
+    try:
+        return calendar.timegm(time.strptime(raw, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+
+
+def window_records(records, days=None, cap=None):
+    """Apply the render window: keep sessions within `days` of the NEWEST record,
+    then cap at `cap` most-recent.
+
+    Anchored to the newest record rather than wall-clock on purpose: after a few
+    days away from the machine a wall-clock window would render an empty
+    dashboard, which reads exactly like the breakage this window was added to
+    fix. Anchoring means "the last N days you actually worked".
+
+    Records with an unparseable ts are kept (fail-open) — the cap still bounds them.
+    """
+    days = window_days() if days is None else days
+    cap = window_size() if cap is None else cap
+    if days > 0 and records:
+        stamps = [t for t in (_ts_epoch(r) for r in records) if t is not None]
+        if stamps:
+            cutoff = max(stamps) - days * 86400
+            records = [r for r in records
+                       if (_ts_epoch(r) is None or _ts_epoch(r) >= cutoff)]
+    if cap > 0:
+        records = records[-cap:]   # load_records sorts ts asc -> last N = newest
+    return records
 
 
 def tokens_saved(records):
@@ -700,9 +796,8 @@ def main(argv):
     out = argv[2] if len(argv) > 2 else DEFAULT_OUT
     records = load_records(inp)
     records = drop_agent_sessions(records)  # internal subagent runs skew the panels
-    n = window_size()
-    if n > 0:
-        records = records[-n:]  # load_records sorts by ts asc -> last N = most recent
+    records = drop_idle_sessions(records)   # zero-tool-call sessions are trend noise
+    records = window_records(records)   # last N days of activity, capped at N sessions
     resolved = load_resolved(os.environ.get("NP_RESOLVED_SUGGESTIONS", default_resolved()))
     records = drop_resolved(records, resolved)
     payload = json.dumps(records, indent=2) if records else "[]"
