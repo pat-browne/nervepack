@@ -27,6 +27,8 @@ if _SETUP not in sys.path:
 
 import os
 import sys
+import time
+import uuid
 
 import np_bashlib
 import np_paths
@@ -74,6 +76,55 @@ def check_auth(text):
         return                                     # only the first line counts
 
 
+def own_sessions_dir():
+    return os.environ.get("NP_OWN_SESSIONS_DIR") or os.path.join(
+        os.environ.get("HOME") or os.path.expanduser("~"),
+        ".cache", "nervepack", "own-sessions")
+
+
+def is_own_session(sid):
+    """True iff `sid` names a headless child nervepack itself spawned. The
+    back-capture sweep asks this so it stops re-discovering its own `claude -p`
+    transcripts as new user sessions to capture (#202)."""
+    if not sid:
+        return False
+    try:
+        return os.path.exists(os.path.join(own_sessions_dir(), sid))
+    except OSError:
+        return False
+
+
+def _mint_session_id():
+    """Name the child session ourselves so it is identifiable later. Recorded
+    BEFORE the call, since a call that dies partway still leaves a transcript."""
+    sid = str(uuid.uuid4())
+    try:
+        d = own_sessions_dir()
+        os.makedirs(d, exist_ok=True)
+        open(os.path.join(d, sid), "a").close()
+    except OSError:
+        pass                                   # fail-open: worst case is a re-discovery
+    return sid
+
+
+def prune_own_sessions(max_age_sec):
+    """Drop markers older than the sweep's discovery window -- past it the sweep
+    would never look at the transcript again anyway."""
+    d = own_sessions_dir()
+    cutoff = time.time() - max_age_sec
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(d, name)
+        try:
+            if os.stat(path).st_mtime < cutoff:
+                os.remove(path)
+        except OSError:
+            pass
+
+
 def _claude_bin():
     return os.environ.get("CLAUDE_BIN") or os.path.join(
         os.path.expanduser("~"), ".local", "bin", "claude")
@@ -106,7 +157,8 @@ def complete(prompt, system=None, timeout=None):
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
     env = _base_env()
     if backend == "claude":
-        argv = [_claude_bin(), "-p", "--model", _model_cheap(), "--allowedTools", ""]
+        argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
+                "--model", _model_cheap(), "--allowedTools", ""]
         if system:
             argv += ["--append-system-prompt", system]
     elif backend == "local":
@@ -138,7 +190,7 @@ def agent(prompt, tools, cwd=None, timeout=None):
     if backend == "claude":
         # --allowedTools is variadic (consumes space-separated tokens until the
         # next flag) -- tools.split() mirrors bash's unquoted `$tools` word-split.
-        argv = [_claude_bin(), "-p",
+        argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
                 "--settings", '{"hooks":{},"includeCoAuthoredBy":false}',
                 "--permission-mode", "bypassPermissions",
                 "--model", _model_agent(), "--allowedTools"] + tools.split()

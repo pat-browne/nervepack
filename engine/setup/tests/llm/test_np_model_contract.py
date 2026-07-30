@@ -15,6 +15,7 @@ have executed WITHOUT running anything. Stdlib unittest (no pytest), per CLAUDE.
 import os
 import sys
 import unittest
+import uuid
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -43,6 +44,10 @@ _STRIP = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
 class ModelContract(unittest.TestCase):
     def setUp(self):
         self.captured = {}
+        import shutil
+        import tempfile
+        self._own_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._own_dir, True)
 
         def _fake_run(argv, input=None, env=None, cwd=None, timeout=None):
             self.captured = {"argv": argv, "input": input, "env": env, "cwd": cwd,
@@ -73,8 +78,20 @@ class ModelContract(unittest.TestCase):
 
     def _env(self, **extra):
         e = dict(self._base)
+        e.setdefault("NP_OWN_SESSIONS_DIR", self._own_dir)
         e.update(extra)
         return mock.patch.dict(os.environ, e, clear=True)
+
+    def _split_session_id(self, argv):
+        """Pull the `--session-id <uuid>` pair out of argv, asserting it is a real
+        uuid, and return (argv_without_the_pair, sid). #202: nervepack mints the
+        child's session id so the back-capture sweep can exclude its own
+        `claude -p` transcripts instead of re-discovering them as new work."""
+        self.assertIn("--session-id", argv, "np_model must name the child session")
+        i = argv.index("--session-id")
+        sid = argv[i + 1]
+        uuid.UUID(sid)                       # raises if it isn't a well-formed uuid
+        return argv[:i] + argv[i + 2:], sid
 
     def _assert_guard_and_strip(self):
         env = self.captured["env"]
@@ -87,7 +104,10 @@ class ModelContract(unittest.TestCase):
     def test_complete_claude_argv_guard_strip_stdin(self):
         with self._env():
             out = np_model.complete("hello")
-        self.assertEqual(self.captured["argv"],
+        argv, sid = self._split_session_id(self.captured["argv"])
+        self.assertTrue(os.path.exists(os.path.join(self._own_dir, sid)),
+                        "the minted session id must be recorded as nervepack's own")
+        self.assertEqual(argv,
                          ["/fake/claude", "-p", "--model", "cheapM", "--allowedTools", ""])
         self.assertEqual(self.captured["input"], "hello")   # prompt on stdin
         self.assertEqual(out, "OUT")                        # returns backend stdout
@@ -103,7 +123,10 @@ class ModelContract(unittest.TestCase):
     def test_agent_claude_argv_guard_strip_stdin(self):
         with self._env():
             rc, out, err = np_model.agent("task", "Bash Read Write")
-        self.assertEqual(self.captured["argv"], [
+        argv, sid = self._split_session_id(self.captured["argv"])
+        self.assertTrue(os.path.exists(os.path.join(self._own_dir, sid)),
+                        "the minted session id must be recorded as nervepack's own")
+        self.assertEqual(argv, [
             "/fake/claude", "-p",
             "--settings", '{"hooks":{},"includeCoAuthoredBy":false}',
             "--permission-mode", "bypassPermissions",
@@ -124,6 +147,9 @@ class ModelContract(unittest.TestCase):
         self.assertTrue(argv[1].endswith("np-llm-local.py"), argv)
         self.assertEqual(argv[2:], ["complete", "--system", "S"])
         self.assertNotIn("--bare", argv)
+        # --session-id is a claude-CLI flag; the local backend writes no Claude
+        # transcript, so there is nothing for the sweep to exclude (#202).
+        self.assertNotIn("--session-id", argv)
         self._assert_guard_and_strip()
 
     # ----- local backend: agent -> NP_LLM_AGENT_CMD via bash -c -----
