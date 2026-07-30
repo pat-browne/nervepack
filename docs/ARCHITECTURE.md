@@ -197,6 +197,17 @@ Record shapes (keep these stable; readers depend on them):
    plain bash; stub `claude` via `CLAUDE_BIN`). The whole suite runs via
    `engine/setup/tests/run-all.sh` (hermetic, zero third-party deps outside `e2e/`);
    CI runs it as the blocking `regression` job and gates `main` on it. (→ coding-rules §5)
+   **Per-script tests are necessary but NOT sufficient — a feature also needs a test
+   of its COMPOSITION.** The dashboard was completely dead for seven weeks while every
+   unit test passed: the server test spawned the server directly and proved it served,
+   the hook test proved the hook's branching, and nothing asserted that the hook
+   actually *produces a reachable dashboard*. When a feature spans a hook + a spawn + a
+   renderer + a toggle, add one test that exercises the whole chain and asserts the
+   user-visible end state (`tests/evaluator/test_dashboard_lifecycle.py` is the worked
+   example), plus a wiring test that every knob is fed/declared/typed end-to-end
+   (`test_dashboard_param_wiring.py`). Validate any such guard by running it against
+   the pre-fix commit — a regression test that passes before AND after the fix is
+   worthless.
 7. **Skills stay lean** (~6 KB soft / 8 KB hard; overflow → `references/`), enforced
    daily by skill-maintain.
 8. **GUI side-effects guard once-per-boot** (`engine/nervepack_engine/hooks/open_dashboard.py`,
