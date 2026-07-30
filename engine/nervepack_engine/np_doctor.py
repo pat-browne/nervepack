@@ -92,6 +92,8 @@ def _core_check(cap_id, np):
         # so mirror that before the -n test); any backend error -> FAIL.
         try:
             out = np_model.complete("ping")
+        except np_model.AuthError as exc:
+            return "FAIL (auth: %s -- re-login with `claude setup-token`)" % exc
         except Exception:
             return "FAIL"
         out = out.rstrip("\n") if out else out
