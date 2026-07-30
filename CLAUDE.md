@@ -80,7 +80,9 @@ is the guaranteed path: it scans `~/.claude/projects/*/*.jsonl`, and for each
 against the saved transcript. SessionStart is awaited and the backgrounded work
 survives because the parent session stays alive. Idempotent (per-`session_id` claim
 marker + dedup vs committed `metrics.jsonl`), bounded per sweep (`backcapture_max`),
-skips `agent-*` subagent transcripts and the active session, fail-open.
+skips `agent-*` subagent transcripts, the active session, and nervepack's own
+headless `claude -p` children (the seam mints each child's `--session-id` and
+records it, so the sweep can't re-discover its own output as new work), fail-open.
 Promotion to the committed layers still rides the on-exit flush + daily/weekly crons
 (the awaited triggers). See [[np-kb-claude-headless-scripting]] §8, ARCHITECTURE
 invariant 12.

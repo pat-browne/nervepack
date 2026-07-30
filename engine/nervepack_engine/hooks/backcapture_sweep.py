@@ -261,7 +261,12 @@ def _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, met
                 continue
             tpath = os.path.join(root, name)
             sid = name[:-len(".jsonl")]
+            # np_model.is_own_session: each capture/evaluate call is itself a
+            # headless `claude -p` that writes a transcript here, so without this
+            # the sweep feeds its own queue faster than it can drain it (#202).
             if not sid or sid.startswith("agent-") or sid == cur_sid:
+                continue
+            if np_model.is_own_session(sid):
                 continue
             try:
                 mt = int(os.stat(tpath).st_mtime)
@@ -403,6 +408,9 @@ def run(payload_text, capture_fn=None, evaluate_fn=None, capture_ok_fn=None):
         cur_sid = payload.get("session_id") or ""
 
         now = int(time.time())
+        # Own-session markers only matter while a transcript is still inside the
+        # discovery window; past it the sweep would never look at it again.
+        np_model.prune_own_sessions(days * 86400)
         _discover(projects_dir, days, min_age_sec, cur_sid, seen_dir, queue_dir, metrics_path, now)
         processed = _process(queue_dir, seen_dir, metrics_path, max_per_sweep,
                               capture_fn or np_capture.capture, evaluate_fn or np_evaluator.evaluate,
