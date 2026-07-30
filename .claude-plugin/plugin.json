@@ -21,6 +21,7 @@
     "./skills/np-core-dashboard",
     "./skills/np-core-dispatch",
     "./skills/np-core-doctor",
+    "./skills/np-core-graduate",
     "./skills/np-core-handoff",
     "./skills/np-core-onboard",
     "./skills/np-core-recall",
