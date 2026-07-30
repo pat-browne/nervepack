@@ -164,13 +164,23 @@ def aggregate():
     if not np_content.content_is_explicit():
         return "skipped: implicit content dir fallback"
 
-    paths = ["dashboard/data/metrics.jsonl", "dashboard/data/metrics.js"]
+    source = "dashboard/data/metrics.jsonl"
+    paths = [source, "dashboard/data/metrics.js"]
     try:
+        # Gate on the SOURCE OF TRUTH only. metrics.js is a derived artifact that
+        # build.py regenerates every run, embedding resolved_last_24h -- a rolling
+        # count that changes on its own as seen-markers age out. Diffing it too
+        # made every run look dirty and commit "0 record(s)" (#202). It still
+        # rides along in the commit; it just never triggers one.
+        # Checked with `status`, not `add`+`diff --cached`: staging on the way to
+        # deciding NOT to commit leaves files in a shared index for the next
+        # writer to sweep up (AGENTS.md "concurrent session").
+        st = subprocess.run(["git", "-C", content, "status", "--porcelain", "--", source],
+                            capture_output=True, text=True)
+        if st.returncode != 0 or not (st.stdout or "").strip():
+            return "no-op: no metrics change to commit"
         subprocess.run(["git", "-C", content, "add"] + paths,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        diff = subprocess.run(["git", "-C", content, "diff", "--cached", "--quiet", "--"] + paths)
-        if diff.returncode == 0:
-            return "no-op: no metrics change to commit"
         msg = "evaluator(metrics): daily batch (%s) — %d record(s)" % (
             time.strftime("%Y-%m-%d", time.gmtime()), n)
         commit = subprocess.run(["git", "-C", content, "commit", "-q", "-m", msg, "--"] + paths,
