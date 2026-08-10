@@ -45,4 +45,28 @@ decision, fold it back into the right nervepack skill (via `np-core-contribute`)
 next session inherits it instead of re-deciding.
 > Process discipline composes with the "superpowers" plugin when installed; nervepack
 > does not depend on it. Provenance + credits: `NOTICE`.
+
+## Log quick-reference
+
+When diagnosing why a session wasn't captured, read:
+
+**`~/.cache/nervepack/backcapture.log`** (back-capture sweep — the reliable capture path)
+
+| Pattern | Meaning | Action |
+|---|---|---|
+| `sweep skipped: another sweep already running` | Lock contention — concurrent session starts (normal) | None; next sweep drains the backlog |
+| `aborting sweep: backend auth failed (…)` | Auth broken — all queued sessions skipped | Fix auth; retries resume automatically |
+| `back-captured <sid> (project <name>)` | Session captured and evaluated successfully | — |
+| `sweep done: N captured, M still queued` | Normal sweep completion | If M > 0, more sessions await the next sweep |
+| `retry-queued <sid> (transient capture failure)` | Model returned invalid output; retries up to 5× | Usually self-heals; watch for repeated entries |
+| `gave up on <sid> after N attempts` | 5-retry limit hit — session permanently dropped | No recovery path |
+| `dropped <sid> (transcript missing …)` | Transcript gone before processing | Lost — normal for ephemeral/test sessions |
+
+**`~/.cache/nervepack/session-flush.log`** (SessionEnd flush — drains capture/evaluator inboxes)
+
+| Pattern | Meaning |
+|---|---|
+| `skip: within Ns flush interval (age Xs)` | Throttled (default 900 s) — daily crons backstop missed flushes |
+| `skip: another flush is already running` | Lock contention — serializes concurrent session-ends |
+| `flush start` … `flush done` | Normal flush cycle completed |
 </EXTREMELY_IMPORTANT>
