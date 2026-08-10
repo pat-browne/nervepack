@@ -207,6 +207,19 @@ def _merge_mode():
     return m if m in ("override", "concatenate", "team-only") else "override"
 
 
+def _layer_label(root, personal):
+    """Display name of the overlay a wiki entry came from: the personal content dir
+    is the literal 'personal', any other merge root (a team overlay) is its dir
+    basename, which stays self-describing with up to 4 team dirs stacked.
+    Compared against _content_dir() rather than derived from the root's position in
+    merge_roots(), because team-only mode drops personal from that list entirely."""
+    if not root:
+        return ""
+    if personal and os.path.normpath(root) == os.path.normpath(personal):
+        return "personal"
+    return os.path.basename(os.path.normpath(root)) or "team"
+
+
 # Allowed link targets: http(s)/mailto, root-relative (not protocol-relative //),
 # fragment, or ./ ../ relative. Explicit alternation avoids \.{0,2}/ matching //.
 _SAFE_HREF = re.compile(r'^(https?:|mailto:|/(?!/)|#|\./|\.\./)' , re.I)
@@ -358,11 +371,13 @@ def md_to_html(md, meta=None, link_map=None, here=""):
     name = html.escape(str(meta.get("name", "")))
     kind = html.escape(str(meta.get("kind", meta.get("topic", ""))))
     stamp = html.escape(str(meta.get("version") or meta.get("last_updated") or ""))
+    layer = html.escape(str(meta.get("layer", "")))
     up = "../" * (here.count("/") + 2)
     back = up + "index.html"
-    head = ('<div class="np-head"><span>%s%s</span>'
+    head = ('<div class="np-head"><span>%s%s%s</span>'
             '<a href="%s">&#8617; dashboard</a></div>') % (
         name, (" &middot; " + kind + (" &middot; " + stamp if stamp else "")) if kind else "",
+        (" &middot; " + layer) if layer else "",
         back)
     # Mermaid: load the vendored (local, not CDN) lib only on pages that have a
     # diagram, keeping the no-external-fetch invariant. Gate: WIKI_MERMAID env
@@ -444,21 +459,22 @@ def wiki_index():
 
     roots = _content_layers()
     mode = _merge_mode()
+    personal = _content_dir()
 
     def _src_entry(p, topic, subdir, html, root):
         return {"name": p["name"], "topic": topic, "kind": p["kind"] or "reference",
                 "dir": subdir, "excerpt": p["excerpt"], "version": p.get("version", ""),
-                "html": html, "root": root}
+                "html": html, "root": root, "layer": _layer_label(root, personal)}
 
     def _synth_entry(p, html, root):
         return {"name": p["name"], "kind": "topic", "excerpt": p["excerpt"],
                 "last_updated": p["last_updated"], "sources": p["sources"],
-                "html": html, "root": root}
+                "html": html, "root": root, "layer": _layer_label(root, personal)}
 
     def _concept_synth(p, html, root):
         return {"name": p["name"], "kind": "concept", "excerpt": p["excerpt"],
                 "last_updated": p["last_updated"], "sources": p["sources"],
-                "html": html, "root": root}
+                "html": html, "root": root, "layer": _layer_label(root, personal)}
 
     def _index_container(container, kind, subdir, name, root, entry, claimed, synth_fn):
         """Walk one topic/concept container dir (recursively), mutating `entry`
@@ -541,26 +557,26 @@ def render_pages(index, out_dir):
     Two-pass: link_map (name -> data-relative path) lets [[wikilinks]] resolve.
     Source .md path is recovered from the html path. Fail-open per file."""
     link_map = {}
-    pages = []   # (name, html, kind, topic|None, last_updated, version, root)
+    pages = []   # (name, html, kind, topic|None, last_updated, version, root, layer)
     for t in index.get("topics", []):
         s = t.get("synthesis")
         if s:
             link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("root")))
+            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("root"), s.get("layer", "")))
         for it in t.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("root")))
+            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("root"), it.get("layer", "")))
     for c in index.get("concepts", []):
         s = c.get("synthesis")
         if s:
             link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("root")))
+            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("root"), s.get("layer", "")))
         for it in c.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("root")))
+            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("root"), it.get("layer", "")))
 
     default_cd = _content_dir()
-    for name, html, kind, topic, last_updated, version, root in pages:
+    for name, html, kind, topic, last_updated, version, root, layer in pages:
         rel_html = html[len("data/"):]                       # e.g. wiki/topics/aws/sub/aws.html
         # read the source from the layer it came from (team vs personal); nested
         # subdirs flow through unchanged since the md path mirrors the html path.
@@ -579,6 +595,8 @@ def render_pages(index, out_dir):
             meta["version"] = version
         if topic:
             meta["topic"] = topic
+        if layer:
+            meta["layer"] = layer
         here = posixpath.dirname(rel_html)
         dest = os.path.join(out_dir, rel_html)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
