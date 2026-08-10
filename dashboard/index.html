@@ -122,6 +122,10 @@
   .sug:first-child { border-top:none; }
   .sug .txt { flex:1; font-size:13px; }
   .sug .meta { font-size:11px; color:var(--text-tertiary); margin-top:2px; }
+  .sugedit { width:100%; font:inherit; font-size:13px; line-height:1.45; resize:vertical;
+             color:var(--text); background:var(--surface); padding:6px 8px;
+             border:1px solid var(--accent-sage); border-radius:var(--radius-sm); }
+  .sugedit:focus-visible { outline:2px solid var(--accent-sage); outline-offset:1px; }
   .pill { display:inline-flex; align-items:center; gap:4px; font-size:11px;
           font-weight:600; padding:2px 8px; border-radius:var(--radius-sm);
           border:1px solid; box-shadow:inset 0 0 0 1px rgba(0,0,0,.04); }
@@ -680,10 +684,11 @@
       const verdict = s.verdict ? `<div class="verdict ${s.verdict.decision === "implement" ? "implement" : "skip"}">${s.verdict.decision === "implement" ? "✓ build" : "↓ skip"} — ${esc(s.verdict.reason || "")}</div>` : "";
       const rowActs = SERVED ? `<span class="rowacts">
             <button class="btn sm primary" data-implement="${esc(s.text)}">Implement</button>
+            <button class="btn sm" data-modify="${esc(s.text)}" title="Edit the wording before implementing — the agent gets your version">Modify</button>
             <button class="btn sm" data-reject="${esc(s.text)}">Reject</button>
           </span>` : "";
       return `<div class="sug">
-        <div class="txt">${esc(s.text)}${verdict}
+        <div class="txt"><span class="sugtext">${esc(s.text)}</span>${verdict}
           <div class="meta"><span class="tag">${esc(s.target || "other")}</span>
             ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""} · ${fmtDate(s.ts)}</div>
         </div>
@@ -740,10 +745,50 @@
       // updates itself (✓ done & removed, or back to the buttons on failure) with no
       // manual refresh. The agent takes ~1-2 min; the pill shows live progress.
       elSug.querySelectorAll("[data-implement]").forEach(b =>
-        b.addEventListener("click", () => startImplement(b)));
+        b.addEventListener("click", () => startImplement(b, b.getAttribute("data-implement"))));
 
-      async function startImplement(b) {
-        const text = b.getAttribute("data-implement");
+      // Modify → edit the wording in place, then implement YOUR text. The row's own
+      // buttons are hidden rather than replaced, so cancelling restores a row whose
+      // listeners are still attached (re-rendering them would drop the wiring).
+      elSug.querySelectorAll("[data-modify]").forEach(b =>
+        b.addEventListener("click", () => openEditor(b)));
+
+      function openEditor(b) {
+        const text = b.getAttribute("data-modify");
+        const row = b.closest(".sug"), txt = row.querySelector(".txt"), acts = row.querySelector(".rowacts");
+        if (row.querySelector(".sugedit")) return;
+        const sugtext = txt.querySelector(".sugtext");
+        const own = [...acts.children];
+
+        const ta = document.createElement("textarea");
+        ta.className = "sugedit"; ta.rows = 3; ta.value = text;
+        ta.setAttribute("aria-label", "Edit this suggestion before implementing");
+        sugtext.hidden = true;
+        txt.insertBefore(ta, txt.firstChild);
+
+        const go = document.createElement("button");
+        go.className = "btn sm primary"; go.textContent = "Implement";
+        const cancel = document.createElement("button");
+        cancel.className = "btn sm"; cancel.textContent = "Cancel";
+        own.forEach(x => x.hidden = true);
+        acts.append(go, cancel);
+        ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+
+        const close = () => { ta.remove(); go.remove(); cancel.remove();
+                              sugtext.hidden = false; own.forEach(x => x.hidden = false); };
+        cancel.addEventListener("click", close);
+        ta.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+        go.addEventListener("click", () => {
+          const edited = ta.value.trim();
+          if (!edited) return ta.focus();
+          ta.remove(); go.remove(); cancel.remove();
+          sugtext.textContent = edited; sugtext.hidden = false;
+          own.forEach(x => x.hidden = false);
+          startImplement(own[0], text, edited);
+        });
+      }
+
+      async function startImplement(b, text, edited) {
         const row = b.closest(".sug"), acts = row.querySelector(".rowacts");
         const buttons = [...row.querySelectorAll("button")];
         buttons.forEach(x => x.style.display = "none");
@@ -751,8 +796,8 @@
         acts.appendChild(pill);
         const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
         const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
-        setPill("warn", "⋯ Implementing…");
-        try { await api("/api/implement", { text }); }
+        setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+        try { await api("/api/implement", { text, edited: edited || "" }); }
         catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
         let tries = 0;
         const poll = () => setTimeout(async () => {
@@ -767,6 +812,9 @@
             const note = document.createElement("div");
             note.className = "note ok"; note.innerHTML = "✓ Implemented" + link;
             elSug.querySelector(".panelhead").after(note);
+            dropResolved(text);
+          } else if (s.state === "already_resolved") {
+            // Another machine sharing this content overlay got there first.
             dropResolved(text);
           } else if (s.state === "not_implementable") {
             setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
