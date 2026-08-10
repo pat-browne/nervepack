@@ -300,13 +300,18 @@ class Handler(BaseHTTPRequestHandler):
                 np_suggestion_resolve.resolve(text, ledger_path=_RESOLVED or None, no_build=_NO_BUILD or None)
                 return self._json({"ok": True})
             if route == "/api/implement":
-                text = (self._body().get("text") or "").strip()
+                body = self._body()
+                text = (body.get("text") or "").strip()
                 if not text:
                     return self._json({"error": "missing text"}, 400)
+                # Optional Modify-box rewrite. Capped like the suggestion text itself —
+                # it reaches the agent prompt, which caps and data-fences it again.
+                edited = (body.get("edited") or "").strip()[:2000]
+                extra = [edited] if edited and edited != text else []
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
-                subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text]), cwd=NP, start_new_session=True,
+                subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text] + extra), cwd=NP, start_new_session=True,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
                 return self._json({"ok": True, "started": True})

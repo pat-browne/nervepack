@@ -41,7 +41,58 @@ def default_ledger_path():
         np_content.content_dir(), "dashboard", "data", "resolved-suggestions.txt")
 
 
-def resolve(text, ledger_path=None, no_build=None):
+def _ledger_lines(ledger_path):
+    try:
+        with open(ledger_path, "r", encoding="utf-8") as fh:
+            return [line.rstrip("\n") for line in fh]
+    except OSError:
+        return []
+
+
+def is_resolved(text, ledger_path=None):
+    """Has this suggestion already been acted on? The ledger is committed to the
+    content overlay and synced, so this also answers "did ANOTHER machine already
+    implement it" -- the only cross-machine coordination point nervepack has."""
+    if not text:
+        return False
+    if ledger_path is None:
+        ledger_path = default_ledger_path()
+    target = _norm(text)
+    return any(_norm(line) == target
+               for line in _ledger_lines(ledger_path)
+               if line and not line.startswith("#"))
+
+
+def unresolve(text, ledger_path=None, no_build=None):
+    """Drop a suggestion from the ledger so it resurfaces on the dashboard --
+    the recovery path when a job resolved something it never implemented.
+    Idempotent (a no-op when absent), so it converges rather than conflicts
+    when several machines run it against the same synced ledger."""
+    if not text:
+        return ('usage: unresolve "<suggestion text>"', 2)
+    if ledger_path is None:
+        ledger_path = default_ledger_path()
+    if no_build is None:
+        no_build = os.environ.get("NP_RESOLVE_NO_BUILD") == "1"
+
+    target = _norm(text)
+    lines = _ledger_lines(ledger_path)
+    kept = [line for line in lines
+            if not line or line.startswith("#") or _norm(line) != target]
+    if len(kept) == len(lines):
+        return ("not resolved, nothing to do: %s" % text, 0)
+
+    with open(ledger_path, "w", encoding="utf-8") as fh:
+        for line in kept:
+            fh.write(line + "\n")
+
+    if not no_build:
+        _rebuild_dashboard()
+
+    return ("unresolved: %s" % text, 0)
+
+
+def resolve(text, ledger_path=None, no_build=None, note=None):
     """Returns (message, exit_code). exit_code 2 on empty text (matches the
     bash original's `exit 2`); 0 otherwise."""
     if not text:
@@ -57,17 +108,16 @@ def resolve(text, ledger_path=None, no_build=None):
     if not os.path.exists(ledger_path):
         open(ledger_path, "a").close()
 
-    with open(ledger_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.rstrip("\n")
-            if not line or line.startswith("#"):
-                continue
-            if _norm(line) == target:
-                return ("already resolved: %s" % text, 0)
+    if is_resolved(text, ledger_path=ledger_path):
+        return ("already resolved: %s" % text, 0)
 
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # An optional 3rd tab field records what was actually done when the dashboard's
+    # Modify box rewrote the suggestion. Readers (_norm here, load_resolved in
+    # build.py) both split on the FIRST tab, so extra fields are inert.
+    tail = ("\t" + re.sub(r"\s+", " ", note).strip()) if note else ""
     with open(ledger_path, "a", encoding="utf-8") as fh:
-        fh.write("%s\t%s\n" % (text, ts))
+        fh.write("%s\t%s%s\n" % (text, ts, tail))
 
     if not no_build:
         _rebuild_dashboard()

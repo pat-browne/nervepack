@@ -236,7 +236,8 @@ def main(argv=None):
         # the re-entrancy case, so no extra check needed here.
         text = argv[1] if len(argv) > 1 else ""
         try:
-            return np_implement_suggestion.implement(text)
+            # argv[2], when present, is the dashboard Modify box's rewrite of argv[1].
+            return np_implement_suggestion.implement(text, argv[2] if len(argv) > 2 else None)
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0
@@ -262,6 +263,16 @@ def main(argv=None):
             return code
         except Exception as exc:
             _bail("suggestion-resolve", "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "suggestion-unresolve":
+        text = argv[1] if len(argv) > 1 else ""
+        try:
+            message, code = np_suggestion_resolve.unresolve(text)
+            sys.stdout.write(message + "\n")
+            return code
+        except Exception as exc:
+            _bail("suggestion-unresolve", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] == "toggle":

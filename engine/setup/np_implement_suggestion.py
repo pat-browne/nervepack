@@ -292,19 +292,50 @@ class _Attempt:
 
 def _agent_call(prompt, cwd, agent_fn, log_path):
     """Run the agentic pass; fail-open on a timeout (mirrors bash's `timeout 600`
-    + `|| true`: a hung agent must not wedge the job)."""
+    + `|| true`: a hung agent must not wedge the job). Returns (output, failure)
+    -- `failure` is a short reason string when the pass did not complete, which
+    the caller folds into the status detail so the dashboard shows WHY rather
+    than a bare "no commit"."""
     timeout = _agent_timeout()
     try:
         returncode, out, err = agent_fn(prompt, _AGENT_TOOLS, cwd, timeout)
-        return (out or "") + (err or "")
+        return (out or "") + (err or ""), ""
     except subprocess.TimeoutExpired:
-        _log(log_path, "agent pass timed out after %ss" % timeout)
-        return ""
+        reason = "agent pass timed out after %ss" % timeout
+        _log(log_path, reason)
+        return "", reason
     except np_model.AuthError:
         raise                      # #211: not a no-op -- the caller must not fail open
     except Exception as exc:
-        _log(log_path, "agent pass raised: %r" % exc)
+        reason = "agent pass raised: %r" % exc
+        _log(log_path, reason)
+        return "", reason
+
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _agent_commit(repo, wt, base_sha):
+    """The sha the agent committed in `wt`, or "" if it committed nothing.
+
+    Positively VERIFIES a commit rather than inferring one from `end_sha !=
+    base_sha`. That inference shipped a silent false success: `git -C <wt>
+    rev-parse HEAD` failing (a worktree that never got created, or vanished
+    under the agent) yields "" -- which is "different from base_sha", so a job
+    whose agent never ran reported `implemented`, resolved the suggestion off
+    the dashboard, and left _land pushing an empty refspec (a branch DELETE).
+    Requires: rev-parse succeeded, the result is a real 40-hex sha, it is not
+    the base, and it DESCENDS from the base (anything else is not this agent's
+    work on this base)."""
+    r = _git(wt, "rev-parse", "HEAD")
+    if r.returncode != 0:
         return ""
+    end_sha = (r.stdout or "").strip()
+    if not _SHA_RE.match(end_sha) or end_sha == base_sha:
+        return ""
+    if _git(repo, "merge-base", "--is-ancestor", base_sha, end_sha).returncode != 0:
+        return ""
+    return end_sha
 
 
 def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
@@ -342,7 +373,7 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
         return a
 
     try:
-        out = _agent_call(prompt, wt, agent_fn, log_path)
+        out, failure = _agent_call(prompt, wt, agent_fn, log_path)
 
         if "NOT_IMPLEMENTABLE" in out:
             a.state = "not_implementable"
@@ -350,12 +381,13 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
             a.detail = (m.group(0)[:160] if m else "") or ("%s repo: not a code change" % label)
             return a
 
-        end_sha_r = _git(wt, "rev-parse", "HEAD")
-        end_sha = (end_sha_r.stdout or "").strip() if end_sha_r.returncode == 0 else ""
-        if end_sha == base_sha:
+        end_sha = _agent_commit(repo, wt, base_sha)
+        if not end_sha:
             a.state = "no_commit"
             detail = "%s repo: agent produced no commit" % label
-            if out:
+            if failure:
+                detail = "%s (%s)" % (detail, failure)
+            elif out:
                 tail = out[-160:].replace("\n", " ")
                 detail = "%s (last output: %s)" % (detail, tail)
             a.detail = detail
@@ -396,10 +428,15 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
     return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
 
 
-def implement(text, repo=None, log_path=None, lock_path=None, status_dir=None,
+def implement(text, edited=None, repo=None, log_path=None, lock_path=None, status_dir=None,
               prompt_file=None, resolve_fn=None, agent_fn=None, gh_pr_create_fn=None):
     """Implement ONE suggestion. Returns 0 always (fail-open) -- callers never
-    need a nonzero exit; state is communicated via the status file + log."""
+    need a nonzero exit; state is communicated via the status file + log.
+
+    `text` is the evaluator's original suggestion: it keys the status file the
+    dashboard polls and it is what gets resolved off the ledger. `edited` is the
+    dashboard Modify box's rewrite -- when present it is what the agent actually
+    receives, and it is recorded next to the original in the ledger."""
     if os.environ.get("NERVEPACK_AGENT"):
         return 0  # never recurse if already inside an agent
     home = os.environ.get("HOME") or os.path.expanduser("~")
@@ -418,6 +455,15 @@ def implement(text, repo=None, log_path=None, lock_path=None, status_dir=None,
         return 0
 
     key = _status_key(text)
+    task = (edited or "").strip() or text
+
+    # Several machines share one content overlay, so the ledger is the only place
+    # they can see each other's work. If this suggestion came back resolved on the
+    # last sync, another machine already did it -- don't spend a second agent pass.
+    if np_suggestion_resolve.is_resolved(text):
+        _write_status(status_dir, key, "already_resolved", "resolved elsewhere; nothing to do")
+        _log(log_path, "already resolved (another machine or an earlier run); skipping %r" % text)
+        return 0
 
     if not _acquire_lock(lock_path):
         _write_status(status_dir, key, "busy")
@@ -433,9 +479,9 @@ def implement(text, repo=None, log_path=None, lock_path=None, status_dir=None,
 
         mode = np_toggle.param("evaluator.implement_mode", "pr")
         content_repo = _resolve_content_repo(repo)
-        slug = _slug(text)
+        slug = _slug(task)
         branch = "np-suggest/%s" % slug
-        prompt = _build_prompt(prompt_file, text)
+        prompt = _build_prompt(prompt_file, task)
 
         land_repo = land_label = base = base_sha = agent_sha = ""
         content = None
@@ -482,13 +528,15 @@ def implement(text, repo=None, log_path=None, lock_path=None, status_dir=None,
 
         ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn)
 
+        note = ("implemented as: %s" % task) if task != text else ""
         try:
-            resolve_fn(text)
+            resolve_fn(text, note)
         except Exception as exc:
             _log(log_path, "resolve step failed for %r: %r" % (text, exc))
 
         _write_status(status_dir, key, "done", ref)
-        _log(log_path, "implemented %r -> %s (%s repo)" % (text, ref, land_label))
+        _log(log_path, "implemented %r%s -> %s (%s repo)"
+             % (text, (" as %r" % task) if task != text else "", ref, land_label))
         return 0
     finally:
         shutil.rmtree(lock_path, ignore_errors=True)
@@ -499,6 +547,13 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
     a base branch name, or a PR URL) recorded in the status file."""
     gh_pr_create_fn = gh_pr_create_fn or _default_gh_pr_create
     ref = land_repo
+
+    # Belt-and-braces: only _attempt_repo's verified sha may reach a remote. An
+    # empty agent_sha would make the direct-landing refspec ":refs/heads/<base>",
+    # which git reads as DELETE <base> -- and exits 0 doing it.
+    if not _SHA_RE.match(agent_sha or ""):
+        _log(log_path, "refusing to land %r: not a verified commit sha (%s repo)" % (agent_sha, land_label))
+        return branch
 
     if land_label == "engine" and mode == "pr":
         ref = branch
@@ -544,7 +599,7 @@ def _default_gh_pr_create(repo, branch, base):
     return (r.stdout or "").strip() if r.returncode == 0 else ""
 
 
-def _default_resolve(text):
+def _default_resolve(text, note=""):
     """Resolve (mark acted-on) + COMMIT the resolution so the ledger's own tree
     is left clean. Resolves in-process via np_suggestion_resolve.resolve()
     (rewrites resolved-suggestions.txt + rebuilds metrics.js), then
@@ -555,7 +610,7 @@ def _default_resolve(text):
     # the bash shell-out that was one of the sites hardened during the
     # Windows-hang investigation (stdin=DEVNULL, timeout=60). No subprocess,
     # no stdin/timeout concern at all.
-    np_suggestion_resolve.resolve(text)
+    np_suggestion_resolve.resolve(text, note=note)
     ledger = np_suggestion_resolve.default_ledger_path()
     ledger_dir = os.path.dirname(ledger)
     root_r = _git(ledger_dir, "rev-parse", "--show-toplevel")
