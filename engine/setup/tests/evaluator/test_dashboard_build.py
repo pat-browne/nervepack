@@ -509,6 +509,26 @@ class TestWikiIndex(unittest.TestCase):
         topic_names = [t["topic"] for t in wiki["topics"]]
         self.assertEqual(topic_names, ["aws"])
 
+    def test_single_root_labels_every_entry_personal(self):
+        """With only the personal overlay resolving, every synthesis + source entry
+        carries layer == 'personal' (the sidebar badge has something to render even
+        before a team overlay is configured)."""
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic(cd, "rust", "rust",
+                         {"name": "rust", "kind": "topic",
+                          "last_updated": "2026-06-01", "sources": "[]"}, "# Rust\n\nx.")
+            _write_topic(cd, "rust", "ownership",
+                         {"name": "ownership", "kind": "reference", "topic": "rust"},
+                         "# Ownership\n\ny.")
+            _write_concept(cd, "borrow-checker",
+                           {"name": "borrow-checker", "kind": "concept",
+                            "last_updated": "2026-05-10", "sources": "[]"}, "# BC\n\nz.")
+            wiki = _parse_wiki(run_build_wiki(cd))
+        rust = next(t for t in wiki["topics"] if t["topic"] == "rust")
+        self.assertEqual(rust["synthesis"]["layer"], "personal")
+        self.assertEqual(rust["sources"][0]["layer"], "personal")
+        self.assertEqual(wiki["concepts"][0]["synthesis"]["layer"], "personal")
+
     def test_wiki_nav_off_yields_empty_groups(self):
         with tempfile.TemporaryDirectory() as cd:
             _write_topic(cd, "rust", "rust",
@@ -753,6 +773,37 @@ class TestWikiIndexLayers(unittest.TestCase):
         self.assertEqual(names.count("rust"), 1)                      # merged, not duplicated
         rust = next(t for t in w["topics"] if t["topic"] == "rust")
         self.assertIn("TEAM rust", rust["synthesis"]["excerpt"])      # higher layer's synthesis wins
+
+    def test_layer_label_is_basename_for_team_and_personal_for_content_dir(self):
+        """Each entry's `layer` names the overlay it came from: the personal content
+        dir is the literal 'personal', a team overlay is its dir basename."""
+        w = self._two_layers("override")
+        team_label = os.path.basename(self._t)
+        by_topic = {t["topic"]: t for t in w["topics"]}
+        self.assertEqual(by_topic["rust"]["synthesis"]["layer"], team_label)  # team won
+        self.assertEqual(by_topic["zig"]["synthesis"]["layer"], team_label)   # team-only topic
+        self.assertEqual(by_topic["go"]["synthesis"]["layer"], "personal")    # personal-only
+
+    def test_layer_label_holds_in_team_only_mode(self):
+        """team-only drops the personal root from merge_roots entirely; the label
+        must still come from the root itself, not from its position in that list."""
+        w = self._two_layers("team-only")
+        team_label = os.path.basename(self._t)
+        for t in w["topics"]:
+            self.assertEqual(t["synthesis"]["layer"], team_label)
+
+
+class TestWikiLayerBadgeWiring(unittest.TestCase):
+    """build.py emitting `layer` is only half the feature — index.html has to read
+    it. Static guard on the consumer side (invariant 6: test the composition)."""
+
+    def test_index_html_renders_the_layer_badge(self):
+        index = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "dashboard", "index.html"))
+        with open(index, encoding="utf-8") as fh:
+            html_text = fh.read()
+        self.assertIn("l.layer", html_text)          # the leaf renderer reads the field
+        self.assertRegex(html_text, r"\.wl\s*\{")    # and the badge has a style rule
 
 
 class TestWikiNesting(unittest.TestCase):

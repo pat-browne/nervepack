@@ -197,6 +197,27 @@ class TestRenderPagesVersionStamp(unittest.TestCase):
                       "version stamp '1.2.3' missing from rendered source page")
 
 
+class TestRenderPagesLayerStamp(unittest.TestCase):
+    """The overlay badge shown in the sidebar must also survive onto the opened
+    page, so a reader who follows a link still sees which layer it came from."""
+
+    def test_md_to_html_stamps_the_layer(self):
+        out = build.md_to_html("# AWS\n\nBody.", meta={
+            "name": "aws", "kind": "topic", "last_updated": "2026-06-01",
+            "layer": "personal"})
+        self.assertIn("personal", out)
+
+    def test_render_pages_carries_layer_into_the_page_header(self):
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic_synthesis(cd, "aws", "aws")
+            out_dir, _ = _run_build_in_content(cd)
+        with open(os.path.join(out_dir, "wiki", "topics", "aws", "aws.html"),
+                  encoding="utf-8") as fh:
+            body = fh.read()
+        self.assertIn("personal", body,
+                      "layer stamp missing from rendered topic page header")
+
+
 class TestWikiStructureRenders(unittest.TestCase):
     """A topic holding reference pages that carry Mermaid fences + GFM tables must
     render end-to-end via render_pages: diagram containers, the vendored (local)
