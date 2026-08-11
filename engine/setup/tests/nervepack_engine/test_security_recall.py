@@ -71,6 +71,32 @@ class TestSecurityRecall(unittest.TestCase):
         out2 = self._run("s7b", "check vulnerability in the api")
         self.assertTrue(out2)
 
+    def test_8_conf_param_off_silent(self):
+        """The flag is a declared param, so toggles.conf alone can turn it off --
+        a bare sub-toggle could only ever inherit `skills` and was invisible here."""
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("skills|shared|runtime|on|security_recall=off\n")
+        out = self._run("s8", "security review this endpoint")
+        self.assertEqual(out, "")
+
+    def test_9_family_off_still_wins(self):
+        """Switching the whole family off must remain decisive over the param."""
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("skills|shared|runtime|off|security_recall=on\n")
+        out = self._run("s9", "security review this endpoint")
+        self.assertEqual(out, "")
+
+    def test_10_state_dir_defaults_under_the_nervepack_cache(self):
+        """Not a world-shared /tmp path — HOME-relative, like every other hook's state.
+        (Asserted as an exact path: under the suite's hermetic HOME, ~ IS a /tmp dir,
+        so 'does not start with /tmp' would be testing the harness, not the code.)"""
+        from nervepack_engine.hooks import security_recall
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NP_SECURITY_RECALL_STATE", None)
+            d = security_recall._state_dir()
+        self.assertEqual(d, os.path.join(os.path.expanduser("~"), ".cache",
+                                         "nervepack", "security-recall-state"))
+
 
 if __name__ == "__main__":
     unittest.main()

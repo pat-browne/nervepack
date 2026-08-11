@@ -64,6 +64,32 @@ class TestSkillTriggerRecall(unittest.TestCase):
         out = self._run("s4", "refactor this skill please")
         self.assertEqual(out, "")
 
+    def test_6_conf_param_off_silent(self):
+        """The flag is a declared param, so toggles.conf alone can turn it off --
+        a bare sub-toggle could only ever inherit `skills` and was invisible here."""
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("skills|shared|runtime|on|trigger_recall=off\n")
+        out = self._run("s5", "refactor this skill please")
+        self.assertEqual(out, "")
+
+    def test_7_family_off_still_wins(self):
+        """Switching the whole family off must remain decisive over the param."""
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("skills|shared|runtime|off|trigger_recall=on\n")
+        out = self._run("s6", "refactor this skill please")
+        self.assertEqual(out, "")
+
+    def test_8_state_dir_defaults_under_the_nervepack_cache(self):
+        """Not a world-shared /tmp path — HOME-relative, like every other hook's state.
+        (Asserted as an exact path: under the suite's hermetic HOME, ~ IS a /tmp dir,
+        so 'does not start with /tmp' would be testing the harness, not the code.)"""
+        from nervepack_engine.hooks import skill_trigger_recall
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NP_SKILL_TRIGGER_STATE", None)
+            d = skill_trigger_recall._state_dir()
+        self.assertEqual(d, os.path.join(os.path.expanduser("~"), ".cache",
+                                         "nervepack", "skill-trigger-state"))
+
 
 if __name__ == "__main__":
     unittest.main()

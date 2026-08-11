@@ -16,11 +16,13 @@ _MSG = ("Security-review trigger (Nervepack): this prompt mentions security or "
 
 
 def _state_dir():
-    return os.environ.get("NP_SECURITY_RECALL_STATE") or "/tmp/nervepack-security-recall"
+    return os.environ.get("NP_SECURITY_RECALL_STATE") or os.path.join(
+        os.path.expanduser("~"), ".cache", "nervepack", "security-recall-state")
 
 
 def run(payload_text):
-    if not np_toggle.enabled("skills.security_recall"):
+    # param, not a bare sub-toggle -- see skill_trigger_recall.run().
+    if not np_toggle.enabled("skills") or np_toggle.param("skills.security_recall", "on") != "on":
         return ""
     try:
         payload = json.loads(payload_text or "{}")
