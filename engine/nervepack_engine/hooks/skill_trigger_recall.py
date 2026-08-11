@@ -18,11 +18,15 @@ _MSG = ("Skill-writing trigger (Nervepack): this prompt matches a skill-writing 
 
 
 def _state_dir():
-    return os.environ.get("NP_SKILL_TRIGGER_STATE") or "/tmp/nervepack-skill-trigger"
+    return os.environ.get("NP_SKILL_TRIGGER_STATE") or os.path.join(
+        os.path.expanduser("~"), ".cache", "nervepack", "skill-trigger-state")
 
 
 def run(payload_text):
-    if not np_toggle.enabled("skills.trigger_recall"):
+    # param, not a bare sub-toggle: a sub-toggle inherits "skills" and never appears
+    # in toggles.conf, so the flag is invisible until someone reads this file
+    # (AGENTS.md § "Feature toggles"). The family check keeps `skills off` decisive.
+    if not np_toggle.enabled("skills") or np_toggle.param("skills.trigger_recall", "on") != "on":
         return ""
     try:
         payload = json.loads(payload_text or "{}")

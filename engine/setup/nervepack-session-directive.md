@@ -45,4 +45,8 @@ decision, fold it back into the right nervepack skill (via `np-core-contribute`)
 next session inherits it instead of re-deciding.
 > Process discipline composes with the "superpowers" plugin when installed; nervepack
 > does not depend on it. Provenance + credits: `NOTICE`.
+
+Diagnosing why a session wasn't captured? Invoke `np-core-doctor` — its
+references/log-patterns.md decodes every `backcapture.log` / `session-flush.log`
+bail and success line.
 </EXTREMELY_IMPORTANT>
