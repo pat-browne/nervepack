@@ -66,6 +66,11 @@ re-run `cli.py setup link-dashboard-data`.
 **Adapter checks report MISSING** — no `~/.config/nervepack/adapter.json` yet; run the
 onboarding flow ([[np-core-onboard]]) to wire the adapter and generate the file.
 
+**Doctor passes but a session wasn't captured** — the doctor checks wiring, not
+outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) and
+`session-flush.log`; every bail/success string is decoded in
+references/log-patterns.md.
+
 ## After fixing
 
 Re-run the doctor; exit 0 + "MUST tier OK ✓" means the engine is healthy.

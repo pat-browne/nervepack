@@ -35,6 +35,8 @@ SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook backc
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook struggle-escalation
 # --- 59: skill-trigger recall ---
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook skill-trigger-recall
+# --- 59b: security-review recall ---
+UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook security-recall
 # --- 61: resume pointer ---
 SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-sessionstart &
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-recall
