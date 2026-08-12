@@ -68,16 +68,16 @@ class TestTurnGate(unittest.TestCase):
             self.assertEqual(self._run(_turn(edits=[p])), "", p)
 
     def test_stop_hook_active_is_silent_without_parsing(self):
-        with mock.patch.object(np_turn_parse, "parse",
-                               side_effect=AssertionError("must not parse")):
+        with mock.patch.object(np_turn_parse, "parse") as parse_mock:
             self.assertEqual(
                 turn_gate.run(self._payload(stop_hook_active=True)), "")
+            parse_mock.assert_not_called()
 
     def test_toggle_off_is_silent(self):
         with mock.patch.object(turn_gate.np_toggle, "enabled", return_value=False), \
-             mock.patch.object(np_turn_parse, "parse",
-                               side_effect=AssertionError("must not parse")):
+             mock.patch.object(np_turn_parse, "parse") as parse_mock:
             self.assertEqual(turn_gate.run(self._payload()), "")
+            parse_mock.assert_not_called()
 
     def test_ui_param_off_disables_the_check(self):
         self.assertEqual(
