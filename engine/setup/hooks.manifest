@@ -50,3 +50,5 @@ SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resum
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-recall
 # --- 63: open artifact on write (Write-scoped) ---
 PostToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-artifact
+# --- 64: turn-completion gate (Stop-scoped; the one hook permitted to block) ---
+Stop||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook turn-gate
