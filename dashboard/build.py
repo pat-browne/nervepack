@@ -14,6 +14,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -205,6 +206,45 @@ def _content_layers():
 def _merge_mode():
     m = _np_content_fn("merge_mode").strip()
     return m if m in ("override", "concatenate", "team-only") else "override"
+
+
+def _engine_dir():
+    """Engine repo root — the lowest-precedence wiki layer. `NP_ENGINE_DIR` overrides
+    it (tests); otherwise it is the repo this build.py ships in."""
+    d = os.environ.get("NP_ENGINE_DIR", "").strip()
+    return d or os.path.join(HERE, "..")
+
+
+def _wiki_roots():
+    """Wiki layers to scan, highest precedence first: the merge roots (team… then
+    personal), plus the engine root appended last.
+
+    The engine ships its own `wiki/topics/`, which `merge_roots()` never returns —
+    without this the engine's pages are invisible in the dashboard (#142a). Skipped
+    when the engine dir IS a content layer (the legacy single-repo layout, where
+    _content_dir() falls back to the engine root), and under `team-only`, whose
+    contract is team layers only."""
+    roots = _content_layers()
+    if _merge_mode() == "team-only":
+        return roots
+    eng = _engine_dir()
+    try:
+        seen = {os.path.realpath(r) for r in roots}
+        dup = os.path.realpath(eng) in seen
+    except OSError:                       # unresolvable path: fail open, don't add
+        dup = True
+    return roots if dup else roots + [eng]
+
+
+_SLUG_UNSAFE = re.compile(r'[^A-Za-z0-9._-]+')
+
+
+def _layer_slug(label):
+    """Filesystem-safe single path segment for a layer's rendered pages. A team
+    overlay's dir basename reaches this unfiltered, so anything that could escape
+    the output tree (separators, '..') is neutralised here."""
+    s = _SLUG_UNSAFE.sub("-", label or "").strip("-.")
+    return s or "layer"
 
 
 def _layer_label(root, personal):
@@ -453,36 +493,42 @@ def wiki_index():
     kind:reference sources; wiki/concepts/<concept>/ is symmetric — one kind:concept
     synthesis page + N kind:reference sources.
     Gated by WIKI_NAV (default on, fail-open)."""
-    empty = {"topics": [], "concepts": []}
+    empty = {"topics": [], "concepts": [], "layers": []}
     if os.environ.get("WIKI_NAV", "on").strip().lower() == "off":
         return empty
 
-    roots = _content_layers()
-    mode = _merge_mode()
+    roots = _wiki_roots()
     personal = _content_dir()
 
-    def _src_entry(p, topic, subdir, html, root):
+    def _src_entry(p, topic, subdir, html, root, layer):
         return {"name": p["name"], "topic": topic, "kind": p["kind"] or "reference",
                 "dir": subdir, "excerpt": p["excerpt"], "version": p.get("version", ""),
-                "html": html, "root": root, "layer": _layer_label(root, personal)}
+                "html": html, "root": root, "layer": layer, "shadowed": False,
+                "src": p["path"]}
 
-    def _synth_entry(p, html, root):
+    def _synth_entry(p, html, root, layer):
         return {"name": p["name"], "kind": "topic", "excerpt": p["excerpt"],
                 "last_updated": p["last_updated"], "sources": p["sources"],
-                "html": html, "root": root, "layer": _layer_label(root, personal)}
+                "html": html, "root": root, "layer": layer, "shadowed": False,
+                "src": p["path"]}
 
-    def _concept_synth(p, html, root):
+    def _concept_synth(p, html, root, layer):
         return {"name": p["name"], "kind": "concept", "excerpt": p["excerpt"],
                 "last_updated": p["last_updated"], "sources": p["sources"],
-                "html": html, "root": root, "layer": _layer_label(root, personal)}
+                "html": html, "root": root, "layer": layer, "shadowed": False,
+                "src": p["path"]}
 
-    def _index_container(container, kind, subdir, name, root, entry, claimed, synth_fn):
-        """Walk one topic/concept container dir (recursively), mutating `entry`
-        (its 'synthesis' + 'sources') and `claimed` (the page-name dedup set). Shared
-        by the topic and concept passes -- the caller owns the cross-layer
-        entry/claimed/override-skip state, so this walk (which was duplicated verbatim
-        for topics and concepts) lives once. `synth_fn(page, html, root)` builds the
-        synthesis entry; `subdir` is 'topics'/'concepts' for the HTML path. (#176)"""
+    def _index_container(container, kind, subdir, name, root, layer, slug, entry, synth_fn):
+        """Walk one topic/concept container dir (recursively) for ONE layer, mutating
+        `entry` (its 'synthesis' + 'sources'). Shared by the topic and concept passes.
+        `synth_fn(page, html, root, layer)` builds the synthesis entry; `subdir` is
+        'topics'/'concepts' for the HTML path. (#176)
+
+        Dedup here is WITHIN this layer only (a page name repeated across the topic's
+        subdirs). Cross-layer precedence is the caller's job now: since #142 every
+        layer is indexed and lower-precedence copies are MARKED shadowed rather than
+        dropped, so provenance stays legible in the nav."""
+        claimed = set()
         for dirpath, dirnames, filenames in os.walk(container):
             dirnames.sort()
             sub = os.path.relpath(dirpath, container)
@@ -494,93 +540,116 @@ def wiki_index():
                 if not p:
                     continue
                 rel = (sub + "/" + p["name"]) if sub else p["name"]
-                html = "data/wiki/%s/%s/%s.html" % (subdir, name, rel)
+                # Layer-qualified: two layers may hold the same topic+page name, and
+                # unqualified paths would render both to one file (last writer wins).
+                html = "data/wiki/%s/%s/%s/%s.html" % (slug, subdir, name, rel)
                 if p["kind"] == kind and sub == "":     # synthesis page at the root only
                     if entry["synthesis"] is None:
-                        entry["synthesis"] = synth_fn(p, html, root)
+                        entry["synthesis"] = synth_fn(p, html, root, layer)
                         claimed.add(p["name"])
                     continue
                 if p["name"] in claimed:
-                    continue                            # page-level dedup across layers + subdirs
+                    continue                            # within-layer dedup
                 claimed.add(p["name"])
-                entry["sources"].append(_src_entry(p, name, sub, html, root))
+                entry["sources"].append(_src_entry(p, name, sub, html, root, layer))
 
-    topics = {}             # topic -> entry (accumulated across layers)
-    taken = {}              # topic -> set of page names already claimed (dedup)
-    cmap = {}; ctaken = {}; seen_concept = set()
+    def _mark(entry, owned):
+        """Flag any page this entry holds whose name a higher-precedence layer already
+        owns, then report the names it contributes. Topic-level `shadowed` follows the
+        synthesis page — that is what the nav dims."""
+        names = []
+        s = entry.get("synthesis")
+        if s:
+            s["shadowed"] = s["name"] in owned
+            entry["shadowed"] = s["shadowed"]
+            names.append(s["name"])
+        for src in entry["sources"]:
+            src["shadowed"] = src["name"] in owned
+            names.append(src["name"])
+        return names
+
+    topics, concepts, layers = [], [], []
+    owned = set()               # page names claimed by a higher-precedence layer
+    used = {}                   # label -> count, so two same-basename dirs stay distinct
     for cd in roots:
-        troot = os.path.join(cd, "wiki", "topics")
-        try:
-            tdirs = sorted(os.listdir(troot))
-        except OSError:
-            tdirs = []
-        for topic in tdirs:
-            td = os.path.join(troot, topic)
-            if not os.path.isdir(td):
-                continue
-            if topic in topics and mode != "concatenate":
-                continue   # higher-precedence (team) layer already owns this topic
-            if topic not in topics:
-                topics[topic] = {"topic": topic, "synthesis": None, "sources": []}
-                taken[topic] = set()
-            _index_container(td, "topic", "topics", topic, cd,
-                             topics[topic], taken[topic], _synth_entry)
+        label = _layer_label(cd, personal)
+        used[label] = used.get(label, 0) + 1
+        if used[label] > 1:
+            label = "%s (%d)" % (label, used[label])
+        slug = _layer_slug(label)
+        fresh = []              # names this layer contributes, merged into `owned` after
+        got = False             # did this layer contribute anything worth a nav section?
 
-        croot = os.path.join(cd, "wiki", "concepts")
-        try:
-            cdirs = sorted(os.listdir(croot))
-        except OSError:
-            cdirs = []
-        for concept in cdirs:
-            ccd = os.path.join(croot, concept)
-            if not os.path.isdir(ccd):
-                continue
-            if concept in seen_concept and mode != "concatenate":
-                continue
-            if concept not in cmap:
-                cmap[concept] = {"name": concept, "synthesis": None, "sources": []}
-                ctaken[concept] = set()
-            _index_container(ccd, "concept", "concepts", concept, cd,
-                             cmap[concept], ctaken[concept], _concept_synth)
-            seen_concept.add(concept)
+        for kind, subdir, holder, synth_fn, key in (
+                ("topic", "topics", topics, _synth_entry, "topic"),
+                ("concept", "concepts", concepts, _concept_synth, "name")):
+            root_dir = os.path.join(cd, "wiki", subdir)
+            try:
+                names = sorted(os.listdir(root_dir))
+            except OSError:
+                names = []
+            for nm in names:
+                container = os.path.join(root_dir, nm)
+                if not os.path.isdir(container):
+                    continue
+                entry = {key: nm, "layer": label, "shadowed": False,
+                         "synthesis": None, "sources": []}
+                _index_container(container, kind, subdir, nm, cd, label, slug,
+                                 entry, synth_fn)
+                if entry["synthesis"] is None and not entry["sources"]:
+                    continue                            # empty dir: nothing to show
+                fresh.extend(_mark(entry, owned))
+                entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
+                holder.append(entry)
+                got = True
+        owned.update(fresh)
+        # Only layers that actually contributed pages become nav sections — an
+        # engine or team root with no wiki/ would otherwise render as an empty group.
+        if got:
+            layers.append(label)
 
-    for entry in topics.values():
-        entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
-    for entry in cmap.values():
-        entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
-    return {"topics": [topics[k] for k in sorted(topics)],
-            "concepts": [cmap[k] for k in sorted(cmap)]}
+    return {"topics": topics, "concepts": concepts, "layers": layers}
 
 
 def render_pages(index, out_dir):
     """Render every indexed page to <out_dir>/<its html path minus 'data/'>.
     Two-pass: link_map (name -> data-relative path) lets [[wikilinks]] resolve.
     Source .md path is recovered from the html path. Fail-open per file."""
+    # Clear the previous render first: page paths carry a layer slug since #142, so
+    # an upgrade (or a renamed/removed topic, or a dropped team overlay) would
+    # otherwise leave orphaned .html from the old scheme behind forever. The tree is
+    # fully regenerated below, and fail-open — a prune error must not break the build.
+    try:
+        shutil.rmtree(os.path.join(out_dir, "wiki"))
+    except (OSError, FileNotFoundError):
+        pass
+
     link_map = {}
-    pages = []   # (name, html, kind, topic|None, last_updated, version, root, layer)
+    pages = []   # (name, html, kind, topic|None, last_updated, version, src, layer)
     for t in index.get("topics", []):
         s = t.get("synthesis")
         if s:
             link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("root"), s.get("layer", "")))
+            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
         for it in t.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("root"), it.get("layer", "")))
+            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("src"), it.get("layer", "")))
     for c in index.get("concepts", []):
         s = c.get("synthesis")
         if s:
             link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("root"), s.get("layer", "")))
+            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
         for it in c.get("sources", []):
             link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("root"), it.get("layer", "")))
+            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("src"), it.get("layer", "")))
 
-    default_cd = _content_dir()
-    for name, html, kind, topic, last_updated, version, root, layer in pages:
-        rel_html = html[len("data/"):]                       # e.g. wiki/topics/aws/sub/aws.html
-        # read the source from the layer it came from (team vs personal); nested
-        # subdirs flow through unchanged since the md path mirrors the html path.
-        src_md = os.path.join(root or default_cd, rel_html[:-5] + ".md")
+    for name, html, kind, topic, last_updated, version, src_md, layer in pages:
+        rel_html = html[len("data/"):]        # e.g. wiki/personal/topics/aws/sub/aws.html
+        # The source path is recorded at index time rather than reconstructed from the
+        # html path: since #142 that path carries a layer slug the source tree has no
+        # counterpart for, so recovery-by-string no longer round-trips.
+        if not src_md:
+            continue
         try:
             with open(src_md, encoding="utf-8") as fh:
                 md = fh.read()
