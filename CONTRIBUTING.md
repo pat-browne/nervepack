@@ -19,6 +19,15 @@ not belong in this repository. So keep your PRs free of personal data, meaning n
 emails, home paths, private hostnames or IPs, or credentials. There's a CI guard
 (`pii-guard`) that enforces this, but please don't make it work for a living.
 
+Commits and PR bodies also stay company-neutral: describe the feature and the tech
+stack only, no company or client names, no internal system names, minimal "why". The
+engine is public and reusable by any forker — company-specific motivation belongs in
+your own content overlay, not here.
+
+`main` is branch-protected — land a change via a PR from a branch off the latest
+`main`, not a direct or `--admin`-bypass push. Reserve `--admin` for routine,
+already-green dependabot bumps that are merely behind `main`.
+
 ## Development
 
 nervepack is deliberately dependency-light.
