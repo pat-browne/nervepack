@@ -28,6 +28,14 @@ durable artifact — committing it pollutes the repo and the publish surface.
   SessionStart directive re-lists skills passively; naming the relevant ones here turns
   that into a directed pickup.
 
+## Always surface the file, not just its path
+
+Once the doc is written, send it to the user (e.g. a file-delivery tool if the host
+provides one) so it opens for review immediately — don't just state the path in text and
+wait to be asked. A handoff is written *for* the user to review before dispatch as much as
+for the next agent to read; a path mentioned in passing is easy to miss or skip past, and
+review is the entire reason this is a separate document instead of an inline message.
+
 ## Rules
 
 - **Reference, don't duplicate.** Anything already captured in a plan, spec, ADR, issue,
@@ -67,4 +75,5 @@ durable artifact — committing it pollutes the repo and the publish surface.
 | 2 | Draft: objective → state (done / in-flight / blocked) → next concrete step |
 | 3 | Add a **Suggested skills** section naming specific nervepack skills to invoke |
 | 4 | Reference existing artifacts by path/URL; redact secrets/PII |
-| 5 | Write to `${TMPDIR:-/tmp}/handoff-<slug>.md` and tell the user the path |
+| 5 | Write to `${TMPDIR:-/tmp}/handoff-<slug>.md` |
+| 6 | Send the file to the user so it opens for review — don't just report the path |
