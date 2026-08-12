@@ -36,6 +36,7 @@ import np_content
 import np_model
 import np_token_lib
 import np_maintenance_freshness
+import np_episodic_freshness
 
 
 def _load_json(path):
@@ -141,6 +142,12 @@ def _core_check(cap_id, np):
         # all die silently and identically. "When did each job last run?" is the
         # one observable that catches all three.
         return np_maintenance_freshness.report()
+    if cap_id == "episodic-freshness":
+        # Advisory, and deliberately NOT the same question as maintenance-freshness:
+        # that one asks "did the cron fire", this asks "did anything come out". The
+        # #113 failure passed the first and would have failed this one — the cron ran
+        # daily for a week while the drain underneath it was dead.
+        return np_episodic_freshness.report()
     if cap_id == "pii_filter_full":
         try:
             import presidio_analyzer  # noqa: F401
