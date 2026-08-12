@@ -21,6 +21,19 @@ class TestDashboardA11y(unittest.TestCase):
         # a single-column grid rule (distinct from the base "1fr 1fr")
         self.assertRegex(self.html, r"\.grid\s*\{\s*grid-template-columns:\s*1fr\s*;")
 
+    def test_narrow_grid_override_is_declared_after_the_base_grid_rule(self):
+        """The collapse rule and the base rule have the SAME specificity, so source
+        order alone decides the winner. Declared before the base rule the override
+        silently loses and the grid never stacks — which is exactly how it shipped
+        (the regex guard above passed the whole time, because the text was present).
+        Pin the ordering, not just the presence."""
+        base = self.html.index("grid-template-columns:1fr 1fr")
+        collapse = self.html.index("grid-template-columns:1fr;")
+        self.assertGreater(
+            collapse, base,
+            "the max-width:900px .grid override must come AFTER the base .grid rule, "
+            "or equal specificity makes the base 1fr 1fr win and the grid never stacks")
+
     def test_chart_points_are_keyboard_focusable_with_a_label(self):
         # each rendered .pt data point must be focusable and carry a plain-text label
         self.assertRegex(self.html, r'class="pt"[^>]*tabindex="0"')
