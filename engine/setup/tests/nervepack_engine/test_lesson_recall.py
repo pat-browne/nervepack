@@ -210,6 +210,24 @@ class TestLessonRecall(unittest.TestCase):
         self.assertIn("TEAM lesson", ctx)
         self.assertNotIn("PERSONAL lesson", ctx)
 
+    # --- issue #152: arming is tool_name_match-VALUE-agnostic -- a lesson
+    # targeting an MCP tool-name regex (not just a literal like "Read") still
+    # arms lesson_guard.py's Phase 2 the same way, since the arming check
+    # (_TOOL_NAME_MATCH_RE) only looks for the frontmatter KEY, never its value.
+    def test_10_arms_regardless_of_tool_name_match_being_an_mcp_regex(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| concise-output |  | warn | concise, pr, write |\n")
+        self._write("concise-output.md",
+            "---\nname: concise-output\nprovenance: failure\n"
+            "enforce:\n  tool_match: \"\"\n"
+            "  tool_name_match: \"^(Edit|Write|mcp__.*__(repo_create_pull_request|repo_reply_to_comment))$\"\n"
+            "  gate: warn\n---\n"
+            "**Do:** run np-flow-concise-output before the write completes.\n")
+        self._run("s11", "drafting a concise pr description")
+        self.assertTrue(os.path.exists(
+            os.path.join(self.tmp, "state", "s11-concise-output-gate-armed")))
+
 
 if __name__ == "__main__":
     unittest.main()

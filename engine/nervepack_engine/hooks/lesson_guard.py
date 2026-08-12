@@ -9,6 +9,21 @@ carry a non-empty tool_match / an enforce block; advisory (provenance:
 success) lessons are skipped (empty tool_match cell = advisory-only skip).
 Fail-open: returns "" on any early-exit path.
 
+Phase 2's tool_name_match is matched as an (unanchored-by-caller) regex via
+`re.fullmatch` -- mirroring Phase 1's `re.search(tool_match, cmd)` -- rather
+than a plain string equality. A literal tool name (`"Read"`, `"Edit"`) still
+matches exactly (fullmatch of a literal against itself == equality), but a
+lesson can now also express an alternation (e.g.
+`"^(Edit|Write|mcp__.*__(repo_create_pull_request|repo_reply_to_comment))$"`)
+to cover a family of tool names in one entry -- needed because MCP tool names
+embed a server id that varies by plugin/version (`mcp__<server>__<tool>`), so
+a single exact string can't durably target "any PR-writing MCP tool." Invalid
+regex fails open (skip), matching Phase 1's `except re.error: continue`.
+This requires `hooks.manifest` to actually register a PreToolUse matcher that
+makes Claude Code invoke this hook for the tool in question in the first
+place (e.g. `Edit`, `Write`, `Skill`, or a broad `mcp__.*` catch-all) --
+Phase 2 firing is necessary but not sufficient without that registration.
+
 IMPORTANT asymmetry preserved from bash: this module's frontmatter read
 (_first_block_value) looks ONLY at the file's first `---...---` block --
 mirrors bash's awk `_fm_val` which exits after the second `---`. This is
@@ -158,7 +173,12 @@ def run(payload_text):
                 continue
             f = os.path.join(lesson_dir, name)
             tnm = _first_block_value(f, "tool_name_match")
-            if not tnm or tool_name != tnm:
+            if not tnm:
+                continue
+            try:
+                if not re.fullmatch(tnm, tool_name):
+                    continue
+            except re.error:
                 continue
             topic = name[:-3]
             armed = os.path.join(state_dir, "%s-%s-gate-armed" % (sid.replace("/", "_"), topic))

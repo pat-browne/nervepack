@@ -119,6 +119,14 @@ enforcement gates the tool call — the two are decoupled).
    character classes or separate lessons. If a `tool_match` would be dangerously broad
    (matches common safe commands), leave it empty and rely on `topic_triggers` injection.
    Entries with no `enforce` (or an empty `tool_match`) are advisory-only.
+   For a non-Bash tool call (Phase 2), set `enforce.tool_name_match` instead — matched
+   as a regex via `re.fullmatch`, so an exact tool name (`"Edit"`, `"Read"`) still
+   matches exactly, but an alternation can target a whole family of MCP tool names in
+   one lesson (e.g. `"^(Edit|Write|mcp__.*__(repo_create_pull_request|repo_reply_to_comment))$"`)
+   — needed because an MCP tool name embeds a server id that varies by plugin/version.
+   Phase 2 only fires for a tool name that `hooks.manifest` actually registers a
+   `PreToolUse` matcher for (currently `Bash`/`Read`/`Edit`/`Write`/`Skill`/`mcp__.*`);
+   a lesson targeting a tool outside that set needs a new manifest row too.
 4. Set top-level `topic_triggers` from the items' topic_triggers (drives
    `engine/nervepack_engine/hooks/lesson_recall.py` injection; for enforced entries it
    also drives `engine/nervepack_engine/hooks/lesson_guard.py`). Increment `seen` when a

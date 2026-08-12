@@ -21,9 +21,17 @@ SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook sessi
 SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture session-end &
 PreCompact||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture checkpoint
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-recall
-# --- 53: lessons layer (two lesson-guard matchers coexist via (matcher, base) dedup) ---
+# --- 53: lessons layer (six lesson-guard matchers coexist via (matcher, base) dedup) ---
+# Edit/Write/Skill + a broad mcp__.* catch-all extend Phase 2 coverage beyond
+# Bash/Read (issue #152) -- Claude Code only invokes a PreToolUse hook for a
+# tool name matching a REGISTERED matcher here; which lesson (if any) actually
+# fires is then decided by lesson_guard.py's own tool_name_match regex.
 PreToolUse|Bash|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
 PreToolUse|Read|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Edit|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Skill|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|mcp__.*|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
 UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-recall
 # --- 54: performance evaluator ---
 SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook evaluator &
