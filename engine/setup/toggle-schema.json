@@ -223,5 +223,42 @@
  },
  "resume": {
   "description": "Deterministic \"where we left off\" pointer — writes and recalls a resume note across sessions."
+ },
+ "turn_gate.ui": {
+  "type": "enum",
+  "options": [
+   "block",
+   "warn",
+   "off"
+  ],
+  "description": "Turn edited a UI file but never showed the result. Blocks once per turn."
+ },
+ "turn_gate.diff": {
+  "type": "enum",
+  "options": [
+   "block",
+   "warn",
+   "off"
+  ],
+  "description": "Turn edited markdown but delivered no rendered diff."
+ },
+ "turn_gate.form": {
+  "type": "enum",
+  "options": [
+   "block",
+   "warn",
+   "off"
+  ],
+  "description": "Closing message scores above the form threshold on the STE linter."
+ },
+ "turn_gate.form_threshold": {
+  "type": "number",
+  "min": 1,
+  "description": "Violations per 100 words before the form check warns. Engine docs average 5.17."
+ },
+ "turn_gate.timeout_s": {
+  "type": "number",
+  "min": 1,
+  "description": "Wall-clock budget for the whole gate. On timeout it allows the turn."
  }
 }
