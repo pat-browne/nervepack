@@ -135,6 +135,13 @@ class TestTurnGate(unittest.TestCase):
         with mock.patch.object(turn_gate, "_lint_score", return_value=(None, [])):
             self.assertEqual(self._run(turn), "")
 
+    def test_ui_off_does_not_suppress_diff_warn(self):
+        turn = _turn(edits=["/docs/guide.md"])
+        out = self._run(turn, params={"turn_gate.ui": "off"})
+        self.assertNotEqual(out, "")
+        data = json.loads(out)
+        self.assertIn("np-flow-deliver-diff", data["hookSpecificOutput"]["additionalContext"])
+
     def test_block_absorbs_warns_rather_than_emitting_both(self):
         # A block and a warn are different top-level contracts. When ui blocks,
         # the diff warning must be folded into the reason, not emitted beside it.
@@ -143,6 +150,23 @@ class TestTurnGate(unittest.TestCase):
         self.assertEqual(data["decision"], "block")
         self.assertNotIn("hookSpecificOutput", data)
         self.assertIn("b.md", data["reason"])
+
+    def test_run_survives_parse_actually_raising(self):
+        with mock.patch.object(np_turn_parse, "parse", side_effect=RuntimeError("boom")), \
+             mock.patch.object(turn_gate.np_toggle, "enabled", return_value=True), \
+             mock.patch.object(turn_gate.np_toggle, "param", return_value=None):
+            self.assertEqual(turn_gate.run(self._payload()), "")
+
+    def test_form_check_against_the_real_linter(self):
+        script = turn_gate._lint_path()
+        if not script:
+            self.skipTest("no content overlay configured on this machine")
+        turn = _turn(final_text="This is a great question! We utilize a seamless, "
+                                "robust approach; it is important to note the "
+                                "results — the parser is used by the caller.")
+        params = {"turn_gate.form_threshold": "1"}
+        out = self._run(turn, params=params)
+        self.assertNotEqual(out, "", "the real linter should flag this deliberately bad text")
 
 
 if __name__ == "__main__":
