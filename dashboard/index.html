@@ -76,6 +76,29 @@
   .wikigroup > summary:hover { background:var(--surface-alt); }
   .wikigroup > summary::before { content:"\25BE"; margin-right:6px; font-size:9px; }
   .wikigroup:not([open]) > summary::before { content:"\25B8"; }
+  /* Per-layer sections (only rendered when >1 content layer resolves). Styled a step
+     stronger than .wikigroup so the layer reads as the outermost grouping. */
+  .wikilayer { border:none; margin:0 -4px 4px; }
+  .wikilayer > summary { list-style:none; cursor:pointer; padding:7px 8px;
+    font-size:11px; font-weight:700; color:var(--text); display:flex;
+    justify-content:space-between; gap:6px; border-radius:var(--radius-sm);
+    background:var(--surface-alt); border:1px solid var(--border); }
+  .wikilayer > summary::-webkit-details-marker { display:none; }
+  .wikilayer > summary:hover { border-color:var(--accent-sage); }
+  .wikilayer > summary::before { content:"\25BE"; margin-right:6px; font-size:9px;
+    color:var(--text-tertiary); }
+  .wikilayer:not([open]) > summary::before { content:"\25B8"; }
+  /* The layer wrapper takes the -4px bleed into .wikilist's padding; inner groups
+     must not also claim it or the extra nesting level overflows the sidebar. */
+  .wikilayer > .wikinest { margin-left:0; }
+  .wikilayer .wikigroup { margin-left:0; margin-right:0; }
+  /* Inside a per-layer section the item badge just repeats the section header. */
+  .wikilist.split .wikiitem .wl { display:none; }
+  /* Overridden page: dimmed, with a marker. Still openable — the point is to make
+     precedence legible, not to hide the shadowed copy. */
+  .wikiitem.shadowed { opacity:.55; }
+  .wikiitem .wsh { font-size:9px; text-transform:uppercase; letter-spacing:.04em;
+                   color:var(--status-warn); font-weight:600; flex:0 0 auto; }
   .wikitopic { margin:2px 0 2px 10px; }
   .wikitopic > summary { list-style:none; cursor:pointer; padding:4px 8px;
     font-size:11px; font-weight:600; color:var(--text-secondary);
@@ -948,8 +971,13 @@
       const layer = l.layer
         ? `<span class="wl" title="Content layer: ${esc(l.layer)}">${esc(l.layer)}</span>`
         : "";
-      return `<a class="wikiitem" href="${esc(l.html)}" target="_blank" rel="noopener" title="${esc(l.name)}">
-        <span class="wn"><span>${esc(l.name)}</span><span class="wk">${esc(l.kind || "")}</span>${layer}</span>
+      // A page a higher-precedence layer also defines: still listed under its own
+      // layer (so provenance stays visible) but dimmed and marked as overridden.
+      const sh = l.shadowed
+        ? `<span class="wsh" title="Overridden by a higher-precedence layer">overridden</span>`
+        : "";
+      return `<a class="wikiitem${l.shadowed ? " shadowed" : ""}" href="${esc(l.html)}" target="_blank" rel="noopener" title="${esc(l.name)}">
+        <span class="wn"><span>${esc(l.name)}</span>${sh}<span class="wk">${esc(l.kind || "")}</span>${layer}</span>
         ${l.excerpt ? `<div class="wx">${esc(l.excerpt)}</div>` : ""}
         <div class="wd">${meta}</div></a>`;
     }
@@ -1003,11 +1031,26 @@
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
       // filter into topics + concepts
-      const tops = items.filter(l => l.group === "Topics");
-      const cons = items.filter(l => l.group === "Concepts");
-      elList.innerHTML =
-        topicGroupHTML(tops, expandAll, "Topics", true) +
-        topicGroupHTML(cons, expandAll, "Concepts", expandAll);
+      const groups = ls =>
+        topicGroupHTML(ls.filter(l => l.group === "Topics"), expandAll, "Topics", true) +
+        topicGroupHTML(ls.filter(l => l.group === "Concepts"), expandAll, "Concepts", expandAll);
+      // Multi-layer: one collapsible section per content layer, precedence order,
+      // highest-precedence open. A single layer renders exactly as it always has —
+      // no gratuitous "Personal" wrapper around the whole tree (#142).
+      const layers = W.layers || [];
+      elList.classList.toggle("split", layers.length > 1);
+      if (layers.length > 1) {
+        elList.innerHTML = layers.map((lab, i) => {
+          const mine = items.filter(l => l.layer === lab);
+          if (!mine.length) return "";
+          const open = expandAll || i === 0;
+          return `<details class="wikilayer"${open ? " open" : ""}>
+            <summary><span>${esc(lab)}</span><span>${mine.length}</span></summary>
+            <div class="wikinest">${groups(mine)}</div></details>`;
+        }).join("");
+        return;
+      }
+      elList.innerHTML = groups(items);
     }
 
     function filter() {

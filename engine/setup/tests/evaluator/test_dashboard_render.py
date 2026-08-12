@@ -153,6 +153,9 @@ def _run_build_in_content(content_dir):
     ev = dict(os.environ)
     ev.pop("NP_LESSONS_DIR", None)
     ev["NP_CONTENT_DIR"] = content_dir
+    # isolate from the engine repo's own wiki/ (a real layer since #142)
+    ev["NP_ENGINE_DIR"] = os.path.join(tmp, "no-engine-wiki")
+    os.makedirs(ev["NP_ENGINE_DIR"], exist_ok=True)
     subprocess.run(["python3", BUILD_PY, inp, out], check=True,
                    capture_output=True, text=True, env=ev)
     with open(out) as fh:
@@ -188,7 +191,7 @@ class TestRenderPagesVersionStamp(unittest.TestCase):
             _write_topic_source(cd, "aws", "creds", "1.2.3",
                                  "Credentials reference content.")
             out_dir, _ = _run_build_in_content(cd)
-        html_path = os.path.join(out_dir, "wiki", "topics", "aws", "creds.html")
+        html_path = os.path.join(out_dir, "wiki", "personal", "topics", "aws", "creds.html")
         self.assertTrue(os.path.isfile(html_path),
                         "rendered source page not found at %s" % html_path)
         with open(html_path, encoding="utf-8") as fh:
@@ -211,7 +214,7 @@ class TestRenderPagesLayerStamp(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cd:
             _write_topic_synthesis(cd, "aws", "aws")
             out_dir, _ = _run_build_in_content(cd)
-        with open(os.path.join(out_dir, "wiki", "topics", "aws", "aws.html"),
+        with open(os.path.join(out_dir, "wiki", "personal", "topics", "aws", "aws.html"),
                   encoding="utf-8") as fh:
             body = fh.read()
         self.assertIn("personal", body,
@@ -230,7 +233,7 @@ class TestWikiStructureRenders(unittest.TestCase):
                     "```mermaid\nerDiagram\n  A ||--o{ B : id\n```\n")
             _write_topic_source(cd, "platform", "erd-camper", "", body)
             out_dir, _ = _run_build_in_content(cd)
-        html_path = os.path.join(out_dir, "wiki", "topics", "platform", "erd-camper.html")
+        html_path = os.path.join(out_dir, "wiki", "personal", "topics", "platform", "erd-camper.html")
         self.assertTrue(os.path.isfile(html_path),
                         "rendered reference page not found at %s" % html_path)
         with open(html_path, encoding="utf-8") as fh:
