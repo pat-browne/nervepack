@@ -73,6 +73,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **CI PII guard** (secret/PII gate) | — (always-on CI job) | `publish/np-publish-scan.py` (secret/PII scanner; LAN-IP/RFC1918 rule, never loopback) + `scan-allowlist.txt`; CI job `pii-guard` in `.github/workflows/ci.yml`; pre-publish gate `publish/np-publish-snapshot.sh` (+ `publish/PUBLISH.md`); tests `engine/setup/tests/publish/` | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
 | **PII filter** (context-window and storage-time scrub) | `pii_filter` (default off) | `np-pii-filter.py`, `np_scrub.py` (extended, `NP_PII_FILTER=1`), `episodic_recall.py` (extended — shells to `np-pii-filter.py` via a `sys.executable` subprocess, `pii_filter_fn` injectable for tests), `lesson_recall.py` (extended, same pattern), `np_scrub.py` (extended, `NP_PII_FILTER=1`), `cli.py setup install-pii-deps` | `specs/2026-07-06-pii-filter-design.md` |
 | **Open artifact on write** (auto-open a spec/plan doc so a human reads it) | `focus` | `engine/nervepack_engine/hooks/open_artifact.py` (PostToolUse, matcher `Write`; dispatched as `cli.py hook open-artifact`; reuses `np_dashboard.resolve_opener()`), registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`) | `specs/2026-07-21-open-artifact-on-write-design.md` |
+| **Turn-completion gate** (block a turn that changed UI without showing it) | `turn_gate` (`.ui` block, `.diff` warn, `.form` warn, `.form_threshold` 12, `.timeout_s` 5) | `engine/nervepack_engine/hooks/turn_gate.py` (Stop; dispatched as `cli.py hook turn-gate`), `engine/nervepack_engine/np_turn_parse.py` (the pure transcript-turn extractor — the ONLY file coupled to Claude Code's transcript shape); the `form` check shells to the overlay's `np-ste-lint.py` via `np_content.content_dir()` and is silently skipped when no overlay is configured | content overlay `specs/2026-08-12-turn-completion-gate-design.md` |
 
 ## Runtime wiring — what fires what
 
@@ -84,6 +85,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | `UserPromptSubmit` | `cli.py hook episodic-recall` · `cli.py hook lesson-recall` · `cli.py hook struggle-escalation` · `engine/nervepack_engine/cli.py hook skill-trigger-recall` · `cli.py hook resume-recall` |
 | `PreToolUse` | `cli.py hook lesson-guard` (matchers: `Bash`, `Read`, `Edit`, `Write`, `Skill`, `mcp__.*`) |
 | `PostToolUse` | `cli.py hook open-artifact` (matcher: `Write`) |
+| `Stop` | `cli.py hook turn-gate` (not backgrounded — a backgrounded hook cannot return a decision) |
 | `PreCompact` | `cli.py hook episodic-capture checkpoint` |
 | `SessionEnd` | `cli.py sync exit &` · `cli.py hook episodic-capture session-end &` · `cli.py hook evaluator &` · `cli.py hook session-flush` (promotes both inboxes on exit; crons = backup) — the three `&` entries are backgrounded so Claude Code's hook-runner returns before it would otherwise report them "Hook cancelled" (invariant 12); `session-flush` backgrounds itself internally (`subprocess.Popen(start_new_session=True)`), not via a settings.json `&` |
 
@@ -154,7 +156,16 @@ Record shapes (keep these stable; readers depend on them):
 
 1. **Hooks fail open.** Every lifecycle hook ends `exit 0` and routes each early
    return through a `bail()` that logs one dated line to a `*.log` in
-   `~/.cache/nervepack/`. A hook must never break or block a session. (→ coding-rules §8)
+   `~/.cache/nervepack/`. A hook must never break a session, and must never block
+   one by accident. (→ coding-rules §8)
+
+   **One deliberate exception: `turn_gate` may block, on purpose.** It is the only
+   hook permitted to, and it is bounded four ways: it is toggle-gated
+   (`turn_gate.ui`), it checks `stop_hook_active` before any parse, toggle read, or
+   file access, it emits at most one block per turn, and every one of its own error
+   paths still returns "" and allows. Blocking is the feature there, not a failure
+   mode. Do not read this as license for blocking hooks generally — a new blocking
+   hook needs its own amendment here.
 2. **Headless `claude -p` rules** (→ `np-kb-claude-headless-scripting`):
    prompt via **stdin** not a trailing positional (variadic `--allowedTools` eats
    it); `--append-system-prompt` to stop it continuing the transcript; **cap input**
