@@ -76,7 +76,7 @@ def _lint_score(text, timeout_s):
         data = json.loads(proc.stdout or "{}")
     except (OSError, ValueError, subprocess.SubprocessError):
         return (None, [])
-    per100 = data.get("per100w")
+    per100 = data.get("total_per100w")
     if per100 is None:
         rules = data.get("per100w_by_rule") or {}
         per100 = sum(rules.values()) if rules else None
@@ -135,8 +135,6 @@ def run(payload_text, *_args):
         return ""
 
     ui_mode = _mode("turn_gate.ui", "block")
-    if ui_mode == "off":
-        return ""
 
     try:
         timeout_s = float(np_toggle.param("turn_gate.timeout_s", "5") or 5)
@@ -151,7 +149,7 @@ def run(payload_text, *_args):
     warns = [w for w in warns if w]
 
     ui_files = [p for p in turn.edits if _is_ui(p)]
-    ui_tripped = bool(ui_files) and not turn.delivery
+    ui_tripped = ui_mode != "off" and bool(ui_files) and not turn.delivery
 
     if ui_tripped:
         names = ", ".join(sorted({os.path.basename(p) for p in ui_files})[:5])
