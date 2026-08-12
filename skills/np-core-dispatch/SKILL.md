@@ -96,6 +96,20 @@ over the full diff *against the spec*, told to hunt the missing consumer / unwir
 write-path — not just critique what changed. Never skip it, even when every task came
 back clean (it has caught a silently-skipped migration that per-task reviews passed).
 
+## Put what you just learned into the brief
+
+- **Let it flag out-of-scope findings** ("flag related issues you can't fix") — otherwise
+  it either swallows them or scope-creeps.
+- **Pre-bake a just-hit failure.** Task N tripped a pitfall and N+1 uses the same
+  machinery? Fold that symptom/cause/fix into the next brief — "we hit this five minutes
+  ago" lands where an abstract warning doesn't.
+- **Creative/editorial work needs a stricter brief:** what to say, what may be edited
+  (name the generated files that must NOT be), voice skills, publication gate.
+  references/creative-brief.md
+- **Runbook first for migrations/cutovers** — explicit commands, fail-open guards,
+  rollback paths — then hand it over via [[np-core-handoff]]. **Stop at the guardrail:**
+  lacking live access it must halt and name what's needed, never route around it.
+
 ## Not this
 
 - A persistent message bus or agent-to-agent chat — this is one-shot dispatch +
