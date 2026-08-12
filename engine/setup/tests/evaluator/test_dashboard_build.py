@@ -400,10 +400,16 @@ def _write_source(content_dir, topic, name, frontmatter, body):
 
 def run_build_wiki(content_dir, **env):
     """Run build.py with NP_CONTENT_DIR=content_dir (so it resolves wiki/ there)
-    and empty metrics input; return the generated metrics.js text."""
+    and empty metrics input; return the generated metrics.js text.
+
+    NP_ENGINE_DIR defaults to an empty temp dir: since #142 the engine root is a
+    real wiki layer, so without this every test would also index the engine repo's
+    own wiki/topics/ and assert against whatever content happens to live there."""
     e = {"NP_CONTENT_DIR": content_dir}
     e.update(env)
     with tempfile.TemporaryDirectory() as tmp:
+        e.setdefault("NP_ENGINE_DIR", os.path.join(tmp, "no-engine-wiki"))
+        os.makedirs(e["NP_ENGINE_DIR"], exist_ok=True)
         inp = os.path.join(tmp, "metrics.jsonl")
         with open(inp, "w"):
             pass
@@ -476,9 +482,9 @@ class TestWikiIndex(unittest.TestCase):
                          "# Creds\n\ny.")
             wiki = _parse_wiki(run_build_wiki(cd))
         rust_topic = next(t for t in wiki["topics"] if t["topic"] == "rust")
-        self.assertEqual(rust_topic["synthesis"]["html"], "data/wiki/topics/rust/rust.html")
+        self.assertEqual(rust_topic["synthesis"]["html"], "data/wiki/personal/topics/rust/rust.html")
         aws_topic = next(t for t in wiki["topics"] if t["topic"] == "aws")
-        self.assertEqual(aws_topic["sources"][0]["html"], "data/wiki/topics/aws/creds.html")
+        self.assertEqual(aws_topic["sources"][0]["html"], "data/wiki/personal/topics/aws/creds.html")
 
     def test_excerpt_skips_heading(self):
         with tempfile.TemporaryDirectory() as cd:
@@ -493,7 +499,7 @@ class TestWikiIndex(unittest.TestCase):
     def test_missing_dirs_yield_empty_groups(self):
         with tempfile.TemporaryDirectory() as cd:
             wiki = _parse_wiki(run_build_wiki(cd))
-        self.assertEqual(wiki, {"topics": [], "concepts": []})
+        self.assertEqual(wiki, {"topics": [], "concepts": [], "layers": []})
 
     def test_index_md_and_readme_excluded(self):
         with tempfile.TemporaryDirectory() as cd:
@@ -535,7 +541,7 @@ class TestWikiIndex(unittest.TestCase):
                          {"name": "rust", "kind": "topic",
                           "last_updated": "2026-06-01", "sources": "[]"}, "# Rust\n\nx.")
             wiki = _parse_wiki(run_build_wiki(cd, WIKI_NAV="off"))
-        self.assertEqual(wiki, {"topics": [], "concepts": []})
+        self.assertEqual(wiki, {"topics": [], "concepts": [], "layers": []})
 
 
 class TestRenderPages(unittest.TestCase):
@@ -572,8 +578,8 @@ class TestRenderPages(unittest.TestCase):
                           "version": "2.2"},
                          "# WCAG\n\nContrast.")
             out_dir, _ = self._run(cd)
-        wiki_html = os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")
-        src_html = os.path.join(out_dir, "wiki", "topics", "design", "wcag-2.2.html")
+        wiki_html = os.path.join(out_dir, "wiki", "personal", "topics", "rust", "rust.html")
+        src_html = os.path.join(out_dir, "wiki", "personal", "topics", "design", "wcag-2.2.html")
         self.assertTrue(os.path.isfile(wiki_html))
         self.assertTrue(os.path.isfile(src_html))
         with open(wiki_html) as fh:
@@ -588,7 +594,7 @@ class TestRenderPages(unittest.TestCase):
                             "last_updated": "2026-06-01", "sources": "[]"},
                            "# X\n\n<script>alert(1)</script>")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "concepts", "x", "x.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "personal", "concepts", "x", "x.html")) as fh:
             body = fh.read()
         self.assertNotIn("<script>alert(1)</script>", body)
         self.assertIn("&lt;script&gt;", body)
@@ -606,7 +612,7 @@ class TestRenderPages(unittest.TestCase):
                             "last_updated": "2026-06-01", "sources": "[]"},
                            "# BC\n\nx.")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "personal", "topics", "rust", "rust.html")) as fh:
             body = fh.read()
         self.assertIn('href="../../concepts/borrow-checker/borrow-checker.html"', body)
 
@@ -617,7 +623,7 @@ class TestRenderPages(unittest.TestCase):
                           "last_updated": "2026-06-01", "sources": "[]"},
                          "# Rust\n\nSee [[ghost]].")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "personal", "topics", "rust", "rust.html")) as fh:
             body = fh.read()
         self.assertNotIn("[[ghost]]", body)
         self.assertIn("ghost", body)
@@ -628,11 +634,11 @@ class TestRenderPages(unittest.TestCase):
                          {"name": "rust", "kind": "topic",
                           "last_updated": "2026-06-01", "sources": "[]"}, "# Rust\n\nx.")
             out_dir, _ = self._run(cd)
-            with open(os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")) as fh:
+            with open(os.path.join(out_dir, "wiki", "personal", "topics", "rust", "rust.html")) as fh:
                 first = fh.read()
             # second build into the SAME content dir, fresh out dir
             out_dir2, _ = self._run(cd)
-            with open(os.path.join(out_dir2, "wiki", "topics", "rust", "rust.html")) as fh:
+            with open(os.path.join(out_dir2, "wiki", "personal", "topics", "rust", "rust.html")) as fh:
                 second = fh.read()
         self.assertEqual(first, second)
 
@@ -653,9 +659,9 @@ class TestRenderPages(unittest.TestCase):
                           "last_updated": "2026-06-01", "sources": "[]"},
                          "# Rust\n\nSystems language.")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "topics", "rust", "rust.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "personal", "topics", "rust", "rust.html")) as fh:
             body = fh.read()
-        self.assertIn('href="../../../../index.html"', body)
+        self.assertIn('href="../../../../../index.html"', body)
 
     def test_source_back_link_depth(self):
         """Co-located source pages live at <out>/wiki/topics/<topic>/<name>.html
@@ -666,9 +672,9 @@ class TestRenderPages(unittest.TestCase):
                           "version": "2.2"},
                          "# WCAG\n\nContrast.")
             out_dir, _ = self._run(cd)
-        with open(os.path.join(out_dir, "wiki", "topics", "design", "wcag-2.2.html")) as fh:
+        with open(os.path.join(out_dir, "wiki", "personal", "topics", "design", "wcag-2.2.html")) as fh:
             body = fh.read()
-        self.assertIn('href="../../../../index.html"', body)
+        self.assertIn('href="../../../../../index.html"', body)
 
 
 import sys as _sys
@@ -703,13 +709,16 @@ class TestWikiIndexNewLayout(unittest.TestCase):
             _mk(cd, "wiki/topics/aws/creds.md", "reference", "creds")
             _mk(cd, "wiki/concepts/prompt-caching/prompt-caching.md", "concept", "prompt-caching", sources=[])
             os.environ["NP_CONTENT_DIR"] = cd
+            # isolate from the engine repo's own wiki/ (a real layer since #142)
+            os.environ["NP_ENGINE_DIR"] = os.path.join(cd, "no-engine-wiki")
             idx = bp.wiki_index()
             os.environ.pop("NP_CONTENT_DIR", None)
+            os.environ.pop("NP_ENGINE_DIR", None)
         names = [t["topic"] for t in idx["topics"]]
         self.assertEqual(names, ["aws"], names)
         aws = idx["topics"][0]
         self.assertEqual(aws["synthesis"]["name"], "aws")
-        self.assertEqual(aws["synthesis"]["html"], "data/wiki/topics/aws/aws.html")
+        self.assertEqual(aws["synthesis"]["html"], "data/wiki/personal/topics/aws/aws.html")
         self.assertEqual([s["name"] for s in aws["sources"]], ["creds"])
         self.assertEqual([c["name"] for c in idx["concepts"]], ["prompt-caching"])
 
@@ -719,8 +728,11 @@ class TestWikiIndexNewLayout(unittest.TestCase):
             _mk(cd, "wiki/entities/python.md", "entity", "python", sources=[])
             _mk(cd, "sources/python/typing.md", "reference", "typing")
             os.environ["NP_CONTENT_DIR"] = cd
+            # isolate from the engine repo's own wiki/ (a real layer since #142)
+            os.environ["NP_ENGINE_DIR"] = os.path.join(cd, "no-engine-wiki")
             idx = bp.wiki_index()
             os.environ.pop("NP_CONTENT_DIR", None)
+            os.environ.pop("NP_ENGINE_DIR", None)
         assert idx["topics"] == [] and idx["concepts"] == []
 
 
@@ -752,37 +764,41 @@ class TestWikiIndexLayers(unittest.TestCase):
         return _parse_wiki(run_build_wiki(self._p, NP_TEAM_DIR=self._t,
                                           NP_TOGGLES_CONF=conf, NP_TOGGLES_LOCAL=toggles_local))
 
-    def test_override_team_wins_union(self):
+    # NOTE: since #142 the nav splits per layer, so a same-named topic is no longer
+    # deduped to one node — it appears once per layer with the loser marked
+    # `shadowed`. These tests now cover what merge_mode still decides: WHICH ROOTS
+    # get scanned. The split/shadow semantics live in TestWikiLayerSplit.
+
+    def test_override_scans_both_roots_and_team_copy_wins(self):
         w = self._two_layers("override")
         names = [t["topic"] for t in w["topics"]]
-        self.assertEqual(sorted(set(names)), ["go", "rust", "zig"])  # union
-        self.assertEqual(names.count("rust"), 1)                      # deduped
-        rust = next(t for t in w["topics"] if t["topic"] == "rust")
-        self.assertIn("TEAM rust", rust["synthesis"]["excerpt"])      # team won
+        self.assertEqual(sorted(set(names)), ["go", "rust", "zig"])   # union of roots
+        rust = [t for t in w["topics"] if t["topic"] == "rust"]
+        self.assertEqual(len(rust), 2, "one 'rust' per layer")
+        winner = next(t for t in rust if not t["shadowed"])
+        self.assertIn("TEAM rust", winner["synthesis"]["excerpt"])    # team still wins
 
     def test_team_only(self):
         w = self._two_layers("team-only")
         self.assertEqual(sorted(t["topic"] for t in w["topics"]), ["rust", "zig"])  # team set only
 
-    def test_concatenate_merges_same_named_topic(self):
-        # concatenate unions topics across layers, but a same-named topic is ONE
-        # node, not a duplicate ("effectively the same" — issue #44).
+    def test_concatenate_scans_both_roots(self):
         w = self._two_layers("concatenate")
         names = [t["topic"] for t in w["topics"]]
-        self.assertEqual(sorted(names), ["go", "rust", "zig"])        # union of topics
-        self.assertEqual(names.count("rust"), 1)                      # merged, not duplicated
-        rust = next(t for t in w["topics"] if t["topic"] == "rust")
-        self.assertIn("TEAM rust", rust["synthesis"]["excerpt"])      # higher layer's synthesis wins
+        self.assertEqual(sorted(set(names)), ["go", "rust", "zig"])   # union of topics
+        winner = next(t for t in w["topics"]
+                      if t["topic"] == "rust" and not t["shadowed"])
+        self.assertIn("TEAM rust", winner["synthesis"]["excerpt"])    # higher layer wins
 
     def test_layer_label_is_basename_for_team_and_personal_for_content_dir(self):
         """Each entry's `layer` names the overlay it came from: the personal content
         dir is the literal 'personal', a team overlay is its dir basename."""
         w = self._two_layers("override")
         team_label = os.path.basename(self._t)
-        by_topic = {t["topic"]: t for t in w["topics"]}
-        self.assertEqual(by_topic["rust"]["synthesis"]["layer"], team_label)  # team won
-        self.assertEqual(by_topic["zig"]["synthesis"]["layer"], team_label)   # team-only topic
-        self.assertEqual(by_topic["go"]["synthesis"]["layer"], "personal")    # personal-only
+        by = {(t["topic"], t["layer"]): t for t in w["topics"]}
+        self.assertEqual(by[("rust", team_label)]["synthesis"]["layer"], team_label)
+        self.assertEqual(by[("zig", team_label)]["synthesis"]["layer"], team_label)
+        self.assertEqual(by[("go", "personal")]["synthesis"]["layer"], "personal")
 
     def test_layer_label_holds_in_team_only_mode(self):
         """team-only drops the personal root from merge_roots entirely; the label
@@ -791,6 +807,137 @@ class TestWikiIndexLayers(unittest.TestCase):
         team_label = os.path.basename(self._t)
         for t in w["topics"]:
             self.assertEqual(t["synthesis"]["layer"], team_label)
+
+
+class TestWikiEngineLayer(unittest.TestCase):
+    """#142a: the engine ships its own wiki/topics/, which merge_roots() never
+    returns — so those pages were invisible in the dashboard. wiki_index() now
+    appends the engine root as the lowest-precedence layer."""
+
+    def setUp(self):
+        self._p = tempfile.mkdtemp(); self._e = tempfile.mkdtemp()
+
+    def tearDown(self):
+        for d in (self._p, self._e):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _run(self, **env):
+        return _parse_wiki(run_build_wiki(self._p, NP_ENGINE_DIR=self._e, **env))
+
+    def test_engine_topics_are_indexed_as_their_own_layer(self):
+        _write_topic(self._p, "aws", "aws", {"name": "aws", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "personal aws")
+        _write_topic(self._e, "k8s", "k8s", {"name": "k8s", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "engine k8s")
+        w = self._run()
+        by = {t["topic"]: t for t in w["topics"]}
+        self.assertIn("k8s", by, "engine-layer topic missing from the index")
+        self.assertEqual(by["k8s"]["layer"], os.path.basename(self._e))
+        self.assertEqual(by["aws"]["layer"], "personal")
+
+    def test_engine_is_lowest_precedence(self):
+        _write_topic(self._p, "aws", "aws", {"name": "aws", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "personal aws")
+        _write_topic(self._e, "k8s", "k8s", {"name": "k8s", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "engine k8s")
+        w = self._run()
+        self.assertEqual(w["layers"], ["personal", os.path.basename(self._e)])
+
+    def test_engine_not_double_counted_in_single_repo_layout(self):
+        """Legacy layout: NP_CONTENT_DIR IS the engine root. One layer, not two."""
+        _write_topic(self._e, "aws", "aws", {"name": "aws", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "solo aws")
+        w = _parse_wiki(run_build_wiki(self._e, NP_ENGINE_DIR=self._e))
+        self.assertEqual(len(w["layers"]), 1)
+        self.assertEqual(len([t for t in w["topics"] if t["topic"] == "aws"]), 1)
+
+
+class TestWikiLayerSplit(unittest.TestCase):
+    """#142c: every layer is indexed; a page a higher layer also defines is MARKED
+    shadowed rather than dropped, so precedence is legible in the nav."""
+
+    def setUp(self):
+        self._p = tempfile.mkdtemp(); self._t = tempfile.mkdtemp(); self._h = tempfile.mkdtemp()
+        _write_topic(self._p, "rust", "rust", {"name": "rust", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "PERSONAL rust")
+        _write_topic(self._t, "rust", "rust", {"name": "rust", "kind": "topic",
+                     "last_updated": "2026-06-02", "sources": "[]"}, "TEAM rust")
+        _write_topic(self._p, "go", "go", {"name": "go", "kind": "topic",
+                     "last_updated": "2026-06-01", "sources": "[]"}, "PERSONAL go")
+
+    def tearDown(self):
+        for d in (self._p, self._t, self._h):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _run(self, mode="override"):
+        toggles_local = os.path.join(self._h, "local")
+        with open(toggles_local, "w") as fh:
+            fh.write("team.merge=%s\n" % mode)
+        conf = os.path.join(os.path.dirname(__file__), "..", "..", "toggles.conf")
+        return _parse_wiki(run_build_wiki(self._p, NP_TEAM_DIR=self._t,
+                                          NP_ENGINE_DIR=self._h,
+                                          NP_TOGGLES_CONF=conf,
+                                          NP_TOGGLES_LOCAL=toggles_local))
+
+    def test_same_topic_appears_once_per_layer(self):
+        w = self._run()
+        rust = [t for t in w["topics"] if t["topic"] == "rust"]
+        self.assertEqual(len(rust), 2, "expected one 'rust' entry per layer")
+        self.assertEqual(sorted(t["layer"] for t in rust),
+                         sorted(["personal", os.path.basename(self._t)]))
+
+    def test_lower_precedence_copy_is_marked_shadowed(self):
+        w = self._run()
+        by_layer = {t["layer"]: t for t in w["topics"] if t["topic"] == "rust"}
+        team = by_layer[os.path.basename(self._t)]
+        self.assertFalse(team["shadowed"], "highest-precedence copy must not be shadowed")
+        self.assertTrue(by_layer["personal"]["shadowed"],
+                        "personal copy shadowed by team must be marked")
+        # an unshadowed personal-only topic stays unmarked
+        go = next(t for t in w["topics"] if t["topic"] == "go")
+        self.assertFalse(go["shadowed"])
+
+    def test_html_paths_are_layer_qualified_so_copies_do_not_collide(self):
+        w = self._run()
+        paths = [t["synthesis"]["html"] for t in w["topics"] if t["topic"] == "rust"]
+        self.assertEqual(len(set(paths)), 2, "same-named pages collided on one path")
+        for p in paths:
+            self.assertTrue(p.startswith("data/wiki/"), p)
+
+    def test_team_only_excludes_engine_and_personal(self):
+        w = self._run("team-only")
+        self.assertEqual(w["layers"], [os.path.basename(self._t)])
+        self.assertEqual([t["topic"] for t in w["topics"]], ["rust"])
+
+
+class TestWikiOutputPrune(unittest.TestCase):
+    """Page paths carry a layer slug since #142, so a rebuild must clear the previous
+    render — otherwise every upgrade leaves the old scheme's .html orphaned forever."""
+
+    def test_stale_pages_from_a_previous_render_are_removed(self):
+        with tempfile.TemporaryDirectory() as cd:
+            _write_topic(cd, "rust", "rust", {"name": "rust", "kind": "topic",
+                         "last_updated": "2026-06-01", "sources": "[]"}, "# Rust\n\nx.")
+            with tempfile.TemporaryDirectory() as tmp:
+                inp = os.path.join(tmp, "metrics.jsonl")
+                open(inp, "w").close()
+                out = os.path.join(tmp, "metrics.js")
+                stale = os.path.join(tmp, "wiki", "topics", "gone")
+                os.makedirs(stale)
+                orphan = os.path.join(stale, "gone.html")
+                with open(orphan, "w") as fh:
+                    fh.write("<html>old scheme</html>")
+                ev = dict(os.environ)
+                ev.update({"NP_CONTENT_DIR": cd,
+                           "NP_ENGINE_DIR": os.path.join(tmp, "no-engine-wiki")})
+                os.makedirs(ev["NP_ENGINE_DIR"], exist_ok=True)
+                subprocess.run(["python3", BUILD, inp, out], check=True,
+                               capture_output=True, text=True, env=ev)
+                self.assertFalse(os.path.exists(orphan),
+                                 "stale page from the previous render survived")
+                self.assertTrue(os.path.isfile(os.path.join(
+                    tmp, "wiki", "personal", "topics", "rust", "rust.html")),
+                    "current render missing after the prune")
 
 
 class TestWikiLayerBadgeWiring(unittest.TestCase):
@@ -804,6 +951,18 @@ class TestWikiLayerBadgeWiring(unittest.TestCase):
             html_text = fh.read()
         self.assertIn("l.layer", html_text)          # the leaf renderer reads the field
         self.assertRegex(html_text, r"\.wl\s*\{")    # and the badge has a style rule
+
+    def test_index_html_renders_the_per_layer_split(self):
+        """#142c: build.py emitting `layers` + `shadowed` is half the feature — the
+        renderer has to consume both, and only split when >1 layer resolves."""
+        index = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "dashboard", "index.html"))
+        with open(index, encoding="utf-8") as fh:
+            html_text = fh.read()
+        self.assertIn("W.layers", html_text)             # reads the layer list
+        self.assertIn("layers.length > 1", html_text)    # single layer stays unchanged
+        self.assertIn("l.shadowed", html_text)           # dims the overridden copy
+        self.assertRegex(html_text, r"\.wikilayer\s*\{") # layer section has a style rule
 
 
 class TestWikiNesting(unittest.TestCase):
@@ -827,10 +986,10 @@ class TestWikiNesting(unittest.TestCase):
         srcs = {s["name"]: s for s in plat["sources"]}
         # flat page: no subdir
         self.assertEqual(srcs["flatpage"]["dir"], "")
-        self.assertEqual(srcs["flatpage"]["html"], "data/wiki/topics/plat/flatpage.html")
+        self.assertEqual(srcs["flatpage"]["html"], "data/wiki/personal/topics/plat/flatpage.html")
         # nested page: dir carries the subdir, html path is subdir-qualified
         self.assertEqual(srcs["nestedpage"]["dir"], "sub")
-        self.assertEqual(srcs["nestedpage"]["html"], "data/wiki/topics/plat/sub/nestedpage.html")
+        self.assertEqual(srcs["nestedpage"]["html"], "data/wiki/personal/topics/plat/sub/nestedpage.html")
 
 
 class TestLearnedLayers(unittest.TestCase):
