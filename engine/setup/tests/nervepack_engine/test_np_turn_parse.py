@@ -78,6 +78,11 @@ class TestTurnParse(unittest.TestCase):
                          _tool_use("Bash", {"command": "xdg-open http://localhost:3000"})])
         self.assertTrue(np_turn_parse.parse(p).delivery)
 
+    def test_np_md_diff_bash_call_counts_as_diff_delivery(self):
+        p = self._write([_user("go"),
+                         _tool_use("Bash", {"command": "python3 np-md-diff.py FILE.md --out /tmp"})])
+        self.assertTrue(any("np-md-diff" in d for d in np_turn_parse.parse(p).delivery))
+
     def test_screenshot_mcp_counts_as_delivery(self):
         p = self._write([_user("go"),
                          _tool_use("mcp__Claude_Browser__computer",

@@ -14,7 +14,7 @@ import re
 
 _IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg")
 _VIEWER_TOOL = re.compile(r"mcp__.*(screenshot|browser|playwright|simulator)", re.I)
-_OPEN_CMD = re.compile(r"(?:^|[|;&\s])(open|xdg-open|vibe-annotations)\s", re.I)
+_OPEN_CMD = re.compile(r"(?:^|[|;&\s])(open|xdg-open)\s", re.I)
 _EDIT_TOOLS = ("Edit", "Write", "NotebookEdit")
 
 
@@ -72,11 +72,11 @@ def _scan(rec, turn):
         elif kind == "tool_use":
             name = blk.get("name") or ""
             inp = blk.get("input") or {}
-            path = inp.get("file_path") or ""
+            path = str(inp.get("file_path") or "")
 
             if name in _EDIT_TOOLS and path:
                 turn.edits.append(path)
-            if name == "Read" and str(path).lower().endswith(_IMAGE_EXT):
+            if name == "Read" and path.lower().endswith(_IMAGE_EXT):
                 turn.delivery.append("read an image")
             if name == "SendUserFile":
                 turn.delivery.append("sent a file to the user")
@@ -84,6 +84,8 @@ def _scan(rec, turn):
                 turn.delivery.append("browser or screenshot tool")
             if name == "Bash" and _OPEN_CMD.search(str(inp.get("command") or "") + " "):
                 turn.delivery.append("opened in a browser")
+            if name == "Bash" and "np-md-diff" in str(inp.get("command") or ""):
+                turn.delivery.append("ran np-md-diff")
 
 
 def parse(path):
