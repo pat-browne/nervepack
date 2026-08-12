@@ -101,6 +101,49 @@ class TestTurnGate(unittest.TestCase):
         self.assertIn("screenshot", reason)
         self.assertIn("no visual", reason)
 
+    def test_markdown_edit_without_diff_warns(self):
+        out = self._run(_turn(edits=["/docs/guide.md"]))
+        data = json.loads(out)
+        self.assertIn("np-flow-deliver-diff",
+                      data["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("guide.md", data["hookSpecificOutput"]["additionalContext"])
+
+    def test_markdown_edit_with_diff_is_silent(self):
+        turn = _turn(edits=["/docs/guide.md"], delivery=["ran np-md-diff.py"])
+        self.assertEqual(self._run(turn), "")
+
+    def test_spec_and_plan_docs_are_exempt_from_diff(self):
+        for p in ("/c/docs/superpowers/specs/x-design.md",
+                  "/c/docs/superpowers/plans/x.md"):
+            self.assertEqual(self._run(_turn(edits=[p])), "", p)
+
+    def test_form_warn_when_linter_scores_above_threshold(self):
+        turn = _turn(final_text="prose")
+        with mock.patch.object(turn_gate, "_lint_score",
+                               return_value=(30.0, [("em_dash", 9)])):
+            data = json.loads(self._run(turn, params={"turn_gate.form_threshold": "12"}))
+        self.assertIn("em_dash", data["hookSpecificOutput"]["additionalContext"])
+
+    def test_form_silent_when_below_threshold(self):
+        turn = _turn(final_text="prose")
+        with mock.patch.object(turn_gate, "_lint_score", return_value=(3.0, [])):
+            self.assertEqual(self._run(turn,
+                                       params={"turn_gate.form_threshold": "12"}), "")
+
+    def test_form_silent_when_linter_missing(self):
+        turn = _turn(final_text="prose")
+        with mock.patch.object(turn_gate, "_lint_score", return_value=(None, [])):
+            self.assertEqual(self._run(turn), "")
+
+    def test_block_absorbs_warns_rather_than_emitting_both(self):
+        # A block and a warn are different top-level contracts. When ui blocks,
+        # the diff warning must be folded into the reason, not emitted beside it.
+        turn = _turn(edits=["/app/a.tsx", "/docs/b.md"])
+        data = json.loads(self._run(turn))
+        self.assertEqual(data["decision"], "block")
+        self.assertNotIn("hookSpecificOutput", data)
+        self.assertIn("b.md", data["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()
