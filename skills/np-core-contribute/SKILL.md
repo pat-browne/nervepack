@@ -46,20 +46,22 @@ write lands*. Below, `$REPO` = the root you picked.
 
 ## Decision tree: where does this go?
 
-| Kind of learning | Target |
-|---|---|
-| Personal coding rule | `$CONTENT/skills/np-kb-coding-rules/SKILL.md` |
-| Environment / toolchain detail | `$CONTENT/skills/np-env-ubuntu-claude-dev-setup/SKILL.md` |
-| Claude plugin choice or rationale | `$CONTENT/skills/np-env-claude-plugin-stack/SKILL.md` |
-| New cross-cutting skill / reusable how-to the user will hit again | `$CONTENT/skills/<kebab-name>/SKILL.md` (engine only for new machinery skills) |
-| Curated technical reference doc (version-pinned spec, RFC, official docs) | `$CONTENT/sources/<topic>/<name>.md` — **invoke ingest protocol** (see below) |
-| Curated synthesis of a topic backed by sources | `$CONTENT/wiki/topics/<topic>/<topic>.md` (`kind: topic`) |
-| Source-free synthesis of one entity/concept (a specific build, a cross-cutting idea) | `$CONTENT/wiki/concepts/<name>.md` (`kind: concept`) |
-| Bootstrap step (re-runnable) | Engine: `engine/setup/NN-name.sh` |
-| Repo workflow / protocol | Engine: `CLAUDE.md` (this is the AI manual) |
-| Recurring AI-agent prompt | Engine: `agents/<name>.md` |
-| Roadmap / deferred-work item — for nervepack itself | Engine: `docs/ROADMAP.md` |
-| Roadmap / deferred-work item — for a pointed-to project (local-llm, pbrowne-net, …) | that project's `ROADMAP.md` if it has one; else its `np-kb-<project>` pointer skill's **Roadmap** section (look + contribute there) |
+Classify the learning as one **kind**. The kind is the engine's vocabulary; the
+*path* comes from the layer's own layout (step 3), never from this table.
+
+| Kind of learning | Kind | Where |
+|---|---|---|
+| Personal coding rule | `skill` | extend `np-kb-coding-rules` |
+| Environment / toolchain detail | `skill` | extend the matching `np-env-*` skill |
+| Claude plugin choice or rationale | `skill` | extend `np-env-claude-plugin-stack` |
+| New cross-cutting how-to the user will hit again | `skill` | a new skill (engine only for machinery) |
+| Curated technical reference (version-pinned spec, RFC, official docs) | `reference` | **invoke ingest protocol** (see below) |
+| Synthesis of a topic or concept | `knowledge` | pick the variant the layer declares |
+| Recurring AI-agent prompt | `prompt` | the layer's prompt route |
+| Bootstrap step (re-runnable) | — | Engine: `engine/setup/NN-name.sh` |
+| Repo workflow / protocol | — | Engine: `CLAUDE.md` (this is the AI manual) |
+| Roadmap / deferred-work item — for nervepack itself | `roadmap` | Engine: `docs/ROADMAP.md` |
+| Roadmap / deferred-work item — for a pointed-to project (local-llm, pbrowne-net, …) | `roadmap` | that project's `ROADMAP.md` if it has one; else its `np-kb-<project>` pointer skill's **Roadmap** section (look + contribute there) |
 
 When in doubt, prefer **editing an existing skill** over creating a new one.
 Skills with overlapping descriptions are worse than one slightly bigger skill.
@@ -81,8 +83,17 @@ sources test, and the cross-tree lookup: references/classification.md
    existing skill overlaps meaningfully (same topic, overlapping "use when…"
    triggers, or similar artifact class), **extend that skill** instead of
    creating a new one. When in doubt, prefer extend.
-3. **Pick the target** using the decision table above (or the existing
-   skill identified in step 2).
+3. **Resolve the target path.** Classify the learning as one kind from the table,
+   then ask the layer where that kind lives:
+   ```bash
+   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py layout route \
+     --layer personal --kind knowledge --variant concept --value name=<name>
+   ```
+   It prints one path relative to the layer root. When it reports that the kind
+   needs a variant, the message lists each variant with the layer's own rule for
+   choosing. When it reports no route for the kind, invoke [[np-core-layout]] to
+   add one, then retry. Never invent a directory, and never hardcode one here.
+   (Or reuse the existing skill identified in step 2.)
 4. **Write the update.** For an existing skill: minimal surgical edit. For
    a new skill: include `---` frontmatter with `name:` and `description:`.
    The description must say WHAT it teaches and WHEN to use it — specific
@@ -90,6 +101,10 @@ sources test, and the cross-tree lookup: references/classification.md
    run the draft through [[np-flow-concise-output]] — SKILL.md bodies and
    wiki/sources pages are explicitly in its scope, and it catches the padding
    this protocol otherwise ships straight into a durable file.
+4b. **Guarantee an inbound link.** A page nothing links to is a page nobody finds.
+   Add a `[[wikilink]]` from a related page or the index (use a relative path when
+   the layout's `links` is `path` — `cli.py layout show` reports it). Directory
+   position is human convenience; the link and `INDEX.md` are the real contract.
 5. **New engine skill only:** append `./skills/<name>` to the `skills` array
    in the engine's `.claude-plugin/plugin.json`. Overlay skills are picked up
    by the relink alone.

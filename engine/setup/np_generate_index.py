@@ -32,6 +32,7 @@ import os
 import sys
 
 import np_content
+import np_layout
 import np_toggle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -148,6 +149,99 @@ def _render_index(out_file, bases, archive_manifest):
     return out_file
 
 
+def _excerpt(body, limit=160):
+    """The first line of real prose in a page body, truncated.
+
+    Curated wiki pages carry name/kind/last_updated but rarely a `description:`, so
+    a description-only column reads "(no description)" for every row and the index
+    is useless for discovery. Fall back to what the page actually opens with."""
+    for line in body.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ">", "|", "---", "```", "<!--")):
+            continue
+        if len(line) > limit:
+            line = line[:limit].rstrip() + "…"
+        return line
+    return ""
+
+
+def _page_meta(path):
+    """(kind, description) for a knowledge page. `description:` wins; otherwise the
+    page's opening prose line."""
+    kind = ""
+    desc = ""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            head = fh.read(4096)
+    except OSError:
+        return "", ""
+    if not head.startswith("---"):
+        return "", ""
+    parts = head.split("---", 2)
+    if len(parts) < 3:
+        return "", ""
+    for line in parts[1].splitlines():
+        if line.startswith("kind:"):
+            kind = line[len("kind:"):].strip()
+        elif line.startswith("description:"):
+            desc = line[len("description:"):].strip()
+    return kind, desc or _excerpt(parts[2])
+
+
+def _knowledge_rows(root):
+    """Markdown rows for every page reachable through the layer's knowledge and
+    reference routes (nervepack#234).
+
+    Follows the layer's DECLARED routes, so a layer that keeps knowledge in notes/
+    indexes exactly as one that uses wiki/. Without this the index lists skills
+    only, a page is findable only by knowing its directory, and directory structure
+    stays a contract in practice no matter what the manifest says."""
+    try:
+        layout, _source = np_layout.resolve(root)
+    except np_layout.LayoutError:
+        return []
+    dirs = set()
+    for kind in ("knowledge", "reference"):
+        spec = (layout.get("routes") or {}).get(kind)
+        if not isinstance(spec, dict):
+            continue
+        entries = spec.get("variants") if "variants" in spec else [spec]
+        for e in entries or []:
+            head = ((e or {}).get("path") or "").split("{", 1)[0].rstrip("/")
+            if head:
+                dirs.add(head)
+    rows = []
+    for d in sorted(dirs):
+        base = os.path.join(root, d)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [x for x in sorted(dirnames) if not x.startswith(".")]
+            for f in sorted(filenames):
+                if not f.endswith(".md") or f == "README.md":
+                    continue
+                full = os.path.join(dirpath, f)
+                kind, desc = _page_meta(full)
+                if not kind:
+                    continue
+                rel = os.path.relpath(full, root).replace(os.sep, "/")
+                rows.append("| [%s](%s) | `%s` | %s | %s |"
+                            % (f[:-3], rel, rel, kind,
+                               (desc or "_(no description)_").replace("|", "\\|")))
+    return sorted(set(rows))
+
+
+def _append_knowledge(path, rows):
+    """Append the Knowledge section to an already-written index."""
+    with open(path, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n## Knowledge\n\n")
+        fh.write("Pages reachable through this layer's declared routes\n")
+        fh.write("(`cli.py layout show`). Discovery reads this table, not the\n")
+        fh.write("directory tree.\n\n")
+        fh.write("| Page | Path | Kind | Description |\n|---|---|---|---|\n")
+        fh.write("\n".join(rows) + "\n")
+
+
 def generate(np_dir=None, out=None):
     """Regenerate the engine (and, in a split layout, the merged overlay) INDEX.md.
     Returns 0. Writes ONLY to the resolved engine + overlay roots."""
@@ -177,6 +271,11 @@ def generate(np_dir=None, out=None):
                 merged_bases.append(os.path.join(t, "skills"))
         written = _render_index(os.path.join(overlay_root, "INDEX.md"),
                                 merged_bases, archive_manifest)
+        # The engine INDEX.md stays skills-only (publishable, pii-guarded); the
+        # merged overlay index also carries the knowledge tree.
+        rows = _knowledge_rows(overlay_root)
+        if rows:
+            _append_knowledge(written, rows)
         out.write("wrote %s\n" % written)
     return 0
 

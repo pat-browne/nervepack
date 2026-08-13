@@ -37,6 +37,7 @@ import np_model
 import np_token_lib
 import np_maintenance_freshness
 import np_episodic_freshness
+import np_layout
 
 
 def _load_json(path):
@@ -86,6 +87,26 @@ def _walk_commands(node, out):
 
 
 def _core_check(cap_id, np):
+    if cap_id == "layer-layout":
+        # SHOULD: a layer with no manifest still contributes fine (np_layout infers
+        # its routes), so "inferred" is an advisory PASS. Only a corrupt or invalid
+        # manifest is a FAIL -- that one silently misplaces durable writes.
+        roots = np_content.content_layers()
+        if not roots:
+            return "PASS (no content layer configured)"
+        inferred = 0
+        pending = 0
+        for r in roots:
+            try:
+                layout, source = np_layout.resolve(r)
+            except np_layout.LayoutError as exc:
+                return "FAIL (%s: %s)" % (os.path.basename(r), exc)
+            if source == "inferred":
+                inferred += 1
+            pending += len(np_layout.open_questions(r, layout))
+        if inferred == 0 and pending == 0:
+            return "PASS"
+        return "PASS (inferred: %d layer(s), %d open question(s))" % (inferred, pending)
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call

@@ -56,6 +56,9 @@ Delegate to [[np-core-contribute]]. Follow its full protocol: sync first,
 check `INDEX.md`, pick the right skill (extend over create), write the
 edit, regenerate index, diff, commit, ask before push.
 
+Placement is that skill's job, and it resolves the path from the layer's own
+layout. This skill never picks a directory.
+
 ### 2b. Session-scoped → memory
 Draft the memory body, then run it through [[np-flow-concise-output]] —
 "memory lesson" is explicitly in its scope, and this is the one path in this

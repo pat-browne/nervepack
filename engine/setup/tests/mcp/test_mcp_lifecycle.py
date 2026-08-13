@@ -343,6 +343,12 @@ class TestLifecycle(unittest.TestCase):
         subprocess.run(["git", "-C", cd, "init", "-q"], check=True)
         subprocess.run(["git", "-C", cd, "config", "user.email", "t@example.test"], check=True)
         subprocess.run(["git", "-C", cd, "config", "user.name", "test"], check=True)
+        # nervepack#234: the destination comes from the LAYER's layout manifest.
+        # Before it, an empty layer silently got a hardcoded sources/<topic>/ tree.
+        os.makedirs(os.path.join(cd, ".nervepack"), exist_ok=True)
+        with open(os.path.join(cd, ".nervepack", "layout.json"), "w") as fh:
+            json.dump({"schema": 1, "routes": {
+                "reference": {"path": "sources/{topic}/{name}.md"}}}, fh)
         c = self._client({"NP_TOGGLES_LOCAL": _fix("contribute-on.local"),
                           "NP_CONTENT_DIR": cd})
         r = c.tool("nervepack_contribute",
@@ -355,6 +361,20 @@ class TestLifecycle(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(cd, "sources", "misc", "np-kb-test.md")))
         log = subprocess.run(["git", "-C", cd, "log", "--oneline"], capture_output=True, text=True)
         self.assertIn("np-kb-test", log.stdout)
+
+    def test_contribute_refuses_a_layer_that_declares_no_route(self):
+        # nervepack#234, deliberate behavior change: a layer that has not said where
+        # its content lives gets an actionable refusal, never an invented directory.
+        cd = tempfile.mkdtemp()
+        subprocess.run(["git", "-C", cd, "init", "-q"], check=True)
+        c = self._client({"NP_TOGGLES_LOCAL": _fix("contribute-on.local"),
+                          "NP_CONTENT_DIR": cd})
+        r = c.tool("nervepack_contribute",
+                   {"kind": "source", "name": "np-kb-test", "topic": "misc", "body": "# x"})
+        text = r["result"]["content"][0]["text"]
+        self.assertIn("no route", text.lower())
+        self.assertIn("np-core-layout", text)
+        self.assertFalse(os.path.exists(os.path.join(cd, "sources")))
 
     def test_contribute_rejects_traversal_in_name(self):
         # #174: a '..'/'/' name must be refused, not allowed to escape the wiki/

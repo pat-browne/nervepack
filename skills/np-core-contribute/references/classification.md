@@ -8,8 +8,9 @@ Decide *what kind of thing* the learning is **before** picking a file:
 
 - **Behavioral / how-to** (a reusable technique, rule, or capability) → a **skill**
   (new one if it's worth a name — not a paragraph buried elsewhere).
-- **Knowledge** (what a thing is, how a build works, a synthesized topic) → the
-  **wiki** (`concepts/` or `topics/`).
+- **Knowledge** (what a thing is, how a build works, a synthesized topic) → kind
+  `knowledge`. Where that lands, and whether the layer splits it into variants, is
+  the layer's own layout (`cli.py layout show`), not a fixed tree.
 - **Deferred work** (not done yet, revisit on a trigger) → a **roadmap** row only.
 
 A roadmap (incl. `references/roadmap.md`) is **deferred-work tracking, not a
