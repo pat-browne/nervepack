@@ -57,6 +57,7 @@ import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
 import np_instruction_block  # noqa: E402
 import np_link_dashboard_data  # noqa: E402
+import np_layout_cli  # noqa: E402
 import np_link_skills  # noqa: E402
 import np_mcp_install  # noqa: E402
 import np_merge_wait  # noqa: E402
@@ -222,6 +223,15 @@ def main(argv=None):
             return fn()
         except Exception as exc:
             _bail(name, "unhandled exception: %r" % exc)
+            return 1
+
+    if argv[0] == "layout":
+        # A real, intentional non-zero exit (invalid manifest, unrouted kind,
+        # refused path) -- not the hook/cron fail-open-to-0 contract.
+        try:
+            return np_layout_cli.run(argv[1:])
+        except Exception as exc:
+            _bail("layout", "unhandled exception: %r" % exc)
             return 1
 
     if argv[0] == "onboard":
