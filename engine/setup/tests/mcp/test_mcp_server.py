@@ -1,4 +1,4 @@
-import json, os, subprocess, sys, threading, unittest
+import json, os, shutil, subprocess, sys, threading, unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 SERVER = os.path.join(REPO, "engine", "setup", "np-mcp-server.py")
@@ -441,6 +441,93 @@ class TestRecallLayers(unittest.TestCase):
         self.assertIn("TEAM deploys lesson", text)
         self.assertNotIn("PERSONAL deploys lesson", text)   # team won, deduped
 
+
+class TestContributeUsesLayout(unittest.TestCase):
+    """nervepack#234: MCP contribute must resolve paths through the layer's layout,
+    not the hardcoded wiki/<wiki_kind>/<name>.md string. Hermetic: a temp git repo
+    as the content overlay, a temp HOME, and toggles enabled via a temp local file."""
+
+    def _overlay(self, layout=None):
+        import tempfile as _tf
+        root = _tf.mkdtemp(prefix="npmcp-ovl-")
+        self.addCleanup(shutil.rmtree, root, True)
+        home = _tf.mkdtemp(prefix="npmcp-home-")
+        self.addCleanup(shutil.rmtree, home, True)
+        subprocess.run(["git", "init", "-q", root], check=True)
+        subprocess.run(["git", "-C", root, "config", "user.email", "t@example.com"],
+                       check=True)
+        subprocess.run(["git", "-C", root, "config", "user.name", "t"], check=True)
+        if layout is not None:
+            d = os.path.join(root, ".nervepack")
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, "layout.json"), "w", encoding="utf-8") as fh:
+                json.dump(layout, fh)
+        toggles = os.path.join(home, "toggles.local")
+        with open(toggles, "w", encoding="utf-8") as fh:
+            fh.write("mcp=on\nmcp.writes=on\nmcp.contribute=on\n")
+        return root, {"NP_CONTENT_DIR": root, "HOME": home,
+                      "NP_TOGGLES_LOCAL": toggles}
+
+    def _contribute(self, env, args):
+        c = MCPClient(extra_env=env)
+        self.addCleanup(c.close)
+        c.initialize()
+        r = c.call("tools/call", {"name": "nervepack_contribute", "arguments": args})
+        return r["result"]["content"][0]["text"]
+
+    def test_knowledge_lands_on_the_declared_route(self):
+        # A layer that keeps knowledge in notes/, never wiki/.
+        root, env = self._overlay({"schema": 1, "routes": {
+            "knowledge": {"path": "notes/{name}.md",
+                          "frontmatter": {"kind": "note"}}}})
+        out = self._contribute(env, {"kind": "knowledge", "name": "widgets",
+                                     "body": "# Widgets\n"})
+        self.assertIn("notes/widgets.md", out, out)
+        self.assertTrue(os.path.isfile(os.path.join(root, "notes", "widgets.md")))
+
+    def test_legacy_wiki_kind_still_works(self):
+        root, env = self._overlay({"schema": 1, "routes": {
+            "knowledge": {"path": "notes/{name}.md"}}})
+        out = self._contribute(env, {"kind": "wiki", "name": "legacy", "body": "x\n"})
+        self.assertIn("notes/legacy.md", out, out)
+
+    def test_traversal_name_is_still_refused(self):
+        root, env = self._overlay({"schema": 1, "routes": {
+            "knowledge": {"path": "notes/{name}.md"}}})
+        out = self._contribute(env, {"kind": "knowledge",
+                                     "name": "../../etc/passwd", "body": "x"})
+        self.assertIn("refused", out.lower(), out)
+
+    def test_unrouted_kind_reports_the_declared_kinds(self):
+        root, env = self._overlay({"schema": 1, "routes": {
+            "skill": {"path": "skills/{name}/SKILL.md"}}})
+        out = self._contribute(env, {"kind": "knowledge", "name": "x", "body": "y"})
+        self.assertIn("no route", out.lower(), out)
+
+    def test_skill_route_still_works(self):
+        root, env = self._overlay({"schema": 1, "routes": {
+            "skill": {"path": "skills/{name}/SKILL.md"}}})
+        out = self._contribute(env, {"kind": "skill", "name": "np-kb-x",
+                                     "body": "---\nname: np-kb-x\n---\n"})
+        self.assertIn("skills/np-kb-x/SKILL.md", out, out)
+
+    def test_variant_selection_is_honored(self):
+        root, env = self._overlay({"schema": 1, "routes": {"knowledge": {"variants": [
+            {"name": "concept", "when": "no sources", "path": "wiki/concepts/{name}.md"},
+            {"name": "topic", "when": "owns sources",
+             "path": "wiki/topics/{topic}/{topic}.md"}]}}})
+        out = self._contribute(env, {"kind": "knowledge", "name": "rust",
+                                     "topic": "rust", "variant": "topic", "body": "x"})
+        self.assertIn("wiki/topics/rust/rust.md", out, out)
+
+    def test_missing_variant_reports_the_choices(self):
+        root, env = self._overlay({"schema": 1, "routes": {"knowledge": {"variants": [
+            {"name": "concept", "when": "no sources", "path": "wiki/concepts/{name}.md"},
+            {"name": "topic", "when": "owns sources",
+             "path": "wiki/topics/{topic}/{topic}.md"}]}}})
+        out = self._contribute(env, {"kind": "knowledge", "name": "x", "body": "y"})
+        self.assertIn("concept", out)
+        self.assertIn("owns sources", out)
 
 if __name__ == "__main__":
     unittest.main()
