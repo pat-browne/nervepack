@@ -49,6 +49,30 @@ That stacks **squad > division > org > personal > engine** (the leftmost wins a 
 clash). More than four team dirs is a hard error — the session falls back to
 personal-only, and the doctor (`cli.py doctor`) flags the invalid config.
 
+## Declaring your layout
+
+nervepack does not assume your overlay uses any particular directory names. Each
+layer says where its own content lives in a committed manifest,
+`<layer>/.nervepack/layout.json`. The engine owns a small vocabulary of content
+**kinds** (`skill`, `knowledge`, `reference`, `roadmap`, `prompt`); your layer maps
+each kind to a path template.
+
+```bash
+NP=~/Code/nervepack/engine/nervepack_engine/cli.py
+python3 $NP layout show      --layer personal   # current routes + where they came from
+python3 $NP layout questions --layer personal   # what the engine could not work out
+```
+
+A layer with **no** manifest still works: the engine infers routes from what is on
+disk (a `skills/*/SKILL.md` tree, pages with frontmatter `kind:`, a root
+`ROADMAP.md`, an `agents/` dir). Inference never guesses — where the shape is
+unclear it reports an open question instead. Run the `np-core-layout` skill to
+answer those and record the manifest, after which placement is deterministic.
+
+Contribution refuses a kind your layer never routed, rather than inventing a
+directory. `INDEX.md` and inbound links are what make a page findable, so directory
+structure stays human convenience rather than a contract.
+
 ## Verify
 
 ```bash

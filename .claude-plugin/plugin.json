@@ -23,6 +23,7 @@
     "./skills/np-core-doctor",
     "./skills/np-core-graduate",
     "./skills/np-core-handoff",
+    "./skills/np-core-layout",
     "./skills/np-core-onboard",
     "./skills/np-core-recall",
     "./skills/np-core-suggestions-review",

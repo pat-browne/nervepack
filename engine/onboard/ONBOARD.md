@@ -18,8 +18,12 @@ onboards through these same docs.
 2. **Satisfy each capability** in `engine/onboard/capabilities.json` (the contract). Tiers:
    - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`, `content`. Onboarding fails without these.
    - **SHOULD**: `session-start`, `session-end-capture`, `session-end-flush`,
-     `scheduled-maint`, `scheduled-auth-token`. Wire what your host supports; mark
-     the rest `unsupported` (and prefer the wrapper fallbacks the hints describe).
+     `scheduled-maint`, `scheduled-auth-token`, `layer-layout`. Wire what your host
+     supports; mark the rest `unsupported` (and prefer the wrapper fallbacks the
+     hints describe). `layer-layout` needs no host wiring: record where each content
+     layer keeps its content (`cli.py layout questions`, then the `np-core-layout`
+     interview). A layer with no manifest still works on inferred routes, but
+     contribution refuses a kind the layer never routed.
      `scheduled-auth-token` is the one capability with a genuinely manual step —
      `engine/setup/62-install-scheduled-auth-token.sh` needs a human at a real
      terminal to run `claude setup-token` and approve in a browser; you cannot

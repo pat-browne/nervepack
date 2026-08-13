@@ -76,6 +76,17 @@
       }
     },
     {
+      "id": "layer-layout",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "each content layer declares where its content lives",
+      "why": "Contribution resolves paths from the layer's own layout manifest (.nervepack/layout.json) instead of a hardcoded wiki/ tree. A layer with no manifest still works on inferred routes, but placement is only guaranteed stable once it is recorded.",
+      "accept": "`cli.py layout show` reports source=manifest for every configured layer, and `cli.py layout questions` returns an empty list.",
+      "hints": {
+        "generic": "run the np-core-layout skill, or `cli.py layout infer` then `cli.py layout record`."
+      }
+    },
+    {
       "id": "dashboard-data",
       "tier": "SHOULD",
       "check": "core",

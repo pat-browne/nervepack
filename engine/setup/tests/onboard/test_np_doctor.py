@@ -14,6 +14,7 @@ cmd.exe (the Git-bash Windows lane) via subprocess shell=True. stdlib only.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -350,6 +351,68 @@ class DoctorTest(unittest.TestCase):
         text, code = np_doctor.report()
         self.assertRegex(self._line(text, "knowledge"), r"\bPASS\b")
 
+
+class TestLayerLayoutCheck(unittest.TestCase):
+    """nervepack#234: the doctor reports whether each content layer has RECORDED
+    where its content lives. Inferred routes still work, so that is an advisory
+    PASS; only a corrupt manifest is a FAIL, because that one silently misplaces
+    durable writes if left alone."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="npdoc-layout-")
+        self.home = tempfile.mkdtemp(prefix="npdoc-home-")
+        self._saved = {k: os.environ.get(k)
+                       for k in ("NP_CONTENT_DIR", "NP_TEAM_DIR", "HOME")}
+        os.environ["NP_CONTENT_DIR"] = self.root
+        os.environ["HOME"] = self.home
+        os.environ.pop("NP_TEAM_DIR", None)
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.root, ignore_errors=True)
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def _write_skill(self):
+        d = os.path.join(self.root, "skills", "s")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "SKILL.md"), "w") as fh:
+            fh.write("---\nname: s\n---\n")
+
+    def test_recorded_manifest_passes_clean(self):
+        import np_layout
+        self._write_skill()
+        np_layout.record(self.root, {
+            "schema": 1,
+            "routes": {"skill": {"path": "skills/{name}/SKILL.md"},
+                       "knowledge": {"path": "notes/{name}.md"},
+                       "roadmap": {"path": "ROADMAP.md"}}})
+        self.assertEqual(np_doctor._core_check("layer-layout", ""), "PASS")
+
+    def test_inferred_layer_passes_with_an_advisory(self):
+        self._write_skill()
+        st = np_doctor._core_check("layer-layout", "")
+        self.assertTrue(st.startswith("PASS"), st)
+        self.assertIn("inferred", st)
+
+    def test_corrupt_manifest_fails(self):
+        p = os.path.join(self.root, ".nervepack", "layout.json")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w") as fh:
+            fh.write("{not json")
+        self.assertTrue(
+            np_doctor._core_check("layer-layout", "").startswith("FAIL"))
+
+    def test_layer_layout_is_a_should_capability(self):
+        with open(os.path.normpath(_CAPS), encoding="utf-8") as fh:
+            caps = json.load(fh)["capabilities"]
+        row = [c for c in caps if c.get("id") == "layer-layout"]
+        self.assertEqual(len(row), 1)
+        self.assertEqual(row[0]["tier"], "SHOULD")
+        self.assertEqual(row[0]["check"], "core")
 
 if __name__ == "__main__":
     unittest.main()

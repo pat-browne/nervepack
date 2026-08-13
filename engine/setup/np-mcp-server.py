@@ -53,6 +53,7 @@ if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 import np_toggle    # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
 import np_content   # noqa: E402  in-process content/team/merge resolver (bash-free)
+import np_layout    # noqa: E402  per-layer layout resolver (nervepack#234)
 import np_episodic_match  # noqa: E402  in-process keyword matcher for recall (bash-free)
 import np_doctor  # noqa: E402  bash-free core-check doctor (fallback when no bash)
 import np_sync    # noqa: E402  bash-free engine sync (fallback when no bash)
@@ -412,33 +413,37 @@ def _seg_ok(s):
 
 def _tool_contribute(args):
     require_contribute()
-    kind = args["kind"]            # skill | source | wiki
+    # nervepack#234: the destination comes from the LAYER's layout manifest, not a
+    # hardcoded wiki/<wiki_kind>/<name>.md. Legacy kind names keep working.
+    _LEGACY = {"wiki": "knowledge", "source": "reference"}
+    kind = _LEGACY.get(args["kind"], args["kind"])
     name = args["name"]
     body = args["body"]
     topic = args.get("topic", "misc")
-    wiki_kind = args.get("wiki_kind", "concepts")
-    # _safe_path confines to the content dir but NOT to the intended subtree; validate
-    # each interpolated segment so a prompt-injected tool call can't use '..' to escape
-    # skills/<name>, sources/<topic>/<name>, wiki/<wiki_kind>/<name>. (#174)
-    for label, seg in (("name", name), ("topic", topic), ("wiki_kind", wiki_kind)):
-        if not _seg_ok(seg):
-            return (f"refused: invalid {label} {seg!r} -- must be a single path "
-                    f"segment ([A-Za-z0-9._-], no '/' or '..')")
-    rel = {
-        "skill": f"skills/{name}/SKILL.md",
-        "source": f"sources/{topic}/{name}.md",
-        "wiki": f"wiki/{wiki_kind}/{name}.md",
-    }[kind]
+    variant = args.get("variant") or args.get("wiki_kind")
     cd = content_dir()
+
+    # np_layout.route() performs the same segment validation _seg_ok did (#174) and
+    # additionally refuses a template that would escape the layer root, so a manifest
+    # pulled from a team remote cannot redirect the write.
+    try:
+        layout, _source = np_layout.resolve(cd)
+        rel = np_layout.route(layout, kind, cd, variant=variant,
+                              values={"name": name, "topic": topic})
+    except np_layout.LayoutError as exc:
+        return f"refused: {exc}"
+
     full = _safe_path(rel, base=cd)
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8") as fh:
         fh.write(body if body.endswith("\n") else body + "\n")
     subject = {
         "skill": f"skill({name}): add via MCP contribute",
-        "source": f"source({topic}): add {name} via MCP contribute",
-        "wiki": f"wiki({name}): add via MCP contribute",
-    }[kind]
+        "reference": f"reference({topic}): add {name} via MCP contribute",
+        "knowledge": f"knowledge({name}): add via MCP contribute",
+        "roadmap": f"roadmap: add {name} via MCP contribute",
+        "prompt": f"prompt({name}): add via MCP contribute",
+    }.get(kind, f"content({name}): add via MCP contribute")
     run(["git", "-C", cd, "add", rel])  # explicit path only
     rc, out, err = run(["git", "-C", cd, "commit", "-m", subject])
     _, sha, _ = run(["git", "-C", cd, "rev-parse", "--short", "HEAD"])
@@ -503,10 +508,12 @@ def _tool_onboard(args):
 
 TOOLS += [
     {"name": "nervepack_contribute",
-     "description": "Write a durable skill/source/wiki page and git-commit it (bypasses human review — gated by mcp.contribute, default off). kind: skill|source|wiki; name; topic (source); body; wiki_kind.",
+     "description": "Write a durable skill/knowledge/reference page and git-commit it (bypasses human review — gated by mcp.contribute, default off). The path comes from the layer's own layout manifest. kind: skill|knowledge|reference|roadmap|prompt (wiki/source still accepted); name; topic; body; variant (when the layer declares variants for that kind).",
      "inputSchema": {"type": "object", "properties": {
-         "kind": {"type": "string", "enum": ["skill", "source", "wiki"]},
+         "kind": {"type": "string", "enum": ["skill", "knowledge", "reference",
+                                             "roadmap", "prompt", "wiki", "source"]},
          "name": {"type": "string"}, "topic": {"type": "string"},
+         "variant": {"type": "string"},
          "wiki_kind": {"type": "string"}, "body": {"type": "string"}},
          "required": ["kind", "name", "body"], "additionalProperties": False},
      "handler": _tool_contribute},
