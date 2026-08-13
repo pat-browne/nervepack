@@ -113,8 +113,11 @@ def _pick(layout, kind, variant):
     `when` rules in the message so the agent can choose."""
     routes = layout.get("routes") or {}
     if kind not in routes:
-        raise LayoutError("this layer declares no route for kind %r (declared: %s)"
-                          % (kind, ", ".join(sorted(routes)) or "none"))
+        raise LayoutError(
+            "this layer declares no route for kind %r (declared: %s). Run the "
+            "np-core-layout interview, or `cli.py layout infer` then "
+            "`cli.py layout record`, to say where %s content lives."
+            % (kind, ", ".join(sorted(routes)) or "none", kind))
     spec = routes[kind]
     vs = variants(layout, kind)
     if not vs:
