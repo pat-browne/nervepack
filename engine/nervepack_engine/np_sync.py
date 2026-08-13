@@ -18,6 +18,14 @@ Full parity with the retired 40-sync-nervepack.sh:
     armed AFTER the disabled/throttle/dry-run early-outs so a deliberate skip never
     fires the team fetch — mirroring the bash EXIT-trap ordering.
 
+New beyond bash parity: the personal content overlay (content_dir(), when it
+resolves to an explicit separate repo, not the single-repo-layout fallback) gets
+the identical strict-safe ff treatment as team layers — same non-fatal stderr-note
+contract, gated by the `sync.content` param. Neither this nor the engine sync ever
+pushes; "local ahead" has always been report-only in this script. The standing
+"push without asking" behavior lives in the np-core-sync SKILL.md's own written
+protocol for the human-attended /np-core-sync invocation, not in this module.
+
 Parity-locked (status-message outcome, modulo the embedded UTC timestamp) to the
 bash original by tests/mcp/parity/test_sync_parity.sh. stdlib only.
 """
@@ -87,10 +95,34 @@ def _is_dirty(target):
     return tracked_dirty or bool(untracked)
 
 
+def _ff_only_layer_sync(path, kind):
+    """Strict-safe ff-only sync for one layer dir (a team root, or the personal
+    content overlay): skip if dirty; otherwise fetch, then ff-merge ONLY when
+    local HEAD is behind-or-equal to upstream. `git merge --ff-only @{u}`
+    trivially SUCCEEDS when HEAD is instead ahead of (or diverged from)
+    upstream -- merging an ancestor is a no-op -- so without the explicit
+    ancestor check, "ahead" was silently indistinguishable from "fully synced"
+    and never produced its note. Caught while adding the content-layer sync
+    (test_content_layer_ahead_is_reported_not_pushed); _team_sync had the
+    identical latent gap, untested, and is fixed here too now that both share
+    this one function. Non-fatal; stderr notes only. `kind` names the layer in
+    the message ("team layer" / "content layer")."""
+    if _git(path, "status", "--porcelain").stdout.strip() != "":
+        sys.stderr.write("np-core-sync: %s %s has local edits — skipping pull\n" % (kind, path))
+        return
+    ok = _git(path, "fetch", "--quiet", "origin").returncode == 0
+    if ok:
+        behind_or_equal = _is_ancestor(path, "HEAD", "@{u}")
+        ok = behind_or_equal and _git(path, "merge", "--ff-only", "--quiet", "@{u}").returncode == 0
+    if not ok:
+        sys.stderr.write("np-core-sync: %s %s not fast-forwarded "
+                         "(diverged/ahead/no upstream) — left as-is\n" % (kind, path))
+
+
 def _team_sync():
-    """Optional team layer: keep every configured team checkout current (strict-safe:
-    ff-only, one repo at a time, skip dirty/diverged). Mirrors bash _np_team_sync.
-    No-op when the `team` toggle is off. Non-fatal; stderr notes only."""
+    """Optional team layer: keep every configured team checkout current via
+    _ff_only_layer_sync. Mirrors bash _np_team_sync. No-op when the `team`
+    toggle is off."""
     if not np_toggle.enabled("team"):
         return
     for td in np_content.team_dirs():
@@ -98,15 +130,26 @@ def _team_sync():
             continue
         if _git(td, "rev-parse", "--is-inside-work-tree").returncode != 0:
             continue
-        if _git(td, "status", "--porcelain").stdout.strip() == "":
-            ok = _git(td, "fetch", "--quiet", "origin").returncode == 0
-            if ok:
-                ok = _git(td, "merge", "--ff-only", "--quiet", "@{u}").returncode == 0
-            if not ok:
-                sys.stderr.write("np-core-sync: team layer %s not fast-forwarded "
-                                 "(diverged/dirty/no upstream) — left as-is\n" % td)
-        else:
-            sys.stderr.write("np-core-sync: team layer %s has local edits — skipping pull\n" % td)
+        _ff_only_layer_sync(td, "team layer")
+
+
+def _content_sync():
+    """Personal content overlay: the same strict-safe treatment as team layers,
+    via _ff_only_layer_sync. No-op when the `sync.content` param is off, or when
+    content_dir() is not an EXPLICIT overlay (content_is_explicit() False means
+    the single-repo legacy layout, where content_dir() just falls back to the
+    engine root itself -- there is no separate repo to sync, and touching it
+    would double-process the engine under a second name)."""
+    if np_toggle.param("sync.content", "on") != "on":
+        return
+    if not np_content.content_is_explicit():
+        return
+    cd = np_content.content_dir()
+    if not cd:
+        return
+    if _git(cd, "rev-parse", "--is-inside-work-tree").returncode != 0:
+        return
+    _ff_only_layer_sync(cd, "content layer")
 
 
 def _post_ff_steps(target):
@@ -231,6 +274,7 @@ def sync(mode="backup", verbose=False):
         _home(), ".cache", "np-core-sync-status")
     outcome = _engine_sync(target, status_file)
     _team_sync()
+    _content_sync()
     return outcome
 
 

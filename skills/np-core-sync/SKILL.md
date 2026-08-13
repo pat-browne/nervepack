@@ -9,20 +9,27 @@ description: Sync ~/Code/nervepack with origin/main using strict-safe semantics 
 
 The underlying command (`cli.py sync`, engine/nervepack_engine/np_sync.py) is intentionally
 *defensive*: it never modifies a dirty working tree, never autostashes, and
-never rebases. Every run produces one of five outcomes, written to
-`~/.cache/np-core-sync-status`:
+never rebases — for the engine AND for every content layer it touches. Every
+run produces one of five ENGINE outcomes, written to `~/.cache/np-core-sync-status`:
 
 | Outcome | Meaning | What this skill does |
 |---|---|---|
 | `up to date` | local == origin/main | report and stop |
 | `fast-forwarded N commit(s)` | safe pull happened | report what changed |
-| `local is N ahead of origin/main` | unpushed local commits | push (auto-approved) |
+| `local is N ahead of origin/main` | unpushed local commits | offer to open a PR (see below) |
 | `SKIPPED (dirty)` | uncommitted edits block sync | surface diff, suggest commit/stash |
 | `DIVERGED` | local and remote both have unique commits | surface both sides, ask user how to resolve |
 
-The `SessionStart` hook calls the script silently in the background, so its
-output only lives in the status file. This skill's job is to surface that
-state and act on it.
+**The personal content overlay gets the same ff-only treatment** as team
+layers, gated by `sync.content` (default on; no-op on a single-repo legacy
+layout). No layer or the engine ever auto-pushes — `np_sync.py` has no push
+code path. Layer outcomes are non-fatal stderr notes, not the status file
+(engine-only): `"content layer <path> not fast-forwarded (diverged/ahead/no
+upstream) — left as-is"` / `"... has local edits — skipping pull"`.
+
+The `SessionStart` hook runs the script silently in the background — no model
+in the loop, so it can never push or open a PR. This skill's interactive steps
+are the only place that ever happens.
 
 ## When to invoke
 
@@ -56,13 +63,25 @@ command (e.g. a stdout/stderr redirect fix) reaches `~/.claude/settings.json` in
 the same sync, not on some later manual re-install. No further action.
 
 ### `local is N ahead`
-Show the unpushed commits with `git -C ~/Code/nervepack log @{u}..HEAD --oneline`,
-then **push without asking** — Pat set a standing preference (2026-06-03): always
-auto-approve nervepack **sync** pushes (already-committed local state), no per-push
-confirmation. New content writes still go through [[np-core-contribute]]'s push
-gate. Push the current branch to its tracking remote;
-if it's a main-tracking branch, fast-forward-push the pinned SHA to `origin/main`
-per the concurrency protocol. Never force-push; on non-fast-forward, surface it.
+**No direct push to main — every push goes through a PR.** (Superseded
+2026-08-13: the prior standing preference auto-pushed already-committed local
+state straight to `origin/main`. That is gone.) Show the unpushed commits
+(`git -C ~/Code/nervepack log @{u}..HEAD --oneline`), then create a branch,
+push it, and open a PR:
+```bash
+git -C ~/Code/nervepack checkout -b sync/<short-sha>-<date>
+git -C ~/Code/nervepack push -u origin sync/<short-sha>-<date>
+gh pr create --repo <owner>/nervepack --fill
+```
+Report the PR URL. If already on a feature branch (not `main`) with an
+upstream, just push it and open the PR from there — no need to branch again.
+If `gh` is missing, unauthenticated, or the push is rejected: degrade to the
+old plain report ("N commits ahead — not pushed") and surface the specific
+failure; never fall back to a direct push. **This only ever happens here**,
+in this skill's own interactive steps — never from the background
+`SessionStart` hook, which has no model in the loop to make this call and
+keeps today's passive report-only behavior for engine, team, and content
+layers alike.
 
 ### `SKIPPED (dirty)`
 Run `git -C ~/Code/nervepack status --short`. Show the user. Suggest the right next
@@ -88,9 +107,10 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 
 - Does not silently rebase, autostash, or merge-with-strategy. The whole
   point is predictability.
-- Does not push **except** in the `local is N ahead` outcome (the standing
-  auto-approval above). Pushing *new* content happens via [[np-core-contribute]]
-  or explicit user ask.
+- **Never pushes directly to a protected branch.** `local is N ahead` opens a
+  PR (see above) instead of pushing straight to `origin/main`, for the engine
+  and for every content layer alike. Pushing *new* content still happens via
+  [[np-core-contribute]] or explicit user ask — unchanged.
 - Does not re-run non-hook `engine/setup/*.sh` scripts or `cli.py setup <step>`
   bootstrap steps. If a one-off setup step changed (e.g. `install-apt-baseline`
   added a new package), surface that to the user — only `cli.py setup link-skills`
