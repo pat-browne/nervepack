@@ -23,6 +23,10 @@
   "min": 60,
   "description": "Throttle (seconds) between SessionStart backup syncs."
  },
+ "sync.content": {
+  "type": "bool",
+  "description": "Fast-forward-pull the personal content overlay too (same strict-safe ff-only treatment as team layers). No-op on a single-repo legacy layout."
+ },
  "evaluator.cap_bytes": {
   "type": "number",
   "min": 1,

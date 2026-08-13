@@ -70,11 +70,31 @@ class NpSync(unittest.TestCase):
         self.target = os.path.join(self.tmp, "target")
         subprocess.run(["git", "clone", "-q", self.remote, self.target], capture_output=True)
 
+        # A second bare remote + clone, standing in for a configured personal
+        # content overlay (e.g. ~/Code/nervepack-content) -- entirely separate
+        # history from the engine's remote/target pair above.
+        self.content_remote = os.path.join(self.tmp, "content-remote.git")
+        content_seed = os.path.join(self.tmp, "content-seed")
+        _git(self.tmp, "init", "-q", "--bare", "-b", "main", self.content_remote)
+        subprocess.run(["git", "init", "-q", "-b", "main", content_seed], capture_output=True)
+        _git(content_seed, "commit", "-q", "--allow-empty", "-m", "content-c1")
+        _git(content_seed, "remote", "add", "origin", self.content_remote)
+        _git(content_seed, "push", "-q", "origin", "main")
+        self.content_seed = content_seed
+        self.content_dir = os.path.join(self.tmp, "content")
+        subprocess.run(["git", "clone", "-q", self.content_remote, self.content_dir],
+                       capture_output=True)
+
     def _advance_remote(self, msg="c2"):
         _git(self.seed, "commit", "-q", "--allow-empty", "-m", msg)
         _git(self.seed, "push", "-q", "origin", "main")
 
-    def _run(self, *args, dryrun=False, sync_off=False, fresh_stamp=False, target=None):
+    def _advance_content_remote(self, msg="content-c2"):
+        _git(self.content_seed, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(self.content_seed, "push", "-q", "origin", "main")
+
+    def _env(self, dryrun=False, sync_off=False, fresh_stamp=False, target=None,
+              content_dir=None):
         env = dict(os.environ)
         env["HOME"] = self.home
         env["NP_TOGGLES_CONF"] = self.conf
@@ -85,6 +105,7 @@ class NpSync(unittest.TestCase):
         env["CLAUDE_SETTINGS"] = os.path.join(self.home, ".claude", "settings.json")
         env.pop("NP_SYNC_DRYRUN", None)
         env.pop("NP_TEAM_DIR", None)
+        env.pop("NP_CONTENT_DIR", None)
         if dryrun:
             env["NP_SYNC_DRYRUN"] = "1"
         if sync_off:
@@ -93,8 +114,21 @@ class NpSync(unittest.TestCase):
         if fresh_stamp:
             with open(self.stamp, "w") as fh:
                 fh.write(str(int(time.time())))
+        if content_dir is not None:
+            env["NP_CONTENT_DIR"] = content_dir
+        return env
+
+    def _run(self, *args, **kw):
+        env = self._env(**kw)
         r = subprocess.run([sys.executable, _PY, *args], capture_output=True, text=True, env=env)
         return r.stdout.strip()
+
+    def _run_full(self, *args, **kw):
+        """Like _run, but returns (stdout, stderr) -- content-layer notes are
+        stderr-only (mirrors _team_sync's existing non-fatal-note contract)."""
+        env = self._env(**kw)
+        r = subprocess.run([sys.executable, _PY, *args], capture_output=True, text=True, env=env)
+        return r.stdout.strip(), r.stderr
 
     def test_up_to_date_clean(self):
         out = self._run("exit")
@@ -166,6 +200,67 @@ class NpSync(unittest.TestCase):
         out = self._run("backup", fresh_stamp=True)
         self.assertIn("within", out)
         self.assertIn("skipping (backup)", out)
+
+    # --- content-layer sync (mirrors _team_sync's exact contract) -----------
+
+    def test_content_layer_fast_forwards_when_configured_and_behind(self):
+        self._advance_content_remote()
+        # Ground truth is the SEED's HEAD, not the clone's own (never-yet-fetched,
+        # therefore stale-but-internally-consistent) origin/main ref -- comparing
+        # against the clone's own stale ref would pass even with zero fetch ever
+        # happening, which is exactly the false-positive shape this suite exists
+        # to avoid (np-kb-testing-ci §1).
+        remote_tip = _git(self.content_seed, "rev-parse", "HEAD").stdout.strip()
+        self.assertNotEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), remote_tip,
+                            "test setup bug: clone already at remote tip before sync ran")
+        self._run("exit", content_dir=self.content_dir)
+        self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), remote_tip)
+
+    def test_content_layer_dirty_skips_with_stderr_note(self):
+        self._advance_content_remote()
+        with open(os.path.join(self.content_dir, "dirty.txt"), "w") as fh:
+            fh.write("x")
+        before = _git(self.content_dir, "rev-parse", "HEAD").stdout.strip()
+        _, err = self._run_full("exit", content_dir=self.content_dir)
+        self.assertIn("content layer", err)
+        self.assertIn("local edits", err)
+        # never touched -- still behind origin, dirty file still present
+        self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), before)
+        self.assertTrue(os.path.isfile(os.path.join(self.content_dir, "dirty.txt")))
+
+    def test_content_layer_ahead_is_reported_not_pushed(self):
+        _git(self.content_dir, "commit", "-q", "--allow-empty", "-m", "content-local1")
+        local_head = _git(self.content_dir, "rev-parse", "HEAD").stdout.strip()
+        _, err = self._run_full("exit", content_dir=self.content_dir)
+        self.assertIn("content layer", err)
+        self.assertIn("not fast-forwarded", err)
+        # never pushed -- the bare remote's main still doesn't know about local_head
+        remote_main = _git(self.content_remote, "rev-parse", "main").stdout.strip()
+        self.assertNotEqual(local_head, remote_main)
+
+    def test_content_layer_unconfigured_is_a_silent_noop(self):
+        # No NP_CONTENT_DIR, no config file -- content_is_explicit() is False, so
+        # this must never touch any real directory (notably NOT the real engine
+        # checkout content_dir() would otherwise fall back to).
+        out, err = self._run_full("exit")
+        self.assertIn("up to date", out)   # engine sync still ran normally
+        self.assertNotIn("content layer", err)
+
+    def test_content_layer_toggle_off_is_a_noop_even_when_behind(self):
+        self._advance_content_remote()
+        with open(self.conf, "w") as fh:
+            fh.write("sync|shared|runtime|on|interval=86400,content=off\n")
+        before = _git(self.content_dir, "rev-parse", "HEAD").stdout.strip()
+        out, err = self._run_full("exit", content_dir=self.content_dir)
+        self.assertIn("up to date", out)
+        self.assertNotIn("content layer", err)
+        self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), before)
+
+    def test_content_layer_missing_directory_does_not_crash_engine_sync(self):
+        # A stale NP_CONTENT_DIR (moved/deleted repo) must degrade gracefully --
+        # the engine's own sync result must still come through on stdout.
+        out = self._run("exit", content_dir=os.path.join(self.tmp, "does-not-exist"))
+        self.assertIn("up to date", out)
 
 
 if __name__ == "__main__":
