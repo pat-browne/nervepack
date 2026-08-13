@@ -566,6 +566,21 @@ Operating rules when concurrency is possible:
   mechanism, not the source.
 - **Don't force-push.** Nervepack is small, conflicts should be rare; if one
   appears, merge with `--no-edit` or surface to the user.
+- **Don't let overlay content (`wiki/`, `sources/`, `memory/`) sit in the engine
+  repo.** `pii-guard` only catches secrets/PII, not generic knowledge landing in
+  the wrong repo — a topic can sit in the engine's `wiki/topics/` indefinitely
+  without any check firing. If you find engine-repo content that looks like it
+  belongs in the overlay: grep the whole engine tree for the topic/file name
+  outside its own folder, and check whether any engine subprocess has a runtime
+  dependency on it (e.g. a doc a script actually reads, not just describes).
+  Zero references → safe to relocate: move it into `$NP_CONTENT_DIR`, commit+push
+  there directly (no CI gate on the overlay), then remove it from the engine via
+  the PR-merges-on-green workflow above — never direct-push the removal to
+  engine `main`. Symptom to watch for: misplaced wiki content makes the
+  dashboard's wiki pane show a layer literally named `nervepack` (the engine
+  dir's own basename, per `_layer_label()`/`_wiki_roots()` in
+  `dashboard/build.py`) — that's a sign content leaked into the engine, not a
+  dashboard bug to patch around.
 
 ## Commit conventions
 
