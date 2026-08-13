@@ -68,22 +68,40 @@ class TestRecord(unittest.TestCase):
         self.assertTrue(text.endswith("\n"))
         self.assertIn('"schema": 1', text)
 
-    @unittest.skipIf(os.geteuid() == 0 if hasattr(os, "geteuid") else False,
-                     "root bypasses directory mode bits")
-    def test_readonly_layer_falls_back_to_cache(self):
-        os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
+    def _block_manifest_dir(self):
+        """Make <root>/.nervepack/ impossible to create, on every OS.
+
+        A chmod'd directory is NOT portable for this: Windows ignores POSIX mode
+        bits on directories, so the layer stays writable under Git-bash and the
+        fallback never fires (caught by the Windows CI lane). Occupying the path
+        with a regular file makes os.makedirs raise FileExistsError everywhere."""
+        with open(os.path.join(self.root, ".nervepack"), "w") as fh:
+            fh.write("not a directory\n")
+
+    def test_unwritable_layer_falls_back_to_cache(self):
+        self._block_manifest_dir()
         written = np_layout.record(self.root, LAYOUT)
         self.assertTrue(written.startswith(os.path.join(self.home, ".config",
-                                                        "nervepack", "layouts")))
+                                                        "nervepack", "layouts")),
+                        written)
         self.assertTrue(os.path.isfile(written))
 
-    @unittest.skipIf(os.geteuid() == 0 if hasattr(os, "geteuid") else False,
-                     "root bypasses directory mode bits")
     def test_load_reads_the_cache_when_layer_has_no_manifest(self):
-        os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
+        self._block_manifest_dir()
         np_layout.record(self.root, LAYOUT)
         self.assertEqual(np_layout.load(self.root)["routes"]["skill"]["path"],
                          "skills/{name}/SKILL.md")
+
+    @unittest.skipUnless(os.name == "posix", "Windows ignores directory mode bits")
+    @unittest.skipIf(os.geteuid() == 0 if hasattr(os, "geteuid") else False,
+                     "root bypasses directory mode bits")
+    def test_readonly_layer_dir_falls_back_to_cache(self):
+        # The real-world shape of the same failure: a read-only checkout.
+        os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
+        written = np_layout.record(self.root, LAYOUT)
+        self.assertTrue(written.startswith(os.path.join(self.home, ".config",
+                                                        "nervepack", "layouts")),
+                        written)
 
     def test_cache_path_is_stable_for_a_root(self):
         self.assertEqual(np_layout.cache_path(self.root),
