@@ -32,6 +32,7 @@ import uuid
 
 import np_bashlib
 import np_paths
+import np_token_lib
 
 # Long-lived nervepack processes (the dashboard server, backgrounded SessionStart
 # hooks) are spawned from inside an interactive Claude Code session and inherit its
@@ -138,13 +139,38 @@ def _model_agent():
     return os.environ.get("NP_LLM_MODEL_AGENT") or "claude-sonnet-4-6"
 
 
-def _base_env():
+def _claude_token():
+    """The long-lived `claude setup-token` OAuth token, read from the file the
+    scheduled-auth installer writes. Returns None when there isn't a usable one.
+
+    The CLI's own interactive credentials expire independently of this token, so
+    without the fallback below a machine with a valid token file still failed
+    every NON-cron model call ("OAuth session expired and could not be
+    refreshed") while the doctor's `scheduled-auth-token` check reported PASS --
+    the scheduler installers were the only thing injecting it, via
+    np_token_lib.claude_token_env_prefix's shell snippet. Read at CALL time, not
+    import time, so rotating the token is still just overwriting the file."""
+    try:
+        with open(np_token_lib.claude_token_file()) as fh:
+            return fh.read().strip() or None
+    except OSError:
+        return None                            # absent/unreadable -> no token, not a crash
+
+
+def _base_env(backend="claude"):
     """Env for every backend call: NERVEPACK_AGENT=1 (the SessionEnd-recursion
-    guard the retired np-llm.sh centralized) plus the CLAUDE_CODE_* strip above."""
+    guard the retired np-llm.sh centralized), the CLAUDE_CODE_* strip above, and
+    -- for the `claude` backend only -- the scheduled-auth token fallback. The
+    `local` backend talks to a non-Anthropic endpoint, so handing it the token
+    would leak a credential to a process with no use for it."""
     env = dict(os.environ)
     env["NERVEPACK_AGENT"] = "1"
     for v in _STRIP_ENV_VARS:
         env.pop(v, None)
+    if backend == "claude" and not env.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        token = _claude_token()                # an exported token wins: caller is authority
+        if token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
     return env
 
 
@@ -155,7 +181,7 @@ def complete(prompt, system=None, timeout=None):
     (e.g. the dashboard server) bound the call; raises subprocess.TimeoutExpired
     like any subprocess.run timeout would."""
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
-    env = _base_env()
+    env = _base_env(backend)
     if backend == "claude":
         argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
                 "--model", _model_cheap(), "--allowedTools", ""]
@@ -186,7 +212,7 @@ def agent(prompt, tools, cwd=None, timeout=None):
     a hung agent; raises subprocess.TimeoutExpired on expiry, same as any
     subprocess.run timeout would -- callers decide how to fail open."""
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
-    env = _base_env()
+    env = _base_env(backend)
     if backend == "claude":
         # --allowedTools is variadic (consumes space-separated tokens until the
         # next flag) -- tools.split() mirrors bash's unquoted `$tools` word-split.
