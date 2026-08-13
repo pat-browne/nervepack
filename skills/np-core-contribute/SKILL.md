@@ -86,7 +86,10 @@ sources test, and the cross-tree lookup: references/classification.md
 4. **Write the update.** For an existing skill: minimal surgical edit. For
    a new skill: include `---` frontmatter with `name:` and `description:`.
    The description must say WHAT it teaches and WHEN to use it — specific
-   enough that step 2 will work for the next contributor.
+   enough that step 2 will work for the next contributor. Before moving on,
+   run the draft through [[np-flow-concise-output]] — SKILL.md bodies and
+   wiki/sources pages are explicitly in its scope, and it catches the padding
+   this protocol otherwise ships straight into a durable file.
 5. **New engine skill only:** append `./skills/<name>` to the `skills` array
    in the engine's `.claude-plugin/plugin.json`. Overlay skills are picked up
    by the relink alone.
@@ -94,7 +97,8 @@ sources test, and the cross-tree lookup: references/classification.md
    (handles new skills in every layer, prunes dangling symlinks, and re-runs
    `cli.py setup generate-index`).
 7. **Diff:** `git -C "$REPO" diff` — show the user.
-8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions"),
+8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions",
+   also gated by [[np-flow-concise-output]]),
    staging explicit paths (never `-A` — a cron or second session may share the tree):
    ```bash
    git -C "$REPO" add <changed paths>
