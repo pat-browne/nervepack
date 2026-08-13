@@ -57,7 +57,10 @@ check `INDEX.md`, pick the right skill (extend over create), write the
 edit, regenerate index, diff, commit, ask before push.
 
 ### 2b. Session-scoped → memory
-Write to `~/.claude/projects/<your-project>/memory/<short-kebab-name>.md`
+Draft the memory body, then run it through [[np-flow-concise-output]] —
+"memory lesson" is explicitly in its scope, and this is the one path in this
+skill that np-core-contribute's own gate (step 4) never touches. Then write
+to `~/.claude/projects/<your-project>/memory/<short-kebab-name>.md`
 using the auto-memory format (see the system prompt's "How to save
 memories" section — frontmatter with `name:`, `description:`,
 `metadata: { type: ... }`). Add a line to `MEMORY.md`. Use the right type:
