@@ -362,6 +362,75 @@ def resolve(root):
     return infer(root), "inferred"
 
 
+# --- discovery questions -----------------------------------------------------
+# open_questions() is a PURE FUNCTION of (disk, layout). The interview answers one
+# question by editing `layout`, then calls this again. An answer that happens to
+# settle three questions makes all three disappear, so the interview never asks a
+# question a prior answer already resolved (nervepack#234).
+
+# Kinds a layer is expected to route. `prompt` and `reference` are optional: plenty
+# of layers hold no agent prompts and no curated source material, so a missing route
+# for either is not a gap worth a question.
+_EXPECTED_KINDS = ("knowledge", "skill", "roadmap")
+
+
+def _routed_dirs(layout):
+    """Every top-level directory some route writes into."""
+    out = set()
+    for spec in (layout.get("routes") or {}).values():
+        if not isinstance(spec, dict):
+            continue
+        for e in _entries(spec) or []:
+            path = (e or {}).get("path") or ""
+            head = path.split("/", 1)[0]
+            if head and "{" not in head and not head.endswith(".md"):
+                out.add(head)
+    return out
+
+
+def open_questions(root, layout=None):
+    """What inference could not settle, as stable {id, question, evidence} dicts."""
+    if layout is None:
+        layout, _ = resolve(root)
+    routes = layout.get("routes") or {}
+    unmapped = {u.rstrip("/") for u in (layout.get("unmapped") or [])}
+    routed = _routed_dirs(layout) | unmapped
+    questions = []
+
+    for kind in _EXPECTED_KINDS:
+        if kind in routes:
+            continue
+        questions.append({
+            "id": "missing-kind:%s" % kind,
+            "question": ("Where does %s content live in this layer? Give a path "
+                         "template, for example notes/{name}.md." % kind),
+            "evidence": "no directory in this layer declares %s content" % kind,
+        })
+
+    try:
+        entries = sorted(os.listdir(root))
+    except OSError:
+        entries = []
+    for entry in entries:
+        if entry in _SKIP_DIRS or entry.startswith(".") or entry in routed:
+            continue
+        if not os.path.isdir(os.path.join(root, entry)):
+            continue
+        found = _md_files(root, entry)
+        if not found:
+            continue
+        sample = ["%s/%s" % (d, f) if d else f for d, f in found[:3]]
+        questions.append({
+            "id": "unmapped-dir:%s" % entry,
+            "question": ("What does %s/ hold, and should contributions ever land "
+                         "there? Answer with a kind, or say it is not a "
+                         "contribution target." % entry),
+            "evidence": "contains markdown: %s" % ", ".join(sample),
+        })
+
+    return questions
+
+
 # --- recording ---------------------------------------------------------------
 def _home():
     return os.environ.get("HOME") or os.path.expanduser("~")
