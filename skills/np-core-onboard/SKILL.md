@@ -28,9 +28,15 @@ this skill is the entry point.
 5. **Record what you did** in `~/.config/nervepack/adapter.json` (per-machine): for each
    `check:adapter` capability, `{status: wired|unsupported, verify: "<cmd, exit 0 = ok>"}`.
    Start from `engine/onboard/adapters/<host>.example.json` if one exists.
-6. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor` (exits non-zero on a MUST
+6. **Record each layer's layout:** for the personal overlay and every configured team
+   layer, run `cli.py layout questions --layer <personal|team>`. When it returns
+   anything, invoke [[np-core-layout]] to run the discovery interview and record
+   `.nervepack/layout.json`. Contribution resolves paths from that manifest, so a
+   layer that has not declared one refuses writes for kinds it never routed.
+7. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor` (exits non-zero on a MUST
    shortfall). Fix → re-run. That generate→verify→fix loop is what makes self-wiring safe.
-7. **Report** the doctor's per-capability table to the user and offer toggle choices
+   The `layer-layout` SHOULD row reports the result of step 6.
+8. **Report** the doctor's per-capability table to the user and offer toggle choices
    (`np-core-toggle`).
 
 ## Hard rules

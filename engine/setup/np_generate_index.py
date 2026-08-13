@@ -149,13 +149,30 @@ def _render_index(out_file, bases, archive_manifest):
     return out_file
 
 
+def _excerpt(body, limit=160):
+    """The first line of real prose in a page body, truncated.
+
+    Curated wiki pages carry name/kind/last_updated but rarely a `description:`, so
+    a description-only column reads "(no description)" for every row and the index
+    is useless for discovery. Fall back to what the page actually opens with."""
+    for line in body.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ">", "|", "---", "```", "<!--")):
+            continue
+        if len(line) > limit:
+            line = line[:limit].rstrip() + "…"
+        return line
+    return ""
+
+
 def _page_meta(path):
-    """(kind, description) from a knowledge page's frontmatter."""
+    """(kind, description) for a knowledge page. `description:` wins; otherwise the
+    page's opening prose line."""
     kind = ""
     desc = ""
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
-            head = fh.read(2048)
+            head = fh.read(4096)
     except OSError:
         return "", ""
     if not head.startswith("---"):
@@ -168,7 +185,7 @@ def _page_meta(path):
             kind = line[len("kind:"):].strip()
         elif line.startswith("description:"):
             desc = line[len("description:"):].strip()
-    return kind, desc
+    return kind, desc or _excerpt(parts[2])
 
 
 def _knowledge_rows(root):

@@ -110,6 +110,38 @@ class TestKnowledgeIndex(unittest.TestCase):
               "---\nkind: note\ndescription: a | b\n---\n")
         self.assertIn("a \\| b", self._index())
 
+    def test_description_falls_back_to_a_body_excerpt(self):
+        # Real wiki pages carry name/kind/last_updated but no description:, so a
+        # description-only column reads "_(no description)_" for every row.
+        write(os.path.join(self.overlay, "wiki", "topics", "aws", "aws.md"),
+              "---\nname: aws\nkind: topic\n---\n\n# AWS\n\n"
+              "Synthesis page. What this nervepack knows about AWS.\n")
+        text = self._index()
+        self.assertIn("Synthesis page. What this nervepack knows about AWS.", text)
+
+    def test_frontmatter_description_wins_over_the_excerpt(self):
+        write(os.path.join(self.overlay, "notes", "a.md"),
+              "---\nkind: note\ndescription: the declared one\n---\n\n"
+              "# A\n\nthe body line\n")
+        text = self._index()
+        self.assertIn("the declared one", text)
+        self.assertNotIn("the body line", text)
+
+    def test_excerpt_skips_headings_and_blank_lines(self):
+        write(os.path.join(self.overlay, "notes", "a.md"),
+              "---\nkind: note\n---\n\n# Heading\n\n## Sub\n\nreal prose here\n")
+        self.assertIn("real prose here", self._index())
+
+    def test_excerpt_is_truncated(self):
+        write(os.path.join(self.overlay, "notes", "a.md"),
+              "---\nkind: note\n---\n\n" + ("word " * 80) + "\n")
+        row = [ln for ln in self._index().splitlines() if "notes/a.md" in ln][0]
+        self.assertLess(len(row), 400)
+
+    def test_page_with_no_body_still_lists(self):
+        write(os.path.join(self.overlay, "notes", "a.md"), "---\nkind: note\n---\n")
+        self.assertIn("notes/a.md", self._index())
+
     def test_index_is_deterministic(self):
         write(os.path.join(self.overlay, "notes", "b.md"),
               "---\nkind: note\ndescription: d2\n---\n")
