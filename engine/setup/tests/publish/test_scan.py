@@ -1,4 +1,4 @@
-import os, subprocess, sys, tempfile, unittest
+import os, shutil, subprocess, sys, tempfile, unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 SCAN = os.path.join(REPO, "publish", "np-publish-scan.py")
@@ -149,6 +149,45 @@ class TestScan(unittest.TestCase):
                          f"a .git pointer file must be skipped:\n{run_scan(d).stdout}")
         d2 = self._tree({"notes.txt": "gitdir: /home/pbrowne/Code/nervepack\n"})
         self.assertEqual(run_scan(d2).returncode, 1)
+
+
+class TestWorktreeExclusion(unittest.TestCase):
+    """A git worktree under .worktrees/ is a full second copy of the repo, including
+    publish/scan-allowlist.txt and the scanner's own test fixtures. Those hold
+    fake-but-real-looking secrets on purpose, and SKIP_FILES matches by exact
+    relpath, so the copies were scanned and the guard failed against itself. CI
+    never saw it (fresh checkout); every local run with a worktree did."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="npscan-wt-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+
+    def _plant(self, rel):
+        p = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("token = AKIAIOSFODNN7EXAMPLE\n")
+        return p
+
+    def _scan(self):
+        return subprocess.run(
+            [sys.executable, SCAN, self.root], capture_output=True, text=True)
+
+    def test_worktree_copy_is_not_scanned(self):
+        self._plant(".worktrees/feat-x/publish/scan-allowlist.txt")
+        r = self._scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_real_tree_is_still_scanned(self):
+        self._plant("engine/setup/leak.py")
+        r = self._scan()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+
+    def test_worktree_exclusion_does_not_hide_a_sibling_named_dir(self):
+        # Only a top-level .worktrees/ is skipped machinery, and the skip is by
+        # directory NAME, so nothing outside a worktree changes.
+        self._plant("engine/worktrees-notes/leak.py")
+        self.assertEqual(self._scan().returncode, 1)
 
 
 if __name__ == "__main__":
