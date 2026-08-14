@@ -4,11 +4,11 @@ status: accepted
 date: 2026-08-14
 tier: normal
 blast_radius:
-  - specs/**
+  - change-specs/**
   - AGENTS.md
 ---
 
-# 0001: Per-change spec artifact (specs/&lt;branch-slug&gt;.md)
+# 0001: Per-change spec artifact (change-specs/&lt;branch-slug&gt;.md)
 
 ## Context and problem statement
 
@@ -37,8 +37,8 @@ something to attach a tier and a gate record to, and neither has one.
 
 ## Decision
 
-We will add a `specs/` directory to this repo holding one `TEMPLATE.md`, one
-`README.md` documenting the schema and conventions, and one spec file per
+We will add a `change-specs/` directory to this repo holding one `TEMPLATE.md`,
+one `README.md` documenting the schema and conventions, and one spec file per
 governed branch, following the template.
 
 Chosen option: "a per-branch spec file in this repo, read by CI", because it
@@ -51,7 +51,7 @@ from the overlay's design docs rather than a competitor to them.
   the home for brainstorming-skill design conversations. This file is a
   short, CI-readable contract, not a design narrative.
 - **Requiring a spec for every change.** Standard-tier and spike-path work
-  skip it — see `specs/README.md` § "When a spec is not required".
+  skip it — see `change-specs/README.md` § "When a spec is not required".
 - **Building the enforcement itself.** `spec-guard` (#248) and drift-guard
   (#249) are separate, not-yet-built issues. This change only adds the
   artifact format they will read.
@@ -81,11 +81,19 @@ from the overlay's design docs rather than a competitor to them.
 
 ## Confirmation
 
-`specs/feat-f1-spec-artifact.md` (this file) exists, matches the schema in
-`specs/README.md`, and is the spec for the branch that added the mechanism —
+`change-specs/feat-f1-spec-artifact.md` (this file) exists, matches the schema in
+`change-specs/README.md`, and is the spec for the branch that added the mechanism —
 satisfying #247's "at least one real spec written using it" acceptance
 criterion by demonstration rather than assertion.
 
 ## Deviations
 
-None. The change stayed within the declared blast radius.
+- 2026-08-14 — the directory was originally named `specs/`, matching the name
+  used throughout this spec's own Considered Options and Decision sections
+  above. CI's existing `engine-layout-check` gate — a pre-existing, deliberate
+  rule anchored at repo root that bans top-level `specs/`, `plans/`, and
+  `runbooks/` from the engine tree, precisely because those names are reserved
+  for the overlay's design docs — correctly failed the PR. Renamed to
+  `change-specs/` throughout (this file, `README.md`, `AGENTS.md`'s new row).
+  No change to `blast_radius` beyond the rename itself; still `AGENTS.md` plus
+  this directory.

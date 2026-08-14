@@ -1,6 +1,6 @@
 # Engine change specs
 
-A `specs/<branch-slug>.md` file is the per-change record for a normal- or
+A `change-specs/<branch-slug>.md` file is the per-change record for a normal- or
 high-tier engine change. It is read by CI (the `spec-guard` job), not only by a
 human — that is why it lives in this repo rather than the content overlay.
 
@@ -11,7 +11,7 @@ docs the `brainstorming` and `writing-plans` superpowers skills produce during
 planning conversations — private, not read by any automated gate, not tied to a
 specific branch.
 
-`specs/<branch-slug>.md` in **this** repo is a repo-governance artifact: it
+`change-specs/<branch-slug>.md` in **this** repo is a repo-governance artifact: it
 declares what a branch is allowed to touch, and CI enforces it. Conceptually
 it is closer to an ADR living in `doc/adr/` inside the repo it documents than
 to a brainstorming spec. Both can exist for the same piece of work — a
@@ -20,9 +20,9 @@ is the short, machine-readable contract CI checks the diff against.
 
 ## Naming
 
-One file per branch: `specs/<branch-slug>.md`, where `<branch-slug>` is the
+One file per branch: `change-specs/<branch-slug>.md`, where `<branch-slug>` is the
 git branch name with `/` replaced by `-`. Example: branch
-`feat/f1-spec-artifact` → `specs/feat-f1-spec-artifact.md`.
+`feat/f1-spec-artifact` → `change-specs/feat-f1-spec-artifact.md`.
 
 ## Front matter
 
