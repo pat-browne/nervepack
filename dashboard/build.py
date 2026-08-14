@@ -487,6 +487,81 @@ def _parse_wiki_page(path):
             "version": fm.get("version", "").strip('"')}
 
 
+def _group_label(key):
+    """Nav heading for a variant key: 'topic' -> 'Topics', 'note' -> 'Notes'."""
+    k = (key or "").replace("-", " ").replace("_", " ").strip()
+    if not k:
+        return "Pages"
+    label = k[:1].upper() + k[1:]
+    return label if label.endswith("s") else label + "s"
+
+
+def _variant_plan(cd):
+    """[(kind, container_subdir, group_key, folder_owning)] from the layer's declared
+    knowledge/reference routes (nervepack#234).
+
+    The nav used to scan literal `wiki/topics` + `wiki/concepts`, so a layer that
+    keeps knowledge anywhere else rendered an empty nav even though contribution
+    wrote there happily. `container_subdir` is the path prefix before the first
+    template variable; `folder_owning` marks a `<dir>/{topic}/{topic}.md` shape,
+    where each subdirectory is one synthesis page plus co-located sources."""
+    try:
+        import np_layout
+        layout, _src = np_layout.resolve(cd)
+    except Exception:
+        return []
+    spec = (layout.get("routes") or {}).get("knowledge")
+    if not isinstance(spec, dict):
+        return []
+    entries = spec.get("variants") if "variants" in spec else [spec]
+    plan = []
+    for e in entries or []:
+        path = (e or {}).get("path") or ""
+        if "{" not in path:
+            continue
+        head = path.split("{", 1)[0].rstrip("/")
+        if not head:
+            continue
+        kind = ((e.get("frontmatter") or {}).get("kind")
+                or e.get("name") or "").strip()
+        if not kind:
+            continue
+        folder_owning = "{topic}/{topic}" in path
+        key = e.get("name") or kind
+        plan.append((kind, head, key, folder_owning))
+    return plan
+
+
+def _scan_plan(cd, groups):
+    """Adapt _variant_plan into the (kind, subdir, holder, synth_fn, key) tuples the
+    indexing loop consumes, creating one group holder per variant."""
+    variants = _variant_plan(cd)
+    if not variants:
+        # A layer that declares no knowledge route (never onboarded, or an empty
+        # fixture) keeps the conventional split, so the nav never regresses to blank.
+        variants = [("topic", "wiki/topics", "topic", True),
+                    ("concept", "wiki/concepts", "concept", True)]
+    plan = []
+    for kind, subdir, key, folder_owning in variants:
+        holder = groups.setdefault(key, [])
+        # The rendered-page path keeps only the container's LAST segment, so
+        # `wiki/topics` still renders under data/wiki/<layer>/topics/… as before.
+        html_seg = subdir.rstrip("/").rsplit("/", 1)[-1]
+
+        def synth_fn(p, html, root, layer, _kind=kind):
+            return {"name": p["name"], "kind": _kind, "excerpt": p["excerpt"],
+                    "last_updated": p["last_updated"], "sources": p["sources"],
+                    "html": html, "root": root, "layer": layer, "shadowed": False,
+                    "src": p["path"]}
+
+        # Entry key is "topic" ONLY for the conventional `topic` variant; every
+        # other variant (concepts included) keys on "name". That asymmetry predates
+        # #234 and is the contract index.html and the build tests both read.
+        plan.append((kind, subdir, html_seg, holder, synth_fn,
+                     "topic" if key == "topic" else "name", folder_owning))
+    return plan
+
+
 def wiki_index():
     """Grouped wiki index for the dashboard left-nav, from the CONTENT overlay.
     NEW layout: wiki/topics/<topic>/ holds one kind:topic synthesis page + N
@@ -568,7 +643,8 @@ def wiki_index():
             names.append(src["name"])
         return names
 
-    topics, concepts, layers = [], [], []
+    groups = {}                 # variant key -> entries, one nav group each (#234)
+    layers = []
     owned = set()               # page names claimed by a higher-precedence layer
     used = {}                   # label -> count, so two same-basename dirs stay distinct
     for cd in roots:
@@ -580,21 +656,36 @@ def wiki_index():
         fresh = []              # names this layer contributes, merged into `owned` after
         got = False             # did this layer contribute anything worth a nav section?
 
-        for kind, subdir, holder, synth_fn, key in (
-                ("topic", "topics", topics, _synth_entry, "topic"),
-                ("concept", "concepts", concepts, _concept_synth, "name")):
-            root_dir = os.path.join(cd, "wiki", subdir)
+        for (kind, subdir, html_seg, holder, synth_fn, key,
+             folder_owning) in _scan_plan(cd, groups):
+            root_dir = os.path.join(cd, subdir)
             try:
                 names = sorted(os.listdir(root_dir))
             except OSError:
                 names = []
+            if not folder_owning:
+                # Flat variant (`notes/{name}.md`): each page is its own entry with
+                # no co-located sources, so the container IS the variant's dir.
+                for f in names:
+                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                        continue
+                    p = _parse_wiki_page(os.path.join(root_dir, f))
+                    if not p or (p["kind"] and p["kind"] != kind):
+                        continue
+                    html = "data/wiki/%s/%s/%s.html" % (slug, html_seg, p["name"])
+                    entry = {key: p["name"], "layer": label, "shadowed": False,
+                             "synthesis": synth_fn(p, html, cd, label), "sources": []}
+                    fresh.extend(_mark(entry, owned))
+                    holder.append(entry)
+                    got = True
+                continue
             for nm in names:
                 container = os.path.join(root_dir, nm)
                 if not os.path.isdir(container):
                     continue
                 entry = {key: nm, "layer": label, "shadowed": False,
                          "synthesis": None, "sources": []}
-                _index_container(container, kind, subdir, nm, cd, label, slug,
+                _index_container(container, kind, html_seg, nm, cd, label, slug,
                                  entry, synth_fn)
                 if entry["synthesis"] is None and not entry["sources"]:
                     continue                            # empty dir: nothing to show
@@ -608,7 +699,19 @@ def wiki_index():
         if got:
             layers.append(label)
 
-    return {"topics": topics, "concepts": concepts, "layers": layers}
+    # `groups` is the general shape (one per declared knowledge variant). `topics`
+    # and `concepts` stay populated as back-compat aliases so an index.html or a
+    # metrics.js built before #234 keeps rendering the conventional split.
+    # Conventional order first (topics open at the top, then concepts), everything
+    # else alphabetical — so a layer using the usual split keeps the nav it had.
+    _RANK = {"topic": 0, "concept": 1}
+    out_groups = [{"key": k, "label": _group_label(k), "entries": groups[k]}
+                  for k in sorted(groups, key=lambda k: (_RANK.get(k, 2), k))
+                  if groups[k]]
+    return {"groups": out_groups,
+            "topics": groups.get("topic", []),
+            "concepts": groups.get("concept", []),
+            "layers": layers}
 
 
 def render_pages(index, out_dir):

@@ -497,9 +497,12 @@ class TestWikiIndex(unittest.TestCase):
         self.assertEqual(python_topic["synthesis"]["excerpt"], "What nervepack knows.")
 
     def test_missing_dirs_yield_empty_groups(self):
+        # `groups` joined the shape in #234 (one nav group per declared knowledge
+        # variant); topics/concepts stay as back-compat aliases.
         with tempfile.TemporaryDirectory() as cd:
             wiki = _parse_wiki(run_build_wiki(cd))
-        self.assertEqual(wiki, {"topics": [], "concepts": [], "layers": []})
+        self.assertEqual(wiki, {"groups": [], "topics": [], "concepts": [],
+                                "layers": []})
 
     def test_index_md_and_readme_excluded(self):
         with tempfile.TemporaryDirectory() as cd:
@@ -1152,6 +1155,73 @@ class TestBacklogMetrics(unittest.TestCase):
             js = run_build("", BACKCAPTURE_QUEUE_DIR=qdir, BACKCAPTURE_SEEN_DIR=sdir)
         b = self._parse(js)
         self.assertEqual(b["resolved_last_24h"], 2, "a 2-day-old seen marker must not count as last-24h")
+
+
+class TestWikiNavFollowsLayerLayout(unittest.TestCase):
+    """nervepack#234 follow-up: the nav scanned literal wiki/topics + wiki/concepts,
+    so a layer that keeps knowledge anywhere else rendered an empty wiki nav even
+    though contribution wrote there happily. Containers now come from the layer's
+    declared knowledge routes."""
+
+    def _layer(self, tmp, layout, pages):
+        cd = os.path.join(tmp, "content")
+        os.makedirs(os.path.join(cd, ".nervepack"), exist_ok=True)
+        with open(os.path.join(cd, ".nervepack", "layout.json"), "w") as fh:
+            json.dump(layout, fh)
+        for rel, text in pages.items():
+            full = os.path.join(cd, rel)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        return cd
+
+    def test_flat_nonstandard_tree_is_indexed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {
+                    "path": "notes/{name}.md", "frontmatter": {"kind": "note"}}}},
+                {"notes/widgets.md": "---\nname: widgets\nkind: note\n---\n\nAbout widgets.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        names = [e["name"] for g in wiki.get("groups", []) for e in g["entries"]]
+        self.assertIn("widgets", names, wiki)
+
+    def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "kb/{topic}/{topic}.md",
+                                  "frontmatter": {"kind": "note"}},
+                    "reference": {"path": "kb/{topic}/{name}.md",
+                                  "frontmatter": {"kind": "reference"}}}},
+                {"kb/rust/rust.md": "---\nname: rust\nkind: note\n---\n\nRust.\n",
+                 "kb/rust/spec.md": "---\nname: spec\nkind: reference\n---\n\nSpec.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        entries = [e for g in wiki.get("groups", []) for e in g["entries"]]
+        self.assertTrue(entries, wiki)
+        rust = next(e for e in entries if e.get("topic") == "rust" or e["name"] == "rust")
+        self.assertEqual([s["name"] for s in rust.get("sources", [])], ["spec"])
+
+    def test_topics_and_concepts_aliases_survive_for_the_standard_tree(self):
+        # Back-compat: a layer using the conventional split still exposes
+        # wiki.topics / wiki.concepts, so an older metrics.js consumer keeps working.
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "topic", "when": "owns sources",
+                     "path": "wiki/topics/{topic}/{topic}.md",
+                     "frontmatter": {"kind": "topic"}},
+                    {"name": "concept", "when": "no sources",
+                     "path": "wiki/concepts/{topic}/{topic}.md",
+                     "frontmatter": {"kind": "concept"}}]}}},
+                {"wiki/topics/rust/rust.md": "---\nname: rust\nkind: topic\n---\n\nRust.\n",
+                 "wiki/concepts/borrow/borrow.md":
+                     "---\nname: borrow\nkind: concept\n---\n\nBorrow.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        self.assertEqual([t["topic"] for t in wiki["topics"]], ["rust"])
+        self.assertEqual([c["name"] for c in wiki["concepts"]], ["borrow"])
 
 
 if __name__ == "__main__":
