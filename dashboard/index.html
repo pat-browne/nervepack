@@ -991,14 +991,22 @@
     if (!elList) return;
 
     // Flatten to leaves with a precomputed lowercase haystack for search.
+    // Since #234 the build emits `groups` — one per knowledge variant the content
+    // layer declares — so a layer using notes/ or kb/ gets a nav instead of a blank
+    // panel. `topics`/`concepts` remain as aliases, and are the fallback for a
+    // metrics.js built before that change.
+    const groups = (W.groups && W.groups.length)
+      ? W.groups
+      : [{ label: "Topics", entries: W.topics || [] },
+         { label: "Concepts", entries: W.concepts || [] }];
+    const groupLabels = groups.map(g => g.label);
     const leaves = [];
-    (W.topics || []).forEach(t => {
-      if (t.synthesis) leaves.push({ ...t.synthesis, group: "Topics", topic: t.topic, isSynthesis: true });
-      (t.sources || []).forEach(s => leaves.push({ ...s, group: "Topics", topic: t.topic, isSynthesis: false }));
-    });
-    (W.concepts || []).forEach(c => {
-      if (c.synthesis) leaves.push({ ...c.synthesis, group: "Concepts", topic: c.name, isSynthesis: true });
-      (c.sources || []).forEach(s => leaves.push({ ...s, group: "Concepts", topic: c.name, isSynthesis: false }));
+    groups.forEach(g => {
+      (g.entries || []).forEach(e => {
+        const topic = e.topic || e.name;
+        if (e.synthesis) leaves.push({ ...e.synthesis, group: g.label, topic, isSynthesis: true });
+        (e.sources || []).forEach(s => leaves.push({ ...s, group: g.label, topic, isSynthesis: false }));
+      });
     });
     leaves.forEach(l => {
       l._hay = [l.name, l.kind, l.layer, l.topic, l.dir, l.excerpt, (l.sources || []).join(" ")]
@@ -1075,10 +1083,13 @@
       elCount.textContent = total ? `${items.length} of ${total} page(s)` : "";
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
-      // filter into topics + concepts
-      const groups = ls =>
-        topicGroupHTML(ls.filter(l => l.group === "Topics"), expandAll, "Topics", true) +
-        topicGroupHTML(ls.filter(l => l.group === "Concepts"), expandAll, "Concepts", expandAll);
+      // One section per declared knowledge variant (#234), in build order. The
+      // first group stays open; the rest follow expandAll, matching the old
+      // Topics-open / Concepts-collapsed behavior for the conventional split.
+      const groupOrder = groupLabels;
+      const groups = ls => groupOrder.map((label, i) =>
+        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label,
+                       i === 0 ? true : expandAll)).join("");
       // Multi-layer: one collapsible section per content layer, precedence order,
       // highest-precedence open. A single layer renders exactly as it always has —
       // no gratuitous "Personal" wrapper around the whole tree (#142).
