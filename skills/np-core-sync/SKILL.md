@@ -27,6 +27,13 @@ code path. Layer outcomes are non-fatal stderr notes, not the status file
 (engine-only): `"content layer <path> not fast-forwarded (diverged/ahead/no
 upstream) — left as-is"` / `"... has local edits — skipping pull"`.
 
+Every sync also validates each layer's `.nervepack/layout.json` (the same
+check `cli.py doctor`'s `layer-layout` capability runs) and prints
+`"layout manifest invalid in <path>: <error>"` to stderr on a corrupt
+manifest. This is non-fatal, like the layer notes above. Surface this line to
+the user if you see it: a bad manifest silently misplaces the next
+[[np-core-contribute]] write into that layer.
+
 The `SessionStart` hook runs the script silently in the background — no model
 in the loop, so it can never push or open a PR. This skill's interactive steps
 are the only place that ever happens.
