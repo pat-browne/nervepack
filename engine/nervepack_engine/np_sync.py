@@ -48,6 +48,7 @@ import time
 
 import np_bashlib
 import np_content
+import np_layout
 import np_link_skills
 import np_toggle
 
@@ -150,6 +151,25 @@ def _content_sync():
     if _git(cd, "rev-parse", "--is-inside-work-tree").returncode != 0:
         return
     _ff_only_layer_sync(cd, "content layer")
+
+
+def _layout_validity_check():
+    """Validate every configured content layer's .nervepack/layout.json. Reuses
+    np_layout.resolve, the same check np_doctor runs for the layer-layout
+    capability, so a corrupt or invalid manifest gets caught on every sync
+    instead of only when someone happens to run the doctor (nervepack#244).
+    Non-fatal; a bad manifest prints an stderr note and sync continues -- it
+    must not touch the parity-locked status file (personal/team layer outcomes
+    are stderr-only, same as _team_sync/_content_sync above)."""
+    try:
+        roots = np_content.content_layers()
+    except Exception:
+        return
+    for r in roots:
+        try:
+            np_layout.resolve(r)
+        except np_layout.LayoutError as exc:
+            sys.stderr.write("np-core-sync: layout manifest invalid in %s: %s\n" % (r, exc))
 
 
 def _post_ff_steps(target):
@@ -275,6 +295,7 @@ def sync(mode="backup", verbose=False):
     outcome = _engine_sync(target, status_file)
     _team_sync()
     _content_sync()
+    _layout_validity_check()
     return outcome
 
 
