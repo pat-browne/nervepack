@@ -76,10 +76,13 @@ sources test, and the cross-tree lookup: references/classification.md
 Sync first ([[np-core-sync]]) → check the merged INDEX for an overlapping
 skill to extend instead of duplicating → resolve the target path via
 `cli.py layout route` (never invent a directory) → write the update (run the
-draft through [[np-flow-concise-output]]) → guarantee an inbound `[[wikilink]]`
-→ new engine skill only: register it in `plugin.json` → relink + regenerate
-INDEX → diff → commit (explicit paths, no LLM attribution) → ask before
-pushing. Full 9-step recipe with commands: references/steps.md
+draft through [[np-flow-concise-output]]. Cross-reference another skill by
+the target repo's own convention, never a relative file path (see
+references/cross-reference-convention.md)) → guarantee an inbound
+`[[wikilink]]` → new engine skill only: register it in `plugin.json` →
+relink + regenerate INDEX → diff → commit (explicit paths, no LLM
+attribution) → ask before pushing. Full 9-step recipe with commands:
+references/steps.md
 
 ## Ingest protocol (when target is `sources/`)
 
