@@ -64,6 +64,7 @@ the brand guide, design language, and source stay in the overlay.
 | `publish/np-publish-scan.py`, `publish/scan-allowlist.txt` | The secret/PII guard run by the `pii-guard` CI job on every push/PR — blocks personal data from landing in the (public-to-be) engine. | Yes — engine machinery |
 | `agents/<name>.md` | Prompts for `/schedule` or `/loop` agents | Yes |
 | _(no `docs/` tree)_ | Design specs + plans (superpowers brainstorm output) are **content, not engine** — they live in the overlay at `$NP_CONTENT_DIR/docs/superpowers/{specs,plans}/`, never in this repo. Promote durable lessons into skills/ via [[np-core-contribute]]. The `nervepack-content-example` repo shows where they go (`docs/specs/`). | N/A — write specs to the overlay |
+| `specs/<branch-slug>.md` | **Engine change specs — a different thing from the overlay's design specs above.** A per-branch, CI-readable governance artifact (schema, status lifecycle, blast radius) that `spec-guard` CI enforces against the diff. Lives here because CI can only read this repo, not the private overlay. See `specs/README.md` for the full contract and the distinction from `docs/superpowers/specs/`. | Yes — one per governed branch, per `specs/TEMPLATE.md` |
 | `.claude-plugin/plugin.json` | Plugin manifest for `claude plugin install` | Update on add/remove skills |
 | `LICENSE`, `NOTICE` | MIT license + third-party attribution | No |
 
