@@ -29,6 +29,7 @@ if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 
 import os
+import re
 import sys
 
 import np_content
@@ -104,7 +105,28 @@ def _skill_map(bases):
     return list(zip(names, dirs))
 
 
-def _render_index(out_file, bases, archive_manifest):
+def _existing_rows(out_file):
+    """name -> row line, parsed from an existing INDEX.md skill table.
+
+    Only rows of the exact generated shape `| [<name>](skills/<name>/SKILL.md) | …`
+    are recognized, so hand-written prose and the archive footer are never mistaken
+    for rows."""
+    rows = {}
+    try:
+        with open(out_file, "r", encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return rows
+    for line in text.splitlines():
+        if not line.startswith("| ["):
+            continue
+        m = re.match(r"\| \[([^\]]+)\]\(skills/([^/]+)/SKILL\.md\) \|", line)
+        if m:
+            rows[m.group(2)] = line
+    return rows
+
+
+def _render_index(out_file, bases, archive_manifest, preserve_reason=""):
     """Write the INDEX.md at `out_file` from the skills under `bases` (precedence:
     later wins). Byte-parity with the bash render_index (header, sorted rows,
     archive footer)."""
@@ -121,6 +143,7 @@ def _render_index(out_file, bases, archive_manifest):
         "|---|---:|---|",
     ]
     rows = []
+    produced = set()
     for name, d in _skill_map(bases):
         skill_file = os.path.join(d, "SKILL.md")
         if not os.path.isfile(skill_file):
@@ -133,6 +156,24 @@ def _render_index(out_file, bases, archive_manifest):
         if fm_name != name:
             fm_name = name + " ⚠"
         rows.append("| [%s](skills/%s/SKILL.md) | %s | %s |" % (fm_name, name, lines, fm_desc))
+        produced.add(name)
+
+    # nervepack#241: an ENABLED layer this machine cannot resolve contributes no
+    # bases, so an authoritative regen would DELETE its rows from a shared committed
+    # file — silently, and a cron would push it. Carry those rows over instead. This
+    # is gated on the unresolvable-layer condition, never unconditional: with every
+    # enabled layer resolvable, the regen stays authoritative and a genuinely deleted
+    # skill is still pruned. Worst case is a stale row until a machine that can see
+    # the layer regenerates, which is visible and self-correcting; deletion is not.
+    if preserve_reason:
+        orphaned = {n: line for n, line in _existing_rows(out_file).items()
+                    if n not in produced}
+        if orphaned:
+            rows.extend(orphaned[n] for n in sorted(orphaned))
+            sys.stderr.write(
+                "np-generate-index: %s — preserving %d existing row(s) rather than "
+                "deleting them: %s\n"
+                % (preserve_reason, len(orphaned), ", ".join(sorted(orphaned))))
     rows.sort()
 
     footer = ["", "## Archived skills", ""]
@@ -269,8 +310,11 @@ def generate(np_dir=None, out=None):
         if np_toggle.enabled("team"):
             for t in reversed(np_content.team_dirs()):
                 merged_bases.append(os.path.join(t, "skills"))
+        # Preservation applies to the MERGED index only. The engine index lists
+        # engine skills exclusively, so no unresolvable layer can contribute to it.
         written = _render_index(os.path.join(overlay_root, "INDEX.md"),
-                                merged_bases, archive_manifest)
+                                merged_bases, archive_manifest,
+                                preserve_reason=np_content.unresolved_layers())
         # The engine INDEX.md stays skills-only (publishable, pii-guarded); the
         # merged overlay index also carries the knowledge tree.
         rows = _knowledge_rows(overlay_root)
