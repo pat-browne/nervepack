@@ -147,6 +147,31 @@ def content_layers():
     return layers
 
 
+def unresolved_layers():
+    """Reason string when a layer is ENABLED but does not resolve on this machine,
+    else "" (nervepack#241).
+
+    `team_dirs()` returns [] for unconfigured, over-cap, AND missing-dir alike, so a
+    caller cannot tell "no team layer wanted" from "team layer wanted but absent".
+    Any writer that regenerates a SHARED COMMITTED artifact from local state must
+    know the difference: with the `team` toggle on and nothing resolvable, an
+    authoritative regen deletes that layer's rows for everyone.
+
+    Deliberately a separate helper rather than a warning inside team_dirs(): hooks
+    and recall paths call that on nearly every turn, so warning there would be
+    constant noise on any machine without a team layer."""
+    if not np_toggle.enabled("team"):
+        return ""
+    if team_dirs():
+        return ""
+    origin = team_origin()
+    if origin == "none":
+        return ("the 'team' toggle is on but no team layer is configured "
+                "(NP_TEAM_DIR / ~/.config/nervepack/team-dir)")
+    return ("the 'team' toggle is on but the configured team layer does not "
+            "resolve (missing dir, or more than the 4-dir cap)")
+
+
 def merge_mode():
     """np_merge_mode: validated team.merge (override | concatenate | team-only)."""
     m = np_toggle.param("team.merge", "override")
