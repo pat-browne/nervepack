@@ -41,7 +41,14 @@ RULES = {
     # ranges, or public IPs. The dashboard's intentional 127.0.0.1 binds stay clean.
     "lan-ip":      re.compile(r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b"),
 }
-SKIP_DIRS = {".git", "__pycache__", "node_modules", ".claude", ".superpowers"}
+# `.worktrees` holds git worktrees — a full second copy of the repo, including this
+# scanner, its allowlist, and the test fixtures that plant fake-but-real-looking
+# secrets on purpose. SKIP_FILES matches by exact relpath, so those copies fell
+# through and the guard blocked against itself on every local run with a worktree
+# open (CI never saw it: a fresh checkout has none). The dir is gitignored and never
+# publishable, so skipping it costs no coverage.
+SKIP_DIRS = {".git", "__pycache__", "node_modules", ".claude", ".superpowers",
+             ".worktrees"}
 SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2", ".zip", ".lock"}
 # The scanner's own machinery: this source file holds the detection regexes
 # (e.g. the pii- patterns) and the scanner's unit tests plant fake-but-real-looking
