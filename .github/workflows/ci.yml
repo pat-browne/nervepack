@@ -31,6 +31,21 @@ jobs:
           done < <(git ls-files '*.sh')
           exit $fail
 
+      # F4/#250: every gate emits a structured verdict the summary job collects
+      # into one PR comment. github.sha/run_id/server_url/repository are all
+      # GitHub-computed, never PR-author-controlled, so direct ${{ }}
+      # interpolation here is safe (contrast head_ref/base_ref below).
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "syntax" --status "${{ job.status }}" --reason "Python/bash syntax sweep" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-syntax.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-syntax
+          path: gate-verdict-syntax.json
+
   regression:
     name: Regression suite (zero-dep)
     runs-on: ubuntu-latest
@@ -83,6 +98,17 @@ jobs:
         with:
           name: regression-report
           path: regression-report.md
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "regression" --status "${{ job.status }}" --reason "Zero-dependency regression suite" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-regression.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-regression
+          path: gate-verdict-regression.json
 
   dashboard-e2e:
     name: Dashboard e2e (Playwright, informational)
@@ -192,6 +218,19 @@ jobs:
           name: regression-report-windows
           path: regression-report-win.md
 
+      # python3 already resolves here via the shim step above (persisted onto
+      # $GITHUB_PATH for the rest of this job).
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "windows" --status "${{ job.status }}" --reason "Regression suite under Git-bash" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-windows.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-windows
+          path: gate-verdict-windows.json
+
   windows-bashfree:
     name: Bash-free MCP suite (no Git-bash)
     runs-on: windows-latest
@@ -225,6 +264,20 @@ jobs:
           python --version
           python engine/setup/tests/mcp/test_bashfree.py -v
 
+      # No shell: pwsh here (unlike the step above) - this job has no bash
+      # default, and only bare `python` is proven to resolve in it (the step
+      # above never installs a python3 alias).
+      - name: Emit structured gate verdict
+        if: always()
+        run: python engine/setup/np-gate-verdict.py --gate "windows-bashfree" --status "${{ job.status }}" --reason "Bash-free MCP suite" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-windows-bashfree.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-windows-bashfree
+          path: gate-verdict-windows-bashfree.json
+
   pii-guard:
     name: Secret/PII guard (terminal gate)
     runs-on: ubuntu-latest
@@ -242,6 +295,17 @@ jobs:
       # is pure stdlib and takes only the checked-out path — no untrusted input.
       - name: Scan engine tree for secrets/PII
         run: python3 publish/np-publish-scan.py "$GITHUB_WORKSPACE"
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "pii-guard" --status "${{ job.status }}" --reason "Secret/PII scan of the engine tree" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-pii-guard.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-pii-guard
+          path: gate-verdict-pii-guard.json
 
   spec-guard:
     name: Spec guard (change-specs, advisory)
@@ -277,3 +341,44 @@ jobs:
             --base "origin/$BASE_REF" \
             --head HEAD \
             --branch "$HEAD_REF"
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "spec-guard" --status "${{ job.status }}" --reason "change-specs/ coverage check (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-spec-guard.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-spec-guard
+          path: gate-verdict-spec-guard.json
+
+  gate-verdicts-summary:
+    name: Gate verdicts summary
+    runs-on: ubuntu-latest
+    # always(): this must still post when an upstream gate failed - that's
+    # the whole point (F4/#250). needs' default gating would otherwise skip
+    # this job the moment any one of them fails or is skipped.
+    if: always() && github.event_name == 'pull_request'
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard]
+    permissions:
+      pull-requests: write   # to post/update the summary comment
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Download every gate-verdict-* artifact
+        uses: actions/download-artifact@v7
+        with:
+          pattern: gate-verdict-*
+          path: verdicts
+          merge-multiple: true
+
+      - name: Post or update the gate-verdicts PR comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 engine/setup/np-gate-verdicts-comment.py --verdicts-dir verdicts --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}"
