@@ -286,6 +286,7 @@
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
       <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
@@ -479,6 +480,7 @@
   const elWins = document.getElementById("panel-wins");
   const elGrad = document.getElementById("panel-graduation");
   const elBacklog = document.getElementById("panel-backlog");
+  const elLedger = document.getElementById("panel-ledger");
   const empty = msg => `<div class="empty">${msg}</div>`;
   const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
@@ -652,6 +654,31 @@
       ${note}`;
   }
 
+  // F5/#251 · Change ledger: change-keyed (spec, tier, gate verdicts, merge SHA),
+  // distinct from the session-keyed trend/tokens panels above. Independent of
+  // session records, so it renders in both the empty and populated branches.
+  // Fail-open: no/empty data -> empty state, never a crash. Rows already capped
+  // to the most recent 50 by build.py; this only renders what it's given.
+  const GATE_ICON = { PASSED: "✅", FAILED: "❌", SKIPPED: "⚪" };
+  function renderLedger() {
+    const L = Array.isArray(window.LEDGER) ? window.LEDGER : [];
+    elLedger.innerHTML = `<span class="lbl">Change ledger</span>` + (L.length
+      ? [...L].reverse().map(e => {
+          const gates = Array.isArray(e.gates) ? e.gates : [];
+          const gateSummary = gates.map(g =>
+            `<span title="${esc(g.name || "")}">${GATE_ICON[g.verdict] || "❔"}</span>`).join(" ");
+          const spec = e.spec ? `<code>${esc(e.spec)}</code>` : "—";
+          const mergeShort = (e.merge_sha || "").slice(0, 12);
+          return `<div class="sug">
+            <div class="txt">
+              <span class="tag">${esc(e.tier || "?")}</span> <b>${esc(e.change_id || "?")}</b>
+              <div class="meta">${spec} · ${gateSummary || "no gate data"} · <code>${esc(mergeShort)}</code> · ${fmtDate(e.ts)}</div>
+            </div>
+          </div>`;
+        }).join("")
+      : empty("No changes recorded yet."));
+  }
+
   if (!M.length) {
     document.getElementById("subtitle").textContent = "0 sessions recorded yet" + learnedNote;
     elTrend.innerHTML = `<span class="lbl">Trend</span>` + empty("No sessions recorded yet.");
@@ -663,6 +690,7 @@
     renderGraduation();
     renderToggles();
     renderBacklog();
+    renderLedger();
   } else {
     const scores = M.map(r => r.contribution_score || 0);
     const struggles = M.reduce((a, r) => a + ((r.signals || {}).struggles || 0), 0);
@@ -950,6 +978,9 @@
 
     // B4 · Back-capture backlog (pending / oldest-age-vs-ceiling / drain rate)
     renderBacklog();
+
+    // F5/#251 · Change ledger (spec, tier, gate verdicts, merge SHA per change)
+    renderLedger();
 
     // D · Latest session
     const last = M[M.length - 1];
