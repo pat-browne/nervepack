@@ -29,6 +29,7 @@ stderr.
 import argparse
 import fnmatch
 import os
+import re
 import subprocess
 import sys
 
@@ -40,7 +41,16 @@ import np_frontmatter  # noqa: E402
 REQUIRED_FIELDS = ("id", "status", "date", "tier")
 VALID_STATUS_PREFIXES = ("proposed", "rejected", "accepted", "superseded by")
 VALID_TIERS = ("standard", "normal", "high")
+# A bare occurrence is a live, unresolved marker (TEMPLATE.md's instruction:
+# "mark an underspecified point with this exact string"). A backtick-quoted
+# occurrence (`` `[NEEDS CLARIFICATION]` ``) is prose *describing* the
+# convention - e.g. this repo's own README.md and specs that explain the
+# mechanism - and must not trip the check. Real bug, caught by dogfooding
+# this tool against its own PR's spec (#248).
 NEEDS_CLARIFICATION = "[NEEDS CLARIFICATION]"
+_BARE_NEEDS_CLARIFICATION = re.compile(
+    r"(?<!`)\[NEEDS CLARIFICATION\](?!`)"
+)
 
 # Doc/test-only exemption, used only until engine/setup/risk-tiers.json (#253)
 # can classify tiers itself. fnmatch's `*` is not path-aware - it already
@@ -106,7 +116,7 @@ def validate_spec(text):
         )
     if not np_frontmatter.list_field(text, "blast_radius"):
         problems.append("frontmatter field 'blast_radius:' has no path globs")
-    if NEEDS_CLARIFICATION in text:
+    if _BARE_NEEDS_CLARIFICATION.search(text):
         problems.append(
             "a %s marker remains - resolve before merging" % NEEDS_CLARIFICATION
         )

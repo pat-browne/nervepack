@@ -101,4 +101,13 @@ GitHub's runner before merge.
 
 ## Deviations
 
-None. The change stayed within the declared blast radius.
+None — the change stayed within the declared blast radius. One correction
+worth recording: the first push of this PR failed its own advisory
+`spec-guard` job. Root cause was in the checker, not this spec — the
+NEEDS_CLARIFICATION detector was a bare substring search, so this
+Confirmation section's own backtick-quoted mention of the marker (describing
+the convention, not leaving one open) tripped it. Fixed with a
+backtick-boundary regex (`(?<!`)\[NEEDS CLARIFICATION\](?!`)`), covered by a
+new test, verified by dogfooding the fixed script against this branch's own
+diff before pushing again. Caught by using the mechanism on itself before
+merge — the intended effect of #247/#248 landing together.

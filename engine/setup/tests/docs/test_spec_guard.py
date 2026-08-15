@@ -78,6 +78,15 @@ class TestValidateSpec(unittest.TestCase):
         problems = spec_guard.validate_spec(doc)
         self.assertTrue(any("NEEDS CLARIFICATION" in p for p in problems))
 
+    def test_backtick_quoted_mention_is_not_flagged(self):
+        # A spec describing the convention itself (e.g. "the `[NEEDS
+        # CLARIFICATION]` marker") is talking about the marker, not leaving
+        # one open - must not be flagged. Real bug, caught dogfooding this
+        # tool on its own PR's spec (#248).
+        doc = self.VALID + "\nUses the `[NEEDS CLARIFICATION]` marker.\n"
+        problems = spec_guard.validate_spec(doc)
+        self.assertFalse(any("NEEDS CLARIFICATION" in p for p in problems))
+
 
 class TestDiffOutsideBlastRadius(unittest.TestCase):
     def test_all_covered_returns_empty(self):
