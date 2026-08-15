@@ -31,3 +31,33 @@ def field(text, name, default=None):
         if line.startswith(name + ":"):
             return line[len(name) + 1:].strip()
     return default
+
+
+def list_field(text, name):
+    """Items of a YAML-style block-list frontmatter field, e.g.:
+        name:
+          - a
+          - b
+    Returns a list of stripped item strings — [] if the field is absent, is
+    written as an inline scalar (`name: value`), or the block is empty."""
+    if not text.startswith("---"):
+        return []
+    end = text.find("\n---", 3)
+    if end == -1:
+        return []
+    lines = text[3:end].splitlines()
+    for i, line in enumerate(lines):
+        if not line.startswith(name + ":"):
+            continue
+        if line[len(name) + 1:].strip():
+            return []  # inline scalar form, not a block list
+        items = []
+        for follow in lines[i + 1:]:
+            if not follow[:1].isspace():
+                break  # next top-level key
+            stripped = follow.strip()
+            if not stripped.startswith("- "):
+                break
+            items.append(stripped[2:].strip())
+        return items
+    return []
