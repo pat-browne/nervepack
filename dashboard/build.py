@@ -65,6 +65,16 @@ def load_graduation(path):
     return data
 
 
+def default_ledger():
+    """Default path for ledger.jsonl: resolved through _content_dir(), same as
+    metrics.jsonl and graduation-candidates.json - the change-keyed record
+    (F5/#251) lives in the overlay, written locally by np-ledger-append.py
+    (not from CI - see that script's own docstring for why). NP_LEDGER env
+    var overrides, matching the NP_GRADUATION_CANDIDATES/NP_RESOLVED_SUGGESTIONS
+    precedent above."""
+    return os.path.join(_content_dir(), "dashboard", "data", "ledger.jsonl")
+
+
 EMPTY_BACKLOG = {"pending": 0, "oldest_pending_days": None, "ceiling_days": 7.0,
                  "resolved_last_24h": 0}
 
@@ -1002,10 +1012,18 @@ def main(argv):
     graduation = json.dumps(load_graduation(
         os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())))
     backlog = json.dumps(backlog_metrics())
+    # F5/#251: the change-keyed ledger, distinct from the session-keyed METRICS
+    # above. load_records() already does exactly what's needed here (parse
+    # JSONL, sort by ts, fail-open on missing/malformed) - no new loader.
+    # Rendered rows capped to the most recent 50 for UI sanity; the underlying
+    # file itself is retained indefinitely (see np-ledger-append.py).
+    ledger_records = load_records(os.environ.get("NP_LEDGER", default_ledger()))
+    ledger = json.dumps(ledger_records[-50:])
     with open(out, "w") as fh:
         fh.write(f"window.METRICS = {payload};\n")
         fh.write(f"window.LEARNED = {learned};\n")
         fh.write(f"window.TOKENS_SAVED = {saved};\n")
+        fh.write(f"window.LEDGER = {ledger};\n")
         fh.write(f"window.WIKI = {wiki};\n")
         fh.write(f"window.GRADUATION = {graduation};\n")
         fh.write(f"window.BACKLOG = {backlog};\n")

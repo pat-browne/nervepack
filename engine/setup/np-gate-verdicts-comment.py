@@ -27,9 +27,18 @@ import json
 import os
 import sys
 import urllib.error
-import urllib.request
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import np_github_api  # noqa: E402
 
 MARKER = "<!-- nervepack:gate-verdicts -->"
+
+# A machine-readable copy of the same verdicts, embedded in an HTML comment so
+# it renders invisibly. F5/#251's ledger writer reads this back out rather
+# than re-downloading CI artifacts or re-deriving verdicts from the table.
+JSON_MARKER = "<!-- nervepack:gate-verdicts-json"
 
 _ICON = {"PASSED": "✅", "FAILED": "❌", "SKIPPED": "⚪"}
 
@@ -49,6 +58,10 @@ def render_comment(verdicts):
     lines = [MARKER, "", "## Gate verdicts", ""]
     if not verdicts:
         lines.append("*No gate verdicts found for this run.*")
+        lines.append("")
+        lines.append(JSON_MARKER)
+        lines.append("[]")
+        lines.append("-->")
         return "\n".join(lines)
     lines.append("| Gate | Verdict | Reason | Rules |")
     lines.append("|---|---|---|---|")
@@ -64,23 +77,31 @@ def render_comment(verdicts):
         "*%s — structured per-gate record. See F5 for the durable, "
         "change-keyed ledger.*" % verdicts[0].get("schema", "?")
     )
+    lines.append("")
+    lines.append(JSON_MARKER)
+    lines.append(json.dumps(verdicts))
+    lines.append("-->")
     return "\n".join(lines)
 
 
-def _default_fetch(url, token, method="GET", data=None):
-    req = urllib.request.Request(url, method=method)
-    req.add_header("Authorization", "Bearer %s" % token)
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("X-GitHub-Api-Version", "2022-11-28")
-    if data is not None:
-        req.data = json.dumps(data).encode("utf-8")
-        req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw) if raw else None
+def extract_verdicts_json(comment_body):
+    """The verdicts list embedded by render_comment(), or None if the body
+    has no JSON block or it fails to parse (malformed/edited-by-hand)."""
+    start = comment_body.find(JSON_MARKER)
+    if start == -1:
+        return None
+    payload_start = start + len(JSON_MARKER)
+    end = comment_body.find("-->", payload_start)
+    if end == -1:
+        return None
+    raw = comment_body[payload_start:end].strip()
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return None
 
 
-def find_existing_comment(repo, pr, token, fetch=_default_fetch):
+def find_existing_comment(repo, pr, token, fetch=np_github_api.default_fetch):
     """The comment id of the prior gate-verdicts comment, or None."""
     url = "https://api.github.com/repos/%s/issues/%s/comments?per_page=100" % (repo, pr)
     for c in fetch(url, token) or []:
@@ -89,7 +110,7 @@ def find_existing_comment(repo, pr, token, fetch=_default_fetch):
     return None
 
 
-def upsert_comment(repo, pr, token, body, fetch=_default_fetch):
+def upsert_comment(repo, pr, token, body, fetch=np_github_api.default_fetch):
     existing = find_existing_comment(repo, pr, token, fetch)
     if existing is not None:
         url = "https://api.github.com/repos/%s/issues/comments/%s" % (repo, existing)

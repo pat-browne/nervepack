@@ -209,6 +209,39 @@ printf 'Reply with exactly: OK' | NP_LLM_BACKEND=local \
 # expect the model's text on stdout, exit 0
 ```
 
+### `Spec:` git trailer (F5/#251)
+
+One-time setup so `git log --format='%(trailers:key=Spec,valueonly)'` can extract
+which `change-specs/<slug>.md` governed a commit, independent of the ledger file:
+
+```bash
+git config trailer.spec.key "Spec"
+git config trailer.spec.cmd 'echo change-specs/$(git rev-parse --abbrev-ref HEAD | tr "/" "-").md'
+```
+
+`trailer.spec.cmd` lets `git interpret-trailers --trailer spec` auto-fill the value
+from the current branch name — useful for local commits on a feature branch before
+squashing.
+
+**The commit that actually matters is the squash-merge landing on `main`, and a
+local git hook cannot intercept that** — `gh pr merge --squash` merges server-side
+via the GitHub API, never touching your local git hooks. So the trailer has to be
+included explicitly when merging, not auto-stamped:
+
+```bash
+gh pr merge <n> --squash --delete-branch \
+  --body "$(printf '%s\n\nSpec: change-specs/<slug>.md' "<summary>")"
+```
+
+Footer rules that make this parseable (`git-interpret-trailers`, cited in
+change-traceability's wiki topic): a blank line before the trailer block, and the
+key `Spec` — not `Spec ` or `spec-file` — immediately followed by `: `.
+
+**Retention:** the trailer and the ledger it complements (`dashboard/data/ledger.jsonl`)
+are retained indefinitely — unlike `metrics.jsonl`'s pruned session telemetry
+(`evaluator.retain_days`, default 90 days), this is meant to be the durable record.
+Nothing prunes it.
+
 ## Don't
 
 - Don't edit `engine/onboard/capabilities.json` to make the doctor pass. Fix the wiring.
