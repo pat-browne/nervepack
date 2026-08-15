@@ -55,19 +55,22 @@ class TestImplementSigchldReset(unittest.TestCase):
         must see SIG_DFL, not the inherited SIG_IGN -- otherwise every
         subprocess call inside that child's own process tree (git, the agent)
         races the kernel's auto-reap and can misreport its exit status."""
+        # Print the raw int value, not signal.getsignal()'s return object --
+        # some Python versions/platforms return a bare int for SIG_DFL/SIG_IGN,
+        # others a Handlers enum member whose str()/repr() differs across
+        # versions; comparing ints is the only version-portable check.
         old = signal.getsignal(signal.SIGCHLD)
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
         try:
             r = subprocess.run(
                 [sys.executable, "-c",
-                 "import signal; print(signal.getsignal(signal.SIGCHLD))"],
+                 "import signal; print(int(signal.getsignal(signal.SIGCHLD)))"],
                 capture_output=True, text=True,
                 preexec_fn=_dashboard_server.implement_job_preexec)
         finally:
             signal.signal(signal.SIGCHLD, old)
         self.assertEqual(r.returncode, 0)
-        self.assertIn("SIG_DFL", r.stdout)
-        self.assertNotIn("SIG_IGN", r.stdout)
+        self.assertEqual(int(r.stdout.strip()), int(signal.SIG_DFL))
 
 
 if __name__ == "__main__":
