@@ -47,5 +47,41 @@ class TestField(unittest.TestCase):
         self.assertEqual(np_frontmatter.field("---\nname: x\nno close", "name", ""), "")
 
 
+class TestListField(unittest.TestCase):
+    DOC = (
+        "---\n"
+        "id: 0001\n"
+        "blast_radius:\n"
+        "  - change-specs/**\n"
+        "  - AGENTS.md\n"
+        "---\n"
+        "body\n"
+    )
+
+    def test_reads_block_list_items_stripped(self):
+        self.assertEqual(
+            np_frontmatter.list_field(self.DOC, "blast_radius"),
+            ["change-specs/**", "AGENTS.md"],
+        )
+
+    def test_absent_field_returns_empty_list(self):
+        self.assertEqual(np_frontmatter.list_field(self.DOC, "missing"), [])
+
+    def test_inline_scalar_form_returns_empty_list(self):
+        doc = "---\nblast_radius: not-a-list\n---\nbody\n"
+        self.assertEqual(np_frontmatter.list_field(doc, "blast_radius"), [])
+
+    def test_empty_block_returns_empty_list(self):
+        doc = "---\nblast_radius:\nid: 1\n---\nbody\n"
+        self.assertEqual(np_frontmatter.list_field(doc, "blast_radius"), [])
+
+    def test_no_frontmatter_block_returns_empty_list(self):
+        self.assertEqual(np_frontmatter.list_field("no frontmatter", "blast_radius"), [])
+
+    def test_last_field_in_block_reads_to_end(self):
+        doc = "---\nid: 1\nblast_radius:\n  - a/**\n  - b/**\n---\nbody\n"
+        self.assertEqual(np_frontmatter.list_field(doc, "blast_radius"), ["a/**", "b/**"])
+
+
 if __name__ == "__main__":
     unittest.main()
