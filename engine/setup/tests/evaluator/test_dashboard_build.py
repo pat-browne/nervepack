@@ -371,6 +371,35 @@ class TestBuild(unittest.TestCase):
         grad_out = json.loads(m.group(1))
         self.assertEqual(grad_out["candidates"], [])
 
+    def test_ledger_emitted_from_fixture(self):
+        """build.py emits window.LEDGER from a committed ledger.jsonl (written by
+        np-ledger-append.py, F5/#251) - the change-keyed record, distinct from the
+        session-keyed METRICS. Passes through verbatim, sorted by ts (load_records'
+        own behavior, reused rather than a new loader)."""
+        fixture = (
+            json.dumps({"change_id": "a", "tier": "normal", "ts": "2026-08-15T00:00:00+00:00"}) + "\n" +
+            json.dumps({"change_id": "b", "tier": "high", "ts": "2026-08-14T00:00:00+00:00"}) + "\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as lf:
+            lf.write(fixture)
+            ledger = lf.name
+        try:
+            js = run_build("", NP_LEDGER=ledger)
+        finally:
+            os.unlink(ledger)
+        m = re.search(r"window\.LEDGER = (\[.*?\]);", js, re.S)
+        self.assertTrue(m, f"window.LEDGER missing from output:\n{js}")
+        ledger_out = json.loads(m.group(1))
+        self.assertEqual([e["change_id"] for e in ledger_out], ["b", "a"])  # sorted by ts
+
+    def test_ledger_missing_file_is_empty_fail_open(self):
+        """No committed ledger.jsonl yet (e.g. before the first merge post-F5) ->
+        an empty list, never a crash."""
+        js = run_build("", NP_LEDGER="/nonexistent/ledger.jsonl")
+        m = re.search(r"window\.LEDGER = (\[.*?\]);", js, re.S)
+        self.assertTrue(m, "window.LEDGER missing")
+        self.assertEqual(json.loads(m.group(1)), [])
+
 
 def _parse_wiki(js_text):
     """Extract the window.WIKI = {...} object literal from build.py output."""

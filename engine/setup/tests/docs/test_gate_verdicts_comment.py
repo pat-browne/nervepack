@@ -71,6 +71,28 @@ class TestRenderComment(unittest.TestCase):
         body = gvc.render_comment([])
         self.assertIn(gvc.MARKER, body)
 
+    def test_embeds_a_machine_readable_json_block(self):
+        # F5/#251 reads this back out to build a ledger entry, without
+        # re-downloading CI artifacts or re-deriving verdicts.
+        verdicts = [
+            {"gate": "syntax", "verdict": "PASSED", "reason": "clean",
+             "evidence_ref": "http://run", "rules_sha": "abc123def456",
+             "schema": "nervepack.gate-verdict/1"},
+        ]
+        body = gvc.render_comment(verdicts)
+        self.assertIn(gvc.JSON_MARKER, body)
+        roundtripped = gvc.extract_verdicts_json(body)
+        self.assertEqual(roundtripped, verdicts)
+
+
+class TestExtractVerdictsJson(unittest.TestCase):
+    def test_none_when_no_json_block_present(self):
+        self.assertIsNone(gvc.extract_verdicts_json("some other comment"))
+
+    def test_none_on_malformed_json_block(self):
+        body = gvc.JSON_MARKER + "\nnot valid json\n-->"
+        self.assertIsNone(gvc.extract_verdicts_json(body))
+
 
 class TestFindExistingComment(unittest.TestCase):
     def test_finds_comment_carrying_marker(self):
