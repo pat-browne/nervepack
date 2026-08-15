@@ -307,7 +307,11 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
     except np_model.AuthError:
         raise                      # #211: not a no-op -- the caller must not fail open
     except Exception as exc:
-        reason = "agent pass raised: %r" % exc
+        # %s not %r: str(exc) includes OSError's filename (which executable or
+        # cwd was missing) where repr() silently drops it -- keep the class
+        # name too so callers matching on it (e.g. "FileNotFoundError" in the
+        # detail) still see it.
+        reason = "agent pass raised: %s: %s" % (type(exc).__name__, exc)
         _log(log_path, reason)
         return "", reason
 
