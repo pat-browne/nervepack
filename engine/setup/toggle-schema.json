@@ -182,6 +182,9 @@
  "lessons": {
   "description": "Auto-distilled patterns from past sessions (failure→recovery and proven wins), optionally enforced at the tool call."
  },
+ "gates": {
+  "description": "Per-gate override for the local spec-driven-development hooks (spec-guard, drift-guard, tier-guard) — a logged warn instead of a block, never a silent disable. CI-enforced required checks are unaffected; those use the GitHub ruleset bypass-actor list."
+ },
  "directive": {
   "description": "The \"consult nervepack first\" directive injected into every session at SessionStart."
  },
@@ -262,5 +265,17 @@
   "type": "number",
   "min": 1,
   "description": "Timeout (seconds) for the form check's linter subprocess. On timeout that check is skipped; the gate itself has no other blocking call."
+ },
+ "gates.spec_guard.enforce": {
+  "type": "bool",
+  "description": "Whether the local spec-guard pre-check blocks or warns at the tool call. Does not affect the spec-guard CI job — that is a separate, already-logged override via the GitHub ruleset bypass-actor list."
+ },
+ "gates.drift_guard.enforce": {
+  "type": "bool",
+  "description": "Whether the drift-guard hook blocks or warns when an edit falls outside a change-spec's declared blast_radius."
+ },
+ "gates.tier_guard.enforce": {
+  "type": "bool",
+  "description": "Whether the tier-guard pre-check blocks or warns when a change's declared tier does not match its touched paths."
  }
 }
