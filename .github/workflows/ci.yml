@@ -353,6 +353,50 @@ jobs:
           name: gate-verdict-spec-guard
           path: gate-verdict-spec-guard.json
 
+  diff-review:
+    name: Diff review (multi-lens, advisory)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    # Advisory (#252/F6): posts PR comments, never approves, never requests
+    # changes, never blocks - see np-diff-review.py's own docstring for the
+    # measured evidence behind this. continue-on-error is almost decorative
+    # here (the script itself always exits 0), kept for consistency with the
+    # other advisory jobs and as a second guard if that ever changes.
+    continue-on-error: true
+    permissions:
+      pull-requests: write   # to post the review
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Run the multi-lens diff review
+        # github.head_ref is attacker-controlled - env + shell variable, never
+        # ${{ }} interpolated directly into the run: script (same reasoning
+        # as spec-guard's step above).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          python3 engine/setup/np-diff-review.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --branch "$HEAD_REF" \
+            --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --rules-sha "${{ github.sha }}" \
+            --out gate-verdict-diff-review.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-diff-review
+          path: gate-verdict-diff-review.json
+
   gate-verdicts-summary:
     name: Gate verdicts summary
     runs-on: ubuntu-latest
@@ -360,7 +404,7 @@ jobs:
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
     if: always() && github.event_name == 'pull_request'
-    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard]
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
     permissions:
       pull-requests: write   # to post/update the summary comment
       contents: read
