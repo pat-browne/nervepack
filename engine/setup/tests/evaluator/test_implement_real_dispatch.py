@@ -189,7 +189,7 @@ class TestImplementRealDispatch(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body).get("started"))
         result = self._poll_status(text)
-        self.assertEqual(result.get("state"), "not_implementable")
+        self.assertEqual(result.get("state"), "not_implementable", result)
 
     def test_implemented_lands_a_verified_commit_through_the_real_cli_dispatch(self):
         text = "real dispatch test beta, please add a note"
@@ -197,7 +197,7 @@ class TestImplementRealDispatch(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body).get("started"))
         result = self._poll_status(text)
-        self.assertEqual(result.get("state"), "done")
+        self.assertEqual(result.get("state"), "done", result)
         branches = _git(self.repo, "branch", "--list", "np-suggest/*").stdout
         self.assertIn("np-suggest/", branches)
         log = _git(self.repo, "log", "--all", "--oneline").stdout
