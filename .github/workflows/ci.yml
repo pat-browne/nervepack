@@ -242,3 +242,38 @@ jobs:
       # is pure stdlib and takes only the checked-out path — no untrusted input.
       - name: Scan engine tree for secrets/PII
         run: python3 publish/np-publish-scan.py "$GITHUB_WORKSPACE"
+
+  spec-guard:
+    name: Spec guard (change-specs, advisory)
+    runs-on: ubuntu-latest
+    # A normal job-level `if:` on event type — NOT the workflow-level `paths:`
+    # filter that silently strands required checks (see np-spec-guard.py's own
+    # "no base ref" exit-0 path for the same reasoning, belt and suspenders).
+    if: github.event_name == 'pull_request'
+    # Advisory (#248/F2): reports a real pass/fail, but never blocks merge
+    # while this stays out of the required-checks ruleset. Promote by adding
+    # "Spec guard" to the ruleset after a watch period — see
+    # change-specs/README.md — not by removing this line first.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # need base-branch history for the three-dot diff
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Check for a change-specs/ record covering this diff
+        # github.head_ref (and, more weakly, base_ref) are attacker-controlled
+        # PR-derived strings - pass via env and reference as shell variables,
+        # never interpolate ${{ }} directly into the run: script.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          python3 engine/setup/np-spec-guard.py \
+            --root "$GITHUB_WORKSPACE" \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_REF"
