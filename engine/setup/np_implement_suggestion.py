@@ -307,7 +307,11 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
     except np_model.AuthError:
         raise                      # #211: not a no-op -- the caller must not fail open
     except Exception as exc:
-        reason = "agent pass raised: %r" % exc
+        # %s not %r: str(exc) includes OSError's filename (which executable or
+        # cwd was missing) where repr() silently drops it -- keep the class
+        # name too so callers matching on it (e.g. "FileNotFoundError" in the
+        # detail) still see it.
+        reason = "agent pass raised: %s: %s" % (type(exc).__name__, exc)
         _log(log_path, reason)
         return "", reason
 
@@ -365,7 +369,13 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
     wtbase = tempfile.mkdtemp(prefix="np-implement-", dir=os.environ.get("TMPDIR"))
     wt = os.path.join(wtbase, "wt")
     add = _git(repo, "worktree", "add", "-q", "-b", branch, wt, base_sha)
-    if add.returncode != 0:
+    # Verify, don't infer (same principle as _agent_commit): observed live on a
+    # GitHub Actions Ubuntu runner, `worktree add` can exit 0 with stderr
+    # "waitpid for branch failed: No child processes" and never actually create
+    # `wt` -- proceeding anyway sends the agent into a cwd that doesn't exist,
+    # surfacing downstream as a bare, confusing "agent pass raised:
+    # FileNotFoundError" instead of a clear worktree-creation failure.
+    if add.returncode != 0 or not os.path.isdir(wt):
         _log(log_path, (add.stderr or "").strip())
         a.state = "worktree_failed"
         a.detail = "%s repo: worktree create failed" % label

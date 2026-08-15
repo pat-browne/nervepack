@@ -311,9 +311,14 @@ class Handler(BaseHTTPRequestHandler):
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
+                # preexec_fn: reset SIGCHLD to default in this child so its own
+                # subprocess tree (git, the agent) doesn't inherit this process's
+                # SIG_IGN and misreport exit statuses on Linux — see
+                # implement_job_preexec()'s docstring.
                 subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text] + extra), cwd=NP, start_new_session=True,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+                                 stderr=subprocess.DEVNULL,
+                                 preexec_fn=implement_job_preexec if os.name != "nt" else None)
                 return self._json({"ok": True, "started": True})
             if route == "/api/implement-mode":
                 mode = (self._body().get("mode") or "").strip()
@@ -385,6 +390,28 @@ def _autoreap_children():
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     except (ImportError, OSError, ValueError, AttributeError):
         pass
+
+
+def implement_job_preexec():
+    """preexec_fn for the implement job's own Popen call — resets SIGCHLD to
+    SIG_DFL in that child before it execs np_implement_suggestion.py.
+
+    subprocess.Popen's restore_signals (default True) resets SIGPIPE/SIGXFSZ/
+    SIGXFZ before exec but deliberately NOT SIGCHLD, so the SIG_IGN set by
+    _autoreap_children() above survives exec() and is inherited by the whole
+    descendant tree — the spawned cli.py process AND every git/agent
+    subprocess it spawns in turn. On Linux, SIG_IGN for SIGCHLD makes the
+    KERNEL auto-reap children immediately, which races any explicit waitpid()
+    in that subtree: git's own internal helper-process reap (surfacing as
+    git's own "waitpid for branch failed: No child processes" stderr) AND
+    Python's subprocess.communicate() in np_implement_suggestion.py, which can
+    then report returncode=0 for a git command that never actually ran —
+    observed live as `git worktree add` reporting success while never
+    creating the worktree. Only this one child's disposition is reset; the
+    server's own SIG_IGN (needed so IT doesn't zombie this direct child) is
+    untouched. POSIX only — the caller must not pass this on Windows."""
+    import signal
+    signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
 
 def main():
