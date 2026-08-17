@@ -1,5 +1,13 @@
 # Steps
 
+0. **Preflight for other writers.** `git -C "$REPO" fetch --quiet && git -C "$REPO"
+   status --short`. Both repos are one working tree shared with other sessions and
+   with crons that commit to `skills/` (`memory-promote` 08:00, `skill-maintain`
+   09:15). Clean tree, or dirty only outside your target paths → work in place.
+   Dirty **in a path you intend to edit**, or you are a background session, or the
+   edit spans several files → isolate in a worktree first. Decision table, the
+   `EnterWorktree` contract, and the per-repo relink hazards:
+   references/isolation.md
 1. **Sync first.** Invoke [[np-core-sync]] to avoid creating a fork.
 2. **Check the merged INDEX before writing.** The single most important step
    for avoiding duplicate skills from disparate sessions/repos:
@@ -37,18 +45,30 @@
    by the relink alone.
 6. **Relink + regenerate INDEX:** `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills`
    (handles new skills in every layer, prunes dangling symlinks, and re-runs
-   `cli.py setup generate-index`).
-7. **Diff:** `git -C "$REPO" diff` — show the user.
+   `cli.py setup generate-index`). Run it **after your final edit** — it records each
+   skill's line count, so regenerating mid-edit ships an `INDEX.md` row that disagrees
+   with the file (observed: a trim to get under budget landed after the regen, and the
+   commit carried a stale count). Run it in the **primary checkout, never an engine
+   worktree** — it would repoint every host skill symlink into the worktree.
+   It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
+   uncommitted edits, check `git -C "$REPO" diff -- INDEX.md` and expect only your own
+   rows to move. If it carries someone else's, leave `INDEX.md` unstaged and say so.
+7. **Diff:** `git -C "$REPO" diff` — show the user. Deliver it as a rendered diff,
+   not a description ([[np-flow-deliver-diff]]).
 8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions",
-   also gated by [[np-flow-concise-output]]),
-   staging explicit paths (never `-A` — a cron or second session may share the tree):
+   also gated by [[np-flow-concise-output]]). Stage explicit paths **and pass the same
+   pathspec to `commit`** — a bare `commit` after an explicit `add` still commits the
+   whole index, so it captures whatever another session staged:
    ```bash
    git -C "$REPO" add <changed paths>
-   git -C "$REPO" commit -m "skill(<name>): <what changed>"
+   git -C "$REPO" commit -m "skill(<name>): <what changed>" -- <changed paths>
    ```
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
 9. **Ask before pushing.** Push is the action that affects another machine.
    Default to `git -C "$REPO" push` only after the user confirms — unless
    they've said "auto-push" or this run was invoked from a scheduled agent
    (which has a standing mandate; see `agents/np-flow-scheduled-refine.md` and
-   `agents/np-flow-weekly-compact.md`).
+   `agents/np-flow-weekly-compact.md`). **Engine changes never direct-push** —
+   `np-core-*`/`np-flow-*` skills and anything under `engine/` or `dashboard/` go
+   through a PR that merges on green CI, with a company-neutral message. The private
+   overlay has no CI gate and may be pushed directly.

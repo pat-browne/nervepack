@@ -73,7 +73,8 @@ sources test, and the cross-tree lookup: references/classification.md
 
 ## Steps
 
-Sync first ([[np-core-sync]]) → check the merged INDEX for an overlapping
+Preflight for other writers (`git fetch && git status --short`) → sync first
+([[np-core-sync]]) → check the merged INDEX for an overlapping
 skill to extend instead of duplicating → resolve the target path via
 `cli.py layout route` (never invent a directory) → write the update (run the
 draft through [[np-flow-concise-output]]. Cross-reference another skill by
@@ -83,6 +84,24 @@ references/cross-reference-convention.md)) → guarantee an inbound
 relink + regenerate INDEX → diff → commit (explicit paths, no LLM
 attribution) → ask before pushing. Full 9-step recipe with commands:
 references/steps.md
+
+## Concurrency — both repos are one shared working tree
+
+Other sessions and the crons write here too, and two crons commit to `skills/`
+(`memory-promote` 08:00, `skill-maintain` 09:15). Preflight with `git status
+--short`, then take the cheapest safe option: **work in place** when the tree is
+clean or dirty only outside your target paths; **isolate in a worktree** when it is
+dirty in a path you intend to edit, when you are a background session, or when the
+edit spans several files.
+
+Three rules that apply either way: commit with a **pathspec on `commit` as well as
+`add`** (a bare `commit` takes the whole index), **check `INDEX.md` before staging it**
+(it regenerates from every skill, so it absorbs another writer's uncommitted text),
+and **re-read a `SKILL.md` from disk** before relying on it — a start-of-session
+snapshot goes stale when another writer corrects the file.
+
+Decision table, the `EnterWorktree` contract, and why relinking is hazardous from an
+engine worktree but harmless from an overlay one: references/isolation.md
 
 ## Ingest protocol (when target is `sources/`)
 
