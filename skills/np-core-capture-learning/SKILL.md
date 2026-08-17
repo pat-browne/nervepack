@@ -52,9 +52,15 @@ current PR you're debugging."
 If the user disagrees, switch routes. They have final say.
 
 ### 2a. Durable → nervepack
-Delegate to [[np-core-contribute]]. Follow its full protocol: sync first,
-check `INDEX.md`, pick the right skill (extend over create), write the
-edit, regenerate index, diff, commit, ask before push.
+Delegate to [[np-core-contribute]]. Follow its full protocol: preflight for other
+writers, sync first, check `INDEX.md`, pick the right skill (extend over create),
+write the edit, regenerate index, diff, commit, ask before push.
+
+The preflight is not optional. Both repos are one working tree shared with other
+sessions and with crons that commit to `skills/`, so a capture that skips it can
+absorb another writer's uncommitted work into its commit, or be clobbered by
+`skill-maintain`. That skill's § "Concurrency" carries the work-in-place vs
+isolate-in-a-worktree decision.
 
 Placement is that skill's job, and it resolves the path from the layer's own
 layout. This skill never picks a directory.
