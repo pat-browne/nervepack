@@ -669,26 +669,34 @@ def wiki_index():
         for (kind, subdir, html_seg, holder, synth_fn, key,
              folder_owning) in _scan_plan(cd, groups):
             root_dir = os.path.join(cd, subdir)
+            if not folder_owning:
+                # Flat variant (`notes/{name}.md`): each page is its own entry with
+                # no co-located sources, so the container IS the variant's dir. Walk
+                # recursively -- a nested subdirectory (e.g. a `system` route's
+                # docs/systems/<landing>/) holds pages too, and a plain os.listdir
+                # only ever saw the top level, silently dropping everything inside.
+                for dirpath, dirnames, filenames in os.walk(root_dir):
+                    dirnames.sort()
+                    sub = os.path.relpath(dirpath, root_dir)
+                    sub = "" if sub == "." else sub.replace(os.sep, "/")
+                    for f in sorted(filenames):
+                        if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                            continue
+                        p = _parse_wiki_page(os.path.join(dirpath, f))
+                        if not p or (p["kind"] and p["kind"] != kind):
+                            continue
+                        rel = (sub + "/" + p["name"]) if sub else p["name"]
+                        html = "data/wiki/%s/%s/%s.html" % (slug, html_seg, rel)
+                        entry = {key: p["name"], "layer": label, "shadowed": False,
+                                 "synthesis": synth_fn(p, html, cd, label), "sources": []}
+                        fresh.extend(_mark(entry, owned))
+                        holder.append(entry)
+                        got = True
+                continue
             try:
                 names = sorted(os.listdir(root_dir))
             except OSError:
                 names = []
-            if not folder_owning:
-                # Flat variant (`notes/{name}.md`): each page is its own entry with
-                # no co-located sources, so the container IS the variant's dir.
-                for f in names:
-                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
-                        continue
-                    p = _parse_wiki_page(os.path.join(root_dir, f))
-                    if not p or (p["kind"] and p["kind"] != kind):
-                        continue
-                    html = "data/wiki/%s/%s/%s.html" % (slug, html_seg, p["name"])
-                    entry = {key: p["name"], "layer": label, "shadowed": False,
-                             "synthesis": synth_fn(p, html, cd, label), "sources": []}
-                    fresh.extend(_mark(entry, owned))
-                    holder.append(entry)
-                    got = True
-                continue
             for nm in names:
                 container = os.path.join(root_dir, nm)
                 if not os.path.isdir(container):

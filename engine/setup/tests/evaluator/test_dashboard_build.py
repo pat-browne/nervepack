@@ -1215,6 +1215,28 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         names = [e["name"] for g in wiki.get("groups", []) for e in g["entries"]]
         self.assertIn("widgets", names, wiki)
 
+    def test_flat_nonstandard_tree_indexes_nested_subdirectory(self):
+        # A flat route (folder_owning=False, e.g. data-base's `system` route
+        # `docs/systems/{name}.md`) used to list only the container's top level
+        # (os.listdir), so a page moved under a landing subdirectory --
+        # docs/systems/data-mcp/data-mcp.md -- silently vanished from the nav.
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {
+                    "path": "notes/{name}.md", "frontmatter": {"kind": "note"}}}},
+                {"notes/widgets.md": "---\nname: widgets\nkind: note\n---\n\nAbout widgets.\n",
+                 "notes/landing/landing.md":
+                     "---\nname: landing\nkind: note\n---\n\nLanding page.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        names = [e["name"] for g in wiki.get("groups", []) for e in g["entries"]]
+        self.assertIn("widgets", names, wiki)
+        self.assertIn("landing", names, wiki)
+        landing = next(e for g in wiki.get("groups", []) for e in g["entries"]
+                        if e["name"] == "landing")
+        self.assertEqual(landing["synthesis"]["html"],
+                          "data/wiki/personal/notes/landing/landing.html")
+
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
