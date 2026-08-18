@@ -603,11 +603,18 @@ def wiki_index():
                 "html": html, "root": root, "layer": layer, "shadowed": False,
                 "src": p["path"]}
 
-    def _index_container(container, kind, subdir, name, root, layer, slug, entry, synth_fn):
+    def _index_container(container, kind, subdir, name, root, layer, slug, entry, synth_fn,
+                         landing=None):
         """Walk one topic/concept container dir (recursively) for ONE layer, mutating
         `entry` (its 'synthesis' + 'sources'). Shared by the topic and concept passes.
         `synth_fn(page, html, root, layer)` builds the synthesis entry; `subdir` is
         'topics'/'concepts' for the HTML path. (#176)
+
+        `landing` picks the synthesis page BY NAME instead of by `kind`, for a flat
+        route's landing subdirectory (`docs/systems/data-mcp/data-mcp.md`): those
+        pages carry no `kind:` frontmatter to match on, so name-vs-dirname is the
+        only signal. Absent it, no page is promoted and every page nests as a
+        source — a directory with no landing page still renders.
 
         Dedup here is WITHIN this layer only (a page name repeated across the topic's
         subdirs). Cross-layer precedence is the caller's job now: since #142 every
@@ -628,7 +635,8 @@ def wiki_index():
                 # Layer-qualified: two layers may hold the same topic+page name, and
                 # unqualified paths would render both to one file (last writer wins).
                 html = "data/wiki/%s/%s/%s/%s.html" % (slug, subdir, name, rel)
-                if p["kind"] == kind and sub == "":     # synthesis page at the root only
+                is_synth = (p["name"] == landing) if landing else (p["kind"] == kind)
+                if is_synth and sub == "":              # synthesis page at the root only
                     if entry["synthesis"] is None:
                         entry["synthesis"] = synth_fn(p, html, root, layer)
                         claimed.add(p["name"])
@@ -666,32 +674,56 @@ def wiki_index():
         fresh = []              # names this layer contributes, merged into `owned` after
         got = False             # did this layer contribute anything worth a nav section?
 
+        plan = list(_scan_plan(cd, groups))
+        # Containers another declared variant owns. A flat route descends one level
+        # (below), and a layer may nest one route inside another's dir --
+        # `.claude/references/{name}.md` (convention) contains
+        # `.claude/references/data-model/{name}.md` (data-model). Without this the
+        # outer route swallows the inner route's pages and reports them twice.
+        route_dirs = {os.path.normpath(os.path.join(cd, sd)) for (_k, sd, *_r) in plan}
+
         for (kind, subdir, html_seg, holder, synth_fn, key,
-             folder_owning) in _scan_plan(cd, groups):
+             folder_owning) in plan:
             root_dir = os.path.join(cd, subdir)
             if not folder_owning:
-                # Flat variant (`notes/{name}.md`): each page is its own entry with
-                # no co-located sources, so the container IS the variant's dir. Walk
-                # recursively -- a nested subdirectory (e.g. a `system` route's
-                # docs/systems/<landing>/) holds pages too, and a plain os.listdir
-                # only ever saw the top level, silently dropping everything inside.
-                for dirpath, dirnames, filenames in os.walk(root_dir):
-                    dirnames.sort()
-                    sub = os.path.relpath(dirpath, root_dir)
-                    sub = "" if sub == "." else sub.replace(os.sep, "/")
-                    for f in sorted(filenames):
-                        if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                # Flat variant (`notes/{name}.md`): a page at the container's top
+                # level is its own entry. A SUBDIRECTORY is a landing group --
+                # `<dir>/<dir>.md` is its landing page and every other page inside
+                # nests under it, the same synthesis+sources shape the folder-owning
+                # path produces, so the nav mirrors the tree on disk. Before this the
+                # scan was a bare os.listdir and never descended at all, so a nested
+                # page was silently dropped from the nav entirely.
+                try:
+                    top = sorted(os.listdir(root_dir))
+                except OSError:
+                    top = []
+                for f in top:
+                    full = os.path.join(root_dir, f)
+                    if os.path.isdir(full):
+                        if f.startswith(".") or os.path.normpath(full) in route_dirs:
                             continue
-                        p = _parse_wiki_page(os.path.join(dirpath, f))
-                        if not p or (p["kind"] and p["kind"] != kind):
-                            continue
-                        rel = (sub + "/" + p["name"]) if sub else p["name"]
-                        html = "data/wiki/%s/%s/%s.html" % (slug, html_seg, rel)
-                        entry = {key: p["name"], "layer": label, "shadowed": False,
-                                 "synthesis": synth_fn(p, html, cd, label), "sources": []}
+                        entry = {key: f, "layer": label, "shadowed": False,
+                                 "synthesis": None, "sources": []}
+                        _index_container(full, kind, html_seg, f, cd, label, slug,
+                                         entry, synth_fn, landing=f)
+                        if entry["synthesis"] is None and not entry["sources"]:
+                            continue                    # empty dir: nothing to show
                         fresh.extend(_mark(entry, owned))
+                        entry["sources"].sort(key=lambda s: (s["dir"], s["name"]))
                         holder.append(entry)
                         got = True
+                        continue
+                    if not f.endswith(".md") or f in ("INDEX.md", "README.md"):
+                        continue
+                    p = _parse_wiki_page(full)
+                    if not p or (p["kind"] and p["kind"] != kind):
+                        continue
+                    html = "data/wiki/%s/%s/%s.html" % (slug, html_seg, p["name"])
+                    entry = {key: p["name"], "layer": label, "shadowed": False,
+                             "synthesis": synth_fn(p, html, cd, label), "sources": []}
+                    fresh.extend(_mark(entry, owned))
+                    holder.append(entry)
+                    got = True
                 continue
             try:
                 names = sorted(os.listdir(root_dir))
