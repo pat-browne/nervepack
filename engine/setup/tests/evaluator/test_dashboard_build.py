@@ -433,12 +433,19 @@ def run_build_wiki(content_dir, **env):
 
     NP_ENGINE_DIR defaults to an empty temp dir: since #142 the engine root is a
     real wiki layer, so without this every test would also index the engine repo's
-    own wiki/topics/ and assert against whatever content happens to live there."""
+    own wiki/topics/ and assert against whatever content happens to live there.
+
+    NP_TEAM_DIR is pinned to an empty temp dir for the same reason: it otherwise
+    resolves from the DEVELOPER'S ~/.config/nervepack/team-dir, so a machine with a
+    team overlay configured indexed that real repo into every fixture assertion --
+    the tests passed or failed on what happened to be checked out locally."""
     e = {"NP_CONTENT_DIR": content_dir}
     e.update(env)
     with tempfile.TemporaryDirectory() as tmp:
         e.setdefault("NP_ENGINE_DIR", os.path.join(tmp, "no-engine-wiki"))
         os.makedirs(e["NP_ENGINE_DIR"], exist_ok=True)
+        e.setdefault("NP_TEAM_DIR", os.path.join(tmp, "no-team-layer"))
+        os.makedirs(e["NP_TEAM_DIR"], exist_ok=True)
         inp = os.path.join(tmp, "metrics.jsonl")
         with open(inp, "w"):
             pass
@@ -1215,27 +1222,57 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         names = [e["name"] for g in wiki.get("groups", []) for e in g["entries"]]
         self.assertIn("widgets", names, wiki)
 
-    def test_flat_nonstandard_tree_indexes_nested_subdirectory(self):
+    def test_flat_route_nests_a_subdir_under_its_landing_page(self):
         # A flat route (folder_owning=False, e.g. data-base's `system` route
         # `docs/systems/{name}.md`) used to list only the container's top level
         # (os.listdir), so a page moved under a landing subdirectory --
         # docs/systems/data-mcp/data-mcp.md -- silently vanished from the nav.
+        # It must come back NESTED: one entry named for the dir, its <dir>/<dir>.md
+        # as the synthesis, and every sibling as a source under it. These pages
+        # carry no `kind:`, so the landing page is matched by name, not kind.
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
                 tmp,
                 {"schema": 1, "routes": {"knowledge": {
                     "path": "notes/{name}.md", "frontmatter": {"kind": "note"}}}},
-                {"notes/widgets.md": "---\nname: widgets\nkind: note\n---\n\nAbout widgets.\n",
-                 "notes/landing/landing.md":
-                     "---\nname: landing\nkind: note\n---\n\nLanding page.\n"})
+                {"notes/widgets.md": "---\ntitle: widgets\ntype: note\n---\n\nAbout widgets.\n",
+                 "notes/landing/landing.md": "---\ntitle: landing\n---\n\nLanding page.\n",
+                 "notes/landing/child-a.md": "---\ntitle: a\n---\n\nChild A.\n",
+                 "notes/landing/child-b.md": "---\ntitle: b\n---\n\nChild B.\n"})
             wiki = _parse_wiki(run_build_wiki(cd))
-        names = [e["name"] for g in wiki.get("groups", []) for e in g["entries"]]
+        entries = [e for g in wiki.get("groups", []) for e in g["entries"]]
+        names = [e["name"] for e in entries]
         self.assertIn("widgets", names, wiki)
-        self.assertIn("landing", names, wiki)
-        landing = next(e for g in wiki.get("groups", []) for e in g["entries"]
-                        if e["name"] == "landing")
+        # ONE entry for the directory -- the children are not siblings of it.
+        self.assertEqual(names.count("landing"), 1, wiki)
+        self.assertNotIn("child-a", names, wiki)
+        landing = next(e for e in entries if e["name"] == "landing")
         self.assertEqual(landing["synthesis"]["html"],
-                          "data/wiki/personal/notes/landing/landing.html")
+                         "data/wiki/personal/notes/landing/landing.html")
+        self.assertEqual([s["name"] for s in landing["sources"]], ["child-a", "child-b"])
+        # A top-level page stays a plain single-page entry.
+        widgets = next(e for e in entries if e["name"] == "widgets")
+        self.assertEqual(widgets["sources"], [])
+
+    def test_flat_route_does_not_swallow_a_nested_route(self):
+        # A layer may nest one declared route inside another's container:
+        # `.claude/references/{name}.md` (convention) contains
+        # `.claude/references/data-model/{name}.md` (data-model). The outer route
+        # must not descend into the inner one -- doing so reported data-model's
+        # pages under BOTH groups (data-base: Conventions 3 -> 42).
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "convention", "path": "refs/{name}.md"},
+                    {"name": "data-model", "path": "refs/data-model/{name}.md"}]}}},
+                {"refs/team.md": "---\ntitle: team\n---\n\nTeam conventions.\n",
+                 "refs/data-model/camper.md": "---\ntitle: camper\n---\n\nCamper table.\n",
+                 "refs/data-model/session.md": "---\ntitle: session\n---\n\nSession table.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki.get("groups", [])}
+        self.assertEqual(by_key.get("convention"), ["team"], wiki)
+        self.assertEqual(sorted(by_key.get("data-model", [])), ["camper", "session"], wiki)
 
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
