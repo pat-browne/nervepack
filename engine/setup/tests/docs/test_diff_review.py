@@ -4,6 +4,7 @@ policy). F6 in the AI-native compliance epic (#252)."""
 import importlib.util
 import json
 import os
+import re
 import tempfile
 import unittest
 
@@ -263,6 +264,46 @@ class TestMainFailsOpenOnNoModel(unittest.TestCase):
         finally:
             os.environ.pop("CLAUDE_BIN", None)
         self.assertEqual(rc, 0)
+
+
+class TestCiJobIsActuallyWired(unittest.TestCase):
+    """The gate reported SKIPPED on every PR ever opened, because the job never
+    installed the CLI and never passed the secret -- while change-spec 0006 said
+    it was one secret away from running. These assertions exist so that claim
+    cannot go stale again silently: drop any of the three and a test fails.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
+        with open(os.path.join(root, ".github", "workflows", "ci.yml"),
+                  encoding="utf-8") as fh:
+            text = fh.read()
+        cls.job = text.split("  diff-review:", 1)[1].split("\n  gate-verdicts-summary:", 1)[0]
+
+    def test_installs_the_claude_cli(self):
+        self.assertIn("@anthropic-ai/claude-code@", self.job)
+
+    def test_pins_the_cli_version(self):
+        """A floating version changes the reviewer between two runs of one PR,
+        which is what F4's rules_sha pinning exists to prevent."""
+        m = re.search(r"@anthropic-ai/claude-code@(\S+)", self.job)
+        self.assertIsNotNone(m)
+        self.assertRegex(m.group(1), r"^\d+\.\d+\.\d+$")
+
+    def test_exports_claude_bin_for_the_probe(self):
+        """np-diff-review.py's model_available() reads CLAUDE_BIN; without it
+        the probe looks in ~/.local/bin, where npm does not install."""
+        self.assertIn("CLAUDE_BIN=", self.job)
+
+    def test_passes_the_oauth_token_into_the_review_step(self):
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+                      self.job)
+
+    def test_stays_advisory(self):
+        """This change activates the reviewer. It must not promote it."""
+        self.assertIn("continue-on-error: true", self.job)
 
 
 if __name__ == "__main__":

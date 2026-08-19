@@ -373,12 +373,30 @@ jobs:
         with:
           python-version: "3.x"
 
+      # np-diff-review.py probes for an executable claude CLI before it
+      # consults any credential, and ubuntu-latest does not ship one - so
+      # without this step the job reported SKIPPED unconditionally, secret or
+      # no secret (#252 shipped believing a secret alone would activate it).
+      # Pinned, not floating: a moving version would change the reviewer's
+      # behavior between two runs of the same PR, which is exactly what F4's
+      # rules_sha pinning exists to prevent. Installed from npm rather than
+      # `curl | bash` because this is the one job that holds a real credential.
+      - name: Install the claude CLI (pinned)
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.236
+          echo "CLAUDE_BIN=$(command -v claude)" >> "$GITHUB_ENV"
+
       - name: Run the multi-lens diff review
         # github.head_ref is attacker-controlled - env + shell variable, never
         # ${{ }} interpolated directly into the run: script (same reasoning
         # as spec-guard's step above).
+        #
+        # CLAUDE_CODE_OAUTH_TOKEN is absent on fork PRs - GitHub withholds
+        # secrets from them - so the reviewer skips there and the PR still goes
+        # green. The fail-open path is also the fork-safety path.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           python3 engine/setup/np-diff-review.py \
