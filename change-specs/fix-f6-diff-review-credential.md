@@ -5,6 +5,7 @@ date: 2026-08-19
 tier: high
 blast_radius:
   - .github/workflows/ci.yml
+  - engine/setup/np-diff-review.py
   - engine/setup/tests/docs/test_diff_review.py
   - change-specs/**
 ---
@@ -95,8 +96,12 @@ effect spec 0006 already claimed it would.
   self-inflicted and no worse than running the branch locally. For a **fork**
   PR, GitHub does not supply secrets to `pull_request` jobs at all, so the
   credential is simply absent and the gate skips — the fail-open path is also
-  the fork-safety path. The existing `HEAD_REF`-via-`env` discipline is
-  preserved verbatim; nothing new is interpolated into a `run:` block.
+  the fork-safety path. **That was not true when first written**: installing the
+  CLI moved the failure rather than removing it, and an absent credential raised
+  `AuthError` out of the lens loop into a red job. Now caught explicitly, with a
+  regression test that reproduces the CI failure. See Deviations. The existing
+  `HEAD_REF`-via-`env` discipline is preserved verbatim; nothing new is
+  interpolated into a `run:` block.
 - **Privacy:** the reviewer sends this repo's diff and a capped excerpt of
   `AGENTS.md` to the model. The engine tree is PII-clean by CI gate, and the
   content overlay is never checked out in CI, so no private layer is exposed.
@@ -137,6 +142,10 @@ effect spec 0006 already claimed it would.
 
 ## Deviations
 
-<Append here when implementation leaves the declared blast radius. Each entry:
-date, what was touched outside blast_radius, and the one-line reason. Never
-delete a prior entry.>
+- 2026-08-19 — also touched `engine/setup/np-diff-review.py`. Reason: installing
+  the CLI moved the failure from "no CLI, skip cleanly" to "CLI present, no
+  credential, raise `AuthError` and exit non-zero", which this spec's own
+  Cross-cutting/Security section claimed could not happen on a fork PR. The
+  fork-safety argument was false as written until the script caught it. Blast
+  radius widened. Caught by running the #281 drift-guard against the edit
+  first — the deny is reproduced in the PR thread.

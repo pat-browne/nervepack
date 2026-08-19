@@ -5,11 +5,17 @@ import importlib.util
 import json
 import os
 import re
+import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHK = os.path.abspath(os.path.join(HERE, "..", "..", "np-diff-review.py"))
+for _p in (os.path.abspath(os.path.join(HERE, "..", "..")),
+           os.path.abspath(os.path.join(HERE, "..", "..", "..", "nervepack_engine"))):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+import np_model  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("diff_review", CHK)
 diff_review = importlib.util.module_from_spec(_spec)
@@ -304,6 +310,61 @@ class TestCiJobIsActuallyWired(unittest.TestCase):
     def test_stays_advisory(self):
         """This change activates the reviewer. It must not promote it."""
         self.assertIn("continue-on-error: true", self.job)
+
+
+class TestFailsOpenOnAuthError(unittest.TestCase):
+    """Installing the CLI in CI moved the failure, it did not remove it.
+
+    Before: no CLI, model_available() False, clean SKIPPED. After: CLI present,
+    no credential, np_model.complete() raises AuthError out of the lens loop,
+    traceback, non-zero exit, red job. That is exactly the fork-PR case -- forks
+    never receive secrets -- so without this the advisory gate would fail every
+    fork PR it was built to stay out of the way of.
+    """
+
+    def _run(self, exc):
+        def boom(prompt, *a, **kw):
+            raise exc
+
+        def fake_fetch(url, token, method="GET", data=None):
+            if "/files" in url:
+                return [{"filename": "a.py", "patch": "@@ -1 +1 @@\n-a\n+b"}]
+            return {}
+
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "verdict.json")
+            os.environ["CLAUDE_BIN"] = sys.executable  # a real executable: probe passes
+            os.environ["GITHUB_TOKEN"] = "t"
+            try:
+                rc = diff_review.main([
+                    "prog", "--repo", "owner/repo", "--pr", "1",
+                    "--repo-root", ".", "--base", "main", "--head", "HEAD",
+                    "--branch", "feat/thing", "--out", out,
+                ], fetch=fake_fetch, complete=boom)
+            finally:
+                os.environ.pop("CLAUDE_BIN", None)
+                os.environ.pop("GITHUB_TOKEN", None)
+            with open(out) as fh:
+                return rc, json.load(fh)
+
+    def test_auth_error_exits_zero(self):
+        rc, _ = self._run(np_model.AuthError("Invalid API key"))
+        self.assertEqual(rc, 0)
+
+    def test_auth_error_records_skipped_not_failed(self):
+        """SKIPPED means the gate never ran. FAILED would assert the diff is
+        bad, which is a lie the ledger would carry forever."""
+        _, verdict = self._run(np_model.AuthError("Invalid API key"))
+        self.assertEqual(verdict["verdict"], "SKIPPED")
+
+    def test_auth_error_reason_is_actionable(self):
+        _, verdict = self._run(np_model.AuthError("Invalid API key"))
+        self.assertIn("credential", verdict["reason"].lower())
+
+    def test_any_backend_failure_also_fails_open(self):
+        rc, verdict = self._run(OSError("claude: command hung"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(verdict["verdict"], "SKIPPED")
 
 
 if __name__ == "__main__":
