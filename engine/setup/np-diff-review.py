@@ -352,10 +352,33 @@ def main(argv, fetch=np_github_api.default_fetch, complete=np_model.complete):
         "--- %s ---\n%s" % (name, patch) for name, patch in file_patches.items()
     )
 
+    # An advisory gate must never turn a PR red, and this is the one place it
+    # could: with the CLI installed but no usable credential, np_model.complete()
+    # raises AuthError straight out of the lens loop. That is precisely the fork-PR
+    # case, since GitHub withholds secrets from fork `pull_request` jobs -- so
+    # before this, activating the reviewer would have failed every fork PR it
+    # exists to stay out of the way of.
+    #
+    # SKIPPED, never FAILED: FAILED asserts something about the diff. "The model
+    # could not be reached" says nothing about the diff, and the ledger keeps
+    # these verdicts forever.
     all_findings = []
-    for lens in LENS_PROMPTS:
-        all_findings.extend(
-            run_lens(lens, diff_text, spec_text, conventions_text, complete=complete))
+    try:
+        for lens in LENS_PROMPTS:
+            all_findings.extend(
+                run_lens(lens, diff_text, spec_text, conventions_text, complete=complete))
+    except np_model.AuthError as exc:
+        sys.stderr.write("diff-review: model credential rejected - skipping (%s)\n" % exc)
+        _write_verdict(args.out, build_verdict(
+            [], args.evidence_ref, args.rules_sha, verdict="SKIPPED",
+            reason="model credential unavailable or rejected"))
+        return 0
+    except Exception as exc:  # backend hung, crashed, or vanished mid-run
+        sys.stderr.write("diff-review: model backend failed - skipping (%r)\n" % (exc,))
+        _write_verdict(args.out, build_verdict(
+            [], args.evidence_ref, args.rules_sha, verdict="SKIPPED",
+            reason="model backend failed: %s" % type(exc).__name__))
+        return 0
     findings = dedup_findings(all_findings)
 
     comments, unplaced = build_review_comments(findings, file_patches)
