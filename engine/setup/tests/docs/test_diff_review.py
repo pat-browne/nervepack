@@ -307,6 +307,15 @@ class TestCiJobIsActuallyWired(unittest.TestCase):
         self.assertIn("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
                       self.job)
 
+    def test_guards_an_install_that_leaves_no_cli_on_path(self):
+        """Exporting an empty CLAUDE_BIN is harmless -- model_available()'s `or`
+        falls back -- but the resulting verdict would blame a missing CLI for a
+        run where the install succeeded. The advisory reviewer caught this on
+        #282; its stated failure mode (confusing downstream errors) was wrong,
+        the misdiagnosed skip underneath it was real."""
+        self.assertIn("command -v claude || true", self.job)
+        self.assertIn("::warning::", self.job)
+
     def test_stays_advisory(self):
         """This change activates the reviewer. It must not promote it."""
         self.assertIn("continue-on-error: true", self.job)

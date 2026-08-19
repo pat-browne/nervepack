@@ -384,7 +384,20 @@ jobs:
       - name: Install the claude CLI (pinned)
         run: |
           npm install -g @anthropic-ai/claude-code@2.1.236
-          echo "CLAUDE_BIN=$(command -v claude)" >> "$GITHUB_ENV"
+          # Export CLAUDE_BIN only when the CLI is actually on PATH. Setting it
+          # empty is harmless - model_available()'s `or` falls back to
+          # ~/.local/bin/claude and the review skips cleanly - but the verdict
+          # would then read "no claude CLI configured" for a run where the
+          # install SUCCEEDED. A wrong reason costs more debugging time than no
+          # reason, so say so loudly here instead. Advisory gate: warn and let
+          # it skip, never fail the step and turn the PR red.
+          bin=$(command -v claude || true)
+          if [ -z "$bin" ]; then
+            echo "::warning::npm install reported success but 'claude' is not on PATH -"
+            echo "::warning::the diff review will SKIP, and its reason will understate this."
+          else
+            echo "CLAUDE_BIN=$bin" >> "$GITHUB_ENV"
+          fi
 
       - name: Run the multi-lens diff review
         # github.head_ref is attacker-controlled - env + shell variable, never
