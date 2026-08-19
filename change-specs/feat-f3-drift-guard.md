@@ -126,12 +126,17 @@ hook correctly deciding it has no jurisdiction, and it stays silent.
 
 - **Security:** the `blast_radius` globs are attacker-reachable input in the
   general case — a spec file arrives inside a repo, and a repo can come from
-  anywhere. They are matched with `fnmatch` and never executed, never compiled
-  as a regex, and never used to construct a path. The hook only ever widens what
-  is *allowed*, so a malicious spec can at worst disable the guard for that
-  repo, which is the same authority its author already has by deleting the file.
-  An edit whose realpath falls outside the resolved repository root is not
-  adjudicated at all.
+  anywhere. They are never executed and never used to construct a path. They
+  are matched with `fnmatch`, which does compile them to a regex internally, so
+  the accurate claim is narrower than "no regex": a `.` or `+` in a glob is
+  matched literally, and a caller cannot inject regex syntax through one. The
+  residual exposure is backtracking on a pathological glob, bounded by a path
+  length of a few thousand characters and by `fnmatch`'s own pattern cache;
+  `np-spec-guard.py` has carried the identical exposure in CI since F2. The hook
+  only ever widens what is *allowed*, so a malicious spec can at worst disable
+  the guard for its own repo — the same authority its author already has by
+  deleting the file. An edit whose realpath falls outside the resolved
+  repository root is not adjudicated at all.
 - **Privacy:** the log line holds an absolute file path and a branch name, under
   `~/.cache/nervepack/`. Same class as every other hook log, and no transcript
   content, no file contents, no diff.
@@ -149,8 +154,12 @@ hook correctly deciding it has no jurisdiction, and it stays silent.
   chance to brick a session. Bounded the same four ways `turn_gate` is: toggle
   gated, silent where it has no jurisdiction, one decision per tool call, and
   every internal error path returns allow.
-- Bad, because it adds a file read to every Write and Edit on the machine, in
-  every repo, forever.
+- Bad, because it adds **~75ms to every Write and Edit** on the machine, in
+  every repo, forever. Measured, not estimated: 10 dispatches in 0.75s against a
+  0.11s floor for 10 bare interpreter starts. The hook's own work is
+  microseconds; the cost is `cli.py`'s import graph, which `lesson-guard`
+  already pays on these same two tools. Cutting it means making dispatch lazy
+  for all hooks, which is a separate change and a separate argument.
 - Neutral, because it is inert until a repo adopts `change-specs/`. Only
   nervepack has.
 
