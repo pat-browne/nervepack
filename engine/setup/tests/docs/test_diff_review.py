@@ -4,11 +4,18 @@ policy). F6 in the AI-native compliance epic (#252)."""
 import importlib.util
 import json
 import os
+import re
+import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHK = os.path.abspath(os.path.join(HERE, "..", "..", "np-diff-review.py"))
+for _p in (os.path.abspath(os.path.join(HERE, "..", "..")),
+           os.path.abspath(os.path.join(HERE, "..", "..", "..", "nervepack_engine"))):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+import np_model  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("diff_review", CHK)
 diff_review = importlib.util.module_from_spec(_spec)
@@ -263,6 +270,122 @@ class TestMainFailsOpenOnNoModel(unittest.TestCase):
         finally:
             os.environ.pop("CLAUDE_BIN", None)
         self.assertEqual(rc, 0)
+
+
+class TestCiJobIsActuallyWired(unittest.TestCase):
+    """The gate reported SKIPPED on every PR ever opened, because the job never
+    installed the CLI and never passed the secret -- while change-spec 0006 said
+    it was one secret away from running. These assertions exist so that claim
+    cannot go stale again silently: drop any of the three and a test fails.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
+        with open(os.path.join(root, ".github", "workflows", "ci.yml"),
+                  encoding="utf-8") as fh:
+            text = fh.read()
+        cls.job = text.split("  diff-review:", 1)[1].split("\n  gate-verdicts-summary:", 1)[0]
+        # Guard the split itself. A missing OPENING marker raises IndexError and
+        # fails loudly, but a renamed CLOSING marker silently widens cls.job to
+        # the rest of the file - and every assertion below would still pass while
+        # matching text from some other job entirely. Caught by the advisory
+        # reviewer on #282. Assert the marker, not a proxy for it: a line-count
+        # heuristic was tried first and tripped on the real job's own length,
+        # which is the same brittleness the finding was about.
+        if "\n  gate-verdicts-summary:" not in text:
+            raise AssertionError(
+                "ci.yml no longer contains the 'gate-verdicts-summary:' job that "
+                "bounds the diff-review section - this parse now silently reads to "
+                "end of file. Fix it before trusting the assertions below.")
+
+    def test_installs_the_claude_cli(self):
+        self.assertIn("@anthropic-ai/claude-code@", self.job)
+
+    def test_pins_the_cli_version(self):
+        """A floating version changes the reviewer between two runs of one PR,
+        which is what F4's rules_sha pinning exists to prevent."""
+        m = re.search(r"@anthropic-ai/claude-code@(\S+)", self.job)
+        self.assertIsNotNone(m)
+        self.assertRegex(m.group(1), r"^\d+\.\d+\.\d+$")
+
+    def test_exports_claude_bin_for_the_probe(self):
+        """np-diff-review.py's model_available() reads CLAUDE_BIN; without it
+        the probe looks in ~/.local/bin, where npm does not install."""
+        self.assertIn("CLAUDE_BIN=", self.job)
+
+    def test_passes_the_oauth_token_into_the_review_step(self):
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+                      self.job)
+
+    def test_guards_an_install_that_leaves_no_cli_on_path(self):
+        """Exporting an empty CLAUDE_BIN is harmless -- model_available()'s `or`
+        falls back -- but the resulting verdict would blame a missing CLI for a
+        run where the install succeeded. The advisory reviewer caught this on
+        #282; its stated failure mode (confusing downstream errors) was wrong,
+        the misdiagnosed skip underneath it was real."""
+        self.assertIn("command -v claude || true", self.job)
+        self.assertIn("::warning::", self.job)
+
+    def test_stays_advisory(self):
+        """This change activates the reviewer. It must not promote it."""
+        self.assertIn("continue-on-error: true", self.job)
+
+
+class TestFailsOpenOnAuthError(unittest.TestCase):
+    """Installing the CLI in CI moved the failure, it did not remove it.
+
+    Before: no CLI, model_available() False, clean SKIPPED. After: CLI present,
+    no credential, np_model.complete() raises AuthError out of the lens loop,
+    traceback, non-zero exit, red job. That is exactly the fork-PR case -- forks
+    never receive secrets -- so without this the advisory gate would fail every
+    fork PR it was built to stay out of the way of.
+    """
+
+    def _run(self, exc):
+        def boom(prompt, *a, **kw):
+            raise exc
+
+        def fake_fetch(url, token, method="GET", data=None):
+            if "/files" in url:
+                return [{"filename": "a.py", "patch": "@@ -1 +1 @@\n-a\n+b"}]
+            return {}
+
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "verdict.json")
+            os.environ["CLAUDE_BIN"] = sys.executable  # a real executable: probe passes
+            os.environ["GITHUB_TOKEN"] = "t"
+            try:
+                rc = diff_review.main([
+                    "prog", "--repo", "owner/repo", "--pr", "1",
+                    "--repo-root", ".", "--base", "main", "--head", "HEAD",
+                    "--branch", "feat/thing", "--out", out,
+                ], fetch=fake_fetch, complete=boom)
+            finally:
+                os.environ.pop("CLAUDE_BIN", None)
+                os.environ.pop("GITHUB_TOKEN", None)
+            with open(out) as fh:
+                return rc, json.load(fh)
+
+    def test_auth_error_exits_zero(self):
+        rc, _ = self._run(np_model.AuthError("Invalid API key"))
+        self.assertEqual(rc, 0)
+
+    def test_auth_error_records_skipped_not_failed(self):
+        """SKIPPED means the gate never ran. FAILED would assert the diff is
+        bad, which is a lie the ledger would carry forever."""
+        _, verdict = self._run(np_model.AuthError("Invalid API key"))
+        self.assertEqual(verdict["verdict"], "SKIPPED")
+
+    def test_auth_error_reason_is_actionable(self):
+        _, verdict = self._run(np_model.AuthError("Invalid API key"))
+        self.assertIn("credential", verdict["reason"].lower())
+
+    def test_any_backend_failure_also_fails_open(self):
+        rc, verdict = self._run(OSError("claude: command hung"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(verdict["verdict"], "SKIPPED")
 
 
 if __name__ == "__main__":
