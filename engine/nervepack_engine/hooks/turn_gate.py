@@ -124,7 +124,7 @@ def _check_form(turn, timeout_s):
         return ""
     detail = ", ".join("%s=%d" % (k, v) for k, v in top) or "see np-ste-lint.py"
     return ("Closing message scores %.1f violations per 100 words against a "
-            "threshold of %.0f (%s). See np-flow-concise-output."
+            "threshold of %.1f (%s). See np-flow-concise-output."
             % (score, threshold, detail))
 
 
