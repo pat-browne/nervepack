@@ -200,6 +200,48 @@ def _work_item_prose(tool_input):
     return value or None
 
 
+def _mode(param, default, allowed):
+    value = (np_toggle.param(param, default) or default).strip().lower()
+    return value if value in allowed else default
+
+
+def _lint(text, timeout_s):
+    """Run the overlay linter over text. Return its report dict, or None."""
+    script = _lint_path()
+    if not script:
+        return None
+    try:
+        proc = subprocess.run(
+            [sys.executable, script], input=text, capture_output=True,
+            text=True, timeout=timeout_s, check=False)
+        data = json.loads(proc.stdout or "{}")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _ask(reason):
+    return json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "ask",
+        "permissionDecisionReason": reason,
+    }}, separators=(",", ":"))
+
+
+def _allow_with_context(context):
+    return json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "allow",
+        "additionalContext": context,
+    }}, separators=(",", ":"))
+
+
+def _categorical_hits(violations):
+    return [(_RULE_LABEL[rule], int(violations.get(rule) or 0))
+            for rule in _CATEGORICAL
+            if int(violations.get(rule) or 0) > 0]
+
+
 def run(payload_text):
     if not np_toggle.enabled("form_gate"):
         return ""
@@ -222,4 +264,44 @@ def run(payload_text):
     if not text or not text.strip():
         return ""
 
-    return ""
+    try:
+        timeout_s = float(np_toggle.param("form_gate.timeout_s", "5") or 5)
+    except (TypeError, ValueError):
+        timeout_s = 5.0
+
+    report = _lint(_strip_quoted(text), timeout_s)
+    if not report:
+        return ""
+
+    violations = report.get("violations") or {}
+    sid = payload.get("session_id") or "unknown"
+
+    categorical = _mode("form_gate.categorical", "ask", ("ask", "warn", "off"))
+    hits = _categorical_hits(violations) if categorical != "off" else []
+
+    if hits:
+        detail = ", ".join("%s x%d" % (name, count) for name, count in hits)
+        message = ("%s breaks an absolute rule of np-flow-concise-output: %s. "
+                   "These are zero-tolerance, not rate-based. Rewrite without "
+                   "them, then retry." % (label, detail))
+        np_toggle.signal(sid, "form-gate %s categorical :: %s"
+                         % (categorical, ", ".join(n for n, _ in hits)))
+        return _ask(message) if categorical == "ask" else _allow_with_context(message)
+
+    if _mode("form_gate.rate", "warn", ("warn", "off")) == "off":
+        return ""
+    try:
+        threshold = float(np_toggle.param("form_gate.rate_threshold", "2.5") or 2.5)
+    except (TypeError, ValueError):
+        threshold = 2.5
+    score = report.get("total_per100w")
+    if score is None or float(score) <= threshold:
+        return ""
+
+    top = sorted(((k, int(v)) for k, v in violations.items() if v),
+                 key=lambda kv: -kv[1])[:3]
+    detail = ", ".join("%s=%d" % (k, v) for k, v in top) or "see np-ste-lint.py"
+    np_toggle.signal(sid, "form-gate rate :: %.1f" % float(score))
+    return _allow_with_context(
+        "%s scores %.1f violations per 100 words against a threshold of %.1f "
+        "(%s). See np-flow-concise-output." % (label, float(score), threshold, detail))

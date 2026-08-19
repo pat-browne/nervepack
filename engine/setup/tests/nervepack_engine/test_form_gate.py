@@ -138,5 +138,103 @@ class TestStripQuoted(unittest.TestCase):
         self.assertIn("Copy.", out)
 
 
+class TestChannels(unittest.TestCase):
+    def _run(self, payload, params=None, lint=None):
+        params = params or {}
+        patches = [
+            mock.patch.object(form_gate.np_toggle, "enabled", return_value=True),
+            mock.patch.object(form_gate.np_toggle, "param",
+                              side_effect=lambda k, d=None: params.get(k, d)),
+            mock.patch.object(form_gate.np_toggle, "signal", return_value=None),
+        ]
+        if lint is not None:
+            patches.append(mock.patch.object(form_gate, "_lint", return_value=lint))
+        for p in patches:
+            p.start()
+        try:
+            return form_gate.run(payload)
+        finally:
+            for p in reversed(patches):
+                p.stop()
+
+    def _write(self, content, name="a.md"):
+        return json.dumps({"session_id": "s1", "tool_name": "Write",
+                           "tool_input": {"file_path": "/x/" + name,
+                                          "content": content}})
+
+    def _clean(self, **over):
+        v = {"em_dash": 0, "semicolon": 0, "contraction": 0,
+             "marketing_adjective": 0, "passive_voice": 0}
+        v.update(over)
+        return {"violations": v, "total_per100w": 0.0}
+
+    def test_semicolon_asks(self):
+        out = self._run(self._write("A clause; another clause."),
+                        lint=self._clean(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "ask")
+        self.assertIn("semicolon", data["permissionDecisionReason"])
+
+    def test_clean_prose_returns_empty(self):
+        out = self._run(self._write("A clean sentence."), lint=self._clean())
+        self.assertEqual(out, "")
+
+    def test_rate_only_violation_warns_and_never_asks(self):
+        out = self._run(self._write("The file was read by the parser."),
+                        params={"form_gate.rate_threshold": "2.5"},
+                        lint={"violations": {"passive_voice": 3},
+                              "total_per100w": 9.0})
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertIn("additionalContext", data)
+
+    def test_rate_below_threshold_returns_empty(self):
+        out = self._run(self._write("Fine prose."),
+                        params={"form_gate.rate_threshold": "2.5"},
+                        lint={"violations": {"passive_voice": 1},
+                              "total_per100w": 1.0})
+        self.assertEqual(out, "")
+
+    def test_categorical_off_downgrades_to_warn(self):
+        out = self._run(self._write("A clause; another."),
+                        params={"form_gate.categorical": "warn"},
+                        lint=self._clean(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "allow")
+
+    def test_reason_names_every_violated_rule(self):
+        out = self._run(self._write("Text"),
+                        lint=self._clean(semicolon=2, em_dash=1))
+        reason = json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("semicolon", reason)
+        self.assertIn("em dash", reason)
+
+    def test_absent_linter_allows(self):
+        with mock.patch.object(form_gate, "_lint_path", return_value=None):
+            out = self._run(self._write("A clause; another."))
+        self.assertEqual(out, "")
+
+    def test_linter_timeout_allows(self):
+        import subprocess as sp
+        with mock.patch.object(form_gate, "_lint_path", return_value="/x/lint.py"), \
+             mock.patch.object(form_gate.subprocess, "run",
+                               side_effect=sp.TimeoutExpired("lint", 5)):
+            out = self._run(self._write("A clause; another."))
+        self.assertEqual(out, "")
+
+    def test_blockquoted_semicolon_allows(self):
+        """Quoted material is stripped before the linter ever sees it."""
+        captured = {}
+
+        def fake_lint(text, timeout_s):
+            captured["text"] = text
+            return self._clean()
+
+        with mock.patch.object(form_gate, "_lint", side_effect=fake_lint):
+            out = self._run(self._write("Mine.\n\n> Theirs; quoted.\n"))
+        self.assertEqual(out, "")
+        self.assertNotIn(";", captured["text"])
+
+
 if __name__ == "__main__":
     unittest.main()
