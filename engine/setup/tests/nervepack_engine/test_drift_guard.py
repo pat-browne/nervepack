@@ -16,10 +16,12 @@ from unittest import mock
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
 _ENGINE_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", ".."))
-for _p in (_ENGINE_DIR, _ENGINE_SETUP, os.path.join(_ENGINE_DIR, "nervepack_engine")):
+_ENGINE_PARENT = os.path.normpath(os.path.join(_ENGINE_DIR, ".."))
+for _p in (_ENGINE_PARENT, _ENGINE_DIR, _ENGINE_SETUP, os.path.join(_ENGINE_DIR, "nervepack_engine")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import np_change_spec  # noqa: E402
 from hooks import drift_guard  # noqa: E402
 
 SPEC = (
@@ -207,6 +209,50 @@ class TestFailsOpen(_Base):
         open(os.path.join(self.tmp, "no", "such"), "w").close()  # a FILE, not a dir
         out = self._run("dashboard/build.py")
         self.assertEqual(self._decision(out), "deny")
+
+
+class TestInternalExceptionStillAllows(_Base):
+    """Fail-open is guaranteed by cli.py's dispatch handler, not by a local
+    try/except in the hook, and this pins that.
+
+    The advisory reviewer on #281 asked for blanket catches around load() on the
+    theory that a raise would "crash without logging a decision" and "return None
+    instead of ''". Both are false -- cli.py catches, logs a dated bail with the
+    hook name, and returns 0, which the harness reads as allow. Adding local
+    catches would suppress the diagnostic that bail exists to produce.
+
+    Asserted here rather than argued, so the property cannot silently regress if
+    that handler is ever narrowed.
+    """
+
+    def test_dispatch_allows_and_logs_when_the_hook_raises(self):
+        import io
+        import importlib
+        cli = importlib.import_module("nervepack_engine.cli")
+        cli_log = os.path.join(self.tmp, "cli.log")
+        payload = json.dumps({"session_id": "boom", "tool_name": "Edit",
+                              "tool_input": {"file_path": os.path.join(self.repo, "any.py")}})
+        real_load = np_change_spec.load
+        stdin, stdout = sys.stdin, sys.stdout
+        try:
+            os.environ["NERVEPACK_CLI_LOG"] = cli_log
+            np_change_spec.load = lambda *a, **k: (_ for _ in ()).throw(
+                RuntimeError("simulated blow-up"))
+            sys.stdin = io.StringIO(payload)
+            sys.stdout = io.StringIO()
+            rc = cli.main(["hook", "drift-guard"])
+            emitted = sys.stdout.getvalue()
+        finally:
+            np_change_spec.load = real_load
+            sys.stdin, sys.stdout = stdin, stdout
+            os.environ.pop("NERVEPACK_CLI_LOG", None)
+
+        self.assertEqual(rc, 0, "a raising hook must not fail the tool call")
+        self.assertEqual(emitted, "", "no decision emitted means allow")
+        with open(cli_log, encoding="utf-8") as fh:
+            logged = fh.read()
+        self.assertIn("drift-guard", logged)
+        self.assertIn("simulated blow-up", logged)
 
 
 if __name__ == "__main__":
