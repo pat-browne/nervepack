@@ -53,6 +53,10 @@
    It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
    uncommitted edits, check `git -C "$REPO" diff -- INDEX.md` and expect only your own
    rows to move. If it carries someone else's, leave `INDEX.md` unstaged and say so.
+   **Use that exact verb.** `cli.py` lives at `engine/nervepack_engine/cli.py`, not the
+   repo root, and an unrecognised or bare invocation **exits 0 printing nothing** — so a
+   guessed verb (`cli.py index`, `cli.py relink`) looks like a successful no-op. Confirm
+   by the effect, not the exit code: `INDEX.md` must appear in `git status`.
 7. **Diff:** `git -C "$REPO" diff` — show the user. Deliver it as a rendered diff,
    not a description ([[np-flow-deliver-diff]]).
 8. **Commit** with conventional subject (see `AGENTS.md` § "Commit conventions",
