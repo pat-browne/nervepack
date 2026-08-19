@@ -287,6 +287,18 @@ class TestCiJobIsActuallyWired(unittest.TestCase):
                   encoding="utf-8") as fh:
             text = fh.read()
         cls.job = text.split("  diff-review:", 1)[1].split("\n  gate-verdicts-summary:", 1)[0]
+        # Guard the split itself. A missing OPENING marker raises IndexError and
+        # fails loudly, but a renamed CLOSING marker silently widens cls.job to
+        # the rest of the file - and every assertion below would still pass while
+        # matching text from some other job entirely. Caught by the advisory
+        # reviewer on #282. Assert the marker, not a proxy for it: a line-count
+        # heuristic was tried first and tripped on the real job's own length,
+        # which is the same brittleness the finding was about.
+        if "\n  gate-verdicts-summary:" not in text:
+            raise AssertionError(
+                "ci.yml no longer contains the 'gate-verdicts-summary:' job that "
+                "bounds the diff-review section - this parse now silently reads to "
+                "end of file. Fix it before trusting the assertions below.")
 
     def test_installs_the_claude_cli(self):
         self.assertIn("@anthropic-ai/claude-code@", self.job)

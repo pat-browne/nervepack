@@ -383,7 +383,16 @@ jobs:
       # `curl | bash` because this is the one job that holds a real credential.
       - name: Install the claude CLI (pinned)
         run: |
-          npm install -g @anthropic-ai/claude-code@2.1.236
+          # A `run:` step gets `bash -e`, so a failed npm install aborts the step
+          # and turns the job red - for a registry outage or a yanked version,
+          # neither of which says anything about the diff. An advisory gate must
+          # not do that. Swallow it, warn, and let the review step skip cleanly:
+          # CLAUDE_BIN stays unset, model_available() falls back to a path that
+          # does not exist, and the verdict is SKIPPED.
+          npm install -g @anthropic-ai/claude-code@2.1.236 || {
+            echo "::warning::npm install of the claude CLI failed - the diff review will SKIP"
+            exit 0
+          }
           # Export CLAUDE_BIN only when the CLI is actually on PATH. Setting it
           # empty is harmless - model_available()'s `or` falls back to
           # ~/.local/bin/claude and the review skips cleanly - but the verdict
@@ -393,8 +402,8 @@ jobs:
           # it skip, never fail the step and turn the PR red.
           bin=$(command -v claude || true)
           if [ -z "$bin" ]; then
-            echo "::warning::npm install reported success but 'claude' is not on PATH -"
-            echo "::warning::the diff review will SKIP, and its reason will understate this."
+            echo "::warning::the claude CLI is not on PATH after install - the diff"
+            echo "::warning::review will SKIP, and its reason will understate why."
           else
             echo "CLAUDE_BIN=$bin" >> "$GITHUB_ENV"
           fi
