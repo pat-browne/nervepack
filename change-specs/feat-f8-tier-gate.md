@@ -7,6 +7,7 @@ blast_radius:
   - engine/setup/np_tier_policy.py
   - engine/setup/np-tier-gate.py
   - engine/setup/np_codeowners.py
+  - engine/setup/risk-tiers.json
   - engine/setup/tests/docs/test_tier_policy.py
   - engine/setup/tests/docs/test_tier_gate.py
   - engine/setup/tests/docs/test_codeowners.py
@@ -196,3 +197,12 @@ Three independent steps, in the order that restores the loosest state first.
 
 The three Python modules are inert if unreferenced: nothing imports them except
 the CI job and their tests.
+
+## Deviations
+
+- 2026-08-20 — added `engine/setup/risk-tiers.json` to the blast radius. The
+  cross-cutting concerns section above always said this change gives the three
+  new modules self-classifying rules, and the glob was simply left out of the
+  frontmatter. `spec-guard` caught it on the first local run against the real
+  diff, which is the case the gate exists for: prose and frontmatter disagreeing
+  about the same change.
