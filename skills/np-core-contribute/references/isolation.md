@@ -1,5 +1,10 @@
 # Concurrency: writing to a repo other writers share
 
+> **Superseded in part.** The standing preference is now: always sync first, always
+> branch off `origin/main`, always commit on top, and never rewrite or move commits
+> and files this session did not create. The work-in-place-when-clean option below is
+> no longer offered. Read the rest for the mechanics, not for the choice.
+
 Both nervepack repos are **single working trees with one git HEAD**, and several
 writers touch them without asking: other interactive sessions, background and cloud
 sessions, and the scheduled crons. Two of those crons commit to `skills/` —

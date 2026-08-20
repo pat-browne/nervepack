@@ -74,7 +74,7 @@ sources test, and the cross-tree lookup: references/classification.md
 ## Steps
 
 Preflight for other writers (`git fetch && git status --short`) → sync first
-([[np-core-sync]]) → check the merged INDEX for an overlapping
+([[np-core-sync]]) → branch off `origin/main` → check the merged INDEX for an overlapping
 skill to extend instead of duplicating → resolve the target path via
 `cli.py layout route` (never invent a directory) → write the update (run the
 draft through [[np-flow-concise-output]]. Cross-reference another skill by
@@ -88,11 +88,14 @@ references/steps.md
 ## Concurrency — both repos are one shared working tree
 
 Other sessions and the crons write here too, and two crons commit to `skills/`
-(`memory-promote` 08:00, `skill-maintain` 09:15). Preflight with `git status
---short`, then take the cheapest safe option: **work in place** when the tree is
-clean or dirty only outside your target paths; **isolate in a worktree** when it is
-dirty in a path you intend to edit, when you are a background session, or when the
-edit spans several files.
+(`memory-promote` 08:00, `skill-maintain` 09:15).
+
+**Standing preference: always branch, never write on `main`.** Sync first, branch off
+`origin/main`, then commit on top. Branch even when the tree is clean. Do not rebase or
+rewrite commits this session did not create, and leave another session's or a cron's
+files and commits exactly where they are. The branch is what stops a diverged `main`,
+or a cron's auto-split of the very skill being edited, from colliding with the write.
+This overrides the older work-in-place-when-clean guidance in references/isolation.md.
 
 Three rules that apply either way: commit with a **pathspec on `commit` as well as
 `add`** (a bare `commit` takes the whole index), **check `INDEX.md` before staging it**
