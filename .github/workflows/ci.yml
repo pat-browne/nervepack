@@ -487,17 +487,28 @@ jobs:
         if: always()
         run: python3 engine/setup/np-gate-verdict.py --gate "tier-gate" --status "${{ job.status }}" --reason "Tier requirement set applied to this diff (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-tier-gate.json
 
-      # Uploaded whether the gate passed or failed. #255 reads tier-policy.json
-      # to decide auto-merge, and a policy artifact that exists only on success
-      # cannot be watched during an advisory period.
-      - name: Upload the tier policy and gate verdict
+      - name: Upload gate verdict
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: gate-verdict-tier-gate
-          path: |
-            gate-verdict-tier-gate.json
-            tier-policy.json
+          path: gate-verdict-tier-gate.json
+
+      # A SEPARATE artifact, deliberately: gate-verdicts-summary downloads
+      # `gate-verdict-*` with merge-multiple and then reads every *.json in the
+      # merged directory as a verdict. Shipping tier-policy.json inside the
+      # gate-verdict-* artifact would put a file with no `gate` field into that
+      # set and render a blank row in the PR comment.
+      #
+      # Uploaded whether the gate passed or failed. #255 reads this to decide
+      # auto-merge, and a policy artifact that exists only on success cannot be
+      # watched during an advisory period.
+      - name: Upload the tier policy
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tier-policy
+          path: tier-policy.json
 
   gate-verdicts-summary:
     name: Gate verdicts summary
