@@ -36,6 +36,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
+import np_change_spec  # noqa: E402
 import np_frontmatter  # noqa: E402
 
 REQUIRED_FIELDS = ("id", "status", "date", "tier")
@@ -65,12 +66,12 @@ EXEMPT_GLOBS = (
 )
 
 
-def branch_slug(branch):
-    return branch.replace("/", "-")
-
-
-def spec_path_for(root, slug):
-    return os.path.join(root, "change-specs", "%s.md" % slug)
+# Spec location and blast-radius matching live in np_change_spec, shared with
+# the drift-guard PreToolUse hook (F3/#249). Two copies of this matcher would
+# let a branch pass locally and fail here on the radius alone. Kept as
+# module-level names because they are this script's stable surface.
+branch_slug = np_change_spec.branch_slug
+spec_path_for = np_change_spec.spec_path_for
 
 
 def changed_files(root, base, head):
@@ -123,10 +124,7 @@ def validate_spec(text):
     return problems
 
 
-def diff_outside_blast_radius(files, globs):
-    if not globs:
-        return list(files)
-    return [f for f in files if not any(fnmatch.fnmatch(f, g) for g in globs)]
+diff_outside_blast_radius = np_change_spec.outside_radius
 
 
 def main(argv):

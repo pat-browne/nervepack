@@ -38,3 +38,26 @@ the `memory.backcapture` toggle and `backcapture_days` (the discovery window).
 
 A throttled flush is not a lost flush: the inbox persists and the daily
 `memory-promote` / `episodic-maintain` / `aggregate-metrics` crons drain it.
+
+## `~/.cache/nervepack/drift-guard.log` — the spec-drift gate
+
+One line per adjudication, shaped
+`<ts> drift-guard <VERDICT> sid=<session> <detail>`.
+
+| Pattern | Meaning | What to do |
+|---|---|---|
+| `PASS <path> in radius of <spec>` | The edit was inside the declared `blast_radius` | Nothing; this is the normal case on an adopted repo |
+| `DENY <path> outside radius of <spec>` | The edit was blocked | Widen the spec's `blast_radius` with a `## Deviations` entry, or supersede the spec. Never widen silently |
+| `WARN <path> outside radius of <spec> (enforce off)` | Same violation, downgraded | `gates.drift_guard.enforce` is off. Turn it back on, or accept that drift is being recorded rather than prevented |
+| `WARN <spec> declares no blast_radius` | The spec exists but grants nothing | Fill in `blast_radius:`. `spec-guard` fails the branch in CI until you do |
+
+**An empty log is the expected state on most machines.** The hook stays silent
+wherever it has no jurisdiction — outside a git repo, on a detached HEAD, or in
+any repo with no `change-specs/<branch-slug>.md`. That silence is deliberate:
+logging every allowed Write and Edit machine-wide would bury the four lines
+above. So a missing log means "nothing to adjudicate", never "the hook is
+broken".
+
+To confirm the hook is wired at all, check that `settings.json` carries both
+rows — `grep -c 'hook drift-guard' ~/.claude/settings.json` returns 2 — rather
+than reading anything into an empty log.

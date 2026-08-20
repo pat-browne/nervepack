@@ -74,6 +74,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | **CI PII guard** (secret/PII gate) | — (always-on CI job) | `publish/np-publish-scan.py` (secret/PII scanner; LAN-IP/RFC1918 rule, never loopback) + `scan-allowlist.txt`; CI job `pii-guard` in `.github/workflows/ci.yml`; pre-publish gate `publish/np-publish-snapshot.sh` (+ `publish/PUBLISH.md`); tests `engine/setup/tests/publish/` | `specs/2026-06-09-nervepack-engine-content-architecture-design.md` |
 | **PII filter** (context-window and storage-time scrub) | `pii_filter` (default off) | `np-pii-filter.py`, `np_scrub.py` (extended, `NP_PII_FILTER=1`), `episodic_recall.py` (extended — shells to `np-pii-filter.py` via a `sys.executable` subprocess, `pii_filter_fn` injectable for tests), `lesson_recall.py` (extended, same pattern), `np_scrub.py` (extended, `NP_PII_FILTER=1`), `cli.py setup install-pii-deps` | `specs/2026-07-06-pii-filter-design.md` |
 | **Open artifact on write** (auto-open a spec/plan doc so a human reads it) | `focus` | `engine/nervepack_engine/hooks/open_artifact.py` (PostToolUse, matcher `Write`; dispatched as `cli.py hook open-artifact`; reuses `np_dashboard.resolve_opener()`), registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`) | `specs/2026-07-21-open-artifact-on-write-design.md` |
+| **Spec-drift gate** (block an edit that leaves the change spec's declared paths) | `gates` (`.drift_guard.enforce`, default on — the ONLY one of the three `gates.*` keys with a consumer today; `.spec_guard.enforce` and `.tier_guard.enforce` are declared by F12/#259 and settable, but inert until the local spec-guard pre-check and tier-guard (#254) exist, so flipping them changes nothing) | `engine/nervepack_engine/hooks/drift_guard.py` (PreToolUse, matchers `Write`/`Edit`; dispatched as `cli.py hook drift-guard`), `engine/setup/np_change_spec.py` (the blast-radius matcher, shared with the `spec-guard` CI job so the local and CI gates cannot disagree about the same policy); reads `change-specs/<branch-slug>.md` in whichever repo the edited file lives in, and is silent in any repo that has no such file | `change-specs/feat-f3-drift-guard.md`; content overlay `skills/np-flow-develop/references/hooks.md` §2 |
 | **Turn-completion gate** (block a turn that changed UI without showing it) | `turn_gate` (`.ui` block, `.diff` warn, `.form` warn, `.form_threshold` 12, `.timeout_s` 5) | `engine/nervepack_engine/hooks/turn_gate.py` (Stop; dispatched as `cli.py hook turn-gate`), `engine/nervepack_engine/np_turn_parse.py` (the pure transcript-turn extractor — the ONLY file coupled to Claude Code's transcript shape); the `form` check shells to the overlay's `np-ste-lint.py` via `np_content.content_dir()` and is silently skipped when no overlay is configured | content overlay `specs/2026-08-12-turn-completion-gate-design.md` |
 
 ## Runtime wiring — what fires what
@@ -85,6 +86,7 @@ worked example* live in [`FEATURES.md`](FEATURES.md).
 | `SessionStart` | `cli.py sync &` · `cli.py hook session-directive` · `cli.py hook open-dashboard &` · `cli.py hook backcapture-sweep &` · `cli.py hook resume-sessionstart &` |
 | `UserPromptSubmit` | `cli.py hook episodic-recall` · `cli.py hook lesson-recall` · `cli.py hook struggle-escalation` · `engine/nervepack_engine/cli.py hook skill-trigger-recall` · `cli.py hook resume-recall` |
 | `PreToolUse` | `cli.py hook lesson-guard` (matchers: `Bash`, `Read`, `Edit`, `Write`, `Skill`, `mcp__.*`) |
+| `PreToolUse` | `cli.py hook drift-guard` (matchers: `Write`, `Edit`) — not backgrounded, for the same reason as `Stop`: a backgrounded hook cannot return a decision |
 | `PostToolUse` | `cli.py hook open-artifact` (matcher: `Write`) |
 | `Stop` | `cli.py hook turn-gate` (not backgrounded — a backgrounded hook cannot return a decision) |
 | `PreCompact` | `cli.py hook episodic-capture checkpoint` |
@@ -160,13 +162,26 @@ Record shapes (keep these stable; readers depend on them):
    `~/.cache/nervepack/`. A hook must never break a session, and must never block
    one by accident. (→ coding-rules §8)
 
-   **One deliberate exception: `turn_gate` may block, on purpose.** It is the only
-   hook permitted to, and it is bounded four ways: it is toggle-gated
-   (`turn_gate.ui`), it checks `stop_hook_active` before any parse, toggle read, or
-   file access, it emits at most one block per turn, and every one of its own error
-   paths still returns "" and allows. Blocking is the feature there, not a failure
-   mode. Do not read this as license for blocking hooks generally — a new blocking
+   **Two deliberate exceptions may block, on purpose.** Both are bounded the same
+   four ways: toggle-gated, cheap-check-first before any parse or file access, at
+   most one decision per event, and every one of their own error paths still
+   returns "" and allows. Blocking is the feature in both, not a failure mode.
+   Do not read this as license for blocking hooks generally — a **third** blocking
    hook needs its own amendment here.
+
+   - **`turn_gate`** (Stop): toggle-gated on `turn_gate.ui`; checks
+     `stop_hook_active` before any parse, toggle read, or file access; one block
+     per turn.
+   - **`drift_guard`** (PreToolUse on Write/Edit, F3/#249): toggle-gated on
+     `gates` and `gates.drift_guard.enforce` (off downgrades every deny to a
+     warn); silent wherever it has no jurisdiction — outside a git repo, on a
+     detached HEAD, or in any repo with no `change-specs/<branch-slug>.md`, which
+     is every repo but this one; one decision per tool call. It **fails closed on
+     a policy violation and open on its own error**, and it never widens a blast
+     radius itself — silent widening is the exact failure it exists to prevent.
+     A spec that declares no `blast_radius` warns rather than denying: `spec-guard`
+     already fails that branch in CI, and denying every edit in the repo over an
+     authoring error would brick the session.
 2. **Headless `claude -p` rules** (→ `np-kb-claude-headless-scripting`):
    prompt via **stdin** not a trailing positional (variadic `--allowedTools` eats
    it); `--append-system-prompt` to stop it continuing the transcript; **cap input**
@@ -301,6 +316,7 @@ Record shapes (keep these stable; readers depend on them):
 | If you change… | Also check / update |
 |---|---|
 | **content layer dir names** (`memory/{episodic,lessons}`, `wiki/{topics,concepts}/<x>/`) | `np_layer_dir`/`np_layer_roots` (the single bash resolver) and its Python mirror `np_content.merge_roots()` (`np_content.py`, the same `/memory/<layer>` subpath — change it in both places, not at each consumer); the recall + guard hooks (`episodic_recall.py`, `lesson_recall.py`, `lesson_guard.py` — all Python ports via `cli.py` dispatcher), `np_aggregate.py` (dispatched via `cli.py cron aggregate-metrics`), `dashboard/build.py` (`wiki_index`, `learned_counts`), `np-mcp-server.py` `_tool_recall`; the maintain-agent write path (`agents/np-flow-episodic-maintain.md`); the example-layout fixture + `tests/content/test_example_layout.sh` (the anti-drift contract) |
+| **`engine/setup/np_change_spec.py`** (the blast-radius matcher) | BOTH gates that read it — `engine/setup/np-spec-guard.py` (the `spec-guard` CI job) and `engine/nervepack_engine/hooks/drift_guard.py` (the PreToolUse gate). Sharing one matcher is the whole point: a second copy lets a branch pass locally and fail CI on the radius alone. `fnmatch`'s `*` already crosses `/`, so every committed `blast_radius` assumes wildcards reach arbitrary depth — changing that reinterprets specs already merged. Its tests: `engine/setup/tests/nervepack_engine/test_np_change_spec.py` (incl. the identity assertion that spec-guard has not re-inlined a copy) and `test_drift_guard.py` |
 | any **lifecycle hook** | its row in `engine/setup/hooks.manifest` (`event\|matcher\|command`, in registration order — the driver `cli.py setup install-hooks` / `np_hook.py` applies them; keep session-flush LAST in SessionEnd), fail-open + `bail()`, the `NERVEPACK_AGENT` guard (all globally-registered hooks must carry it — not only those that call `claude -p`), and `engine/setup/tests/` (`tests/setup/test_install_hooks.py` for the driver, `tests/nervepack_engine/test_np_hook.py` for `register`/`purge`). On native Windows `np_hook.py` wraps the stored command as `bash -lc '<cmd>'` (`NP_HOOK_WRAP`, auto on a MINGW/MSYS kernel) so PowerShell-dispatched hooks resolve to Git-bash — keep hook commands single-quote-free. **`register`'s dedup keys on `(matcher, base)`** — where `base` is the `cli.py <group> <name>` tail for a CLI hook, else the first `*.sh`/`*.py` filename. That per-matcher key is what lets `lesson-guard`'s six matchers (Bash/Read/Edit/Write/Skill/`mcp__.*`) coexist; the empty-matcher bucket reproduces the old `np_register_hook`. It still **can't recognize a full command-shape migration** (a bash script retired for `cli.py hook <name>`) as "the same hook", so a bash→`cli.py` change *adds* the new entry beside the stale one. That is handled by hardcoded one-off `purge()` calls in `np_hook.install_hooks` (the 53 legacy list: `playbook-guard.sh`/`lesson-guard.sh` on PreToolUse, `playbook-recall.sh`/`strategy-recall.sh`/`lesson-recall.sh` on UserPromptSubmit); a future such migration needs a new purge entry, not a manual settings.json pass. `~/.config/nervepack/adapter.json`'s host-recorded doctor `verify` greps go stale the same way and independently — its strings are substring matches against the registered command's basename, so they stop matching post-migration and need a manual one-line fix |
 | **`episodic_capture.py`** (or its prompt/schema, or the `np_capture.capture()` it dispatches to) | `episodic-recall`, `episodic-match`, `np_scrub`, dedup fingerprint, `np-flow-episodic-maintain` (consumes the inbox shape, incl. `struggles[]`→lessons `provenance: failure` and `strategies[]`→lessons `provenance: success`), `np-transcript-extract.py`, `np-mcp-server.py` `_tool_capture` (calls `np_capture.capture()` unconditionally, in-process) |
 | **the lessons layer** (recall, enforcement, or distillation) | the capture schema (`struggles[]`/`strategies[]`), `np-flow-episodic-maintain` §5b/5c (writes `memory/lessons/`, tags `provenance`, adds `enforce` only when warranted), `lesson_recall.py`/`lesson_guard.py` (Python ports via `cli.py` dispatcher) + their registration (the `PreToolUse` Bash/Read/Edit/Write/Skill/`mcp__.*` + `UserPromptSubmit` rows in `engine/setup/hooks.manifest`, applied by `cli.py setup install-hooks` — plus the 53 legacy `purge()` list in `np_hook.install_hooks`), `lesson_guard.py`'s `tool_name_match` `re.fullmatch` (an alternation targets a family of MCP tool names in one lesson — see its module docstring), the `lessons`/`lessons.enforce` toggle, the dashboard "learned" counts (`build.py`, split by `provenance`), and the **graduation detector** (`np_graduation_detect.py` reads a lesson's `seen`/`status` + byte size — keep those stable; `skills.graduate_seen`/`graduate_kb` params; `np_skill_maintain.py` wiring + `tests/skills/test_graduation_detect.py`) |
