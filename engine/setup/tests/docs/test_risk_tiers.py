@@ -187,6 +187,34 @@ class TestLoadFailures(unittest.TestCase):
         with self.assertRaises(np_risk_tiers.RegistryError):
             np_risk_tiers.load(p)
 
+    def test_malformed_glob_raises_rather_than_matching_nothing(self):
+        """fnmatch does NOT raise on `[invalid` - it escapes the bracket to a
+        literal, so the rule silently matches nothing. In a tier registry that is
+        a silent DOWNGRADE: a typo'd high rule stops protecting anything and its
+        paths fall through to the default.
+
+        The advisory reviewer on #286 flagged this as a crash risk. It is not a
+        crash; verified against five malformed patterns, none of which raised.
+        The real failure is quieter and worse, so it is caught at load time."""
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "risk-tiers.json")
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"schema": 1, "default": "normal",
+                       "rules": [{"glob": "**/hooks/[**", "tier": "high"}]}, fh)
+        with self.assertRaises(np_risk_tiers.RegistryError):
+            np_risk_tiers.load(p)
+
+    def test_a_valid_character_class_is_still_allowed(self):
+        """The check must not be a blanket ban on `[`, or it would reject working
+        rules to fix a typo."""
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "risk-tiers.json")
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"schema": 1, "default": "normal",
+                       "rules": [{"glob": "np-[pd]*", "tier": "high"}]}, fh)
+        reg = np_risk_tiers.load(p)
+        self.assertEqual(np_risk_tiers.tier_for("np-pii-filter.py", reg), "high")
+
     def test_unknown_tier_in_a_rule_raises(self):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "risk-tiers.json")
