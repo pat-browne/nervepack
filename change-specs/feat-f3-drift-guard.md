@@ -1,6 +1,6 @@
 ---
 id: 0007
-status: proposed
+status: accepted
 date: 2026-08-19
 tier: high
 blast_radius:
