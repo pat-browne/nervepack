@@ -20,7 +20,7 @@ reads as authoritative once it is in a file.
 
 | Tier | Means | Spec required | Gate consequence |
 |---|---|---|---|
-| **standard** | Pre-authorized class: docs, wiki, skill references, comments, test-only | No | Deterministic gates only. Auto-merge eligible (#255). |
+| **standard** | Pre-authorized class: docs, wiki, skill references, comments, test-only | No | Deterministic gates only. Auto-merge eligible (decided by `tier-gate`, acted on by #255). |
 | **normal** | Everything not otherwise matched. The default. | Yes | Full gate set. A human merges. |
 | **high** | Hooks, crons, CI config, installers, credential paths, PII and publish guards, layer path resolution, and the tiering machinery itself | Yes, plus a rollback plan | Full gate set plus a second adversarial lens. Never auto-merges. |
 
@@ -88,6 +88,23 @@ always passes.
 otherwise. CI sees one diff, not a task's history, so it cannot know a change was
 called `standard` an hour ago and quietly relabelled. That half is a process rule
 in the `np-flow-develop` skill, held by the person doing the work.
+
+## What reads a tier
+
+Three consumers, all reading this one registry through `np_risk_tiers`.
+
+| Consumer | Uses the tier to decide |
+|---|---|
+| `engine/setup/np-spec-guard.py` (`spec-guard` CI job) | whether the change needs a spec at all, and whether the tier the spec declares is high enough for the paths the diff touches |
+| `engine/setup/np-tier-gate.py` (`tier-gate` CI job) | which gate verdicts must be PASSED, whether the spec needs a populated `## Rollback`, and whether the adversarial lens must have run |
+| `engine/setup/np_codeowners.py` | which globs get written into `.github/CODEOWNERS` as the declared high-risk paths |
+
+`.github/CODEOWNERS` is generated, never hand-edited, and a test fails when it
+drifts from this file. It declares and routes. It does not gate.
+
+The full requirement table per tier, and the reason every pull request runs the
+same jobs rather than a tier-specific subset, live in
+[BRANCH-PROTECTION.md](BRANCH-PROTECTION.md).
 
 ## Changing the registry
 

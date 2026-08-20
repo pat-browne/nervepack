@@ -1,6 +1,60 @@
 # Code owners for nervepack.
-# These owners are requested for review on PRs that touch matching paths.
+#
+# GENERATED from engine/setup/risk-tiers.json by engine/setup/np_codeowners.py.
+# Do not edit by hand - add a rule to the registry and re-run:
+#   python3 engine/setup/np_codeowners.py --write
+# engine/setup/tests/docs/test_codeowners.py fails when this drifts.
+#
+# This file DECLARES the high-risk paths and routes review requests to
+# their owner. It does not gate anything. With one maintainer its
+# approval role is inert: required approvals are zero and the only owner
+# is the author of every pull request. It becomes load-bearing the day a
+# second contributor exists, and not before. The enforcing gate is
+# engine/setup/np-tier-gate.py.
+#
+# The globs below are COPIED VERBATIM from risk-tiers.json, which uses
+# fnmatch, where `*` crosses `/`. CODEOWNERS uses gitignore-style matching,
+# where `*` does not and `**` does. The two therefore disagree in both
+# directions on some entries. That is tolerable because this file routes
+# review requests; every gate that DECIDES anything reads risk-tiers.json
+# through np_risk_tiers, never this file.
+#
 # https://docs.github.com/articles/about-code-owners
 
-# Default owner for everything in the repo.
+# Default owner for everything in the repo. First, because CODEOWNERS
+# resolves last match wins - the high-risk rules below override it.
 *       @pat-browne
+
+# --- high-tier paths, from risk-tiers.json (last match wins) ---
+# runs inside the session lifecycle, before a human sees anything
+**/hooks/**    @pat-browne
+# decides which hooks are registered at all
+engine/setup/hooks.manifest    @pat-browne
+# runs unattended with no human in the loop
+**/*cron*    @pat-browne
+# CI config; also the only place repo secrets are in scope
+.github/workflows/**    @pat-browne
+# the PII redaction path
+**/np-pii-filter*    @pat-browne
+# the secret/PII publication gate
+**/np-publish-scan*    @pat-browne
+# layer path resolution; a wrong root reads or writes the wrong repo
+**/np_content.py    @pat-browne
+# installers mutate the machine outside the repo
+engine/setup/*install*    @pat-browne
+# reads and stores credentials
+**/np_token*    @pat-browne
+# SELF: this file decides how much scrutiny every change gets. If it were standard, the whole policy could be rewritten in a diff needing no spec and no declared tier.
+engine/setup/risk-tiers.json    @pat-browne
+# SELF: the resolver that reads the rule above
+engine/setup/np_risk_tiers.py    @pat-browne
+# SELF: the CI gate that enforces both
+engine/setup/np-spec-guard.py    @pat-browne
+# the blast-radius matcher shared by spec-guard and drift-guard
+engine/setup/np_change_spec.py    @pat-browne
+# SELF: states what each tier requires. If it were standard, the thresholds could be lowered by a change needing no spec, no rollback plan and no adversarial lens.
+engine/setup/np_tier_policy.py    @pat-browne
+# SELF: the CI gate that applies the rule above
+engine/setup/np-tier-gate.py    @pat-browne
+# generates the committed declaration of these very paths
+engine/setup/np_codeowners.py    @pat-browne
