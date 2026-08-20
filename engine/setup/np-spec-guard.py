@@ -27,7 +27,6 @@ Exit 0 = clean, exempt, or nothing to check; 1 = violation(s), listed on
 stderr.
 """
 import argparse
-import fnmatch
 import os
 import re
 import subprocess
@@ -37,6 +36,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 import np_change_spec  # noqa: E402
+import np_risk_tiers  # noqa: E402
 import np_frontmatter  # noqa: E402
 
 REQUIRED_FIELDS = ("id", "status", "date", "tier")
@@ -53,17 +53,11 @@ _BARE_NEEDS_CLARIFICATION = re.compile(
     r"(?<!`)\[NEEDS CLARIFICATION\](?!`)"
 )
 
-# Doc/test-only exemption, used only until engine/setup/risk-tiers.json (#253)
-# can classify tiers itself. fnmatch's `*` is not path-aware - it already
-# crosses `/` (translates to regex `.*`) - so a single `*` here behaves like a
-# recursive glob; write patterns assuming any wildcard reaches arbitrary depth.
-EXEMPT_GLOBS = (
-    "*.md",
-    "docs/*",
-    "wiki/*",
-    "*/tests/*",
-    "change-specs/*",
-)
+# Exemption is no longer a local heuristic: engine/setup/risk-tiers.json (F7/#253)
+# now owns the standard-tier globs, and a diff is exempt when every path it
+# touches resolves to `standard`. That is what the placeholder comment here
+# asked for, and it keeps this gate and #254's differential gating reading one
+# list instead of two that can disagree.
 
 
 # Spec location and blast-radius matching live in np_change_spec, shared with
@@ -90,15 +84,28 @@ def changed_files(root, base, head):
     return [p for p in out.stdout.splitlines() if p]
 
 
-def is_exempt(root, files):
-    tiers_path = os.path.join(root, "engine", "setup", "risk-tiers.json")
-    if os.path.isfile(tiers_path):
-        # #253 not yet built - when it lands, prefer its standard-tier globs
-        # over the heuristic below rather than guessing at an undefined schema.
-        pass
+def is_exempt(root, files, registry=None):
+    """True when nothing in the diff needs a spec, i.e. every path is standard
+    tier. An empty diff is exempt for the same reason: nothing to protect."""
     if not files:
         return True
-    return all(any(fnmatch.fnmatch(f, g) for g in EXEMPT_GLOBS) for f in files)
+    registry = registry or np_risk_tiers.load()
+    return np_risk_tiers.tier_for_paths(files, registry) == "standard"
+
+
+def tier_problems(declared, files, registry):
+    """[] when the declared tier is at least what the paths require.
+
+    Over-declaring passes: the ratchet turns one way only. The message names the
+    specific paths that forced the higher tier - a tier failure that reports only
+    a verdict makes the author bisect their own diff against a glob list.
+    """
+    required, offenders = np_risk_tiers.explain(files, registry)
+    if np_risk_tiers.satisfies(declared, required):
+        return []
+    shown = ", ".join(path for path, _ in offenders[:5])
+    return ["spec declares tier '%s' but the diff requires '%s' - forced by: %s"
+            % (declared, required, shown)]
 
 
 def validate_spec(text):
@@ -148,8 +155,17 @@ def main(argv):
     if files is None:
         return 0  # fail open on our own error resolving the diff, not on policy
 
-    if is_exempt(args.root, files):
-        print("spec-guard: exempt diff (doc/test-only, or no changes) - clean")
+    try:
+        registry = np_risk_tiers.load()
+    except np_risk_tiers.RegistryError as exc:
+        # A policy failure, not an infra one: unlike an unresolvable git ref, a
+        # broken registry is a versioned file in this repo, and treating it as
+        # "nothing to check" would turn it into a silent repo-wide downgrade.
+        sys.stderr.write("spec-guard: %s\n" % exc)
+        return 1
+
+    if is_exempt(args.root, files, registry):
+        print("spec-guard: exempt diff (every path is standard tier) - clean")
         return 0
 
     slug = branch_slug(branch)
@@ -169,6 +185,10 @@ def main(argv):
         text = f.read()
 
     problems = validate_spec(text)
+    problems.extend(tier_problems(
+        np_frontmatter.field(text, "tier", ""),
+        [f for f in files if f != spec_rel],
+        registry))
 
     globs = np_frontmatter.list_field(text, "blast_radius")
     outside = diff_outside_blast_radius(

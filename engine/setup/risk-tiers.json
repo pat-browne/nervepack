@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "comment": "Path globs to risk tier, read by np_risk_tiers.py and consumed by the spec-guard CI job (F7/#253). THIS TAXONOMY IS A SYNTHESIS, NOT A CITATION. No published standard enumerates high-risk code paths: CIS says 'extra sensitive code or configuration' without defining it, Google's Building Secure and Reliable Systems says 'safety implications', SLSA says 'security-relevant properties'. Every organization invents its own list, and this is ours. Do not cite it as though it came from a standard.",
+  "precedence": "LAST MATCH WINS, mirroring CODEOWNERS. Position in the `rules` array is what decides, NOT specificity -- a broader glob placed lower overrides a narrower one above it. This is the opposite of most people's intuition. Practical consequence: standard-tier globs go FIRST and high-tier globs go LAST, and appending a broad standard glob at the bottom silently downgrades everything it matches. A test asserts that no standard rule appears after a high one.",
+  "matching": "fnmatch, whose `*` is NOT path-aware -- it translates to regex `.*` and already crosses `/`. Any wildcard here reaches arbitrary depth, so `docs/**` and `docs/*` behave identically. Written with `**` for readability only.",
+  "default": "normal",
+  "rules": [
+    {"glob": "*.md", "tier": "standard", "why": "prose anywhere"},
+    {"glob": "docs/**", "tier": "standard", "why": "engine documentation"},
+    {"glob": "wiki/**", "tier": "standard", "why": "content-overlay knowledge pages"},
+    {"glob": "skills/**/references/**", "tier": "standard", "why": "skill reference depth, not the skill body"},
+    {"glob": "**/tests/**", "tier": "standard", "why": "test-only changes; the suite is its own gate"},
+    {"glob": "change-specs/**", "tier": "standard", "why": "the change record itself"},
+
+    {"glob": "**/hooks/**", "tier": "high", "why": "runs inside the session lifecycle, before a human sees anything"},
+    {"glob": "engine/setup/hooks.manifest", "tier": "high", "why": "decides which hooks are registered at all"},
+    {"glob": "**/*cron*", "tier": "high", "why": "runs unattended with no human in the loop"},
+    {"glob": ".github/workflows/**", "tier": "high", "why": "CI config; also the only place repo secrets are in scope"},
+    {"glob": "**/np-pii-filter*", "tier": "high", "why": "the PII redaction path"},
+    {"glob": "**/np-publish-scan*", "tier": "high", "why": "the secret/PII publication gate"},
+    {"glob": "**/np_content.py", "tier": "high", "why": "layer path resolution; a wrong root reads or writes the wrong repo"},
+    {"glob": "engine/setup/*install*", "tier": "high", "why": "installers mutate the machine outside the repo"},
+    {"glob": "**/np_token*", "tier": "high", "why": "reads and stores credentials"},
+    {"glob": "engine/setup/risk-tiers.json", "tier": "high", "why": "SELF: this file decides how much scrutiny every change gets. If it were standard, the whole policy could be rewritten in a diff needing no spec and no declared tier."},
+    {"glob": "engine/setup/np_risk_tiers.py", "tier": "high", "why": "SELF: the resolver that reads the rule above"},
+    {"glob": "engine/setup/np-spec-guard.py", "tier": "high", "why": "SELF: the CI gate that enforces both"},
+    {"glob": "engine/setup/np_change_spec.py", "tier": "high", "why": "the blast-radius matcher shared by spec-guard and drift-guard"}
+  ]
+}
