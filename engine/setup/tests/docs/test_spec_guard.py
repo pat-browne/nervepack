@@ -19,6 +19,9 @@ _spec = importlib.util.spec_from_file_location("spec_guard", CHK)
 spec_guard = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(spec_guard)
 
+sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "..")))
+import np_risk_tiers  # noqa: E402
+
 
 class TestBranchSlug(unittest.TestCase):
     def test_replaces_slashes_with_dashes(self):
@@ -230,6 +233,87 @@ class TestCliEndToEnd(unittest.TestCase):
                 capture_output=True, text=True,
             )
             self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+
+
+class TestTierEscalation(unittest.TestCase):
+    """F7/#253: a spec may not declare a tier lower than its paths require.
+
+    Over-declaring is always fine -- the ratchet turns one way. These test the
+    pure helper; the CLI cases below prove it reaches the exit code.
+    """
+
+    def setUp(self):
+        self.reg = np_risk_tiers.load()
+
+    def _problems(self, declared, files):
+        return spec_guard.tier_problems(declared, files, self.reg)
+
+    def test_correct_declaration_is_clean(self):
+        self.assertEqual(
+            self._problems("high", ["engine/nervepack_engine/hooks/x.py"]), [])
+
+    def test_under_declaring_is_flagged(self):
+        problems = self._problems("standard", ["engine/nervepack_engine/hooks/x.py"])
+        self.assertEqual(len(problems), 1)
+
+    def test_the_flag_names_the_path_that_forced_the_tier(self):
+        """A tier failure that does not say WHICH file caused it is unactionable
+        -- the author has to bisect their own diff against a glob list."""
+        problems = self._problems("normal", ["docs/a.md",
+                                             "engine/nervepack_engine/hooks/x.py"])
+        self.assertIn("hooks/x.py", problems[0])
+
+    def test_over_declaring_is_clean(self):
+        self.assertEqual(self._problems("high", ["docs/a.md"]), [])
+
+
+class TestExemptionUsesTheRegistry(unittest.TestCase):
+    """The EXEMPT_GLOBS heuristic is gone; exemption is now 'every path is
+    standard tier', which is what np-spec-guard.py's own comment asked for."""
+
+    def test_a_hook_change_is_not_exempt(self):
+        self.assertFalse(
+            spec_guard.is_exempt(".", ["engine/nervepack_engine/hooks/drift_guard.py"]))
+
+    def test_the_registry_itself_is_not_exempt(self):
+        """Editing the tier policy must never be a spec-free change."""
+        self.assertFalse(spec_guard.is_exempt(".", ["engine/setup/risk-tiers.json"]))
+
+
+class TestCliTierEscalation(unittest.TestCase):
+    def test_under_declared_tier_exits_one_and_names_the_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            base = _init_repo(d)
+            _git(d, "checkout", "-q", "-b", "feat/x")
+            _write(os.path.join(d, "engine", "nervepack_engine", "hooks", "h.py"), "x\n")
+            _write(os.path.join(d, "change-specs", "feat-x.md"),
+                   "---\nid: 0001\nstatus: proposed\ndate: 2026-01-01\n"
+                   "tier: standard\nblast_radius:\n  - engine/**\n  - change-specs/**\n---\n")
+            _git(d, "add", "-A")
+            _git(d, "commit", "-q", "-m", "under-declared")
+            r = subprocess.run(
+                [sys.executable, CHK, "--root", d, "--base", base,
+                 "--head", _head_sha(d), "--branch", "feat/x"],
+                capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("hooks/h.py", r.stderr)
+        self.assertIn("high", r.stderr)
+
+    def test_correctly_declared_high_tier_exits_zero(self):
+        with tempfile.TemporaryDirectory() as d:
+            base = _init_repo(d)
+            _git(d, "checkout", "-q", "-b", "feat/y")
+            _write(os.path.join(d, "engine", "nervepack_engine", "hooks", "h.py"), "x\n")
+            _write(os.path.join(d, "change-specs", "feat-y.md"),
+                   "---\nid: 0001\nstatus: proposed\ndate: 2026-01-01\n"
+                   "tier: high\nblast_radius:\n  - engine/**\n  - change-specs/**\n---\n")
+            _git(d, "add", "-A")
+            _git(d, "commit", "-q", "-m", "correctly declared")
+            r = subprocess.run(
+                [sys.executable, CHK, "--root", d, "--base", base,
+                 "--head", _head_sha(d), "--branch", "feat/y"],
+                capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":
