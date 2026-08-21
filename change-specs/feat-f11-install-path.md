@@ -85,6 +85,24 @@ returned unchanged — this is a best-effort correction, never a precondition.
 This did not exist in the design. It exists because the first real run of the new
 code produced a path that looked right and was not.
 
+## The check for platform assumptions had a platform assumption
+
+The first version validated absoluteness with `os.path.isabs`. That passed
+locally and failed the Windows lane, because **Python 3.13 changed
+`ntpath.isabs` to require a drive letter**, so `/opt/nervepack` is absolute on
+Linux and not absolute on Windows. Local Python here is 3.12, where the old
+behaviour still holds, so the assumption was invisible on two axes at once —
+platform and interpreter version.
+
+Absoluteness is now judged from the string, by one regex, identically
+everywhere. That is the correct semantics regardless of the bug: the check is
+about a string that will be embedded in a bash command on the **target**
+machine, so it must not consult the machine running the check at all.
+
+Worth recording rather than quietly fixing. This is a change whose entire purpose
+is removing an assumption about where things live, and it shipped its first
+draft with an assumption about where it was running.
+
 ## Considered options
 
 1. **A token substituted at manifest-read time** (chosen) — Good, because the

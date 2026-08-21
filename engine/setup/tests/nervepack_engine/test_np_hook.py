@@ -410,8 +410,25 @@ class TestTheResolvedRootIsValidated(unittest.TestCase):
             self.fail("a semicolon in the root was accepted")
 
     def test_an_ordinary_absolute_root_is_accepted(self):
+        """This is the Windows-lane regression test.
+
+        The first version of this check used os.path.isabs, which on Python 3.13
+        and later rejects "/opt/x" for having no drive letter. The same root
+        therefore validated on Linux and failed on the Windows lane - a
+        platform-dependent assumption inside the change that exists to remove
+        platform-dependent assumptions. Absoluteness is now judged from the
+        string alone, identically everywhere."""
         rows = np_hook.read_manifest(self.MANIFEST, root="/opt/nervepack")
         self.assertIn("/opt/nervepack/engine", rows[0][2])
+
+    def test_absoluteness_never_consults_the_local_platform(self):
+        """The judgement is about a string that will run on the TARGET machine."""
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "..", "..", "..", "nervepack_engine", "np_hook.py"),
+                  encoding="utf-8") as fh:
+            source = fh.read()
+        head = source.split("def _repo_root_for_commands", 1)[1].split("def ", 1)[0]
+        self.assertNotIn("os.path.isabs", head)
 
     def test_a_windows_drive_root_is_accepted(self):
         rows = np_hook.read_manifest(self.MANIFEST, root="D:\\src\\nervepack")

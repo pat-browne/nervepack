@@ -223,6 +223,18 @@ NP_DIR_TOKEN = "{NP_DIR}"
 _UNSAFE_IN_ROOT = re.compile(r"""[\s"'\\$`;&|<>()*?\[\]{}!#~]""")
 
 
+# Absolute means absolute IN THE STRING, judged the same way on every platform.
+# `os.path.isabs` cannot be used here: on Windows Python it rejects "/opt/x" for
+# having no drive letter, so the identical root would validate on Linux and fail
+# on the Windows lane. That is precisely the class of platform-dependent
+# assumption #257 exists to remove, and the check for it had one.
+#
+# The judgement is about a string that will be embedded in a bash command on the
+# TARGET machine, not about the machine running the check, so it must not consult
+# the local platform at all.
+_ABSOLUTE_ROOT = re.compile(r"^(/|[A-Za-z]:/)")
+
+
 class UnsafeRootError(Exception):
     """The resolved engine root cannot be expressed in a manifest command."""
 
@@ -286,7 +298,7 @@ def _repo_root_for_commands(root=None):
             "the engine root resolved to nothing, so hook commands would point "
             "at /engine/... and fail open silently")
     resolved = str(resolved).replace("\\", "/")
-    if not os.path.isabs(resolved) and not re.match(r"^[A-Za-z]:/", resolved):
+    if not _ABSOLUTE_ROOT.match(resolved):
         raise UnsafeRootError(
             "the engine root %r is not absolute; a relative path in a hook "
             "command resolves against whatever directory the session started in"
