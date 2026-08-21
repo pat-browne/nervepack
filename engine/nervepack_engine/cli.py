@@ -224,6 +224,14 @@ def main(argv=None):
         try:
             return fn()
         except Exception as exc:
+            # stderr AS WELL AS the log. _bail writes only to a file, which is
+            # right for a hook - a hook must not pollute the session's streams -
+            # and wrong for a setup step, which a human or a CI job runs directly
+            # and reads the output of. Without this a failed step exits 1 with no
+            # explanation anywhere either of them will look. Cost two CI rounds
+            # on #296 to rediscover.
+            sys.stderr.write("cli.py setup %s: unhandled exception: %r\n"
+                             % (name, exc))
             _bail(name, "unhandled exception: %r" % exc)
             return 1
 

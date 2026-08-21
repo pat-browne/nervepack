@@ -5,6 +5,9 @@ date: 2026-08-21
 tier: high
 blast_radius:
   - engine/setup/tests/setup/test_clean_clone_install.py
+  - engine/nervepack_engine/np_hook.py
+  - engine/nervepack_engine/cli.py
+  - engine/setup/tests/nervepack_engine/test_np_hook.py
   - change-specs/**
 ---
 
@@ -127,3 +130,20 @@ under test, and nothing imports it.
 - 2026-08-21 — opened as a standard-tier change with no spec, on a local
   `spec-guard` run that diffed an empty tree because the file was still
   untracked. CI caught it. Spec written at `tier: high`, which the diff requires.
+- 2026-08-21 — widened to `np_hook.py`, `cli.py` and `test_np_hook.py`. The test
+  found a real bug in #295's own validator on its first Windows run, and fixing
+  it is the only honest response to a test doing exactly what it was built to do.
+
+  **A tilde is only special at the start of a word.** Bash expands `~/x` and
+  `~user/x`; a tilde anywhere else in a word is literal. #295 rejected it
+  everywhere, which broke Windows outright — 8.3 short paths are the *default*
+  for a profile name over eight characters, so a Windows runner resolves its temp
+  directory to `C:\Users\RUNNER~1\...` and every install there raised. Any real
+  Windows user with a long username would have hit this.
+
+  Also widened to `cli.py`, for the reason the bug took two CI rounds to find:
+  `_bail` writes only to a log file. That is right for a hook, which must not
+  pollute the session's streams, and wrong for a setup step, which a human or a
+  CI job runs directly and reads. A failed step exited 1 with two empty streams
+  and the reason in a file nobody knew to open. Setup failures now write to
+  stderr as well as the log; the hook contract is untouched.

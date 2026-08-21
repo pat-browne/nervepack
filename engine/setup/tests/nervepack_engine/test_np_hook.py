@@ -441,5 +441,45 @@ class TestTheResolvedRootIsValidated(unittest.TestCase):
         self.assertNotIn(np_hook.NP_DIR_TOKEN, rows[0][2])
 
 
+
+class TestATildeIsOnlySpecialAtTheStart(unittest.TestCase):
+    """Bash expands `~/x` and `~user/x`. A tilde anywhere else in a word is
+    literal.
+
+    Rejecting it everywhere broke Windows outright: 8.3 short paths are the
+    DEFAULT for a profile name over eight characters, so a Windows runner's temp
+    directory is C:\\Users\\RUNNER~1\\... and every install there raised. Found by
+    the clean-clone test on #296, which is the entire reason that test exists."""
+
+    MANIFEST = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "hooks.manifest")
+
+    def test_an_eight_dot_three_windows_path_is_accepted(self):
+        rows = np_hook.read_manifest(
+            self.MANIFEST, root=r"C:\Users\RUNNER~1\AppData\Local\Temp\np")
+        self.assertIn("C:/Users/RUNNER~1/AppData/Local/Temp/np/engine", rows[0][2])
+
+    def test_a_mid_path_tilde_on_posix_is_accepted(self):
+        rows = np_hook.read_manifest(self.MANIFEST, root="/opt/np~1/nervepack")
+        self.assertIn("/opt/np~1/nervepack/engine", rows[0][2])
+
+    def test_a_leading_tilde_is_still_rejected(self):
+        """`~/Code/nervepack` is what #295 removed from the manifest. It must
+        never come back in through the root."""
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="~/Code/nervepack")
+
+    def test_a_leading_tilde_user_form_is_rejected(self):
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="~someone/nervepack")
+
+    def test_the_other_metacharacters_are_still_rejected(self):
+        """Loosening the tilde must not loosen anything else."""
+        for bad in ("/tmp/$(id)/np", "/tmp/`id`/np", "/home/my user/np",
+                    "/tmp/a;b/np", "/tmp/a|b/np"):
+            with self.assertRaises(np_hook.UnsafeRootError, msg=bad):
+                np_hook.read_manifest(self.MANIFEST, root=bad)
+
+
 if __name__ == "__main__":
     unittest.main()
