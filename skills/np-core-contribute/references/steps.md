@@ -21,7 +21,7 @@
 3. **Resolve the target path.** Classify the learning as one kind from the table,
    then ask the layer where that kind lives:
    ```bash
-   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py layout route \
+   python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" layout route \
      --layer personal --kind knowledge --variant concept --value name=<name>
    ```
    It prints one path relative to the layer root. When it reports that the kind
@@ -43,7 +43,7 @@
 5. **New engine skill only:** append `./skills/<name>` to the `skills` array
    in the engine's `.claude-plugin/plugin.json`. Overlay skills are picked up
    by the relink alone.
-6. **Relink + regenerate INDEX:** `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills`
+6. **Relink + regenerate INDEX:** `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup link-skills`
    (handles new skills in every layer, prunes dangling symlinks, and re-runs
    `cli.py setup generate-index`). Run it **after your final edit** — it records each
    skill's line count, so regenerating mid-edit ships an `INDEX.md` row that disagrees

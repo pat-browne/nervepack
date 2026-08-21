@@ -91,7 +91,7 @@ confirm compliant output, no dangling refs, no reliance on a private overlay.
 ## 7. Retire the source (archive convention)
 
 ```bash
-cd ~/Code/nervepack-content
+cd "${NP_CONTENT_DIR:-$HOME/Code/nervepack-content}"
 mkdir -p archive && git mv skills/<name> archive/<name>
 # append a row to archive/MANIFEST.md:
 #   | <name> | <YYYY-MM-DD> | graduated to team overlay | <team>:<name> |
