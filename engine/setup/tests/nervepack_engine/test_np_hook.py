@@ -463,11 +463,18 @@ class TestATildeIsOnlySpecialAtTheStart(unittest.TestCase):
         rows = np_hook.read_manifest(self.MANIFEST, root="/opt/np~1/nervepack")
         self.assertIn("/opt/np~1/nervepack/engine", rows[0][2])
 
-    def test_a_leading_tilde_is_still_rejected(self):
-        """`~/Code/nervepack` is what #295 removed from the manifest. It must
-        never come back in through the root."""
-        with self.assertRaises(np_hook.UnsafeRootError):
+    def test_a_leading_tilde_is_rejected_by_name(self):
+        """`~/Code/nervepack` is what #295 removed from the manifest, and it must
+        not come back in through the root.
+
+        The message matters, not just the rejection. A leading tilde also fails
+        the absolute check, so ordering the two the other way round left this
+        branch unreachable and reported only "not absolute" - true, and useless
+        about why a tilde path is the wrong thing to pass."""
+        with self.assertRaises(np_hook.UnsafeRootError) as caught:
             np_hook.read_manifest(self.MANIFEST, root="~/Code/nervepack")
+        self.assertIn("~", str(caught.exception))
+        self.assertIn("home directory", str(caught.exception))
 
     def test_a_leading_tilde_user_form_is_rejected(self):
         with self.assertRaises(np_hook.UnsafeRootError):
@@ -477,8 +484,11 @@ class TestATildeIsOnlySpecialAtTheStart(unittest.TestCase):
         """Loosening the tilde must not loosen anything else."""
         for bad in ("/tmp/$(id)/np", "/tmp/`id`/np", "/home/my user/np",
                     "/tmp/a;b/np", "/tmp/a|b/np"):
-            with self.assertRaises(np_hook.UnsafeRootError, msg=bad):
-                np_hook.read_manifest(self.MANIFEST, root=bad)
+            # subTest rather than msg=: this reports EVERY offender that slipped
+            # through in one run, instead of stopping at the first.
+            with self.subTest(root=bad):
+                with self.assertRaises(np_hook.UnsafeRootError):
+                    np_hook.read_manifest(self.MANIFEST, root=bad)
 
 
 if __name__ == "__main__":

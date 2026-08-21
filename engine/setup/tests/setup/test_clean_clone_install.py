@@ -35,7 +35,12 @@ _NEEDED = ("engine",)
 
 
 def _clone_to(dest):
-    """A checkout of this tree at `dest`, without .git or any worktree."""
+    """A checkout of this tree at `dest`.
+
+    Skips `.git`, any worktree, bytecode, and `tests` - the installer reads none
+    of them, and copying `.git` would triple the runtime of every suite run for
+    no coverage.
+    """
     os.makedirs(dest, exist_ok=True)
     for name in _NEEDED:
         src = os.path.join(_REPO, name)

@@ -307,15 +307,20 @@ def _repo_root_for_commands(root=None):
             "the engine root resolved to nothing, so hook commands would point "
             "at /engine/... and fail open silently")
     resolved = str(resolved).replace("\\", "/")
+    # BEFORE the absolute check, deliberately. A leading tilde also fails
+    # "is it absolute", so with the checks the other way round this branch was
+    # unreachable and `~/Code/nervepack` - the exact string #295 removed from the
+    # manifest - reported only "not absolute". True, and useless: it says nothing
+    # about why passing a tilde path here is a mistake.
+    if _LEADING_TILDE.match(resolved):
+        raise UnsafeRootError(
+            "the engine root %r starts with '~', which bash would expand to a "
+            "home directory. Pass the resolved path instead." % resolved)
     if not _ABSOLUTE_ROOT.match(resolved):
         raise UnsafeRootError(
             "the engine root %r is not absolute; a relative path in a hook "
             "command resolves against whatever directory the session started in"
             % resolved)
-    if _LEADING_TILDE.match(resolved):
-        raise UnsafeRootError(
-            "the engine root %r starts with '~', which bash would expand to a "
-            "home directory. Pass the resolved path instead." % resolved)
     bad = _UNSAFE_IN_ROOT.search(resolved)
     if bad:
         raise UnsafeRootError(
