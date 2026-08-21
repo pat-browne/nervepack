@@ -66,10 +66,12 @@ git -C ~/Code/nervepack checkout -B recover/<short-sha>-<date> <local-sha>
 git -C ~/Code/nervepack push -u origin recover/<short-sha>-<date>
 gh pr create --repo <owner>/nervepack --fill
 ```
-Never `git push origin <sha>:refs/heads/main` directly. That bypasses the PR
-gate this same skill enforces for the ordinary `local is N ahead` case, and a
-diverged `main` means the safety that gate exists for is exactly what is
-missing right now.
+Do not push the recovered branch straight to `main` here. That bypasses the
+PR gate this same skill enforces for the ordinary `local is N ahead` case.
+This is a different scenario from AGENTS.md's own emergency
+`git push origin <sha>:refs/heads/main`, which locks in a commit **already
+known safe** to protect it from a concurrent reset. Here the commit has not
+been reviewed yet, so the PR path is the point, not a step to skip.
 
 **Re-check issue and PR state before trusting a plan doc's last snapshot.**
 Remote-only commits can represent an entire wave of a tracked epic landing
