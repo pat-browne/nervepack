@@ -82,15 +82,39 @@ def main(argv):
     decision = np_automerge.decide(
         read_tier_policy(args.tier_policy), args.author, policy)
 
+    # ORDER MATTERS. The record is written first, and the signal that acts on it
+    # only after. If the record cannot be written we refuse to signal at all,
+    # because enabling an unattended merge with no record of why is the exact
+    # state this decision exists to prevent. Note this is the OPPOSITE call from
+    # np-tier-gate.py, which warns and carries on when its artifact write fails:
+    # there the artifact is observability around a verdict that still gets
+    # printed, here the artifact IS the justification for an action.
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            json.dump(decision, fh, indent=2)
-            fh.write("\n")
+        try:
+            with open(args.out, "w", encoding="utf-8") as fh:
+                json.dump(decision, fh, indent=2)
+                fh.write("\n")
+        except OSError as exc:
+            sys.stderr.write(
+                "auto-merge: cannot write %s: %s. Refusing to signal will_enable "
+                "without a decision record - this pull request is unaffected and "
+                "simply will not auto-merge.\n" % (args.out, exc))
+            return 1
 
     out_file = os.environ.get("GITHUB_OUTPUT")
     if out_file:
-        with open(out_file, "a", encoding="utf-8") as fh:
-            fh.write("will_enable=%s\n" % ("true" if decision["will_enable"] else "false"))
+        try:
+            with open(out_file, "a", encoding="utf-8") as fh:
+                fh.write("will_enable=%s\n"
+                         % ("true" if decision["will_enable"] else "false"))
+        except OSError as exc:
+            # Fails closed on its own: an unwritten output leaves the step
+            # condition false, so nothing enables. Reported as an error anyway,
+            # because a decision that never reached the workflow is a decision
+            # nobody made.
+            sys.stderr.write("auto-merge: cannot write %s: %s. Nothing was "
+                             "enabled.\n" % (out_file, exc))
+            return 1
 
     print("auto-merge: tier '%s', author '%s'" % (decision["tier"], decision["author"]))
     print("auto-merge: eligible=%s policy-enabled=%s -> will_enable=%s"

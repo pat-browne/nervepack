@@ -591,7 +591,17 @@ jobs:
         if: steps.decide.outputs.will_enable == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge "${{ github.event.pull_request.number }}" --auto --squash --repo "${{ github.repository }}"
+        run: |
+          # gh prints its own specific error, so this adds only what gh cannot
+          # know: what the failure means for this pull request. Without that
+          # line, a red step next to a decision record saying will_enable=true
+          # reads as "it merged something it should not have".
+          gh pr merge "${{ github.event.pull_request.number }}" --auto --squash --repo "${{ github.repository }}" || {
+            echo "::error::could not enable auto-merge (see the gh error above)."
+            echo "::error::The pull request is UNCHANGED - nothing merged, and nothing"
+            echo "::error::will merge unattended. It now needs a human to merge it."
+            exit 1
+          }
 
       - name: Emit structured gate verdict
         if: always()

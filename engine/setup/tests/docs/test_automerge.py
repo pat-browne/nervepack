@@ -204,5 +204,95 @@ class TestThePolicyFile(unittest.TestCase):
             np_automerge.load("/nonexistent/automerge.json")
 
 
+
+class TestTheGateCliFailsClosed(unittest.TestCase):
+    """np-automerge-gate.py writes the record BEFORE it emits the signal that
+    acts on it. Enabling an unattended merge with no record of why is the exact
+    state the decision artifact exists to prevent."""
+
+    GATE = os.path.abspath(os.path.join(_ENGINE_SETUP, "np-automerge-gate.py"))
+
+    def _run(self, d, tier_policy, out=None, github_output=None, author="trusted"):
+        import subprocess
+        tp = os.path.join(d, "tier-policy.json")
+        with open(tp, "w") as f:
+            json.dump(tier_policy, f)
+        policy = os.path.join(d, "automerge.json")
+        with open(policy, "w") as f:
+            json.dump({"schema": 1, "enabled": True, "allowed_tiers": ["standard"],
+                       "trusted_authors": ["trusted"]}, f)
+        argv = [sys.executable, self.GATE, "--tier-policy", tp,
+                "--policy", policy, "--author", author]
+        if out:
+            argv += ["--out", out]
+        env = dict(os.environ)
+        env.pop("GITHUB_OUTPUT", None)
+        if github_output:
+            env["GITHUB_OUTPUT"] = github_output
+        return subprocess.run(argv, capture_output=True, text=True, env=env)
+
+    def _eligible(self):
+        return {"tier": "standard", "auto_merge_eligible": True, "problems": [],
+                "gate_verdicts": {"diff-review": "PASSED"}}
+
+    def test_an_unwritable_record_refuses_to_signal(self):
+        with tempfile.TemporaryDirectory() as d:
+            gh_out = os.path.join(d, "gh-output")
+            rc = self._run(d, self._eligible(),
+                           out=os.path.join(d, "no", "such", "dir", "decision.json"),
+                           github_output=gh_out)
+            self.assertEqual(rc.returncode, 1, rc.stdout + rc.stderr)
+            self.assertIn("Refusing to signal", rc.stderr)
+            self.assertFalse(os.path.exists(gh_out),
+                             "will_enable was signalled with no decision record")
+
+    def test_the_happy_path_signals_true(self):
+        with tempfile.TemporaryDirectory() as d:
+            gh_out = os.path.join(d, "gh-output")
+            out = os.path.join(d, "decision.json")
+            rc = self._run(d, self._eligible(), out=out, github_output=gh_out)
+            self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+            with open(gh_out) as f:
+                self.assertIn("will_enable=true", f.read())
+
+    def test_an_untrusted_author_signals_false(self):
+        with tempfile.TemporaryDirectory() as d:
+            gh_out = os.path.join(d, "gh-output")
+            rc = self._run(d, self._eligible(), out=os.path.join(d, "decision.json"),
+                           github_output=gh_out, author="stranger")
+            self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+            with open(gh_out) as f:
+                self.assertIn("will_enable=false", f.read())
+
+    def test_a_missing_tier_policy_signals_false(self):
+        """A decision is still made and recorded - it is just a no."""
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            gh_out = os.path.join(d, "gh-output")
+            policy = os.path.join(d, "automerge.json")
+            with open(policy, "w") as f:
+                json.dump({"schema": 1, "enabled": True, "allowed_tiers": ["standard"],
+                           "trusted_authors": ["trusted"]}, f)
+            env = dict(os.environ, GITHUB_OUTPUT=gh_out)
+            rc = subprocess.run(
+                [sys.executable, self.GATE, "--tier-policy",
+                 os.path.join(d, "absent.json"), "--policy", policy,
+                 "--author", "trusted"], capture_output=True, text=True, env=env)
+            self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+            with open(gh_out) as f:
+                self.assertIn("will_enable=false", f.read())
+
+    def test_a_broken_policy_exits_one(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            policy = os.path.join(d, "automerge.json")
+            with open(policy, "w") as f:
+                f.write("{not json")
+            rc = subprocess.run(
+                [sys.executable, self.GATE, "--policy", policy, "--author", "x"],
+                capture_output=True, text=True)
+            self.assertEqual(rc.returncode, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
