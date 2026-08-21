@@ -58,9 +58,9 @@ layer says where its own content lives in a committed manifest,
 each kind to a path template.
 
 ```bash
-NP=~/Code/nervepack/engine/nervepack_engine/cli.py
-python3 $NP layout show      --layer personal   # current routes + where they came from
-python3 $NP layout questions --layer personal   # what the engine could not work out
+NP="${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py"
+python3 "$NP" layout show      --layer personal   # current routes + where they came from
+python3 "$NP" layout questions --layer personal   # what the engine could not work out
 ```
 
 A layer with **no** manifest still works: the engine infers routes from what is on
@@ -76,7 +76,7 @@ structure stays human convenience rather than a contract.
 ## Verify
 
 ```bash
-python3 ~/Code/nervepack/engine/setup/np-path-check.py ~/Code/nervepack ~/Code/nervepack-content
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-path-check.py" "${NP_DIR:-$HOME/Code/nervepack}" "${NP_CONTENT_DIR:-$HOME/Code/nervepack-content}"
 ```
 
 Passing your overlay as a second argument checks that its skills and docs resolve too,

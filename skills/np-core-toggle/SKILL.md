@@ -6,7 +6,7 @@ description: Turn Nervepack features on/off and adjust their settings. Use when 
 # np-core-toggle
 
 Nervepack features each have an on/off toggle declared in `engine/setup/toggles.conf`.
-Use the CLI (`TOGGLE="python3 ~/Code/nervepack/engine/nervepack_engine/cli.py toggle"`):
+Use the CLI (`TOGGLE="python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py toggle"`):
 
 - **List state:** `$TOGGLE status`
 - **Flip:** `$TOGGLE <feature> on|off`
