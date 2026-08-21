@@ -230,8 +230,11 @@ condition evaluated, so nothing downstream runs.
 **Stop it without merging anything**, if the repository itself is the problem:
 
 ```bash
-gh api -X PATCH repos/pat-browne/nervepack -f allow_auto_merge=false
+gh api -X PATCH repos/pat-browne/nervepack -F allow_auto_merge=false
 ```
+
+`-F`, not `-f`: `-f` sends the value as the string `"false"`, which is not a JSON
+`false`. Getting this wrong disables nothing while looking like it did.
 
 Native auto-merge cannot be enabled on any pull request while that is off, and
 already-enabled requests stop firing.

@@ -441,5 +441,75 @@ class TestBackfillNamesSlugCollisions(unittest.TestCase):
             self.assertIn("already recorded 1", buf.getvalue())
 
 
+
+class TestANoSpecResultCannotShadowALaterPullRequest(unittest.TestCase):
+    """`already` is updated only when an entry actually lands, never on a
+    no-spec result. The sequence that would supposedly need is unreachable: two
+    pull requests sharing a slug also share the change spec path, because
+    append_one derives it from that same slug. So one cannot find a spec while
+    the other does not.
+
+    Marking the slug seen on a no-spec result would therefore buy nothing and
+    could only suppress a legitimate entry - data loss dressed as
+    de-duplication."""
+
+    def _args(self, d):
+        import argparse
+        return argparse.Namespace(repo="o/r", pr=None, backfill=True, limit=50,
+                                  repo_root=d, content_dir=d, spec=None,
+                                  tier=None, merge_sha=None)
+
+    def _two_colliding(self, d, with_spec):
+        data = os.path.join(d, "dashboard", "data")
+        os.makedirs(data)
+        os.makedirs(os.path.join(d, "change-specs"))
+        if with_spec:
+            with open(os.path.join(d, "change-specs", "feat-foo.md"), "w") as f:
+                f.write("---\ntier: normal\n---\nbody\n")
+
+        def fake_fetch(url, token, **kw):
+            if "/pulls?" in url:
+                return [{"number": 7, "head": {"ref": "feat/foo"},
+                         "merged_at": "2026-08-01T00:00:00Z"},
+                        {"number": 8, "head": {"ref": "feat-foo"},
+                         "merged_at": "2026-08-02T00:00:00Z"}]
+            if "/comments" in url:
+                return []
+            if "/pulls/7" in url:
+                return {"head": {"sha": "h7", "ref": "feat/foo"},
+                        "merge_commit_sha": "m7"}
+            return {"head": {"sha": "h8", "ref": "feat-foo"},
+                    "merge_commit_sha": "m8"}
+        return data, fake_fetch
+
+    def _run(self, d, fake_fetch):
+        import io, contextlib
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch)
+        return out.getvalue(), err.getvalue()
+
+    def test_colliding_pull_requests_append_exactly_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            data, fetch = self._two_colliding(d, with_spec=True)
+            out, err = self._run(d, fetch)
+            with open(os.path.join(data, "ledger.jsonl")) as f:
+                entries = [json.loads(x) for x in f if x.strip()]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["merge_sha"], "m7")
+            self.assertIn("already recorded 1", out)
+            # And the one that could not be recorded is NAMED, not dropped.
+            self.assertIn("#7", err)
+            self.assertIn("#8", err)
+
+    def test_when_neither_has_a_spec_nothing_is_written_and_nothing_claims_it_was(self):
+        with tempfile.TemporaryDirectory() as d:
+            data, fetch = self._two_colliding(d, with_spec=False)
+            out, _ = self._run(d, fetch)
+            self.assertFalse(os.path.exists(os.path.join(data, "ledger.jsonl")))
+            self.assertIn("appended 0", out)
+            self.assertIn("skipped 2 with no change spec", out)
+
+
 if __name__ == "__main__":
     unittest.main()

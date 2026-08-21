@@ -158,14 +158,30 @@ Prow/Tide's published guarantee, obtained from the ruleset rather than from code
 ### The repository setting
 
 Native auto-merge must be on at the repository level or no pull request can use
-it:
+it. Check what it is now:
 
 ```bash
-gh api -X PATCH repos/pat-browne/nervepack -f allow_auto_merge=true
+gh api repos/pat-browne/nervepack --jq .allow_auto_merge
 ```
 
-Turning it off is the fastest way to stop every pending auto-merge at once,
-without merging a change to do it.
+Turn it on:
+
+```bash
+gh api -X PATCH repos/pat-browne/nervepack -F allow_auto_merge=true
+```
+
+Turn it off, which is the fastest way to stop every pending auto-merge at once
+without merging a change to do it:
+
+```bash
+gh api -X PATCH repos/pat-browne/nervepack -F allow_auto_merge=false
+```
+
+**`-F`, not `-f`.** `-f` sends every value as a *string*, so
+`-f allow_auto_merge=false` transmits `"false"`, and a non-empty string is not a
+JSON `false`. `-F` parses `true`, `false`, `null` and numbers as themselves. This
+is the difference between disabling auto-merge and quietly leaving it on while
+believing otherwise.
 
 ### The ledger entry does not come from CI
 
