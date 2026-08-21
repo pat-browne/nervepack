@@ -108,23 +108,51 @@ generator reads the same registry.
   returns `high`; `test_risk_tiers.py` already asserts no standard rule follows a
   high one.
 - The live ruleset read back through
-  `gh api repos/pat-browne/nervepack/rulesets/<id>` reports
+  `gh api repos/pat-browne/nervepack/rulesets/$id` (id looked up by name,
+  as in the rollback below) reports
   `require_extra_approval_for_unattributed_changes: false`, matching the
   committed file.
 
 ## Rollback
 
-Find the id, then restore the parameter:
+Self-contained on purpose. A rollback that sends the reader to another file for
+half its steps is a rollback nobody completes at 2am.
+
+**Restore the extra-approval requirement.** One command, no hand-editing: the
+edit and the apply in the same step, so there is no window where the file and
+the live ruleset disagree.
 
 ```bash
 id=$(gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id')
-gh api -X PUT repos/pat-browne/nervepack/rulesets/$id \
-  --input .github/branch-protection/ruleset-main.json
+python3 - <<'EOF' > /tmp/ruleset-restore.json
+import json
+d = json.load(open(".github/branch-protection/ruleset-main.json"))
+for r in d["rules"]:
+    if r["type"] == "pull_request":
+        r["parameters"]["require_extra_approval_for_unattributed_changes"] = True
+print(json.dumps(d, indent=2))
+EOF
+gh api -X PUT repos/pat-browne/nervepack/rulesets/$id --input /tmp/ruleset-restore.json
 ```
 
-after editing the file back to `true`, or restore classic protection entirely
-with the backup and the commands in `change-specs/feat-f8-tier-gate.md`.
+Then commit the same change to the file, so the record still matches the live
+ruleset.
 
-Reverting the tier rule is a plain revert of this commit: dropping the
-`.github/branch-protection/**` rule returns that path to the `normal` default,
-and nothing caches a resolved tier between runs.
+**Abandon the ruleset entirely** and go back to classic branch protection. The
+backup is the exact body to PUT, captured from the live API before #254
+replaced it:
+
+```bash
+id=$(gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id')
+gh api -X DELETE repos/pat-browne/nervepack/rulesets/$id
+gh api -X PUT repos/pat-browne/nervepack/branches/main/protection \
+  --input .github/branch-protection/classic-main.backup.json
+gh api repos/pat-browne/nervepack/branches/main/protection --jq .required_status_checks.contexts
+```
+
+The last line is the check, not a formality: a PUT that half-applied leaves the
+branch protected by less than either configuration.
+
+**Revert the tier rule.** A plain `git revert` of this commit. Dropping the
+`.github/branch-protection/**` rule returns that path to the `normal` default.
+Nothing caches a resolved tier between runs, so no invalidation step exists.
