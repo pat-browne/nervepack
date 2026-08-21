@@ -18,7 +18,6 @@ blast_radius:
   - docs/ARCHITECTURE.md
   - docs/BRANCH-PROTECTION.md
   - change-specs/**
-  - INDEX.md
 ---
 
 # 0010: differential gating by tier (F8)
@@ -207,6 +206,11 @@ the CI job and their tests.
 
 ## Deviations
 
+- 2026-08-20 — dropped `INDEX.md` from the blast radius. It was declared on
+  the guess that the generated skill index might move, and nothing here adds
+  or renames a skill, so it never did. A declared path a change never touches
+  is not harmless: the blast radius is what drift-guard enforces, so every
+  unused glob is a hole opened for a file this change had no business editing.
 - 2026-08-20 — added `engine/setup/risk-tiers.json` to the blast radius. The
   cross-cutting concerns section above always said this change gives the three
   new modules self-classifying rules, and the glob was simply left out of the
