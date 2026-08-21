@@ -90,6 +90,15 @@ the opener looks for an open issue whose body already names that commit.
 high-tier change explains itself, and demanding a second document on top of it
 would be ceremony.
 
+**But a change spec is never scanned by rule 2.** `change-specs/README.md` says
+an accepted spec is never edited into the new answer — it is a historical record,
+and the whole reason IDs are sequential and never reused. Reporting one for
+naming a path that has since been renamed would demand an edit the process
+forbids, and an unresolvable finding is worse than no finding at all.
+
+The asymmetry is the point. A spec is documentation you wrote **for that
+change**, not documentation that has to stay current.
+
 Tests are exempt. A test-only diff is backend-only by definition, and it cannot
 introduce user-facing behavior, which is the first of the four conditions.
 

@@ -26,8 +26,9 @@ def _cfg(**over):
     base = {
         "schema": 1,
         "enabled": True,
-        "doc_globs": ["*.md", "docs/**"],
+        "doc_globs": ["*.md", "docs/**", "change-specs/**"],
         "exempt_globs": ["**/tests/**"],
+        "dangling_exempt_globs": ["change-specs/**"],
         "triggers": [{"id": "hooks", "globs": ["**/hooks/**"]},
                      {"id": "ci", "globs": [".github/workflows/**"]}],
     }
@@ -188,6 +189,43 @@ class TestTheCommittedConfig(unittest.TestCase):
                     f.write(bad)
                 with self.assertRaises(np_doc_coupling.ConfigError, msg=bad):
                     np_doc_coupling.load(path)
+
+
+
+class TestAcceptedSpecsAreNeverScannedForDanglingReferences(unittest.TestCase):
+    """A change spec counts as documentation for satisfying a trigger, and is
+    never scanned for stale references.
+
+    change-specs/README.md: "An accepted spec is never edited into the new
+    answer." Reporting one for naming a path that has since been renamed would
+    demand an edit the process forbids, and an unresolvable finding is worse
+    than no finding at all."""
+
+    def test_a_spec_naming_a_removed_path_is_not_reported(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write(os.path.join(d, "change-specs", "feat-old.md"),
+                   "blast_radius:\n  - engine/setup/np_old.py\n")
+            r = np_doc_coupling.evaluate(d, [], ["engine/setup/np_old.py"], _cfg())
+            self.assertEqual(r["dangling"], [])
+
+    def test_but_a_spec_still_satisfies_a_trigger(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = np_doc_coupling.evaluate(
+                d, ["engine/hooks/x.py", "change-specs/feat-x.md"], [], _cfg())
+            self.assertTrue(r["satisfied"], r["problems"])
+
+    def test_an_ordinary_doc_naming_the_same_path_is_still_reported(self):
+        """The exemption is for change specs only, not a hole in rule 2."""
+        with tempfile.TemporaryDirectory() as d:
+            _write(os.path.join(d, "change-specs", "feat-old.md"), "np_old.py\n")
+            _write(os.path.join(d, "docs", "GUIDE.md"), "np_old.py\n")
+            r = np_doc_coupling.evaluate(d, [], ["engine/setup/np_old.py"], _cfg())
+            self.assertEqual([x["doc"] for x in r["dangling"]], ["docs/GUIDE.md"])
+
+    def test_the_committed_config_exempts_change_specs(self):
+        config = np_doc_coupling.load()
+        self.assertTrue(np_doc_coupling.is_dangling_exempt("change-specs/x.md", config))
+        self.assertFalse(np_doc_coupling.is_dangling_exempt("docs/x.md", config))
 
 
 if __name__ == "__main__":

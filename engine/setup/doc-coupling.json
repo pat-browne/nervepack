@@ -12,6 +12,8 @@
     "change-specs/**"
   ],
   "doc_globs_note": "What COUNTS as documentation for the purposes of satisfying a trigger. change-specs/** counts: a change spec is where a normal- or high-tier change explains itself, and requiring a second document on top of it would be ceremony.",
+  "dangling_exempt_globs": ["change-specs/**"],
+  "dangling_exempt_note": "A change spec COUNTS as documentation for satisfying a trigger, but is NEVER scanned for dangling references. An accepted spec is a historical record and change-specs/README.md forbids editing one into the new answer - so flagging it for naming a path that has since been renamed would demand an edit the process prohibits. The asymmetry is the point: a spec is documentation you wrote for that change, not documentation that has to stay current.",
   "triggers": [
     {
       "id": "cli-surface",

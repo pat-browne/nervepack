@@ -101,6 +101,20 @@ def is_exempt(rel, config):
     return _matches_any(rel, config.get("exempt_globs", []))
 
 
+def is_dangling_exempt(rel, config):
+    """True for documents that count as docs but are never scanned for stale
+    references.
+
+    `change-specs/**` is the case. A change spec counts as documentation for
+    satisfying a trigger, because it is where a change explains itself. It is
+    never scanned for dangling references, because change-specs/README.md
+    forbids editing an accepted spec into the new answer -- so reporting one for
+    naming a path that has since been renamed would demand an edit the process
+    prohibits, and an unresolvable finding is worse than no finding.
+    """
+    return _matches_any(rel, config.get("dangling_exempt_globs", []))
+
+
 def triggers_fired(changed, config):
     """[(trigger_id, [paths])] for every trigger this diff touched.
 
@@ -159,7 +173,7 @@ def dangling_references(root, removed, changed, config, doc_files=None):
 
 
 def _walk_docs(root, config):
-    """Every documentation file in the tree, repo-relative.
+    """Every documentation file the dangling-reference rule may scan.
 
     Walks rather than shelling out to git, so this stays importable and testable
     against a plain directory.
@@ -169,7 +183,8 @@ def _walk_docs(root, config):
         dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
         for name in filenames:
             rel = os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/")
-            if is_doc(rel, config) and not is_exempt(rel, config):
+            if (is_doc(rel, config) and not is_exempt(rel, config)
+                    and not is_dangling_exempt(rel, config)):
                 docs.append(rel)
     return sorted(docs)
 
