@@ -18,9 +18,14 @@ do not silently write the file. Run this suggest-and-prompt flow
    # Ask the resolver. `sources` is a LAYER, not a directory in this repo: it
    # resolves to <overlay>/memory/sources, and both halves of that were wrong
    # here before #257 - the engine repo has no sources/ at all.
-   SOURCES=$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" layer_roots sources)
-   TOTAL=$(find "$SOURCES" -name '*.md' | wc -l)
-   PARENT=$(find "$SOURCES/<topic>" -name '*.md' 2>/dev/null | wc -l)
+   #
+   # ONE PATH PER MERGE ROOT, so this is a list, not a path: with team.merge on
+   # there is a team root as well as the personal one. Treating the output as a
+   # single directory works on a one-root machine and silently undercounts on
+   # every other.
+   ROOTS=$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" layer_roots sources)
+   TOTAL=$(echo "$ROOTS" | while IFS= read -r d; do find "$d" -name '*.md' 2>/dev/null; done | wc -l)
+   PARENT=$(echo "$ROOTS" | while IFS= read -r d; do find "$d/<topic>" -name '*.md' 2>/dev/null; done | wc -l)
    ```
 
 3. **Find least-referenced source** in `<topic>/` — count `[[<source>]]`
