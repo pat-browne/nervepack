@@ -40,6 +40,7 @@ import fnmatch
 import json
 import os
 import re
+import sys
 
 SCHEMA = 1
 
@@ -165,7 +166,12 @@ def dangling_references(root, removed, changed, config, doc_files=None):
             try:
                 with open(os.path.join(root, doc), encoding="utf-8", errors="replace") as fh:
                     text = fh.read()
-            except OSError:
+            except OSError as exc:
+                # Say so. A document that cannot be read is a document this rule
+                # did not check, and silence there is indistinguishable from
+                # "checked it, found nothing".
+                sys.stderr.write("doc-coupling: could not read %s (%s) - not "
+                                 "checked for stale references\n" % (doc, exc))
                 continue
             if pattern.search(text):
                 out.append((rel, doc))

@@ -44,6 +44,22 @@ import np_doc_coupling  # noqa: E402
 import np_github_api  # noqa: E402
 
 MARKER = "<!-- nervepack:doc-coupling -->"
+# Every issue this opens carries it, and already_filed() queries on it. Narrowing
+# the duplicate search by label is also what keeps the 100-per-page limit below
+# from mattering in practice.
+LABEL = "documentation"
+
+
+def _code(text):
+    """A repo path, rendered so it cannot become markdown.
+
+    Paths reach this from `git diff` on a merged commit, so a file named
+    `[click here](https://evil.com).md` would otherwise render as a link in an
+    issue this repository opened about itself. Backticks stop that; the inner
+    backtick is replaced rather than escaped, because a backtick in a filename is
+    pathological and there is no escape that works inside inline code.
+    """
+    return "`%s`" % str(text).replace("`", "'")
 
 
 def changed_and_removed(root, base, head):
@@ -93,13 +109,16 @@ def issue_body(result, repo, sha, run_url):
         lines.append("## Triggers that fired, with no documentation in the change")
         lines.append("")
         for trigger in result["triggers"]:
-            lines.append("- **%s** — %s" % (trigger["id"], ", ".join(trigger["paths"])))
+            lines.append("- **%s** - %s"
+                         % (trigger["id"],
+                            ", ".join(_code(p) for p in trigger["paths"])))
         lines.append("")
     if result["dangling"]:
         lines.append("## Documents naming a path this change removed or renamed")
         lines.append("")
         for item in result["dangling"]:
-            lines.append("- `%s` still names `%s`" % (item["doc"], item["removed"]))
+            lines.append("- %s still names %s"
+                         % (_code(item["doc"]), _code(item["removed"])))
         lines.append("")
         lines.append("This is the case the check exists for. Wen et al. (ICPC 2019,")
         lines.append("1.3 billion AST-level changes across 1,500 systems) found")
@@ -124,8 +143,23 @@ def already_filed(repo, sha, token, fetch=np_github_api.default_fetch):
     in the body rather than on the title, because a title is the part someone
     edits.
     """
-    url = ("https://api.github.com/repos/%s/issues?state=open&per_page=100" % repo)
-    for issue in fetch(url, token) or []:
+    url = ("https://api.github.com/repos/%s/issues?state=open&labels=%s&per_page=100"
+           % (repo, LABEL))
+    try:
+        issues = fetch(url, token) or []
+    except Exception as exc:                       # noqa: BLE001 - see below
+        # Warn and let the caller file anyway. A duplicate issue is noise; a
+        # missing one is lost debt, and recording the debt is the entire point of
+        # this mechanism. Failing closed here would trade the thing that matters
+        # for the thing that does not.
+        sys.stderr.write("doc-coupling: could not list existing issues (%s) - "
+                         "filing anyway, which may duplicate\n" % exc)
+        return None
+    # 100 per page, unpaginated. The label filter keeps that from mattering here,
+    # and the failure mode if it ever does is a DUPLICATE issue rather than a
+    # missed one - the safe direction for a mechanism whose job is to not lose
+    # the debt.
+    for issue in issues:
         body = issue.get("body") or ""
         if MARKER in body and sha and sha in body:
             return issue.get("number")
@@ -140,11 +174,24 @@ def open_issue(repo, sha, run_url, result, token, fetch=np_github_api.default_fe
     payload = json.dumps({
         "title": "docs: coupling unmet for %s" % (sha[:8] if sha else "a recent change"),
         "body": issue_body(result, repo, sha, run_url),
-        "labels": ["documentation"],
+        "labels": [LABEL],
     }).encode("utf-8")
-    created = fetch("https://api.github.com/repos/%s/issues" % repo, token,
-                    method="POST", data=payload)
-    print("doc-coupling: opened issue #%s" % created.get("number"))
+    try:
+        created = fetch("https://api.github.com/repos/%s/issues" % repo, token,
+                        method="POST", data=payload) or {}
+    except Exception as exc:                       # noqa: BLE001
+        # Loud. This is the one step that records the debt, so a silent failure
+        # here means the whole mechanism did nothing while looking like it worked.
+        sys.stderr.write("doc-coupling: could not open the issue (%s). THE DEBT "
+                         "WAS NOT RECORDED - the findings are in this job's log "
+                         "and in doc-coupling.json.\n" % exc)
+        return 1
+    number = created.get("number")
+    if not number:
+        sys.stderr.write("doc-coupling: the issue API returned no number - the "
+                         "debt may not have been recorded\n")
+        return 1
+    print("doc-coupling: opened issue #%s" % number)
     return 0
 
 

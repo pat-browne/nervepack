@@ -597,7 +597,18 @@ jobs:
             --open-issue \
             --repo "${{ github.repository }}" \
             --sha "${{ github.sha }}" \
+            --out doc-coupling.json \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # if: always() - the findings are the thing worth keeping when the issue
+      # could NOT be filed. This job going red is the signal that the debt was
+      # not recorded; the artifact is what says which debt.
+      - name: Upload the coupling result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: doc-coupling-merge
+          path: doc-coupling.json
 
   auto-merge:
     name: Auto-merge decision (standard tier)

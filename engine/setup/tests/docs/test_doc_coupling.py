@@ -18,8 +18,14 @@ _ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:
     sys.path.insert(0, _ENGINE_SETUP)
 
+import importlib.util  # noqa: E402
 import np_doc_coupling  # noqa: E402
 import np_risk_tiers  # noqa: E402
+
+_GATE = os.path.join(_ENGINE_SETUP, "np-doc-coupling-gate.py")
+_gs = importlib.util.spec_from_file_location("doc_coupling_gate", _GATE)
+doc_coupling_gate = importlib.util.module_from_spec(_gs)
+_gs.loader.exec_module(doc_coupling_gate)
 
 
 def _cfg(**over):
@@ -226,6 +232,94 @@ class TestAcceptedSpecsAreNeverScannedForDanglingReferences(unittest.TestCase):
         config = np_doc_coupling.load()
         self.assertTrue(np_doc_coupling.is_dangling_exempt("change-specs/x.md", config))
         self.assertFalse(np_doc_coupling.is_dangling_exempt("docs/x.md", config))
+
+
+
+class TestTheIssueBodyCannotBeInjected(unittest.TestCase):
+    """Paths reach the issue body from `git diff` on a merged commit, so a file
+    named `[click here](https://evil.com).md` would otherwise render as a link
+    in an issue this repository opened about itself."""
+
+    def test_a_markdown_link_in_a_path_is_rendered_as_code(self):
+        result = {"triggers": [{"id": "x", "paths": ["[click](https://evil.com).md"]}],
+                  "dangling": [], "docs_changed": []}
+        body = doc_coupling_gate.issue_body(result, "o/r", "abc123", "")
+        self.assertIn("`[click](https://evil.com).md`", body)
+        self.assertNotIn("- **x** - [click](https://evil.com).md", body)
+
+    def test_a_backtick_in_a_path_cannot_break_out_of_the_code_span(self):
+        """There is no escape for a backtick inside inline code, so it is
+        replaced. A backtick in a filename is pathological."""
+        self.assertEqual(doc_coupling_gate._code("a`b.md"), "`a'b.md`")
+
+    def test_a_dangling_entry_is_escaped_too(self):
+        result = {"triggers": [], "docs_changed": [],
+                  "dangling": [{"doc": "docs/[x](http://e).md", "removed": "a.py"}]}
+        body = doc_coupling_gate.issue_body(result, "o/r", "abc", "")
+        self.assertIn("`docs/[x](http://e).md`", body)
+
+
+class TestFilingTheIssueFailsLoudly(unittest.TestCase):
+    """This is the one step that records the debt. A silent failure here means
+    the whole mechanism did nothing while looking like it worked."""
+
+    RESULT = {"triggers": [{"id": "x", "paths": ["a.py"]}], "dangling": [],
+              "docs_changed": []}
+
+    def test_a_listing_failure_still_files(self):
+        """A duplicate issue is noise. A missing one is lost debt."""
+        calls = []
+
+        def fetch(url, token, method="GET", data=None):
+            calls.append((url, method))
+            if method == "GET":
+                raise RuntimeError("502")
+            return {"number": 42}
+
+        rc = doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok",
+                                          fetch=fetch)
+        self.assertEqual(rc, 0)
+        self.assertIn("POST", [m for _, m in calls])
+
+    def test_a_creation_failure_exits_one(self):
+        def fetch(url, token, method="GET", data=None):
+            if method == "POST":
+                raise RuntimeError("500")
+            return []
+        self.assertEqual(
+            doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok",
+                                         fetch=fetch), 1)
+
+    def test_a_response_with_no_number_exits_one(self):
+        def fetch(url, token, method="GET", data=None):
+            return {} if method == "POST" else []
+        self.assertEqual(
+            doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok",
+                                         fetch=fetch), 1)
+
+    def test_an_existing_issue_for_the_same_commit_is_not_duplicated(self):
+        posted = []
+
+        def fetch(url, token, method="GET", data=None):
+            if method == "GET":
+                return [{"number": 9, "body": doc_coupling_gate.MARKER + "\nsha123\n"}]
+            posted.append(url)
+            return {"number": 10}
+
+        rc = doc_coupling_gate.open_issue("o/r", "sha123", "", self.RESULT, "tok",
+                                          fetch=fetch)
+        self.assertEqual(rc, 0)
+        self.assertEqual(posted, [])
+
+    def test_the_duplicate_search_is_narrowed_by_label(self):
+        """What keeps the unpaginated 100-per-page limit from mattering."""
+        seen = {}
+
+        def fetch(url, token, method="GET", data=None):
+            seen["url"] = url
+            return []
+        doc_coupling_gate.already_filed("o/r", "sha", "tok", fetch=fetch)
+        self.assertIn("labels=%s" % doc_coupling_gate.LABEL, seen["url"])
 
 
 if __name__ == "__main__":
