@@ -168,6 +168,34 @@ def _bail(context, msg):
         pass
 
 
+def _warn_setup_failure(name, exc):
+    """Report a failed setup step on stderr, whatever the stream can encode.
+
+    A non-ASCII character in the exception text raises UnicodeEncodeError on a
+    stream opened in a legacy code page, which is what a piped stderr still gets
+    on Windows before 3.15. Raising HERE would replace the original failure with
+    an unrelated one - the reporting path swallowing the thing it is reporting,
+    which is the exact shape of bug this whole branch exists to surface.
+
+    `print(..., file=sys.stderr)` is not a fix: it calls the same `write` and
+    raises identically. Re-encoding with backslashreplace is, and it keeps the
+    message readable: ValueError('caf\\xe9').
+    """
+    try:
+        message = "cli.py setup %s: unhandled exception: %r\n" % (name, exc)
+        try:
+            sys.stderr.write(message)
+        except UnicodeEncodeError:
+            sys.stderr.write(message.encode("ascii", "backslashreplace").decode("ascii"))
+    except Exception:                              # noqa: BLE001
+        # Broad on purpose, and the breadth IS the contract. stderr can be closed,
+        # a pipe can be broken, and `repr(exc)` runs user-defined `__repr__` that
+        # may itself raise. Any of those escaping here would skip the `_bail()`
+        # call that follows and lose the file log too - both channels gone
+        # because reporting failed. Silence on one channel beats losing both.
+        pass
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
 
@@ -224,6 +252,13 @@ def main(argv=None):
         try:
             return fn()
         except Exception as exc:
+            # stderr AS WELL AS the log. _bail writes only to a file, which is
+            # right for a hook - a hook must not pollute the session's streams -
+            # and wrong for a setup step, which a human or a CI job runs directly
+            # and reads the output of. Without this a failed step exits 1 with no
+            # explanation anywhere either of them will look. Cost two CI rounds
+            # on #296 to rediscover.
+            _warn_setup_failure(name, exc)
             _bail(name, "unhandled exception: %r" % exc)
             return 1
 
