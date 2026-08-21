@@ -24,6 +24,32 @@ audited event.
 | Force push, deletion | blocked | — |
 | Bypass | repository admin, `always`, logged | See below. |
 
+## One GitHub default is turned off on purpose
+
+Creating the ruleset, GitHub added a parameter the committed JSON never
+declared: `require_extra_approval_for_unattributed_changes`, defaulted to
+`true`. It demands one approving review when a pull request contains a commit
+that GitHub cannot attribute to an account, for example a commit authored with
+an email address linked to no user.
+
+With zero required approvals and one maintainer, "one extra approval" is a
+requirement nobody in this repository can satisfy. A single author cannot
+approve their own pull request, so any unattributed commit would leave the
+change mergeable only by an admin bypass. That is precisely the unsatisfiable
+approval requirement the zero-approval decision above exists to avoid, so the
+parameter is set to `false` and the committed JSON now says so.
+
+This is not the rule-relaxing the bypass policy warns against. The requirement
+was never chosen, never satisfiable, and turning it off restores the stated
+intent rather than escaping it.
+
+Ruleset ids are **not stable across recreations**, so no procedure in this
+document hardcodes one. Every command that needs the id looks it up:
+
+```bash
+id=$(gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id')
+```
+
 There is **no merge queue**. Queues serialize concurrent merges from several
 authors. At one author they add latency and nothing else.
 
@@ -140,25 +166,27 @@ two can silently disagree. Two habits keep the gap small:
 ## Changing any of this
 
 1. Edit `.github/branch-protection/ruleset-main.json`.
-2. Look up the id, which is not stable across recreations:
+2. Apply it, looking the id up in the same command:
    ```bash
-   gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id'
-   ```
-3. Apply it:
-   ```bash
-   gh api -X PUT repos/pat-browne/nervepack/rulesets/<id> \
+   id=$(gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id')
+   gh api -X PUT repos/pat-browne/nervepack/rulesets/$id \
      --input .github/branch-protection/ruleset-main.json
    ```
-4. Read it back and confirm the live copy matches the committed one.
+3. Read it back and confirm the live copy matches the committed one.
 
 To restore the classic configuration instead, delete the ruleset and PUT the
 backup:
 
 ```bash
-gh api -X DELETE repos/pat-browne/nervepack/rulesets/<id>
+id=$(gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id')
+gh api -X DELETE repos/pat-browne/nervepack/rulesets/$id
 gh api -X PUT repos/pat-browne/nervepack/branches/main/protection \
   --input .github/branch-protection/classic-main.backup.json
+gh api repos/pat-browne/nervepack/branches/main/protection --jq .required_status_checks.contexts
 ```
+
+Read the last line back rather than trusting the PUT. A restore that half
+applied leaves the branch protected by less than either configuration.
 
 The committed JSON is a record of intent, not the source of truth. GitHub holds
 the live state. Nothing in CI applies these files, because a workflow that could
