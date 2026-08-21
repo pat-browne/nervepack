@@ -27,6 +27,7 @@
     {"glob": "engine/setup/np_change_spec.py", "tier": "high", "why": "the blast-radius matcher shared by spec-guard and drift-guard"},
     {"glob": "engine/setup/np_tier_policy.py", "tier": "high", "why": "SELF: states what each tier requires. If it were standard, the thresholds could be lowered by a change needing no spec, no rollback plan and no adversarial lens."},
     {"glob": "engine/setup/np-tier-gate.py", "tier": "high", "why": "SELF: the CI gate that applies the rule above"},
-    {"glob": "engine/setup/np_codeowners.py", "tier": "high", "why": "generates the committed declaration of these very paths"}
+    {"glob": "engine/setup/np_codeowners.py", "tier": "high", "why": "generates the committed declaration of these very paths"},
+    {"glob": ".github/branch-protection/**", "tier": "high", "why": "SELF: the committed record of which status checks are REQUIRED. It resolved to normal until #291, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens."}
   ]
 }

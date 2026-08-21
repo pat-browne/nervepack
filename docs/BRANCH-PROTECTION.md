@@ -24,6 +24,28 @@ audited event.
 | Force push, deletion | blocked | — |
 | Bypass | repository admin, `always`, logged | See below. |
 
+## One GitHub default is turned off on purpose
+
+Creating the ruleset, GitHub added a parameter the committed JSON never
+declared: `require_extra_approval_for_unattributed_changes`, defaulted to
+`true`. It demands one approving review when a pull request contains a commit
+that GitHub cannot attribute to an account, for example a commit authored with
+an email address linked to no user.
+
+With zero required approvals and one maintainer, "one extra approval" is a
+requirement nobody in this repository can satisfy. A single author cannot
+approve their own pull request, so any unattributed commit would leave the
+change mergeable only by an admin bypass. That is precisely the unsatisfiable
+approval requirement the zero-approval decision above exists to avoid, so the
+parameter is set to `false` and the committed JSON now says so.
+
+This is not the rule-relaxing the bypass policy warns against. The requirement
+was never chosen, never satisfiable, and turning it off restores the stated
+intent rather than escaping it.
+
+The live ruleset id today is **21119853**, but ids are not stable across
+recreations, so every command below looks it up rather than hardcoding it.
+
 There is **no merge queue**. Queues serialize concurrent merges from several
 authors. At one author they add latency and nothing else.
 
