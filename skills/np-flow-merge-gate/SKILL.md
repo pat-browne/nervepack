@@ -26,7 +26,7 @@ is **quiet** (all refs + HEAD + working tree stable across a full poll interval)
 then checks merge-readiness. Read-only — it never commits, merges, or pushes.
 
 ```bash
-python3 engine/nervepack_engine/cli.py merge-wait --repo ${NP_DIR:-$HOME/Code/nervepack} --branch <BR> --base origin/main
+python3 engine/nervepack_engine/cli.py merge-wait --repo "${NP_DIR:-$HOME/Code/nervepack}" --branch <BR> --base origin/main
 ```
 
 Cadence: starts at `--interval` 60s, adds `--backoff` 30s each cycle, gives up at

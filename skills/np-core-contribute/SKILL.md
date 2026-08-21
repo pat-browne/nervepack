@@ -33,7 +33,7 @@ Nervepack is split (`docs/ARCHITECTURE.md` § "Content seam"):
   skills, `engine/setup/`, `agents/`, its own docs.
 - **personal content overlay** — the default target for domain knowledge
   (`np-kb-*`/`np-env-*` skills, `wiki/`, `sources/`). Resolve it:
-  `CONTENT="$(python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py content_dir)"`
+  `CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"`
   (single-repo layouts resolve to the engine root, so the same paths work).
 - **team overlay** — only for a shared team convention ("save to the team layer",
   "this is a team rule", `--layer team`): resolve with `np_content.py team_dir` (same resolver).

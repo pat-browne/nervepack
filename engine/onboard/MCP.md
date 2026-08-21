@@ -18,7 +18,7 @@ overlay through `NP_CONTENT_DIR`, exactly like the rest of nervepack.
 From a cloned repo, run the guided installer:
 
 ```bash
-${NP_DIR:-$HOME/Code/nervepack}/engine/bin/nervepack-install
+"${NP_DIR:-$HOME/Code/nervepack}/engine/bin/nervepack-install"
 ```
 
 It walks you through it: enter your **content directory** (where your personal

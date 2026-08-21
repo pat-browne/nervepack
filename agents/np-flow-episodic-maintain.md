@@ -30,7 +30,7 @@ Your job: drain the episodic capture inbox into nervepack's `memory/episodic/` l
 ### 1. Sync nervepack
 
 ```bash
-python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py sync --verbose
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" sync --verbose
 ```
 
 If the result is anything other than `up to date` or `fast-forwarded`, **stop**

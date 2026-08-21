@@ -33,9 +33,9 @@ concept.
 
 1. Read the current state:
    ```bash
-   NP=${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py
-   python3 $NP layout show --layer personal
-   python3 $NP layout questions --layer personal
+   NP="${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py"
+   python3 "$NP" layout show --layer personal
+   python3 "$NP" layout questions --layer personal
    ```
 2. Read every doc in the layout's `derived_from` list **before you ask anything**.
    Prose often answers a question, and an answered question is never asked.
@@ -47,7 +47,7 @@ concept.
 6. Ask the next surviving question. Repeat until the list is empty.
 7. Record and show the result:
    ```bash
-   printf '%s' "$LAYOUT_JSON" | python3 $NP layout record --layer personal
+   printf '%s' "$LAYOUT_JSON" | python3 "$NP" layout record --layer personal
    git -C "$LAYER" diff -- .nervepack/layout.json
    ```
 8. Ask before committing. The manifest is a repo file, and a team layer needs a PR.

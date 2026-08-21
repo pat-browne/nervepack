@@ -181,6 +181,52 @@ class TestNoCommandHardcodesTheInstallPath(unittest.TestCase):
                 REPO = saved
 
 
+class TestTheVariableIsAlwaysQuoted(unittest.TestCase):
+    """An unquoted expansion word-splits and glob-expands.
+
+    It does NOT allow command substitution: bash does not re-evaluate the RESULT
+    of a parameter expansion, so a `$(id)` inside NP_DIR reaches the program as
+    literal text. Measured, because the difference decides how alarmed to be.
+
+    What is real: NP_DIR=/opt/my nervepack becomes two arguments, and a `*` in
+    the value expands against the filesystem. Both break the command rather than
+    escalate anything, and quoting fixes both.
+    """
+
+    VAR_AT = re.compile(r"\$\{NP(?:_CONTENT)?_DIR:-")
+
+    @staticmethod
+    def _quoted_at(line, idx):
+        """Quote state RESETS at `$(`. Command substitution parses its body as
+        fresh shell input, so enclosing quotes do not protect an expansion
+        inside it - which is how CONTENT="$(python3 ${VAR}/x)" slipped past the
+        first version of this check."""
+        opened = line.rfind("$(", 0, idx)
+        start = opened + 2 if opened >= 0 else 0
+        return line[start:idx].count('"') % 2 == 1
+
+    def test_no_shell_line_leaves_the_variable_unquoted(self):
+        offenders = []
+        for rel in _markdown_files():
+            fence = None
+            with open(os.path.join(REPO, rel), encoding="utf-8") as fh:
+                for number, line in enumerate(fh, 1):
+                    stripped = line.strip()
+                    if stripped.startswith("```"):
+                        fence = None if fence else (stripped[3:].strip().lower() or "text")
+                        continue
+                    if "${NP_DIR:-" not in line and "${NP_CONTENT_DIR:-" not in line:
+                        continue
+                    for match in self.VAR_AT.finditer(line):
+                        if not self._quoted_at(line, match.start()):
+                            offenders.append("%s:%d %s"
+                                             % (rel, number, stripped[:88]))
+                            break
+        self.assertEqual(offenders, [],
+                         "quote the expansion so a path with a space or a glob "
+                         "character still works:\n  " + "\n  ".join(offenders))
+
+
 class TestEveryReferencedEnginePathExists(unittest.TestCase):
     """A substituted command that points at a path this repo does not have is
     worse than the literal it replaced: it looks resolved and is not.

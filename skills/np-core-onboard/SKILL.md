@@ -15,7 +15,7 @@ this skill is the entry point.
 1. **Read the contract:** `engine/onboard/ONBOARD.md` + `engine/onboard/capabilities.json`. Identify
    your host and how it (a) surfaces standing context to the model, (b) fires session
    start/end events, (c) runs a headless model call. Each capability has per-host `hints`.
-2. **Check current state first:** `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py doctor`. It shows
+2. **Check current state first:** `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" doctor`. It shows
    what's already wired vs MISSING — only do work the doctor flags.
 3. **Satisfy each capability** for your host (MUST: `knowledge`, `llm-cli`, `git-sync`,
    `toggles`; SHOULD: the session-start/end + scheduled-maint ones — wire what your host

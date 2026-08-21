@@ -8,7 +8,7 @@ description: Run and interpret nervepack's health check (cli.py doctor) — when
 ## Run it
 
 ```bash
-python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py doctor
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" doctor
 ```
 
 Or from the MCP tool: call `nervepack_doctor` (output identical to the CLI). The doctor
@@ -42,14 +42,14 @@ runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no
 | Check | Fix |
 |---|---|
 | `team` | Set `NP_TEAM_DIR` or `~/.config/nervepack/team-dir` if you have a team overlay; otherwise safe to ignore |
-| `dashboard-data` | `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup link-dashboard-data` |
+| `dashboard-data` | `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup link-dashboard-data` |
 | `hook-scripts` | Re-run the failing bootstrap (the error names the missing script) |
 | `session-start` | Re-run `cli.py setup install-hooks` (registers every lifecycle hook from `engine/setup/hooks.manifest`) |
 | `session-end-capture` | Re-run `cli.py setup install-hooks` |
 | `session-end-flush` | Re-run `cli.py setup install-hooks` |
 | `scheduled-maint` | Re-run `cli.py setup install-memory-cron` (Linux), `install-memory-launchd` (macOS), or `install-memory-schtasks` (Windows) |
 | `scheduled-auth-token` | Missing or in its rotation window: `bash engine/setup/62-install-scheduled-auth-token.sh` (`--rotate` to force). Fixes "Not logged in" failures in memory-promote/refine/compact logs — those crons run under launchd/cron, which don't inherit the interactive session's OAuth. |
-| `pii_filter_full` | `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-pii-deps` |
+| `pii_filter_full` | `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup install-pii-deps` |
 
 ## Common failure patterns
 

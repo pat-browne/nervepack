@@ -486,7 +486,7 @@ Don't auto-fix. Surface candidates and let the user decide.
    overlap. This is how disparate sessions avoid creating duplicates.
 2. `mkdir skills/<name> && ${EDITOR:-nano} skills/<name>/SKILL.md`
 3. Add `./skills/<name>` to `skills` array in `.claude-plugin/plugin.json`
-4. Run `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup link-skills` — symlinks into the host's
+4. Run `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup link-skills` — symlinks into the host's
    skill directory (e.g. `~/.claude/skills/` for Claude Code) AND regenerates `INDEX.md`.
 5. Commit with subject `skill(<name>): <one-line summary>`
 

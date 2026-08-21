@@ -18,8 +18,8 @@ view of "open" matches what the dashboard shows.
 
 - **List** the open, deduped, confidence-ranked suggestions:
   ```bash
-  python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py list --top 10
-  python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py list --json   # for machine use
+  python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py" list --top 10
+  python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py" list --json   # for machine use
   ```
   "Open" = present in metrics.jsonl AND not already in
   `dashboard/data/resolved-suggestions.txt`. Dedup is by normalized text, keeping the
@@ -27,7 +27,7 @@ view of "open" matches what the dashboard shows.
 - **Clear** — resolve every open suggestion (default ALL) so the panel resets and new
   ones accumulate; rebuilds `metrics.js` so the dashboard reflects it immediately:
   ```bash
-  python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py clear
+  python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-suggestions-review.py" clear
   ```
   Clearing is non-destructive: it appends the texts to the resolved ledger (the
   metrics records are untouched), so the audit trail survives.
