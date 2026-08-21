@@ -187,7 +187,7 @@ def backfill(args, token, fetch=np_github_api.default_fetch):
                          % (e.code, e.reason))
         return 1
 
-    appended = 0
+    appended = failed = no_spec = 0
     for number, head_ref in candidates:
         slug = head_ref.replace("/", "-")
         if slug in already:
@@ -199,11 +199,31 @@ def backfill(args, token, fetch=np_github_api.default_fetch):
         one.pr = str(number)
         one.backfill = False
         rc = append_one(one, token, fetch=fetch)
-        if rc == 0:
+        if rc != 0:
+            failed += 1
+            continue
+        # rc 0 does NOT mean an entry was written. append_one also returns 0 for
+        # the legitimate no-entry-needed case (a standard-tier or spike change
+        # with no spec), so counting every zero as an append would report work
+        # that never happened. Ask the ledger instead of inferring.
+        if slug in existing_change_ids(ledger_path):
             already.add(slug)
             appended += 1
-    print("ledger-append: backfill scanned %d merged pull request(s), appended %d"
-          % (len(candidates), appended))
+        else:
+            no_spec += 1
+
+    print("ledger-append: backfill scanned %d merged pull request(s): appended %d, "
+          "skipped %d with no change spec, failed %d"
+          % (len(candidates), appended, no_spec, failed))
+    if failed:
+        # Loud. A partial backfill leaves the durable record incomplete, and
+        # "appended 2" with nothing else said reads as success. Re-running is
+        # safe: the scan skips everything already present.
+        sys.stderr.write(
+            "ledger-append: %d pull request(s) could not be recorded - the ledger "
+            "is INCOMPLETE. Re-running --backfill is safe and will retry only "
+            "those.\n" % failed)
+        return 1
     return 0
 
 

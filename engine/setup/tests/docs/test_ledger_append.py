@@ -315,5 +315,76 @@ class TestBackfillSkipsWhatIsAlreadyRecorded(unittest.TestCase):
             with open(os.path.join(data, "ledger.jsonl")) as f:
                 self.assertEqual(len([x for x in f if x.strip()]), 1)
 
+
+class TestBackfillCountsHonestly(unittest.TestCase):
+    """append_one returns 0 both when it wrote an entry and when it correctly
+    wrote nothing (a standard-tier change with no spec). Counting every zero as
+    an append reports work that never happened."""
+
+    def _args(self, d):
+        import argparse
+        return argparse.Namespace(repo="o/r", pr=None, backfill=True, limit=50,
+                                  repo_root=d, content_dir=d, spec=None,
+                                  tier=None, merge_sha=None)
+
+    def _setup(self, d):
+        os.makedirs(os.path.join(d, "dashboard", "data"))
+        os.makedirs(os.path.join(d, "change-specs"))
+
+    def test_a_pull_request_with_no_spec_is_not_counted_as_appended(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._setup(d)   # no spec file written
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 5, "head": {"ref": "docs/typo"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                if "/pulls/5" in url:
+                    return {"head": {"sha": "h5", "ref": "docs/typo"},
+                            "merge_commit_sha": "m5"}
+                return []
+
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch)
+            self.assertEqual(rc, 0)
+            self.assertIn("appended 0", buf.getvalue())
+            self.assertIn("skipped 1 with no change spec", buf.getvalue())
+            self.assertFalse(os.path.exists(
+                os.path.join(d, "dashboard", "data", "ledger.jsonl")))
+
+    def test_a_failure_is_counted_and_exits_nonzero(self):
+        """A partial backfill leaves the durable record incomplete, and
+        'appended N' alone reads as success."""
+        import urllib.error
+        with tempfile.TemporaryDirectory() as d:
+            self._setup(d)
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 6, "head": {"ref": "feat/c"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                raise urllib.error.HTTPError(url, 502, "Bad Gateway", None, None)
+
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch)
+            self.assertEqual(rc, 1)
+            self.assertIn("failed 1", buf.getvalue())
+
+    def test_a_listing_error_exits_nonzero(self):
+        import urllib.error
+        with tempfile.TemporaryDirectory() as d:
+            self._setup(d)
+
+            def fake_fetch(url, token, **kw):
+                raise urllib.error.HTTPError(url, 500, "boom", None, None)
+
+            self.assertEqual(
+                ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

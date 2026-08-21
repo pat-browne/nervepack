@@ -102,6 +102,15 @@ def main(argv):
             return 1
 
     out_file = os.environ.get("GITHUB_OUTPUT")
+    if not out_file:
+        # Expected off a runner, where there is no step to signal. Said out loud
+        # anyway: inside Actions this variable is always set, so its absence
+        # there means the step condition will read empty and nothing will
+        # enable - a silence that looks exactly like "not eligible".
+        sys.stderr.write(
+            "auto-merge: $GITHUB_OUTPUT is unset, so will_enable was not "
+            "signalled. Expected outside GitHub Actions; inside it, nothing "
+            "will auto-merge and the reason will not be visible.\n")
     if out_file:
         try:
             with open(out_file, "a", encoding="utf-8") as fh:
