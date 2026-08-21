@@ -53,7 +53,7 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
 
 **Check the local-only side before calling it noise.** Local-only commits on
 `main` are not always leftover work from someone else. Read each one with
-`git show <sha> --stat`. A commit dated within the last few sessions, with a
+`git show <sha> --stat`. A commit dated within the last 7 days, with a
 message that names a feature rather than a merge artifact, is a candidate for
 this session's own finished, unpushed work. Cross-check it against open
 issues with `gh issue list` or `gh issue view <n>` before deciding.
