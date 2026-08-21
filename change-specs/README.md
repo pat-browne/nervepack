@@ -31,8 +31,8 @@ git branch name with `/` replaced by `-`. Example: branch
 | `id` | yes | Sequential, never reused. Zero-padded 4 digits. |
 | `status` | yes | `proposed \| rejected \| accepted \| superseded by <NNNN>` |
 | `date` | yes | ISO 8601, the date first opened |
-| `tier` | yes | `standard \| normal \| high` — see the tier registry (#253/F7, not yet built) |
-| `blast_radius` | yes | Path globs this change may touch. Enforced by drift-guard (#249, not yet built) |
+| `tier` | yes | `standard \| normal \| high` — resolved from `engine/setup/risk-tiers.json`, see `docs/RISK-TIERS.md` |
+| `blast_radius` | yes | Path globs this change may touch. Enforced by the drift-guard hook at the tool call and by `spec-guard` in CI |
 
 ## Status lifecycle and the immutability rule
 
@@ -48,7 +48,7 @@ there is.
 ## `[NEEDS CLARIFICATION]`
 
 Mark an underspecified point with this exact string rather than guessing.
-`spec-guard` (#248, not yet built) will fail the PR while any marker remains.
+`spec-guard` fails the PR while any marker remains.
 Clear every one before implementation proceeds.
 
 ## When a spec is not required
@@ -59,6 +59,16 @@ change gets abandoned. Write one when three or more hold, per Google's
 design-doc test: you are unsure of the right design; a senior perspective would
 help; the design is contentious; cross-cutting concerns get overlooked; legacy
 code needs documenting.
+
+## High tier needs a rollback plan
+
+A spec with `tier: high` must carry a `## Rollback` section with something under
+it. The `tier-gate` CI job checks for it, and an empty heading does not count —
+that is the shape a template leaves behind, and accepting it would turn a
+rollback plan into a formatting exercise.
+
+Write the steps someone would run, in the order that restores the loosest state
+first. `feat-f8-tier-gate.md` in this directory is a worked example.
 
 ## Length
 

@@ -308,17 +308,18 @@ jobs:
           path: gate-verdict-pii-guard.json
 
   spec-guard:
-    name: Spec guard (change-specs, advisory)
+    name: Spec guard (change-specs)
     runs-on: ubuntu-latest
     # A normal job-level `if:` on event type — NOT the workflow-level `paths:`
     # filter that silently strands required checks (see np-spec-guard.py's own
     # "no base ref" exit-0 path for the same reasoning, belt and suspenders).
     if: github.event_name == 'pull_request'
-    # Advisory (#248/F2): reports a real pass/fail, but never blocks merge
-    # while this stays out of the required-checks ruleset. Promote by adding
-    # "Spec guard" to the ruleset after a watch period — see
-    # change-specs/README.md — not by removing this line first.
-    continue-on-error: true
+    # PROMOTED to required (#254/F8). It shipped advisory in #248/F2 and has
+    # run on every pull request since without a false positive, which is the
+    # watch period change-specs/README.md asked for. Its context now sits in
+    # the branch ruleset (.github/branch-protection/ruleset-main.json), so
+    # continue-on-error is gone: with it set the job reports success even when
+    # the script exits 1, which would make the required check vacuous.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -437,6 +438,78 @@ jobs:
           name: gate-verdict-diff-review
           path: gate-verdict-diff-review.json
 
+  tier-gate:
+    name: Tier gate (differential gating, advisory)
+    runs-on: ubuntu-latest
+    # always(): this must run even when an upstream gate FAILED. Reading "which
+    # required verdicts are missing" is the whole job - needs' default gating
+    # would skip it exactly when it has the most to say.
+    if: always() && github.event_name == 'pull_request'
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
+    # Advisory (#254/F8), per this repo's "ship any new gate advisory first,
+    # then promote" rule. It reports its real exit code regardless, because an
+    # advisory period that reports nothing measures nothing. Promotion is the
+    # first step of #255, after it has been watched on real pull requests.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # need base-branch history for the three-dot diff
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Download every gate-verdict-* artifact
+        uses: actions/download-artifact@v7
+        with:
+          pattern: gate-verdict-*
+          path: verdicts
+          merge-multiple: true
+
+      - name: Apply the tier's requirement set
+        # head_ref/base_ref are attacker-controlled PR-derived strings - passed
+        # via env and referenced as shell variables, never ${{ }}-interpolated
+        # into the run: script. Same reasoning as spec-guard above.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          python3 engine/setup/np-tier-gate.py \
+            --root "$GITHUB_WORKSPACE" \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --branch "$HEAD_REF" \
+            --verdicts-dir verdicts \
+            --out tier-policy.json
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "tier-gate" --status "${{ job.status }}" --reason "Tier requirement set applied to this diff (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-tier-gate.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-tier-gate
+          path: gate-verdict-tier-gate.json
+
+      # A SEPARATE artifact, deliberately: gate-verdicts-summary downloads
+      # `gate-verdict-*` with merge-multiple and then reads every *.json in the
+      # merged directory as a verdict. Shipping tier-policy.json inside the
+      # gate-verdict-* artifact would put a file with no `gate` field into that
+      # set and render a blank row in the PR comment.
+      #
+      # Uploaded whether the gate passed or failed. #255 reads this to decide
+      # auto-merge, and a policy artifact that exists only on success cannot be
+      # watched during an advisory period.
+      - name: Upload the tier policy
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tier-policy
+          path: tier-policy.json
+
   gate-verdicts-summary:
     name: Gate verdicts summary
     runs-on: ubuntu-latest
@@ -444,7 +517,7 @@ jobs:
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
     if: always() && github.event_name == 'pull_request'
-    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate]
     permissions:
       pull-requests: write   # to post/update the summary comment
       contents: read

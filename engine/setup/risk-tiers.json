@@ -24,6 +24,9 @@
     {"glob": "engine/setup/risk-tiers.json", "tier": "high", "why": "SELF: this file decides how much scrutiny every change gets. If it were standard, the whole policy could be rewritten in a diff needing no spec and no declared tier."},
     {"glob": "engine/setup/np_risk_tiers.py", "tier": "high", "why": "SELF: the resolver that reads the rule above"},
     {"glob": "engine/setup/np-spec-guard.py", "tier": "high", "why": "SELF: the CI gate that enforces both"},
-    {"glob": "engine/setup/np_change_spec.py", "tier": "high", "why": "the blast-radius matcher shared by spec-guard and drift-guard"}
+    {"glob": "engine/setup/np_change_spec.py", "tier": "high", "why": "the blast-radius matcher shared by spec-guard and drift-guard"},
+    {"glob": "engine/setup/np_tier_policy.py", "tier": "high", "why": "SELF: states what each tier requires. If it were standard, the thresholds could be lowered by a change needing no spec, no rollback plan and no adversarial lens."},
+    {"glob": "engine/setup/np-tier-gate.py", "tier": "high", "why": "SELF: the CI gate that applies the rule above"},
+    {"glob": "engine/setup/np_codeowners.py", "tier": "high", "why": "generates the committed declaration of these very paths"}
   ]
 }
