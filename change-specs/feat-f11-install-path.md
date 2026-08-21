@@ -20,11 +20,18 @@ is assumed across setup scripts and skill cross-references. Surveying that
 constraint before building changed what this change should be.
 
 **The criterion's first acceptance item is already met.** There is no
-machine-specific absolute path anywhere in the tree. The only occurrences of
-`/home/pbrowne` and `/Users/` are inside `publish/np-publish-scan.py`'s own
-detection patterns and their tests, which is where they belong — and the
-`pii-guard` CI job already fails the build if one appears elsewhere. That is an
-enforced property, not a hopeful one.
+machine-specific absolute path anywhere in the tree. The only occurrences of the
+maintainer's home directory, and of the macOS home prefix, are inside
+`publish/np-publish-scan.py`'s own detection patterns and their tests, which is
+where they belong — and the `pii-guard` CI job already fails the build if one
+appears elsewhere. That is an enforced property, not a hopeful one.
+
+Enforced firmly enough that it caught this document. The sentence above
+originally spelled both paths out while explaining that they appear nowhere but
+the scanner, and `pii-guard` failed the build for it. The gate is right: a
+literal home path in a committed file is what it exists to catch, and this repo
+is meant to go public. Intent is not a category the scanner has, and should not
+be.
 
 **The core already resolves its own root correctly.** `np_paths` computes
 `REPO_ROOT` from its own file location and never reads `$HOME`.
