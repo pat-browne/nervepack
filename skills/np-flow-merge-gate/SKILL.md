@@ -5,7 +5,7 @@ description: Gate a branch merge on concurrent work finishing, then decide clean
 
 # Merge gate — wait out concurrency, then merge on a clean diff
 
-`${NP_DIR:-$HOME/Code/nervepack}` is a single working tree with one git HEAD. When a second
+`~/Code/nervepack` is a single working tree with one git HEAD. When a second
 session (often a `.claude/worktrees/agent-*` worktree), a cron, or a cloud routine
 is committing here too, merging blind risks sweeping their files, orphaning their
 commits, or merging a half-finished state. This workflow makes the merge **wait for

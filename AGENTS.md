@@ -529,7 +529,7 @@ weekly-compact agent. Read it, decide for each proposal, then either:
   `compact-proposals/REJECTED.md` so the agent doesn't re-propose).
 
 ## When another AI session may be working in this repo concurrently
-`${NP_DIR:-$HOME/Code/nervepack}` is a **single working tree with one git HEAD**. If two sessions —
+`~/Code/nervepack` is a **single working tree with one git HEAD**. If two sessions —
 or a session plus a cron/cloud agent — operate here at once, they WILL collide.
 Observed failure modes (all real):
 - `git add -A` / `git commit -am` in one session **sweeps the other session's

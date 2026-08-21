@@ -28,8 +28,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
 
 LITERAL = "~/Code/nervepack"
-# A line that RUNS something. A mention inside prose is not one of these.
-INVOKES = re.compile(r"(^|[|`(\s\"'])(python3?|bash|sh|cd|find|ls|cat|git|export|rm|cp)\s")
+# A command WORD. Scoped to the enclosing code span, never to the whole line:
+# a prose sentence may mention `git` while the path beside it is just a location.
+# Line-scoped matching is what wrongly rewrote three prose references on #298,
+# including one that inverted the rationale it was explaining.
+COMMAND_WORD = re.compile(r"\b(python3?|bash|sh|cd|find|ls|cat|git|export|rm|cp|gh)\b")
+CODE_SPAN = re.compile(r"`[^`]*`")
 SHELL_FENCES = ("bash", "sh", "shell", "console")
 # `git clone <url> <dest>` is the one command whose path argument is the
 # directory being CREATED, not a reference to an existing install. Writing
@@ -69,8 +73,17 @@ def _offending_lines(rel):
                 continue
             if CREATES_THE_CHECKOUT.search(line):
                 continue
-            if fence in SHELL_FENCES or INVOKES.search(line):
+            if fence in SHELL_FENCES:
                 bad.append((number, line.rstrip()))
+                continue
+            # Outside a fence, judge each occurrence by the code span holding it.
+            for match in re.finditer(re.escape(LITERAL), line):
+                span = next((m for m in CODE_SPAN.finditer(line)
+                             if m.start() <= match.start() < m.end()), None)
+                context = span.group(0) if span else line
+                if COMMAND_WORD.search(context):
+                    bad.append((number, line.rstrip()))
+                    break
     return bad
 
 
@@ -119,6 +132,38 @@ class TestNoCommandHardcodesTheInstallPath(unittest.TestCase):
                 REPO = saved
         self.assertEqual(len(offenders), 1)
         self.assertIn("git -C", offenders[0][1])
+
+    def test_prose_mentioning_a_command_word_is_left_alone(self):
+        """The case that actually went wrong. A sentence may say `git HEAD`
+        while the path beside it is a location, not an argument. Judging the
+        whole LINE rewrote three prose references on #298, one of which
+        inverted the history it was explaining."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "x.md"), "w", encoding="utf-8") as fh:
+                fh.write("`~/Code/nervepack` is a single working tree with one "
+                         "git HEAD.\n"
+                         "Before #257 the rows carried `~/Code/nervepack` and a "
+                         "`git worktree remove` broke them.\n")
+            global REPO
+            saved, REPO = REPO, d
+            try:
+                self.assertEqual(_offending_lines("x.md"), [])
+            finally:
+                REPO = saved
+
+    def test_a_command_inside_a_code_span_is_still_caught(self):
+        """The span-scoped rule must not become a blanket prose exemption."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "x.md"), "w", encoding="utf-8") as fh:
+                fh.write("Show the user `git -C ~/Code/nervepack log` first.\n")
+            global REPO
+            saved, REPO = REPO, d
+            try:
+                self.assertEqual(len(_offending_lines("x.md")), 1)
+            finally:
+                REPO = saved
 
     def test_prose_is_left_alone(self):
         """The variable must NOT spread into prose: a file-reading tool expands
