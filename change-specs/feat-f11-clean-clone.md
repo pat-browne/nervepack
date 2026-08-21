@@ -8,6 +8,7 @@ blast_radius:
   - engine/nervepack_engine/np_hook.py
   - engine/nervepack_engine/cli.py
   - engine/setup/tests/nervepack_engine/test_np_hook.py
+  - engine/setup/tests/nervepack_engine/test_cli.py
   - change-specs/**
 ---
 
