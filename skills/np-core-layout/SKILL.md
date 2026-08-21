@@ -33,7 +33,7 @@ concept.
 
 1. Read the current state:
    ```bash
-   NP=~/Code/nervepack/engine/nervepack_engine/cli.py
+   NP=${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py
    python3 $NP layout show --layer personal
    python3 $NP layout questions --layer personal
    ```

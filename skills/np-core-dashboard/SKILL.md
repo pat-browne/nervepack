@@ -12,7 +12,7 @@ once-per-boot guard — knowing which is which answers "why didn't it open?".
 ## Open it now (manual, always works)
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py open-dashboard
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py open-dashboard
 ```
 
 This rebuilds `metrics.js` from the latest metrics, resolves the URL, and opens it

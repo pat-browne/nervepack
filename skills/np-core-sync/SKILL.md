@@ -45,7 +45,7 @@ are the only place that ever happens.
 
 2. **Run the sync in exit mode** (idempotent, writes a fresh status):
    ```bash
-   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync exit --verbose
+   python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py sync exit --verbose
    ```
    Bare `cli.py sync` (no `exit`) is backup mode: it throttles to `sync.interval`
    (default 86400s) and no-ops inside that window. It prints a `within Ns

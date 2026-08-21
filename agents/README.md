@@ -22,7 +22,7 @@ accumulated state).
 ### All scheduled jobs (cron: Linux / macOS fallback)
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-memory-cron
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-memory-cron
 ```
 
 Idempotent. Installs `memory-promote`, `episodic-maintain`, `aggregate-metrics`,
@@ -36,7 +36,7 @@ crontab -l | grep nervepack-
 ### All scheduled jobs (launchd: macOS preferred)
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-memory-launchd
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-memory-launchd
 ```
 
 Installs the same jobs as LaunchAgents. Verify:
@@ -49,19 +49,19 @@ launchctl list | grep com.nervepack
 
 ### memory-promote (local)
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron memory-promote
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py cron memory-promote
 tail -50 ~/.cache/nervepack/memory-promote.log
 ```
 
 ### nervepack-refine (local cron)
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron refine
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py cron refine
 tail -50 ~/.cache/nervepack/refine.log
 ```
 
 ### nervepack-compact (local cron)
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py cron compact
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py cron compact
 tail -50 ~/.cache/nervepack/compact.log
 ```
 

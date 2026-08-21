@@ -486,7 +486,7 @@ Don't auto-fix. Surface candidates and let the user decide.
    overlap. This is how disparate sessions avoid creating duplicates.
 2. `mkdir skills/<name> && ${EDITOR:-nano} skills/<name>/SKILL.md`
 3. Add `./skills/<name>` to `skills` array in `.claude-plugin/plugin.json`
-4. Run `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills` — symlinks into the host's
+4. Run `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup link-skills` — symlinks into the host's
    skill directory (e.g. `~/.claude/skills/` for Claude Code) AND regenerates `INDEX.md`.
 5. Commit with subject `skill(<name>): <one-line summary>`
 
@@ -529,7 +529,7 @@ weekly-compact agent. Read it, decide for each proposal, then either:
   `compact-proposals/REJECTED.md` so the agent doesn't re-propose).
 
 ## When another AI session may be working in this repo concurrently
-`~/Code/nervepack` is a **single working tree with one git HEAD**. If two sessions —
+`${NP_DIR:-$HOME/Code/nervepack}` is a **single working tree with one git HEAD**. If two sessions —
 or a session plus a cron/cloud agent — operate here at once, they WILL collide.
 Observed failure modes (all real):
 - `git add -A` / `git commit -am` in one session **sweeps the other session's

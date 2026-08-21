@@ -18,6 +18,15 @@ hand-edit hooks or settings; the onboard does it and proves it with the doctor.
 git clone https://github.com/pat-browne/nervepack ~/Code/nervepack
 ```
 
+`~/Code/nervepack` is the default and nothing requires it. To install elsewhere,
+clone where you like and export `NP_DIR`, which the engine reads as the repo
+root. Every command later in this guide honours it:
+
+```bash
+export NP_DIR=/opt/nervepack
+git clone https://github.com/pat-browne/nervepack "$NP_DIR"
+```
+
 Git is the only prerequisite for this step. On **Windows, install
 [Git for Windows](https://gitforwindows.org) first** — it supplies the `bash` that runs
 every nervepack hook and cron.
@@ -26,14 +35,14 @@ every nervepack hook and cron.
 
 | OS | Command |
 |---|---|
-| Linux | `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-apt-baseline` |
-| macOS | `python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-brew-baseline` |
+| Linux | `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-apt-baseline` |
+| macOS | `python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-brew-baseline` |
 | Windows | No installer step — install **Node 20, Python 3, `gh`, and `jq`** by hand (Git for Windows already covers bash). |
 
 The engine runs on **Bash + Python 3** — the baseline above installs Python (`apt` on
 Linux, `uv python install` on macOS; install it by hand on Windows), so every engine
 script works out of the box. On a Claude host, finish with
-`python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup install-claude-plugins`.
+`python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup install-claude-plugins`.
 
 **3. Authenticate GitHub** (so the maintenance jobs can push your content):
 
@@ -51,7 +60,7 @@ onboard nervepack
 skill, so it only exists *after* onboarding links the skills. Saying "onboard
 nervepack" works from zero because the agent auto-loads this repo's `CLAUDE.md`,
 which routes it to the contract. Non-interactive alternative:
-`python3 ~/Code/nervepack/engine/nervepack_engine/cli.py onboard` runs the same
+`python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py onboard` runs the same
 wiring directly. Once onboarded, `/np-onboard` is available for re-runs.)
 
 Your agent reads the tool-neutral contract, links the skills, installs the session hooks
@@ -59,7 +68,7 @@ and scheduler, writes `~/.config/nervepack/adapter.json`, and runs the doctor un
 MUST capability is green. Verify any time:
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py doctor   # per-capability PASS/MISSING; non-zero on a real gap
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py doctor   # per-capability PASS/MISSING; non-zero on a real gap
 ```
 
 That's the whole install. What differs by OS is handled for you:
@@ -96,7 +105,7 @@ The engine and your content overlay live in separate repos, so a script named in
 can drift. This catches a stale path before you chase a dead command:
 
 ```bash
-python3 ~/Code/nervepack/engine/setup/np-path-check.py ~/Code/nervepack ~/Code/nervepack-content
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np-path-check.py ${NP_DIR:-$HOME/Code/nervepack} ${NP_CONTENT_DIR:-$HOME/Code/nervepack-content}
 ```
 
 A clean run prints `all setup/onboard path references resolve ✓`; any hit names the file,

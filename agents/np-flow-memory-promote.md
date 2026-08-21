@@ -36,7 +36,7 @@ the engine) is committed in the **engine repo** (`$NERVEPACK` = `~/Code/nervepac
 ### 1. Sync nervepack
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync --verbose
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py sync --verbose
 ```
 
 Read the resulting status. If it's anything other than `up to date` or
@@ -103,7 +103,7 @@ Make the edit, then, **in the same project dir the entry came from**:
 ### 5. Regenerate INDEX and commit
 
 ```bash
-python3 ~/Code/nervepack/engine/nervepack_engine/cli.py setup link-skills   # relinks both trees + regenerates INDEX.md (in the engine)
+python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py setup link-skills   # relinks both trees + regenerates INDEX.md (in the engine)
 ```
 
 Commit to the repo each change actually landed in (two repos — see the note at

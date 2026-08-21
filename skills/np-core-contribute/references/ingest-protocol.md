@@ -15,8 +15,12 @@ do not silently write the file. Run this suggest-and-prompt flow
 
 2. **Count sources:**
    ```bash
-   TOTAL=$(find ~/Code/nervepack/sources -name '*.md' | wc -l)
-   PARENT=$(find ~/Code/nervepack/sources/<topic> -name '*.md' 2>/dev/null | wc -l)
+   # Ask the resolver. `sources` is a LAYER, not a directory in this repo: it
+   # resolves to <overlay>/memory/sources, and both halves of that were wrong
+   # here before #257 - the engine repo has no sources/ at all.
+   SOURCES=$(python3 ${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py layer_roots sources)
+   TOTAL=$(find "$SOURCES" -name '*.md' | wc -l)
+   PARENT=$(find "$SOURCES/<topic>" -name '*.md' 2>/dev/null | wc -l)
    ```
 
 3. **Find least-referenced source** in `<topic>/` — count `[[<source>]]`

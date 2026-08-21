@@ -5,7 +5,7 @@ description: Gate a branch merge on concurrent work finishing, then decide clean
 
 # Merge gate — wait out concurrency, then merge on a clean diff
 
-`~/Code/nervepack` is a single working tree with one git HEAD. When a second
+`${NP_DIR:-$HOME/Code/nervepack}` is a single working tree with one git HEAD. When a second
 session (often a `.claude/worktrees/agent-*` worktree), a cron, or a cloud routine
 is committing here too, merging blind risks sweeping their files, orphaning their
 commits, or merging a half-finished state. This workflow makes the merge **wait for
@@ -26,7 +26,7 @@ is **quiet** (all refs + HEAD + working tree stable across a full poll interval)
 then checks merge-readiness. Read-only — it never commits, merges, or pushes.
 
 ```bash
-python3 engine/nervepack_engine/cli.py merge-wait --repo ~/Code/nervepack --branch <BR> --base origin/main
+python3 engine/nervepack_engine/cli.py merge-wait --repo ${NP_DIR:-$HOME/Code/nervepack} --branch <BR> --base origin/main
 ```
 
 Cadence: starts at `--interval` 60s, adds `--backoff` 30s each cycle, gives up at
