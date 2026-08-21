@@ -537,8 +537,18 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     needs: [tier-gate]
     permissions:
-      contents: write        # enabling native auto-merge acts on the branch
-      pull-requests: write   # ...and on the pull request
+      # `gh pr merge --auto` needs BOTH. This is the scope GitHub's own
+      # "Automating Dependabot with GitHub Actions" example declares for exactly
+      # this call, and guessing lower fails in the worst possible way: the enable
+      # step errors, the pull request simply never auto-merges, and nothing about
+      # that looks different from "not eligible".
+      #
+      # `contents: write` here cannot push to `main`. The branch ruleset requires
+      # a pull request, forbids non-fast-forward and deletion, and GITHUB_TOKEN
+      # is not in its bypass-actor list - so the ruleset, not the token scope, is
+      # what stands between this job and the default branch.
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
 
