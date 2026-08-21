@@ -73,12 +73,22 @@ Secret/PII guard (terminal gate)
 Windows suite (Git-bash)
 Bash-free MCP suite (no Git-bash)
 Spec guard (change-specs)
+Tier gate (differential gating)
 ```
 
 The first five are deterministic: the same tree gives the same answer, with no
-model in the loop. Only gates of that kind are ever required to pass.
+model in the loop. Only gates of that kind are ever required to pass. `Tier
+gate` qualifies too — it reads verdicts and applies a table, and consults no
+model.
 
-`Spec guard` joined them in #254. It shipped advisory in #248 and ran on every
+One consequence of promoting `Tier gate` is worth knowing before it surprises
+someone. A high-tier pull request whose `diff-review` SKIPPED can no longer
+merge without an admin bypass, and `diff-review` always skips on a fork, because
+GitHub withholds secrets from fork pull requests. So a fork pull request that
+touches a hook is blocked pending maintainer action. For high-risk paths that is
+the intended answer, and it is still a real narrowing.
+
+`Spec guard` joined them in #254, and `Tier gate` in #255. It shipped advisory in #248 and ran on every
 pull request after that without a false positive, which is the watch period
 `change-specs/README.md` asked for.
 
@@ -88,16 +98,91 @@ forever. Rename the job and the ruleset in the same change.
 
 ## What is deliberately not required
 
-`Diff review (multi-lens, advisory)` and `Tier gate (differential gating,
-advisory)` both run on every pull request and neither one is required.
+`Diff review (multi-lens, advisory)` and `Auto-merge decision (standard tier)`
+both run on every pull request and neither one is required.
 
 The diff reviewer stays advisory permanently. Measured LLM review precision is
 50 to 85 percent, and the largest rejection category is missing project context
 rather than wrongness. It comments. It does not vote.
 
-The tier gate is advisory for now, under this repo's rule that a new gate ships
-advisory and gets promoted after it has been watched on real pull requests.
-Promotion is the first step of #255.
+The auto-merge decision is not a gate at all. It records a judgement and, when
+that judgement is yes, asks GitHub to enable native auto-merge. Failing it would
+mean nothing.
+
+## Auto-merge
+
+A standard-tier pull request can merge without a human. Nothing else can.
+
+The mechanism is **GitHub's native auto-merge**, and no code here performs a
+merge. Native auto-merge is a *waiting* mechanism: GitHub holds the pull request
+until every required check and every ruleset requirement is satisfied, then
+merges. It sits on the same side of the gate as a human clicking the button, so
+it cannot bypass one. A workflow that called the merge API directly would hold a
+token able to merge whether or not the gates passed, and its safety would rest on
+a conditional staying correct forever.
+
+Four conditions decide eligibility, in `engine/setup/np_automerge.py`:
+
+1. `tier-policy.json` says `auto_merge_eligible` — standard tier, every required
+   verdict PASSED, no open problems.
+2. The tier is in the policy's `allowed_tiers`.
+3. The pull request's **author** is in `trusted_authors`.
+4. `diff-review` ran. Not that it approved — see below.
+
+A fifth flag, `enabled` in `engine/setup/automerge.json`, is the kill switch and
+is kept separate from eligibility, so the record still says whether a change
+*would* have merged itself while the switch is off. **It ships off.**
+
+### The reviewer gets a real consequence without becoming an authority
+
+`diff-review` never reports FAILED. What it does with a finding is post a review
+comment, and this ruleset requires conversation resolution, so a pull request
+with open findings is unmergeable natively and auto-merge simply waits.
+
+Condition 4 therefore checks only that the lens *ran*. SKIPPED means no
+adversarial signal exists at all, which is the one state where merging without a
+human would be indefensible.
+
+That gives a 50-to-85-percent-precision signal exactly the weight it deserves. A
+finding does not block the change. It demotes the change from *merges itself* to
+*a human looks at it*, so a false positive costs one glance rather than a
+stranded pull request.
+
+### Checks are verified against the latest base commit
+
+`strict_required_status_checks_policy` means a pull request cannot merge while
+its branch is behind `main`. Moving the base makes the pull request out of date
+and forces an update, which re-runs every check against the new base. That is
+Prow/Tide's published guarantee, obtained from the ruleset rather than from code.
+
+### The repository setting
+
+Native auto-merge must be on at the repository level or no pull request can use
+it:
+
+```bash
+gh api -X PATCH repos/pat-browne/nervepack -f allow_auto_merge=true
+```
+
+Turning it off is the fastest way to stop every pending auto-merge at once,
+without merging a change to do it.
+
+### The ledger entry does not come from CI
+
+`dashboard/data/ledger.jsonl` lives in the private content overlay, and a
+public-repo Actions job has no write access to it and must not be given any. A
+human running `np-ledger-append.py` was the mechanism, and an auto-merged pull
+request has no human in the loop.
+
+So the record catches up locally instead:
+
+```bash
+python3 engine/setup/np-ledger-append.py --repo pat-browne/nervepack --backfill
+```
+
+It appends every merged pull request the ledger is missing and skips the rest,
+so running it twice is a no-op. Closing this gap by giving CI a cross-repo token
+would trade a bookkeeping delay for a credential in the wrong place.
 
 ## Differential gating
 

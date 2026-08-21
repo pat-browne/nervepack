@@ -28,6 +28,9 @@
     {"glob": "engine/setup/np_tier_policy.py", "tier": "high", "why": "SELF: states what each tier requires. If it were standard, the thresholds could be lowered by a change needing no spec, no rollback plan and no adversarial lens."},
     {"glob": "engine/setup/np-tier-gate.py", "tier": "high", "why": "SELF: the CI gate that applies the rule above"},
     {"glob": "engine/setup/np_codeowners.py", "tier": "high", "why": "generates the committed declaration of these very paths"},
-    {"glob": ".github/branch-protection/**", "tier": "high", "why": "SELF: the committed record of which status checks are REQUIRED. It resolved to normal until change spec 0011, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens."}
+    {"glob": ".github/branch-protection/**", "tier": "high", "why": "SELF: the committed record of which status checks are REQUIRED. It resolved to normal until change spec 0011, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens."},
+    {"glob": "engine/setup/automerge.json", "tier": "high", "why": "SELF: decides which changes may merge with no human. If it were standard, the tier allowlist and the trusted-author list could both be widened in a diff needing no spec."},
+    {"glob": "engine/setup/np_automerge.py", "tier": "high", "why": "SELF: the decision that reads the policy above"},
+    {"glob": "engine/setup/np-automerge-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"}
   ]
 }

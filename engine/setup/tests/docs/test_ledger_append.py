@@ -175,5 +175,145 @@ class TestMainFailureModes(unittest.TestCase):
             self.assertFalse(os.path.isfile(ledger_path))
 
 
+
+
+class TestExistingChangeIds(unittest.TestCase):
+    """Backfill idempotence rests entirely on this. F9/#255."""
+
+    def _ledger(self, d, lines):
+        path = os.path.join(d, "ledger.jsonl")
+        with open(path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+        return path
+
+    def test_reads_every_change_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._ledger(d, [json.dumps({"change_id": "a"}),
+                                    json.dumps({"change_id": "b"})])
+            self.assertEqual(ledger_append.existing_change_ids(path), {"a", "b"})
+
+    def test_a_missing_ledger_is_an_empty_set_not_an_error(self):
+        self.assertEqual(
+            ledger_append.existing_change_ids("/nonexistent/ledger.jsonl"), set())
+
+    def test_an_unparseable_line_is_skipped_not_fatal(self):
+        """The ledger is append-only and kept indefinitely. One bad line written
+        years ago must not stop today from being recorded."""
+        with tempfile.TemporaryDirectory() as d:
+            path = self._ledger(d, ["{not json", json.dumps({"change_id": "b"})])
+            self.assertEqual(ledger_append.existing_change_ids(path), {"b"})
+
+    def test_blank_lines_are_ignored(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._ledger(d, [json.dumps({"change_id": "a"}), "", "  "])
+            self.assertEqual(ledger_append.existing_change_ids(path), {"a"})
+
+    def test_an_entry_without_a_change_id_contributes_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._ledger(d, [json.dumps({"spec": "x"})])
+            self.assertEqual(ledger_append.existing_change_ids(path), set())
+
+
+class TestMergedPullRequests(unittest.TestCase):
+    def test_unmerged_closed_pull_requests_are_filtered_out(self):
+        """state=closed covers both closed and merged, so merged_at is the only
+        thing that distinguishes them."""
+        def fake_fetch(url, token, **kw):
+            return [
+                {"number": 3, "head": {"ref": "feat/a"}, "merged_at": "2026-08-01T00:00:00Z"},
+                {"number": 4, "head": {"ref": "feat/b"}, "merged_at": None},
+            ]
+        self.assertEqual(
+            ledger_append.merged_pull_requests("o/r", "tok", 50, fetch=fake_fetch),
+            [(3, "feat/a")])
+
+    def test_the_page_size_is_capped_at_the_api_maximum(self):
+        seen = {}
+        def fake_fetch(url, token, **kw):
+            seen["url"] = url
+            return []
+        ledger_append.merged_pull_requests("o/r", "tok", 500, fetch=fake_fetch)
+        self.assertIn("per_page=100", seen["url"])
+
+
+class TestBackfillSkipsWhatIsAlreadyRecorded(unittest.TestCase):
+    def test_a_pull_request_already_in_the_ledger_is_not_fetched_again(self):
+        import argparse
+        with tempfile.TemporaryDirectory() as d:
+            data = os.path.join(d, "dashboard", "data")
+            os.makedirs(data)
+            with open(os.path.join(data, "ledger.jsonl"), "w") as f:
+                f.write(json.dumps({"change_id": "feat-a"}) + "\n")
+
+            calls = []
+            def fake_fetch(url, token, **kw):
+                calls.append(url)
+                if "/pulls?" in url:
+                    return [{"number": 3, "head": {"ref": "feat/a"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                return []
+
+            args = argparse.Namespace(
+                repo="o/r", pr=None, backfill=True, limit=50, repo_root=d,
+                content_dir=d, spec=None, tier=None, merge_sha=None)
+            rc = ledger_append.backfill(args, "tok", fetch=fake_fetch)
+            self.assertEqual(rc, 0)
+            # Only the listing call. No per-PR fetch for an entry already held.
+            self.assertEqual([c for c in calls if "/pulls/" in c], [])
+
+    def test_a_missing_pull_request_is_appended(self):
+        import argparse
+        with tempfile.TemporaryDirectory() as d:
+            data = os.path.join(d, "dashboard", "data")
+            os.makedirs(data)
+            os.makedirs(os.path.join(d, "change-specs"))
+            with open(os.path.join(d, "change-specs", "feat-b.md"), "w") as f:
+                f.write("---\ntier: normal\n---\nbody\n")
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 4, "head": {"ref": "feat/b"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                if "/pulls/4" in url:
+                    return {"head": {"sha": "head4", "ref": "feat/b"},
+                            "merge_commit_sha": "merge4"}
+                return []
+
+            args = argparse.Namespace(
+                repo="o/r", pr=None, backfill=True, limit=50, repo_root=d,
+                content_dir=d, spec=None, tier=None, merge_sha=None)
+            self.assertEqual(ledger_append.backfill(args, "tok", fetch=fake_fetch), 0)
+            with open(os.path.join(data, "ledger.jsonl")) as f:
+                entries = [json.loads(x) for x in f if x.strip()]
+            self.assertEqual([e["change_id"] for e in entries], ["feat-b"])
+            self.assertEqual(entries[0]["merge_sha"], "merge4")
+
+    def test_running_it_twice_appends_nothing_the_second_time(self):
+        import argparse
+        with tempfile.TemporaryDirectory() as d:
+            data = os.path.join(d, "dashboard", "data")
+            os.makedirs(data)
+            os.makedirs(os.path.join(d, "change-specs"))
+            with open(os.path.join(d, "change-specs", "feat-b.md"), "w") as f:
+                f.write("---\ntier: normal\n---\nbody\n")
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 4, "head": {"ref": "feat/b"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                if "/pulls/4" in url:
+                    return {"head": {"sha": "head4", "ref": "feat/b"},
+                            "merge_commit_sha": "merge4"}
+                return []
+
+            args = argparse.Namespace(
+                repo="o/r", pr=None, backfill=True, limit=50, repo_root=d,
+                content_dir=d, spec=None, tier=None, merge_sha=None)
+            ledger_append.backfill(args, "tok", fetch=fake_fetch)
+            ledger_append.backfill(args, "tok", fetch=fake_fetch)
+            with open(os.path.join(data, "ledger.jsonl")) as f:
+                self.assertEqual(len([x for x in f if x.strip()]), 1)
+
 if __name__ == "__main__":
     unittest.main()
