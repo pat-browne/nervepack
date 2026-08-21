@@ -181,11 +181,19 @@ def _warn_setup_failure(name, exc):
     raises identically. Re-encoding with backslashreplace is, and it keeps the
     message readable: ValueError('caf\\xe9').
     """
-    message = "cli.py setup %s: unhandled exception: %r\n" % (name, exc)
     try:
-        sys.stderr.write(message)
-    except UnicodeEncodeError:
-        sys.stderr.write(message.encode("ascii", "backslashreplace").decode("ascii"))
+        message = "cli.py setup %s: unhandled exception: %r\n" % (name, exc)
+        try:
+            sys.stderr.write(message)
+        except UnicodeEncodeError:
+            sys.stderr.write(message.encode("ascii", "backslashreplace").decode("ascii"))
+    except Exception:                              # noqa: BLE001
+        # Broad on purpose, and the breadth IS the contract. stderr can be closed,
+        # a pipe can be broken, and `repr(exc)` runs user-defined `__repr__` that
+        # may itself raise. Any of those escaping here would skip the `_bail()`
+        # call that follows and lose the file log too - both channels gone
+        # because reporting failed. Silence on one channel beats losing both.
+        pass
 
 
 def main(argv=None):

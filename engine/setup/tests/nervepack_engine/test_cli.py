@@ -352,6 +352,27 @@ class TestASetupFailureIsAlwaysReportable(unittest.TestCase):
         self.assertIn("install-hooks", out)
         self.assertIn("caf", out)
 
+    def test_it_survives_a_closed_stream(self):
+        """Both channels must not be lost because reporting failed: an exception
+        escaping here would skip the _bail() log write that follows."""
+        from nervepack_engine import cli
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        stream.close()
+        with mock.patch.object(cli.sys, "stderr", stream):
+            cli._warn_setup_failure("install-hooks", ValueError("x"))
+
+    def test_it_survives_a_repr_that_raises(self):
+        """repr(exc) runs user-defined __repr__, which may itself raise."""
+        from nervepack_engine import cli
+
+        class Hostile(Exception):
+            def __repr__(self):
+                raise RuntimeError("nope")
+
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        with mock.patch.object(cli.sys, "stderr", stream):
+            cli._warn_setup_failure("install-hooks", Hostile())
+
     def test_it_never_raises_on_an_unencodable_message(self):
         for text in ("caf\u00e9", "\u4e2d\u6587", "emoji \U0001f600"):
             with self.subTest(text=text):
