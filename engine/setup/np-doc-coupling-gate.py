@@ -36,12 +36,24 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 import np_doc_coupling  # noqa: E402
 import np_github_api  # noqa: E402
+
+# A diff on this tree takes milliseconds. The timeout exists for a hung git, not
+# a slow one, so it is generous enough to never fire on a real diff and short
+# enough to beat any job-level timeout.
+GIT_TIMEOUT_S = 60
+# Bounded retry on the ONE call that records durable state. GitHub documents
+# 429 and 5xx as retryable, and this is the step whose failure means the debt was
+# never written down - the whole argument for this mechanism. The list call above
+# is deliberately NOT retried: it already fails soft by filing anyway.
+CREATE_ATTEMPTS = 3
+CREATE_BACKOFF_S = 2
 
 MARKER = "<!-- nervepack:doc-coupling -->"
 # Every issue this opens carries it, and already_filed() queries on it. Narrowing
@@ -87,10 +99,17 @@ def changed_and_removed(root, base, head):
     went AWAY, and a rename reports as R with both names. The old name is what a
     stale document still points at, so it is the one recorded as removed.
     """
-    out = subprocess.run(
-        ["git", "-C", root, "diff", "--name-status", "-M", "%s...%s" % (base, head)],
-        capture_output=True, text=True,
-    )
+    try:
+        out = subprocess.run(
+            ["git", "-C", root, "diff", "--name-status", "-M", "%s...%s" % (base, head)],
+            capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        # A hung git would otherwise hold the runner until the job-level timeout,
+        # which is measured in hours and says nothing about what went wrong.
+        sys.stderr.write("doc-coupling: git diff did not finish within %ds - "
+                         "treating the diff as unresolvable\n" % GIT_TIMEOUT_S)
+        return None, None
     if out.returncode != 0:
         sys.stderr.write("doc-coupling: could not diff %s...%s (%s) - skipping\n"
                          % (base, head, out.stderr.strip()))
@@ -194,15 +213,28 @@ def open_issue(repo, sha, run_url, result, token, fetch=np_github_api.default_fe
         "body": issue_body(result, repo, sha, run_url),
         "labels": [LABEL],
     }).encode("utf-8")
-    try:
-        created = fetch("https://api.github.com/repos/%s/issues" % repo, token,
-                        method="POST", data=payload) or {}
-    except Exception as exc:                       # noqa: BLE001
+    created, last_error = {}, None
+    for attempt in range(1, CREATE_ATTEMPTS + 1):
+        try:
+            created = fetch("https://api.github.com/repos/%s/issues" % repo, token,
+                            method="POST", data=payload) or {}
+            break
+        except Exception as exc:                   # noqa: BLE001
+            last_error = exc
+            if attempt == CREATE_ATTEMPTS:
+                break
+            wait = CREATE_BACKOFF_S * attempt
+            sys.stderr.write("doc-coupling: opening the issue failed (%s), "
+                             "attempt %d of %d - retrying in %ds\n"
+                             % (exc, attempt, CREATE_ATTEMPTS, wait))
+            time.sleep(wait)
+    if last_error is not None and not created:
         # Loud. This is the one step that records the debt, so a silent failure
         # here means the whole mechanism did nothing while looking like it worked.
-        sys.stderr.write("doc-coupling: could not open the issue (%s). THE DEBT "
-                         "WAS NOT RECORDED - the findings are in this job's log "
-                         "and in doc-coupling.json.\n" % exc)
+        sys.stderr.write("doc-coupling: could not open the issue after %d "
+                         "attempts (%s). THE DEBT WAS NOT RECORDED - the findings "
+                         "are in this job's log and in doc-coupling.json.\n"
+                         % (CREATE_ATTEMPTS, last_error))
         return 1
     number = created.get("number")
     if not number:

@@ -260,6 +260,16 @@ class TestTheIssueBodyCannotBeInjected(unittest.TestCase):
 
 
 class TestFilingTheIssueFailsLoudly(unittest.TestCase):
+    """Backoff is neutralised here. The retry is real, but a unit suite that
+    sleeps for it teaches people to skip the suite."""
+
+    def setUp(self):
+        self._backoff = doc_coupling_gate.CREATE_BACKOFF_S
+        doc_coupling_gate.CREATE_BACKOFF_S = 0
+
+    def tearDown(self):
+        doc_coupling_gate.CREATE_BACKOFF_S = self._backoff
+
     """This is the one step that records the debt. A silent failure here means
     the whole mechanism did nothing while looking like it worked."""
 
@@ -368,6 +378,99 @@ class TestAGitFailureIsAdvisoryOnAPullRequestAndFatalAtMerge(unittest.TestCase):
         happened should not have to know which stream to look at."""
         with tempfile.TemporaryDirectory() as d:
             self.assertIn("WARNING", self._run(d).stdout)
+
+
+
+class TestTheCreateCallRetries(unittest.TestCase):
+    """GitHub documents 429 and 5xx as retryable, and this is the one call whose
+    failure means the debt was never written down."""
+
+    RESULT = {"triggers": [{"id": "x", "paths": ["a.py"]}], "dangling": [],
+              "docs_changed": []}
+
+    def setUp(self):
+        self._backoff = doc_coupling_gate.CREATE_BACKOFF_S
+        doc_coupling_gate.CREATE_BACKOFF_S = 0
+
+    def tearDown(self):
+        doc_coupling_gate.CREATE_BACKOFF_S = self._backoff
+
+    def test_a_transient_failure_is_retried_and_succeeds(self):
+        attempts = []
+
+        def fetch(url, token, method="GET", data=None):
+            if method == "GET":
+                return []
+            attempts.append(1)
+            if len(attempts) < 3:
+                raise RuntimeError("503")
+            return {"number": 77}
+
+        rc = doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok",
+                                          fetch=fetch)
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(attempts), 3)
+
+    def test_it_gives_up_after_a_bounded_number_of_attempts(self):
+        attempts = []
+
+        def fetch(url, token, method="GET", data=None):
+            if method == "GET":
+                return []
+            attempts.append(1)
+            raise RuntimeError("503")
+
+        rc = doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok",
+                                          fetch=fetch)
+        self.assertEqual(rc, 1)
+        self.assertEqual(len(attempts), doc_coupling_gate.CREATE_ATTEMPTS)
+
+    def test_a_first_attempt_success_does_not_retry(self):
+        attempts = []
+
+        def fetch(url, token, method="GET", data=None):
+            if method == "GET":
+                return []
+            attempts.append(1)
+            return {"number": 1}
+
+        doc_coupling_gate.open_issue("o/r", "sha", "", self.RESULT, "tok", fetch=fetch)
+        self.assertEqual(len(attempts), 1)
+
+
+class TestGitHasATimeout(unittest.TestCase):
+    def test_a_timeout_reads_as_an_unresolvable_diff(self):
+        """A hung git would otherwise hold the runner until the job-level
+        timeout, which is measured in hours and says nothing about the cause."""
+        import subprocess as sp
+        real = sp.run
+
+        def fake(argv, **kw):
+            if argv[:2] == ["git", "-C"]:
+                raise sp.TimeoutExpired(argv, kw.get("timeout", 1))
+            return real(argv, **kw)
+
+        sp.run = fake
+        try:
+            self.assertEqual(
+                doc_coupling_gate.changed_and_removed(".", "a", "b"), (None, None))
+        finally:
+            sp.run = real
+
+    def test_the_timeout_is_passed_to_subprocess(self):
+        import subprocess as sp
+        real, seen = sp.run, {}
+
+        def fake(argv, **kw):
+            seen.update(kw)
+            return real(["true"], capture_output=True, text=True)
+
+        sp.run = fake
+        try:
+            doc_coupling_gate.changed_and_removed(".", "a", "b")
+        finally:
+            sp.run = real
+        self.assertEqual(seen.get("timeout"), doc_coupling_gate.GIT_TIMEOUT_S)
 
 
 if __name__ == "__main__":
