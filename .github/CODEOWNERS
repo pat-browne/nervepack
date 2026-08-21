@@ -58,5 +58,5 @@ engine/setup/np_tier_policy.py    @pat-browne
 engine/setup/np-tier-gate.py    @pat-browne
 # generates the committed declaration of these very paths
 engine/setup/np_codeowners.py    @pat-browne
-# SELF: the committed record of which status checks are REQUIRED. It resolved to normal until #291, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens.
+# SELF: the committed record of which status checks are REQUIRED. It resolved to normal until change spec 0011, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens.
 .github/branch-protection/**    @pat-browne
