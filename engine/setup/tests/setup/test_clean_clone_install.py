@@ -51,7 +51,12 @@ def _commands(settings):
     for rows in (settings.get("hooks") or {}).values():
         for entry in rows:
             for hook in entry.get("hooks", []):
-                out.append(hook.get("command", ""))
+                command = hook.get("command")
+                # Skip a row with no command rather than appending "". An empty
+                # string would inflate the count comparison below, turning a
+                # malformed registration into a passing test.
+                if command:
+                    out.append(command)
     return out
 
 
@@ -78,9 +83,15 @@ class TestACleanCloneRegistersAgainstItsOwnPath(unittest.TestCase):
         # Pre-flight, so a copy that silently lost a file fails HERE with a
         # sentence rather than downstream as an opaque non-zero exit.
         self.assertTrue(os.path.isfile(cli), "the copy has no cli.py at %s" % cli)
-        result = subprocess.run([sys.executable, cli, "setup", "install-hooks"],
-                                env=env, capture_output=True, text=True,
-                                errors="replace")
+        try:
+            result = subprocess.run([sys.executable, cli, "setup", "install-hooks"],
+                                    env=env, capture_output=True, text=True,
+                                    errors="replace", timeout=120)
+        except subprocess.TimeoutExpired:
+            # Fail fast with a sentence instead of leaning on the job-level
+            # timeout, which is measured in hours and says nothing about which
+            # test was running.
+            self.fail("install-hooks did not finish within 120s (root=%s)" % self.root)
         # An exit code on its own is not diagnosable from a CI log, and this test
         # runs on a lane that cannot be reproduced locally. Say everything.
         self.assertEqual(
@@ -138,6 +149,8 @@ class TestACleanCloneRegistersAgainstItsOwnPath(unittest.TestCase):
     def test_the_same_count_is_registered_as_from_the_real_checkout(self):
         """A clone must not register FEWER hooks than the original. Equal counts
         are what makes 'it works elsewhere' mean the same thing as 'it works'."""
+        saved = list(sys.path)
+        self.addCleanup(lambda: sys.path.__setitem__(slice(None), saved))
         sys.path.insert(0, os.path.join(_REPO, "engine", "setup"))
         sys.path.insert(0, os.path.join(_REPO, "engine", "nervepack_engine"))
         import np_hook
