@@ -527,6 +527,89 @@ jobs:
           name: tier-policy
           path: tier-policy.json
 
+  doc-coupling:
+    name: Doc coupling (advisory)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # need base-branch history for the three-dot diff
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Check that documentation moved with the change
+        # Advisory permanently, not pending promotion. A blocking documentation
+        # gate gets overridden by whoever holds the admin bit and then removed -
+        # GitLab needed a three-day escape hatch on theirs, and Danger's
+        # canonical example ships a #trivial bypass. The consequence here is an
+        # issue opened at MERGE (see doc-coupling-issue below), which has to be
+        # closed by someone rather than dismissed.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          python3 engine/setup/np-doc-coupling-gate.py \
+            --root "$GITHUB_WORKSPACE" \
+            --base "origin/$BASE_REF" \
+            --head HEAD \
+            --out doc-coupling.json
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "doc-coupling" --status "${{ job.status }}" --reason "Documentation-coupling check (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-doc-coupling.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-doc-coupling
+          path: gate-verdict-doc-coupling.json
+
+  doc-coupling-issue:
+    name: Doc coupling (record the debt)
+    runs-on: ubuntu-latest
+    # Merge time only. Opening an issue from a pull-request job would file one
+    # on every push to the branch, and would hand `issues: write` to a job
+    # running on pull-request-derived input. By the time a commit is on main it
+    # is a fact, and there is exactly one of it.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2   # the merge commit and its parent
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Open an issue for any unmet coupling
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 engine/setup/np-doc-coupling-gate.py \
+            --root "$GITHUB_WORKSPACE" \
+            --head HEAD \
+            --open-issue \
+            --repo "${{ github.repository }}" \
+            --sha "${{ github.sha }}" \
+            --out doc-coupling.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # if: always() - the findings are the thing worth keeping when the issue
+      # could NOT be filed. This job going red is the signal that the debt was
+      # not recorded; the artifact is what says which debt.
+      - name: Upload the coupling result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: doc-coupling-merge
+          path: doc-coupling.json
+
   auto-merge:
     name: Auto-merge decision (standard tier)
     runs-on: ubuntu-latest
@@ -631,7 +714,7 @@ jobs:
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
     if: always() && github.event_name == 'pull_request'
-    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate, auto-merge]
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate, auto-merge, doc-coupling]
     permissions:
       pull-requests: write   # to post/update the summary comment
       contents: read

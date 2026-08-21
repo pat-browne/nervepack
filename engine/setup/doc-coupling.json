@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "comment": "Enumerated triggers for the documentation-coupling check (F10/#256). GitLab-style: the rule is a committed list, not a slogan, so it can be audited and argued with. Docs are expected when a change introduces or enhances user-facing behavior, changes an interface, changes a documented process, or deprecates something. BACKEND-ONLY IS EXEMPT - that exemption is the reason the list below is short and specific rather than a catch-all on source paths.",
+  "enabled": true,
+  "sizing_note": "The list starts deliberately small. A trigger that fires on everything teaches people to ignore the check, and this mechanism works only while its output is believed. Add a trigger when a real drift gets through, not in anticipation.",
+  "doc_globs": [
+    "*.md",
+    "docs/**",
+    "wiki/**",
+    "skills/**/SKILL.md",
+    "skills/**/references/**",
+    "change-specs/**"
+  ],
+  "doc_globs_note": "What COUNTS as documentation for the purposes of satisfying a trigger. change-specs/** counts: a change spec is where a normal- or high-tier change explains itself, and requiring a second document on top of it would be ceremony.",
+  "dangling_exempt_globs": ["change-specs/**"],
+  "dangling_exempt_note": "A change spec COUNTS as documentation for satisfying a trigger, but is NEVER scanned for dangling references. An accepted spec is a historical record and change-specs/README.md forbids editing one into the new answer - so flagging it for naming a path that has since been renamed would demand an edit the process prohibits. The asymmetry is the point: a spec is documentation you wrote for that change, not documentation that has to stay current.",
+  "triggers": [
+    {
+      "id": "cli-surface",
+      "why": "a user-facing command's flags or behavior",
+      "globs": ["engine/nervepack_engine/cli.py", "engine/setup/np-*.py"]
+    },
+    {
+      "id": "lifecycle-hooks",
+      "why": "changes what happens inside a session without anyone asking",
+      "globs": ["**/hooks/**", "engine/setup/hooks.manifest"]
+    },
+    {
+      "id": "documented-process",
+      "why": "CI is a documented process; docs/BRANCH-PROTECTION.md describes it",
+      "globs": [".github/workflows/**", ".github/branch-protection/**"]
+    },
+    {
+      "id": "toggles",
+      "why": "a toggle is an interface: someone has to know it exists to use it",
+      "globs": ["engine/setup/toggles.conf", "engine/setup/toggle-schema.json"]
+    },
+    {
+      "id": "policy-data",
+      "why": "the files that decide how much scrutiny a change gets",
+      "globs": ["engine/setup/risk-tiers.json", "engine/setup/automerge.json",
+                "engine/setup/doc-coupling.json"]
+    },
+    {
+      "id": "installers-and-scheduling",
+      "why": "mutates the machine outside the repo; the steps are documented",
+      "globs": ["engine/setup/*install*", "**/*cron*", "**/np_scheduler*"]
+    }
+  ],
+  "exempt_globs": ["**/tests/**", "engine/setup/tests/**"],
+  "exempt_globs_note": "A test-only diff is backend-only by definition. It also cannot introduce user-facing behavior, which is the first of the four documented conditions."
+}
