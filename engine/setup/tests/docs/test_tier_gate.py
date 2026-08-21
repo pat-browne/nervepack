@@ -203,6 +203,42 @@ class TestCliEndToEnd(unittest.TestCase):
             self.assertEqual(rc.returncode, 1)
             self.assertIn("regression", rc.stderr)
 
+    def test_an_unreadable_spec_fails_and_says_which_file(self):
+        """A spec that exists and cannot be read must not report as a spec that
+        does not exist. The author would go looking for a missing file that is
+        sitting right in front of them."""
+        with tempfile.TemporaryDirectory() as d:
+            base = _init_repo(d)
+            _write(os.path.join(d, "engine", "hooks", "thing.py"), "x = 1\n")
+            spec = os.path.join(d, "change-specs", "feat-thing.md")
+            # Invalid UTF-8: a real encoding failure, and the one case that
+            # needs no permission games to reproduce as a non-root user.
+            os.makedirs(os.path.dirname(spec), exist_ok=True)
+            with open(spec, "wb") as f:
+                f.write(b"---\ntier: high\n---\n\n## Rollback\n\n\xff\xfe bad\n")
+            _git(d, "add", "-A")
+            _git(d, "commit", "-q", "-m", "spec with invalid utf-8")
+            vdir = _verdicts_dir(d, {g: "PASSED" for g in DETERMINISTIC})
+            rc = _run(d, base, _head_sha(d), "feat/thing", vdir)
+            self.assertEqual(rc.returncode, 1)
+            self.assertIn("cannot read", rc.stderr)
+            self.assertIn("feat-thing.md", rc.stderr)
+            self.assertNotIn("no change spec was found", rc.stderr)
+
+    def test_a_broken_registry_is_a_policy_failure_not_a_skip(self):
+        """np_risk_tiers.load already wraps OSError and ValueError in
+        RegistryError, so catching only RegistryError here is complete. This
+        test is what makes that true rather than assumed."""
+        import np_risk_tiers
+        for bad in ("", "{not json", '{"schema": 99}', '[]'):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "risk-tiers.json")
+                _write(path, bad)
+                with self.assertRaises(np_risk_tiers.RegistryError):
+                    np_risk_tiers.load(path)
+        with self.assertRaises(np_risk_tiers.RegistryError):
+            np_risk_tiers.load(os.path.join("/nonexistent", "risk-tiers.json"))
+
     def test_no_base_ref_exits_zero(self):
         """Not a pull_request event. Same contract as spec-guard."""
         rc = subprocess.run([sys.executable, CHK, "--root", ".", "--base", ""],

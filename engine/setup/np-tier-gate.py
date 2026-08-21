@@ -87,13 +87,26 @@ def read_verdicts(verdicts_dir):
     return verdicts
 
 
+class SpecUnreadable(Exception):
+    """The change spec exists but could not be read."""
+
+
 def spec_text_for(root, branch):
-    """The change spec's contents, or None when the branch has no spec."""
+    """The change spec's contents, or None when the branch has no spec.
+
+    Raises SpecUnreadable when the file EXISTS and cannot be read. Returning
+    None there would make np_tier_policy report "no change spec was found",
+    sending the author to look for a file that is sitting right in front of
+    them. A wrong reason costs more time than no reason.
+    """
     path = np_change_spec.spec_path_for(root, np_change_spec.branch_slug(branch))
     if not os.path.isfile(path):
         return None
-    with open(path, encoding="utf-8") as fh:
-        return fh.read()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SpecUnreadable("cannot read %s: %s" % (path, exc))
 
 
 def main(argv):
@@ -135,9 +148,17 @@ def main(argv):
     subject = [f for f in files if f != spec_rel]
 
     tier, offenders = np_risk_tiers.explain(subject, registry)
+    try:
+        spec_text = spec_text_for(args.root, branch)
+    except SpecUnreadable as exc:
+        # A policy failure, not an infra one, for the same reason a broken
+        # registry is: the file is versioned in this repo, and reading it as
+        # "no spec" would silently exempt the change from every spec-derived
+        # requirement its tier has.
+        sys.stderr.write("tier-gate: %s\n" % exc)
+        return 1
     decision = np_tier_policy.evaluate(
-        tier, spec_text_for(args.root, branch),
-        read_verdicts(args.verdicts_dir), tier_source=offenders)
+        tier, spec_text, read_verdicts(args.verdicts_dir), tier_source=offenders)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:

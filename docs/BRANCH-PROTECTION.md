@@ -117,6 +117,26 @@ both directions on some entries. And past **3 MB** GitHub silently disables
 code-owner functionality for the whole repository, with no warning of any kind.
 A test asserts the file stays well under that.
 
+## Nothing checks that the live ruleset still matches this file
+
+There is no drift check, and this is the honest statement of a real gap rather
+than a design anyone is pleased with.
+
+CI cannot read the live ruleset. `GITHUB_TOKEN` carries no repository-admin
+scope, so a workflow that wanted to compare the two would need a personal access
+token with admin rights stored as a repo secret. That token would then sit in
+the same job scope as everything else, and a token able to read the ruleset is
+one step from a token able to rewrite it.
+
+So the committed JSON is a record of intent and GitHub holds the truth, and the
+two can silently disagree. Two habits keep the gap small:
+
+1. Apply the file in the same session that changes it, and read the live ruleset
+   back afterwards to confirm.
+2. When a required check's display name changes, treat the ruleset as part of
+   that change, not as follow-up work. `docs/ARCHITECTURE.md`'s change-impact
+   map carries the same reminder.
+
 ## Changing any of this
 
 1. Edit `.github/branch-protection/ruleset-main.json`.

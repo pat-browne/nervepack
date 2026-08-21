@@ -160,8 +160,15 @@ def main(argv):
             existing = fh.read()
     owner = args.owner or owner_from(existing)
     if not owner:
-        sys.stderr.write("np_codeowners: no owner given and none found in %s\n"
-                         % args.path)
+        # The bootstrap case: a fresh checkout where CODEOWNERS does not exist
+        # yet, so there is no `*` line to read the owner from. Name the fix
+        # rather than only the symptom.
+        sys.stderr.write(
+            "np_codeowners: no owner given, and %s has no `*` catch-all line to "
+            "read one from.\n"
+            "Pass one explicitly the first time:\n"
+            "  python3 engine/setup/np_codeowners.py --owner '@your-handle' --write\n"
+            % args.path)
         return 1
 
     if args.write:
