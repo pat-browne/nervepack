@@ -43,10 +43,17 @@ are the only place that ever happens.
    cat ~/.cache/np-core-sync-status 2>/dev/null || echo "no status yet"
    ```
 
-2. **Run the sync** (idempotent, writes a fresh status):
+2. **Run the sync in exit mode** (idempotent, writes a fresh status):
    ```bash
-   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync --verbose
+   python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync exit --verbose
    ```
+   Bare `cli.py sync` (no `exit`) is backup mode: it throttles to `sync.interval`
+   (default 86400s) and no-ops inside that window. It prints a `within Ns
+   interval, skipping (backup)` line to stdout and leaves the status file's
+   prior outcome in place, even when the repo has diverged since that outcome
+   was written. Backup mode exists to keep the automatic `SessionStart` hook
+   cheap, not for this skill's own interactive steps. `sync exit` always runs
+   the real check, so use it here.
 
 3. **Branch on the outcome.** Full per-outcome steps live in
    `references/outcomes.md`; quick summary:
