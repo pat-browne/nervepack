@@ -205,15 +205,54 @@ class TestTheVariableIsAlwaysQuoted(unittest.TestCase):
         start = opened + 2 if opened >= 0 else 0
         return line[start:idx].count('"') % 2 == 1
 
+    def test_a_non_shell_fence_is_not_checked(self):
+        """A ```text block showing the pattern is documentation about the rule,
+        not an instance of it."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "x.md"), "w", encoding="utf-8") as fh:
+                fh.write("```text\nuse ${NP_DIR:-$HOME/Code/nervepack}/engine\n```\n")
+            global REPO
+            saved, REPO = REPO, d
+            try:
+                self.assertEqual(self._unquoted_in(["x.md"]), [])
+            finally:
+                REPO = saved
+
+    def test_an_inline_span_outside_a_fence_is_still_checked(self):
+        """Skipping everything outside a shell fence would miss these."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "x.md"), "w", encoding="utf-8") as fh:
+                fh.write("Run `git -C ${NP_DIR:-$HOME/Code/nervepack} status`.\n")
+            global REPO
+            saved, REPO = REPO, d
+            try:
+                self.assertEqual(len(self._unquoted_in(["x.md"])), 1)
+            finally:
+                REPO = saved
+
     def test_no_shell_line_leaves_the_variable_unquoted(self):
+        offenders = self._unquoted_in(_markdown_files())
+        self.assertEqual(offenders, [],
+                         "quote the expansion so a path with a space or a glob "
+                         "character still works:\n  " + "\n  ".join(offenders))
+
+    def _unquoted_in(self, rels):
         offenders = []
-        for rel in _markdown_files():
+        for rel in rels:
             fence = None
             with open(os.path.join(REPO, rel), encoding="utf-8") as fh:
                 for number, line in enumerate(fh, 1):
                     stripped = line.strip()
                     if stripped.startswith("```"):
                         fence = None if fence else (stripped[3:].strip().lower() or "text")
+                        continue
+                    # Inside a NON-shell fence (```text, ```json) a variable is
+                    # illustrative, not executable, so quoting means nothing
+                    # there. Outside any fence is still checked: an inline span
+                    # like `git -C "${NP_DIR:-...}" log` is a real command.
+                    if fence and fence not in SHELL_FENCES:
                         continue
                     if "${NP_DIR:-" not in line and "${NP_CONTENT_DIR:-" not in line:
                         continue
@@ -222,9 +261,7 @@ class TestTheVariableIsAlwaysQuoted(unittest.TestCase):
                             offenders.append("%s:%d %s"
                                              % (rel, number, stripped[:88]))
                             break
-        self.assertEqual(offenders, [],
-                         "quote the expansion so a path with a space or a glob "
-                         "character still works:\n  " + "\n  ".join(offenders))
+        return offenders
 
 
 class TestEveryReferencedEnginePathExists(unittest.TestCase):
