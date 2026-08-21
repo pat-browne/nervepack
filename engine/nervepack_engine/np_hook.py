@@ -209,6 +209,23 @@ def purge(event, substrings, matcher=None, settings_path=None):
 
 NP_DIR_TOKEN = "{NP_DIR}"
 
+# A resolved root is interpolated into a command that bash later evaluates as an
+# UNQUOTED word, so anything the shell would act on has to be rejected rather
+# than substituted. Whitespace is in the set for the same reason and is the more
+# likely case in practice: `/home/my user/nervepack` would split into two argv
+# tokens long before anyone tried `$(id)`.
+#
+# Quoting the path instead was considered and rejected. `_CLI_TAIL` above keys
+# the dedup on `cli.py` followed by WHITESPACE, so `"…/cli.py" sync` would stop
+# matching and every hook would re-register under a different key on the next
+# sync. Failing loudly at install time is both safer and easier to act on than a
+# command that is subtly wrong.
+_UNSAFE_IN_ROOT = re.compile(r"""[\s"'\\$`;&|<>()*?\[\]{}!#~]""")
+
+
+class UnsafeRootError(Exception):
+    """The resolved engine root cannot be expressed in a manifest command."""
+
 
 def main_worktree_root(root):
     """The MAIN checkout, even when called from a linked worktree.
@@ -259,7 +276,28 @@ def _repo_root_for_commands(root=None):
     normalised to the one form the consumer of this string understands.
     """
     resolved = main_worktree_root(root or np_paths.REPO_ROOT)
-    return resolved.replace("\\", "/")
+    if not resolved or not str(resolved).strip():
+        # np_paths computes REPO_ROOT from its own __file__, so this should be
+        # unreachable. Checked anyway because the failure it prevents is the one
+        # this whole change is about: an empty root substitutes silently and
+        # registers 26 hooks pointing at /engine/..., which fail open and say
+        # nothing.
+        raise UnsafeRootError(
+            "the engine root resolved to nothing, so hook commands would point "
+            "at /engine/... and fail open silently")
+    resolved = str(resolved).replace("\\", "/")
+    if not os.path.isabs(resolved) and not re.match(r"^[A-Za-z]:/", resolved):
+        raise UnsafeRootError(
+            "the engine root %r is not absolute; a relative path in a hook "
+            "command resolves against whatever directory the session started in"
+            % resolved)
+    bad = _UNSAFE_IN_ROOT.search(resolved)
+    if bad:
+        raise UnsafeRootError(
+            "the engine root %r contains %r, which bash would act on: these "
+            "commands are interpolated unquoted. Move the checkout somewhere "
+            "without shell metacharacters or whitespace." % (resolved, bad.group(0)))
+    return resolved
 
 
 def substitute_root(command, root=None):
@@ -308,6 +346,12 @@ def install_hooks(settings_path=None, manifest_path=None, wrap=None, uname=None)
             return 1
     for event, substrings in _LEGACY_PURGES:
         purge(event, substrings, settings_path=settings_path)
+    # Say which root the 26 commands were built from. Without it, diagnosing a
+    # hook that does not fire means opening ~/.claude/settings.json by hand to
+    # find out where it points - and "points somewhere unexpected" is the exact
+    # failure this change exists to remove.
+    sys.stderr.write("np_hook: registering hooks rooted at %s\n"
+                     % _repo_root_for_commands())
     for event, matcher, command in read_manifest(manifest_path):
         register(event, command, matcher, settings_path=settings_path, wrap=wrap, uname=uname)
     return 0

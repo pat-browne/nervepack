@@ -370,5 +370,59 @@ class TestRegisteringFromAWorktreeUsesTheMainCheckout(unittest.TestCase):
             self.assertEqual(np_hook.main_worktree_root(d), d)
 
 
+
+class TestTheResolvedRootIsValidated(unittest.TestCase):
+    """These commands are interpolated into a bash word UNQUOTED, so anything
+    the shell would act on has to be rejected rather than substituted.
+
+    Quoting the path instead would break `_CLI_TAIL`, which keys the dedup on
+    `cli.py` followed by whitespace - every hook would then re-register under a
+    different key on the next sync."""
+
+    MANIFEST = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "hooks.manifest")
+
+    def test_a_command_substitution_is_rejected(self):
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/$(id)/nervepack")
+
+    def test_a_backtick_is_rejected(self):
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/`id`/nervepack")
+
+    def test_whitespace_is_rejected(self):
+        """More likely than an injection in practice: an unquoted path with a
+        space splits into two argv tokens."""
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/home/my user/nervepack")
+
+    def test_a_relative_root_is_rejected(self):
+        """It would resolve against whatever directory the session started in."""
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="relative/nervepack")
+
+    def test_the_message_names_the_offending_character(self):
+        try:
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/a;b/nervepack")
+        except np_hook.UnsafeRootError as exc:
+            self.assertIn(";", str(exc))
+        else:
+            self.fail("a semicolon in the root was accepted")
+
+    def test_an_ordinary_absolute_root_is_accepted(self):
+        rows = np_hook.read_manifest(self.MANIFEST, root="/opt/nervepack")
+        self.assertIn("/opt/nervepack/engine", rows[0][2])
+
+    def test_a_windows_drive_root_is_accepted(self):
+        rows = np_hook.read_manifest(self.MANIFEST, root="D:\\src\\nervepack")
+        self.assertIn("D:/src/nervepack/engine", rows[0][2])
+
+    def test_an_empty_root_falls_back_to_the_real_one(self):
+        """`root or np_paths.REPO_ROOT` - the documented default, not a hole."""
+        rows = np_hook.read_manifest(self.MANIFEST, root="")
+        self.assertIn("/engine/nervepack_engine/cli.py", rows[0][2])
+        self.assertNotIn(np_hook.NP_DIR_TOKEN, rows[0][2])
+
+
 if __name__ == "__main__":
     unittest.main()
