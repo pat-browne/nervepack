@@ -75,9 +75,25 @@ class TestACleanCloneRegistersAgainstItsOwnPath(unittest.TestCase):
         env.pop("NP_DIR", None)
         env.pop("NERVEPACK", None)
         cli = os.path.join(self.root, "engine", "nervepack_engine", "cli.py")
+        # Pre-flight, so a copy that silently lost a file fails HERE with a
+        # sentence rather than downstream as an opaque non-zero exit.
+        self.assertTrue(os.path.isfile(cli), "the copy has no cli.py at %s" % cli)
         result = subprocess.run([sys.executable, cli, "setup", "install-hooks"],
-                                env=env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                                env=env, capture_output=True, text=True,
+                                errors="replace")
+        # An exit code on its own is not diagnosable from a CI log, and this test
+        # runs on a lane that cannot be reproduced locally. Say everything.
+        self.assertEqual(
+            result.returncode, 0,
+            "install-hooks exited %s\n"
+            "  interpreter: %s\n"
+            "  cli:         %s\n"
+            "  root:        %s\n"
+            "  settings:    %s (exists=%s)\n"
+            "  stdout:      %r\n"
+            "  stderr:      %r"
+            % (result.returncode, sys.executable, cli, self.root, self.settings,
+               os.path.exists(self.settings), result.stdout, result.stderr))
         with open(self.settings, encoding="utf-8") as fh:
             return json.load(fh), result
 
