@@ -62,7 +62,7 @@ If it turns out to be real, unpushed work: treat local `main` itself as the
 source, not the target. Branch from it, push the branch, and open a PR, the
 same as the `local is N ahead` case above:
 ```bash
-git -C ~/Code/nervepack checkout -b recover/<short-sha>-<date> <local-sha>
+git -C ~/Code/nervepack checkout -B recover/<short-sha>-<date> <local-sha>
 git -C ~/Code/nervepack push -u origin recover/<short-sha>-<date>
 gh pr create --repo <owner>/nervepack --fill
 ```
