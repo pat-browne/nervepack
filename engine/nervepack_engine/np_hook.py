@@ -220,7 +220,16 @@ NP_DIR_TOKEN = "{NP_DIR}"
 # matching and every hook would re-register under a different key on the next
 # sync. Failing loudly at install time is both safer and easier to act on than a
 # command that is subtly wrong.
-_UNSAFE_IN_ROOT = re.compile(r"""[\s"'\\$`;&|<>()*?\[\]{}!#~]""")
+_UNSAFE_IN_ROOT = re.compile(r"""[\s"'\\$`;&|<>()*?\[\]{}!#]""")
+# A tilde is only special at the START of a word. Bash performs tilde expansion
+# on `~/x` and on `~user/x`, and leaves a tilde anywhere else in a word literal.
+#
+# Rejecting it everywhere broke Windows outright: 8.3 short paths are the DEFAULT
+# for a profile whose name exceeds eight characters, so a GitHub Windows runner
+# resolves its temp directory to C:\Users\RUNNER~1\... and every install there
+# raised. The clean-clone test on #296 is what found it, which is the entire
+# reason that test exists.
+_LEADING_TILDE = re.compile(r"^~")
 
 
 # Absolute means absolute IN THE STRING, judged the same way on every platform.
@@ -298,6 +307,15 @@ def _repo_root_for_commands(root=None):
             "the engine root resolved to nothing, so hook commands would point "
             "at /engine/... and fail open silently")
     resolved = str(resolved).replace("\\", "/")
+    # BEFORE the absolute check, deliberately. A leading tilde also fails
+    # "is it absolute", so with the checks the other way round this branch was
+    # unreachable and `~/Code/nervepack` - the exact string #295 removed from the
+    # manifest - reported only "not absolute". True, and useless: it says nothing
+    # about why passing a tilde path here is a mistake.
+    if _LEADING_TILDE.match(resolved):
+        raise UnsafeRootError(
+            "the engine root %r starts with '~', which bash would expand to a "
+            "home directory. Pass the resolved path instead." % resolved)
     if not _ABSOLUTE_ROOT.match(resolved):
         raise UnsafeRootError(
             "the engine root %r is not absolute; a relative path in a hook "

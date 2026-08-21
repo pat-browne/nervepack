@@ -327,5 +327,57 @@ class TestCronDispatch(unittest.TestCase):
         self.assertIn("no-op: test", printed)
 
 
+
+class TestASetupFailureIsAlwaysReportable(unittest.TestCase):
+    """The reporting path must not raise. Doing so would replace the original
+    failure with an unrelated one - a reporting path swallowing the thing it
+    reports, which is the shape of bug this branch exists to surface."""
+
+    def _write_to(self, encoding, exc):
+        from nervepack_engine import cli
+        stream = io.TextIOWrapper(io.BytesIO(), encoding=encoding, errors="strict")
+        with mock.patch.object(cli.sys, "stderr", stream):
+            cli._warn_setup_failure("install-hooks", exc)
+        stream.flush()
+        return stream.buffer.getvalue().decode(encoding)
+
+    def test_a_plain_message_is_written_through(self):
+        out = self._write_to("utf-8", ValueError("plain"))
+        self.assertIn("install-hooks", out)
+        self.assertIn("plain", out)
+
+    def test_a_non_ascii_message_survives_an_ascii_stream(self):
+        """A piped stderr still gets a legacy code page on Windows before 3.15."""
+        out = self._write_to("ascii", ValueError("caf\u00e9"))
+        self.assertIn("install-hooks", out)
+        self.assertIn("caf", out)
+
+    def test_it_survives_a_closed_stream(self):
+        """Both channels must not be lost because reporting failed: an exception
+        escaping here would skip the _bail() log write that follows."""
+        from nervepack_engine import cli
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        stream.close()
+        with mock.patch.object(cli.sys, "stderr", stream):
+            cli._warn_setup_failure("install-hooks", ValueError("x"))
+
+    def test_it_survives_a_repr_that_raises(self):
+        """repr(exc) runs user-defined __repr__, which may itself raise."""
+        from nervepack_engine import cli
+
+        class Hostile(Exception):
+            def __repr__(self):
+                raise RuntimeError("nope")
+
+        stream = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        with mock.patch.object(cli.sys, "stderr", stream):
+            cli._warn_setup_failure("install-hooks", Hostile())
+
+    def test_it_never_raises_on_an_unencodable_message(self):
+        for text in ("caf\u00e9", "\u4e2d\u6587", "emoji \U0001f600"):
+            with self.subTest(text=text):
+                self._write_to("ascii", ValueError(text))
+
+
 if __name__ == "__main__":
     unittest.main()
