@@ -78,7 +78,13 @@ def read_verdicts(verdicts_dir):
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
         except (OSError, ValueError) as exc:
-            sys.stderr.write("tier-gate: ignoring %s (%s)\n" % (path, exc))
+            # Name the consequence, not only the cause. np_tier_policy will
+            # report this gate as "produced no verdict" a few lines later, and
+            # two messages that do not reference each other read as two
+            # separate problems.
+            sys.stderr.write(
+                "tier-gate: %s is corrupt (%s) - treating it as a MISSING "
+                "verdict for whichever gate wrote it\n" % (path, exc))
             continue
         gate = isinstance(data, dict) and data.get("gate")
         verdict = isinstance(data, dict) and data.get("verdict")

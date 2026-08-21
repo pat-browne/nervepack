@@ -140,12 +140,16 @@ two can silently disagree. Two habits keep the gap small:
 ## Changing any of this
 
 1. Edit `.github/branch-protection/ruleset-main.json`.
-2. Apply it:
+2. Look up the id, which is not stable across recreations:
+   ```bash
+   gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id'
+   ```
+3. Apply it:
    ```bash
    gh api -X PUT repos/pat-browne/nervepack/rulesets/<id> \
      --input .github/branch-protection/ruleset-main.json
    ```
-3. Read it back and confirm the live copy matches the committed one.
+4. Read it back and confirm the live copy matches the committed one.
 
 To restore the classic configuration instead, delete the ruleset and PUT the
 backup:

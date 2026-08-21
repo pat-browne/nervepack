@@ -186,6 +186,13 @@ Three independent steps, in the order that restores the loosest state first.
    `gh api -X PUT repos/pat-browne/nervepack/branches/main/protection --input .github/branch-protection/classic-main.backup.json`
    restores exactly the classic protection this change replaced. The backup file
    is the pre-change API response, committed for this purpose.
+
+   The ruleset id is not stable across recreations, so look it up first:
+
+   ```bash
+   gh api repos/pat-browne/nervepack/rulesets --jq '.[] | select(.name=="main") | .id'
+   ```
+
 2. **spec-guard's promotion.** Restore `continue-on-error: true` on the
    `spec-guard` job and remove its context from the ruleset's required checks.
    Independent of step 1 only if the ruleset survives; if step 1 already ran,
