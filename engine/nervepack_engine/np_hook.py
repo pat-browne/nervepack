@@ -207,8 +207,74 @@ def purge(event, substrings, matcher=None, settings_path=None):
     _dump(path, data)
 
 
-def read_manifest(manifest_path=None):
-    """Yield (event, matcher, command) rows from hooks.manifest, in file order."""
+NP_DIR_TOKEN = "{NP_DIR}"
+
+
+def main_worktree_root(root):
+    """The MAIN checkout, even when called from a linked worktree.
+
+    This matters only because #257 made the hook commands follow the resolved
+    root. Registering from `.worktrees/feat-x` would otherwise write 26 hook
+    commands pointing INTO that worktree, and the next `git worktree remove`
+    would leave every hook on the machine pointing at a deleted directory --
+    which, because hooks fail open, would be silent.
+
+    A linked worktree's `.git` is a FILE containing `gitdir: <main>/.git/worktrees/<name>`.
+    Walking up three levels from there lands on the main checkout. A normal
+    checkout has `.git` as a directory and is returned unchanged, as is anything
+    that is not a git checkout at all -- this is a best-effort correction, never
+    a precondition.
+    """
+    dot_git = os.path.join(root, ".git")
+    if not os.path.isfile(dot_git):
+        return root
+    try:
+        with open(dot_git, encoding="utf-8") as fh:
+            line = fh.read().strip()
+    except OSError:
+        return root
+    if not line.startswith("gitdir:"):
+        return root
+    target = line.split(":", 1)[1].strip()
+    if not os.path.isabs(target):
+        target = os.path.normpath(os.path.join(root, target))
+    # <main>/.git/worktrees/<name> -> <main>
+    candidate = os.path.dirname(os.path.dirname(os.path.dirname(target)))
+    if os.path.isdir(os.path.join(candidate, ".git")):
+        return candidate
+    return root
+
+
+def _repo_root_for_commands(root=None):
+    """The engine repo root as it should appear inside a hook command string.
+
+    Resolved by np_paths from ITS OWN file location, so a clone at /opt/nervepack
+    or D:\\src\\nervepack gets its own path. Nothing here reads $HOME or assumes
+    ~/Code/nervepack -- that assumption is exactly what #257 removed.
+
+    Backslashes become forward slashes. These commands are routed through bash on
+    a Git-bash host, where a backslash is an escape character rather than a
+    separator, and Git-bash accepts C:/Users/... perfectly well. This is also the
+    S1075 sub-rule in practice: the separator is not hardcoded per-platform, it is
+    normalised to the one form the consumer of this string understands.
+    """
+    resolved = main_worktree_root(root or np_paths.REPO_ROOT)
+    return resolved.replace("\\", "/")
+
+
+def substitute_root(command, root=None):
+    """Replace {NP_DIR} in one manifest command with the resolved repo root."""
+    return command.replace(NP_DIR_TOKEN, _repo_root_for_commands(root))
+
+
+def read_manifest(manifest_path=None, root=None):
+    """Yield (event, matcher, command) rows from hooks.manifest, in file order.
+
+    {NP_DIR} is substituted here rather than at registration, so every consumer
+    of read_manifest -- the installer, the doctor's drift check, the tests -- sees
+    the same command string that lands in settings.json. Two places doing this
+    substitution would eventually disagree about one row.
+    """
     path = manifest_path or _MANIFEST
     rows = []
     with open(path, encoding="utf-8") as fh:
@@ -221,7 +287,8 @@ def read_manifest(manifest_path=None):
             if len(parts) != 3:
                 continue
             event, matcher, command = parts
-            rows.append((event.strip(), matcher.strip(), command.strip()))
+            rows.append((event.strip(), matcher.strip(),
+                         substitute_root(command.strip(), root)))
     return rows
 
 
