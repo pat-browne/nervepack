@@ -161,9 +161,19 @@ def main(argv):
         tier, spec_text, read_verdicts(args.verdicts_dir), tier_source=offenders)
 
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            json.dump(decision, fh, indent=2)
-            fh.write("\n")
+        try:
+            with open(args.out, "w", encoding="utf-8") as fh:
+                json.dump(decision, fh, indent=2)
+                fh.write("\n")
+        except OSError as exc:
+            # Warn and carry on, deliberately. The artifact is observability;
+            # the verdict below is the gate's actual job. Returning here on a
+            # full disk would suppress a policy answer that is already computed
+            # and correct, and report an infrastructure problem in the same
+            # shape as an unmet requirement.
+            sys.stderr.write("tier-gate: could not write %s: %s (continuing - "
+                             "the verdict below is unaffected)\n"
+                             % (args.out, exc))
 
     forced_by = ", ".join(path for path, _ in offenders[:5]) or "(empty diff)"
     print("tier-gate: tier '%s', forced by: %s" % (tier, forced_by))

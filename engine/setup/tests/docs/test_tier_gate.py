@@ -239,6 +239,22 @@ class TestCliEndToEnd(unittest.TestCase):
         with self.assertRaises(np_risk_tiers.RegistryError):
             np_risk_tiers.load(os.path.join("/nonexistent", "risk-tiers.json"))
 
+    def test_an_unwritable_out_path_warns_but_still_reports_the_verdict(self):
+        """The artifact is observability; the verdict is the job. A full disk
+        must not suppress a policy answer that is already computed, nor report
+        an infrastructure problem in the same shape as an unmet requirement."""
+        with tempfile.TemporaryDirectory() as d:
+            base = _init_repo(d)
+            _write(os.path.join(d, "docs", "NOTES.md"), "notes\n")
+            _git(d, "add", "-A")
+            _git(d, "commit", "-q", "-m", "docs")
+            vdir = _verdicts_dir(d, {g: "PASSED" for g in DETERMINISTIC})
+            unwritable = os.path.join(d, "no", "such", "dir", "policy.json")
+            rc = _run(d, base, _head_sha(d), "feat/thing", vdir, unwritable)
+            self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+            self.assertIn("could not write", rc.stderr)
+            self.assertIn("tier-gate: clean", rc.stdout)
+
     def test_no_base_ref_exits_zero(self):
         """Not a pull_request event. Same contract as spec-guard."""
         rc = subprocess.run([sys.executable, CHK, "--root", ".", "--base", ""],
