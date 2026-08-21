@@ -207,8 +207,124 @@ def purge(event, substrings, matcher=None, settings_path=None):
     _dump(path, data)
 
 
-def read_manifest(manifest_path=None):
-    """Yield (event, matcher, command) rows from hooks.manifest, in file order."""
+NP_DIR_TOKEN = "{NP_DIR}"
+
+# A resolved root is interpolated into a command that bash later evaluates as an
+# UNQUOTED word, so anything the shell would act on has to be rejected rather
+# than substituted. Whitespace is in the set for the same reason and is the more
+# likely case in practice: `/home/my user/nervepack` would split into two argv
+# tokens long before anyone tried `$(id)`.
+#
+# Quoting the path instead was considered and rejected. `_CLI_TAIL` above keys
+# the dedup on `cli.py` followed by WHITESPACE, so `"…/cli.py" sync` would stop
+# matching and every hook would re-register under a different key on the next
+# sync. Failing loudly at install time is both safer and easier to act on than a
+# command that is subtly wrong.
+_UNSAFE_IN_ROOT = re.compile(r"""[\s"'\\$`;&|<>()*?\[\]{}!#~]""")
+
+
+# Absolute means absolute IN THE STRING, judged the same way on every platform.
+# `os.path.isabs` cannot be used here: on Windows Python it rejects "/opt/x" for
+# having no drive letter, so the identical root would validate on Linux and fail
+# on the Windows lane. That is precisely the class of platform-dependent
+# assumption #257 exists to remove, and the check for it had one.
+#
+# The judgement is about a string that will be embedded in a bash command on the
+# TARGET machine, not about the machine running the check, so it must not consult
+# the local platform at all.
+_ABSOLUTE_ROOT = re.compile(r"^(/|[A-Za-z]:/)")
+
+
+class UnsafeRootError(Exception):
+    """The resolved engine root cannot be expressed in a manifest command."""
+
+
+def main_worktree_root(root):
+    """The MAIN checkout, even when called from a linked worktree.
+
+    This matters only because #257 made the hook commands follow the resolved
+    root. Registering from `.worktrees/feat-x` would otherwise write 26 hook
+    commands pointing INTO that worktree, and the next `git worktree remove`
+    would leave every hook on the machine pointing at a deleted directory --
+    which, because hooks fail open, would be silent.
+
+    A linked worktree's `.git` is a FILE containing `gitdir: <main>/.git/worktrees/<name>`.
+    Walking up three levels from there lands on the main checkout. A normal
+    checkout has `.git` as a directory and is returned unchanged, as is anything
+    that is not a git checkout at all -- this is a best-effort correction, never
+    a precondition.
+    """
+    dot_git = os.path.join(root, ".git")
+    if not os.path.isfile(dot_git):
+        return root
+    try:
+        with open(dot_git, encoding="utf-8") as fh:
+            line = fh.read().strip()
+    except OSError:
+        return root
+    if not line.startswith("gitdir:"):
+        return root
+    target = line.split(":", 1)[1].strip()
+    if not os.path.isabs(target):
+        target = os.path.normpath(os.path.join(root, target))
+    # <main>/.git/worktrees/<name> -> <main>
+    candidate = os.path.dirname(os.path.dirname(os.path.dirname(target)))
+    if os.path.isdir(os.path.join(candidate, ".git")):
+        return candidate
+    return root
+
+
+def _repo_root_for_commands(root=None):
+    """The engine repo root as it should appear inside a hook command string.
+
+    Resolved by np_paths from ITS OWN file location, so a clone at /opt/nervepack
+    or D:\\src\\nervepack gets its own path. Nothing here reads $HOME or assumes
+    ~/Code/nervepack -- that assumption is exactly what #257 removed.
+
+    Backslashes become forward slashes. These commands are routed through bash on
+    a Git-bash host, where a backslash is an escape character rather than a
+    separator, and Git-bash accepts C:/Users/... perfectly well. This is also the
+    S1075 sub-rule in practice: the separator is not hardcoded per-platform, it is
+    normalised to the one form the consumer of this string understands.
+    """
+    resolved = main_worktree_root(root or np_paths.REPO_ROOT)
+    if not resolved or not str(resolved).strip():
+        # np_paths computes REPO_ROOT from its own __file__, so this should be
+        # unreachable. Checked anyway because the failure it prevents is the one
+        # this whole change is about: an empty root substitutes silently and
+        # registers 26 hooks pointing at /engine/..., which fail open and say
+        # nothing.
+        raise UnsafeRootError(
+            "the engine root resolved to nothing, so hook commands would point "
+            "at /engine/... and fail open silently")
+    resolved = str(resolved).replace("\\", "/")
+    if not _ABSOLUTE_ROOT.match(resolved):
+        raise UnsafeRootError(
+            "the engine root %r is not absolute; a relative path in a hook "
+            "command resolves against whatever directory the session started in"
+            % resolved)
+    bad = _UNSAFE_IN_ROOT.search(resolved)
+    if bad:
+        raise UnsafeRootError(
+            "the engine root %r contains %r, which bash would act on: these "
+            "commands are interpolated unquoted. Move the checkout somewhere "
+            "without shell metacharacters or whitespace." % (resolved, bad.group(0)))
+    return resolved
+
+
+def substitute_root(command, root=None):
+    """Replace {NP_DIR} in one manifest command with the resolved repo root."""
+    return command.replace(NP_DIR_TOKEN, _repo_root_for_commands(root))
+
+
+def read_manifest(manifest_path=None, root=None):
+    """Yield (event, matcher, command) rows from hooks.manifest, in file order.
+
+    {NP_DIR} is substituted here rather than at registration, so every consumer
+    of read_manifest -- the installer, the doctor's drift check, the tests -- sees
+    the same command string that lands in settings.json. Two places doing this
+    substitution would eventually disagree about one row.
+    """
     path = manifest_path or _MANIFEST
     rows = []
     with open(path, encoding="utf-8") as fh:
@@ -221,7 +337,8 @@ def read_manifest(manifest_path=None):
             if len(parts) != 3:
                 continue
             event, matcher, command = parts
-            rows.append((event.strip(), matcher.strip(), command.strip()))
+            rows.append((event.strip(), matcher.strip(),
+                         substitute_root(command.strip(), root)))
     return rows
 
 
@@ -241,6 +358,12 @@ def install_hooks(settings_path=None, manifest_path=None, wrap=None, uname=None)
             return 1
     for event, substrings in _LEGACY_PURGES:
         purge(event, substrings, settings_path=settings_path)
+    # Say which root the 26 commands were built from. Without it, diagnosing a
+    # hook that does not fire means opening ~/.claude/settings.json by hand to
+    # find out where it points - and "points somewhere unexpected" is the exact
+    # failure this change exists to remove.
+    sys.stderr.write("np_hook: registering hooks rooted at %s\n"
+                     % _repo_root_for_commands())
     for event, matcher, command in read_manifest(manifest_path):
         register(event, command, matcher, settings_path=settings_path, wrap=wrap, uname=uname)
     return 0

@@ -288,5 +288,158 @@ class TestPurge(unittest.TestCase):
         self.assertEqual(s["hooks"]["PreToolUse"][0]["matcher"], "Read")
 
 
+
+class TestTheInstallPathIsNotAssumed(unittest.TestCase):
+    """#257/F11. Every manifest row used to carry ~/Code/nervepack literally, so
+    a clone anywhere else registered 26 hooks pointing at a directory that does
+    not exist -- and hooks fail open, so nothing would have errored. The whole
+    system would simply have done nothing."""
+
+    MANIFEST = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "hooks.manifest")
+
+    def test_no_manifest_row_hardcodes_an_install_path(self):
+        """Comment lines are excluded: the header explains what was removed and
+        why, and a check that cannot tell the explanation from the thing it
+        warns about would push the explanation out of the file."""
+        with open(self.MANIFEST, encoding="utf-8") as fh:
+            rows = [ln for ln in fh.read().splitlines()
+                    if ln.strip() and not ln.strip().startswith("#")]
+        self.assertTrue(rows, "no manifest rows found - has the file moved?")
+        for row in rows:
+            self.assertNotIn("Code/nervepack", row, row)
+
+    def test_every_row_that_names_the_engine_uses_the_token(self):
+        with open(self.MANIFEST, encoding="utf-8") as fh:
+            rows = [ln for ln in fh.read().splitlines()
+                    if ln.strip() and not ln.strip().startswith("#")]
+        engine_rows = [r for r in rows if "cli.py" in r]
+        self.assertTrue(engine_rows)
+        for row in engine_rows:
+            self.assertIn(np_hook.NP_DIR_TOKEN, row, row)
+
+    def test_the_token_is_substituted_with_the_given_root(self):
+        rows = np_hook.read_manifest(self.MANIFEST, root="/opt/nervepack")
+        self.assertTrue(rows)
+        for _, _, command in rows:
+            self.assertNotIn(np_hook.NP_DIR_TOKEN, command)
+        self.assertIn("/opt/nervepack/engine", rows[0][2])
+
+    def test_a_windows_root_is_normalised_to_forward_slashes(self):
+        """These commands are routed through bash on a Git-bash host, where a
+        backslash is an escape character rather than a separator."""
+        rows = np_hook.read_manifest(self.MANIFEST, root="D:\\src\\nervepack")
+        self.assertIn("D:/src/nervepack/engine", rows[0][2])
+        self.assertNotIn("\\", rows[0][2])
+
+    def test_no_row_still_contains_the_token_after_a_default_read(self):
+        for _, _, command in np_hook.read_manifest(self.MANIFEST):
+            self.assertNotIn(np_hook.NP_DIR_TOKEN, command)
+
+
+class TestRegisteringFromAWorktreeUsesTheMainCheckout(unittest.TestCase):
+    """Registering from `.worktrees/feat-x` would write 26 hook commands pointing
+    INTO that worktree, and the next `git worktree remove` would leave every hook
+    on the machine pointing at a deleted directory -- silently, because hooks
+    fail open."""
+
+    def test_a_linked_worktree_resolves_to_its_main_checkout(self):
+        with tempfile.TemporaryDirectory() as d:
+            main = os.path.join(d, "main")
+            os.makedirs(os.path.join(main, ".git", "worktrees", "feat-x"))
+            wt = os.path.join(d, "main", ".worktrees", "feat-x")
+            os.makedirs(wt)
+            with open(os.path.join(wt, ".git"), "w") as f:
+                f.write("gitdir: %s\n" % os.path.join(main, ".git", "worktrees", "feat-x"))
+            self.assertEqual(np_hook.main_worktree_root(wt), main)
+
+    def test_a_normal_checkout_is_returned_unchanged(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, ".git"))
+            self.assertEqual(np_hook.main_worktree_root(d), d)
+
+    def test_something_that_is_not_a_checkout_is_returned_unchanged(self):
+        """Best-effort correction, never a precondition."""
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(np_hook.main_worktree_root(d), d)
+
+    def test_a_dot_git_file_that_is_not_a_gitdir_pointer_is_ignored(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, ".git"), "w") as f:
+                f.write("something else\n")
+            self.assertEqual(np_hook.main_worktree_root(d), d)
+
+
+
+class TestTheResolvedRootIsValidated(unittest.TestCase):
+    """These commands are interpolated into a bash word UNQUOTED, so anything
+    the shell would act on has to be rejected rather than substituted.
+
+    Quoting the path instead would break `_CLI_TAIL`, which keys the dedup on
+    `cli.py` followed by whitespace - every hook would then re-register under a
+    different key on the next sync."""
+
+    MANIFEST = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "hooks.manifest")
+
+    def test_a_command_substitution_is_rejected(self):
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/$(id)/nervepack")
+
+    def test_a_backtick_is_rejected(self):
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/`id`/nervepack")
+
+    def test_whitespace_is_rejected(self):
+        """More likely than an injection in practice: an unquoted path with a
+        space splits into two argv tokens."""
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="/home/my user/nervepack")
+
+    def test_a_relative_root_is_rejected(self):
+        """It would resolve against whatever directory the session started in."""
+        with self.assertRaises(np_hook.UnsafeRootError):
+            np_hook.read_manifest(self.MANIFEST, root="relative/nervepack")
+
+    def test_the_message_names_the_offending_character(self):
+        try:
+            np_hook.read_manifest(self.MANIFEST, root="/tmp/a;b/nervepack")
+        except np_hook.UnsafeRootError as exc:
+            self.assertIn(";", str(exc))
+        else:
+            self.fail("a semicolon in the root was accepted")
+
+    def test_an_ordinary_absolute_root_is_accepted(self):
+        """This is the Windows-lane regression test.
+
+        The first version of this check used os.path.isabs, which on Python 3.13
+        and later rejects "/opt/x" for having no drive letter. The same root
+        therefore validated on Linux and failed on the Windows lane - a
+        platform-dependent assumption inside the change that exists to remove
+        platform-dependent assumptions. Absoluteness is now judged from the
+        string alone, identically everywhere."""
+        rows = np_hook.read_manifest(self.MANIFEST, root="/opt/nervepack")
+        self.assertIn("/opt/nervepack/engine", rows[0][2])
+
+    def test_absoluteness_never_consults_the_local_platform(self):
+        """The judgement is about a string that will run on the TARGET machine."""
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "..", "..", "..", "nervepack_engine", "np_hook.py"),
+                  encoding="utf-8") as fh:
+            source = fh.read()
+        head = source.split("def _repo_root_for_commands", 1)[1].split("def ", 1)[0]
+        self.assertNotIn("os.path.isabs", head)
+
+    def test_a_windows_drive_root_is_accepted(self):
+        rows = np_hook.read_manifest(self.MANIFEST, root="D:\\src\\nervepack")
+        self.assertIn("D:/src/nervepack/engine", rows[0][2])
+
+    def test_an_empty_root_falls_back_to_the_real_one(self):
+        """`root or np_paths.REPO_ROOT` - the documented default, not a hole."""
+        rows = np_hook.read_manifest(self.MANIFEST, root="")
+        self.assertIn("/engine/nervepack_engine/cli.py", rows[0][2])
+        self.assertNotIn(np_hook.NP_DIR_TOKEN, rows[0][2])
+
+
 if __name__ == "__main__":
     unittest.main()
