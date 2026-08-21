@@ -52,11 +52,24 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
   wants to keep both sides; surface the diffs.
 
 **Check the local-only side before calling it noise.** Local-only commits on
-`main` are not always leftover work from someone else. Read each one. A local
-commit can be this session's own finished, unpushed feature. Check its date
-and message against open issues with `gh issue list` or `gh issue view`. Treat
-it as real work that needs a proper branch and PR. Never rebase or force-push
-over it silently.
+`main` are not always leftover work from someone else. Read each one with
+`git show <sha> --stat`. A commit dated within the last few sessions, with a
+message that names a feature rather than a merge artifact, is a candidate for
+this session's own finished, unpushed work. Cross-check it against open
+issues with `gh issue list` or `gh issue view <n>` before deciding.
+
+If it turns out to be real, unpushed work: treat local `main` itself as the
+source, not the target. Branch from it, push the branch, and open a PR, the
+same as the `local is N ahead` case above:
+```bash
+git -C ~/Code/nervepack checkout -b recover/<short-sha>-<date> <local-sha>
+git -C ~/Code/nervepack push -u origin recover/<short-sha>-<date>
+gh pr create --repo <owner>/nervepack --fill
+```
+Never `git push origin <sha>:refs/heads/main` directly. That bypasses the PR
+gate this same skill enforces for the ordinary `local is N ahead` case, and a
+diverged `main` means the safety that gate exists for is exactly what is
+missing right now.
 
 **Re-check issue and PR state before trusting a plan doc's last snapshot.**
 Remote-only commits can represent an entire wave of a tracked epic landing

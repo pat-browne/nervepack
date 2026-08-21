@@ -48,8 +48,10 @@ are the only place that ever happens.
    python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync exit --verbose
    ```
    Bare `cli.py sync` (no `exit`) is backup mode: it throttles to `sync.interval`
-   (default 86400s) and silently no-ops inside that window, even when the repo
-   has actually diverged. `sync exit` always runs the real check.
+   (default 86400s) and no-ops inside that window. It prints a `within Ns
+   interval, skipping (backup)` line to stdout and leaves the status file's
+   prior outcome in place, even when the repo has diverged since that outcome
+   was written. `sync exit` always runs the real check.
 
 3. **Branch on the outcome.** Full per-outcome steps live in
    `references/outcomes.md`; quick summary:
