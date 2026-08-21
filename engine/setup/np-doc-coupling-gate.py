@@ -62,6 +62,24 @@ def _code(text):
     return "`%s`" % str(text).replace("`", "'")
 
 
+def _write_json(path, payload):
+    """Write the artifact, or warn. Always called on every exit path that has an
+    --out, including the one where nothing could be evaluated: the upload step
+    runs with if: always(), and an absent file there reports as a confusing
+    "no files found" rather than as the git error that actually happened."""
+    if not path:
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+            fh.write("\n")
+    except OSError as exc:
+        # Warn and carry on: the artifact is observability around a result that
+        # is also printed, and the pull-request check never blocks anyway.
+        sys.stderr.write("doc-coupling: could not write %s: %s (continuing)\n"
+                         % (path, exc))
+
+
 def changed_and_removed(root, base, head):
     """(changed, removed) or (None, None) on a git error.
 
@@ -221,20 +239,31 @@ def main(argv, fetch=np_github_api.default_fetch):
 
     changed, removed = changed_and_removed(args.root, base, args.head)
     if changed is None:
-        return 0  # fail open on our own git error, never on policy
+        # Two different right answers, depending on which job this is.
+        #
+        # On a pull request the check is advisory, so an unresolvable ref - a
+        # shallow clone, a missing base - must not turn the job red over an
+        # infrastructure problem that says nothing about the diff.
+        #
+        # At merge time this is the step that RECORDS THE DEBT, and the spec's
+        # whole argument is that deferred documentation is recorded rather than
+        # forgiven. Returning 0 here would forgive it silently: no issue, no
+        # finding, nothing to notice.
+        note = {"schema": np_doc_coupling.SCHEMA, "evaluated": False,
+                "reason": "could not resolve the diff %s...%s" % (base, args.head)}
+        _write_json(args.out, note)
+        print("doc-coupling: WARNING - could not evaluate coupling for this "
+              "change (git could not resolve %s...%s)" % (base, args.head))
+        if args.open_issue:
+            sys.stderr.write(
+                "doc-coupling: at merge time that is a failure, not a skip - "
+                "nothing was checked and no debt was recorded\n")
+            return 1
+        return 0
 
     result = np_doc_coupling.evaluate(args.root, changed, removed, config)
 
-    if args.out:
-        try:
-            with open(args.out, "w", encoding="utf-8") as fh:
-                json.dump(result, fh, indent=2)
-                fh.write("\n")
-        except OSError as exc:
-            # Warn and carry on: the artifact is observability around a result
-            # that still gets printed below, and this check never blocks anyway.
-            sys.stderr.write("doc-coupling: could not write %s: %s (continuing)\n"
-                             % (args.out, exc))
+    _write_json(args.out, result)
 
     if result["satisfied"]:
         print("doc-coupling: satisfied")

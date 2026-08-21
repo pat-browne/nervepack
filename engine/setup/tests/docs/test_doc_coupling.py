@@ -322,5 +322,53 @@ class TestFilingTheIssueFailsLoudly(unittest.TestCase):
         self.assertIn("labels=%s" % doc_coupling_gate.LABEL, seen["url"])
 
 
+
+class TestAGitFailureIsAdvisoryOnAPullRequestAndFatalAtMerge(unittest.TestCase):
+    """The same condition, two right answers.
+
+    On a pull request the check is advisory, so an unresolvable ref must not turn
+    the job red over an infrastructure problem that says nothing about the diff.
+    At merge time this is the step that RECORDS the debt, and returning 0 would
+    forgive it silently - no issue, no finding, nothing to notice."""
+
+    GATE = os.path.join(_ENGINE_SETUP, "np-doc-coupling-gate.py")
+
+    def _run(self, d, *extra):
+        import subprocess
+        return subprocess.run(
+            [sys.executable, self.GATE, "--root", d, "--base", "no-such-ref",
+             "--head", "HEAD"] + list(extra),
+            capture_output=True, text=True)
+
+    def test_pull_request_mode_exits_zero(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc = self._run(d)
+            self.assertEqual(rc.returncode, 0, rc.stdout + rc.stderr)
+            self.assertIn("could not evaluate coupling", rc.stdout)
+
+    def test_merge_mode_exits_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc = self._run(d, "--open-issue", "--repo", "o/r")
+            self.assertEqual(rc.returncode, 1)
+            self.assertIn("no debt was recorded", rc.stderr)
+
+    def test_the_artifact_is_written_even_when_nothing_could_be_evaluated(self):
+        """The upload step runs with if: always(), and an absent file reports as
+        a confusing "no files found" rather than as the git error that happened."""
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "doc-coupling.json")
+            self._run(d, "--out", out)
+            with open(out, encoding="utf-8") as f:
+                payload = json.load(f)
+            self.assertFalse(payload["evaluated"])
+            self.assertIn("could not resolve", payload["reason"])
+
+    def test_the_warning_reaches_stdout_not_only_stderr(self):
+        """CI job logs interleave both, but a reader scanning output for what
+        happened should not have to know which stream to look at."""
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIn("WARNING", self._run(d).stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
