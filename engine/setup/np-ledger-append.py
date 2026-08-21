@@ -187,10 +187,29 @@ def backfill(args, token, fetch=np_github_api.default_fetch):
                          % (e.code, e.reason))
         return 1
 
-    appended = failed = no_spec = 0
+    # A slug is a branch name with "/" replaced by "-", so `feat/foo` and
+    # `feat-foo` collide, and so does the same branch merged twice. That is a
+    # property of the change_id scheme itself (F5 keys the ledger on it, and
+    # spec-guard and drift-guard resolve the change spec through the same
+    # transform), not something introduced here -- but backfill is the one place
+    # a collision turns into a SILENT omission, because the second pull request
+    # would be skipped as "already recorded". Detect it and say so.
+    by_slug = {}
+    for number, head_ref in candidates:
+        by_slug.setdefault(head_ref.replace("/", "-"), []).append(number)
+    for slug, numbers in sorted(by_slug.items()):
+        if len(numbers) > 1:
+            sys.stderr.write(
+                "ledger-append: pull requests %s all resolve to change_id %r - "
+                "only the first can be recorded, because the ledger is keyed on "
+                "it. Record the others by hand with --pr and --spec.\n"
+                % (", ".join("#%d" % n for n in numbers), slug))
+
+    appended = failed = no_spec = seen_already = 0
     for number, head_ref in candidates:
         slug = head_ref.replace("/", "-")
         if slug in already:
+            seen_already += 1
             continue
         # Reuse the single-PR path verbatim rather than reimplementing it. Two
         # code paths that build a ledger entry would eventually build two
@@ -213,8 +232,8 @@ def backfill(args, token, fetch=np_github_api.default_fetch):
             no_spec += 1
 
     print("ledger-append: backfill scanned %d merged pull request(s): appended %d, "
-          "skipped %d with no change spec, failed %d"
-          % (len(candidates), appended, no_spec, failed))
+          "already recorded %d, skipped %d with no change spec, failed %d"
+          % (len(candidates), appended, seen_already, no_spec, failed))
     if failed:
         # Loud. A partial backfill leaves the durable record incomplete, and
         # "appended 2" with nothing else said reads as success. Re-running is

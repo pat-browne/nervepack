@@ -386,5 +386,60 @@ class TestBackfillCountsHonestly(unittest.TestCase):
                 ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch), 1)
 
 
+
+class TestBackfillNamesSlugCollisions(unittest.TestCase):
+    """`feat/foo` and `feat-foo` produce the same change_id, and so does the
+    same branch merged twice. Backfill is the one place that turns into a SILENT
+    omission, because the second pull request looks already recorded."""
+
+    def _args(self, d):
+        import argparse
+        return argparse.Namespace(repo="o/r", pr=None, backfill=True, limit=50,
+                                  repo_root=d, content_dir=d, spec=None,
+                                  tier=None, merge_sha=None)
+
+    def test_colliding_slugs_are_reported_on_stderr(self):
+        import io, contextlib
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "dashboard", "data"))
+            os.makedirs(os.path.join(d, "change-specs"))
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 7, "head": {"ref": "feat/foo"},
+                             "merged_at": "2026-08-01T00:00:00Z"},
+                            {"number": 8, "head": {"ref": "feat-foo"},
+                             "merged_at": "2026-08-02T00:00:00Z"}]
+                return {"head": {"sha": "h", "ref": "feat/foo"},
+                        "merge_commit_sha": "m"}
+
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(err):
+                ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch)
+            self.assertIn("#7", err.getvalue())
+            self.assertIn("#8", err.getvalue())
+            self.assertIn("feat-foo", err.getvalue())
+
+    def test_an_entry_already_in_the_ledger_is_counted_not_dropped(self):
+        import io, contextlib
+        with tempfile.TemporaryDirectory() as d:
+            data = os.path.join(d, "dashboard", "data")
+            os.makedirs(data)
+            with open(os.path.join(data, "ledger.jsonl"), "w") as f:
+                f.write(json.dumps({"change_id": "feat-a"}) + "\n")
+
+            def fake_fetch(url, token, **kw):
+                if "/pulls?" in url:
+                    return [{"number": 3, "head": {"ref": "feat/a"},
+                             "merged_at": "2026-08-01T00:00:00Z"}]
+                return []
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ledger_append.backfill(self._args(d), "tok", fetch=fake_fetch)
+            self.assertIn("already recorded 1", buf.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
