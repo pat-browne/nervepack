@@ -23,7 +23,11 @@ do not silently write the file. Run this suggest-and-prompt flow
    # there is a team root as well as the personal one. Treating the output as a
    # single directory works on a one-root machine and silently undercounts on
    # every other.
-   ROOTS=$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" layer_roots sources)
+   ROOTS=$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" layer_roots sources) \
+     || { echo "could not resolve the sources layer" >&2; exit 1; }
+   # An empty result would make both counts read 0, which is indistinguishable
+   # from "no sources yet" - the answer that decides whether to add or replace.
+   [ -n "$ROOTS" ] || { echo "the sources layer resolved to nothing" >&2; exit 1; }
    TOTAL=$(echo "$ROOTS" | while IFS= read -r d; do find "$d" -name '*.md' 2>/dev/null; done | wc -l)
    PARENT=$(echo "$ROOTS" | while IFS= read -r d; do find "$d/<topic>" -name '*.md' 2>/dev/null; done | wc -l)
    ```
