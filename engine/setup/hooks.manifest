@@ -11,50 +11,60 @@
 # start until the child exits. See np-kb-claude-headless-scripting.
 # Retired the 11 NN-install-*.sh installers + np-hook-lib.sh (phase 13).
 #
+# {NP_DIR} is substituted at install time with the engine repo root, resolved by
+# np_paths from its OWN file location -- never guessed, and never assumed to be
+# ~/Code/nervepack. Before #257 these rows carried that path literally, so a
+# clone anywhere else registered 26 hooks pointing at a directory that does not
+# exist. Hooks fail open (ARCHITECTURE invariant 1), so nothing would have
+# errored: the whole system would have quietly done nothing.
+#
+# On a Git-bash host the substituted path is normalised to forward slashes, since
+# these commands are routed through bash and a backslash there is an escape.
+#
 # --- 50: sync + dashboard (sync is cli.py-dispatched; 40-sync-nervepack.sh retired, phase 17) ---
-SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync >/dev/null 2>&1 &
-SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py sync exit >/dev/null 2>&1 &
-SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py sync >/dev/null 2>&1 &
+SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py sync exit >/dev/null 2>&1 &
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
 # --- 51: consult-nervepack directive (synchronous) ---
-SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook session-directive
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook session-directive
 # --- 52: episodic capture + recall ---
-SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture session-end &
-PreCompact||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-capture checkpoint
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook episodic-recall
+SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture session-end &
+PreCompact||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture checkpoint
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-recall
 # --- 53: lessons layer (six lesson-guard matchers coexist via (matcher, base) dedup) ---
 # Edit/Write/Skill + a broad mcp__.* catch-all extend Phase 2 coverage beyond
 # Bash/Read (issue #152) -- Claude Code only invokes a PreToolUse hook for a
 # tool name matching a REGISTERED matcher here; which lesson (if any) actually
 # fires is then decided by lesson_guard.py's own tool_name_match regex.
-PreToolUse|Bash|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-PreToolUse|Read|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-PreToolUse|Edit|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-PreToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-PreToolUse|Skill|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-PreToolUse|mcp__.*|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-guard
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook lesson-recall
+PreToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Read|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|Skill|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+PreToolUse|mcp__.*|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-guard
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-recall
 # --- 53b: spec-drift guard (Write/Edit-scoped; the SECOND hook permitted to
 # block -- see ARCHITECTURE invariant 1). Denies an edit outside the
 # blast_radius of change-specs/<branch-slug>.md. Silent in any repo with no
 # such spec, which is every repo but this one today.
-PreToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook drift-guard
-PreToolUse|Edit|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook drift-guard
+PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook drift-guard
+PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook drift-guard
 # --- 54: performance evaluator ---
-SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook evaluator &
+SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook evaluator &
 # --- 55: promotion flush (LAST SessionEnd row -- see header) ---
-SessionEnd||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook session-flush
+SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook session-flush
 # --- 56: back-capture sweep (reliable capture path) ---
-SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook backcapture-sweep >/dev/null 2>&1 &
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook backcapture-sweep >/dev/null 2>&1 &
 # --- 57: struggle escalation ---
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook struggle-escalation
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook struggle-escalation
 # --- 59: skill-trigger recall ---
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook skill-trigger-recall
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook skill-trigger-recall
 # --- 59b: security-review recall ---
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook security-recall
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook security-recall
 # --- 61: resume pointer ---
-SessionStart||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-sessionstart &
-UserPromptSubmit||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook resume-recall
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-sessionstart &
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-recall
 # --- 63: open artifact on write (Write-scoped) ---
-PostToolUse|Write|python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook open-artifact
+PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
 # --- 64: turn-completion gate (Stop-scoped; the one hook permitted to block) ---
-Stop||python3 ~/Code/nervepack/engine/nervepack_engine/cli.py hook turn-gate
+Stop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
