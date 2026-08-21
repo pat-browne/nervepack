@@ -66,3 +66,9 @@ engine/setup/automerge.json    @pat-browne
 engine/setup/np_automerge.py    @pat-browne
 # SELF: the CI job that applies it
 engine/setup/np-automerge-gate.py    @pat-browne
+# SELF: the trigger list for the documentation-coupling check. A list that can be emptied in a standard-tier diff is not a list.
+engine/setup/doc-coupling.json    @pat-browne
+# SELF: the check that reads it
+engine/setup/np_doc_coupling.py    @pat-browne
+# SELF: the CI job that applies it
+engine/setup/np-doc-coupling-gate.py    @pat-browne

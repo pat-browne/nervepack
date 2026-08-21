@@ -31,6 +31,9 @@
     {"glob": ".github/branch-protection/**", "tier": "high", "why": "SELF: the committed record of which status checks are REQUIRED. It resolved to normal until change spec 0011, which meant the list of required gates could be rewritten in a change needing no rollback plan and no adversarial lens."},
     {"glob": "engine/setup/automerge.json", "tier": "high", "why": "SELF: decides which changes may merge with no human. If it were standard, the tier allowlist and the trusted-author list could both be widened in a diff needing no spec."},
     {"glob": "engine/setup/np_automerge.py", "tier": "high", "why": "SELF: the decision that reads the policy above"},
-    {"glob": "engine/setup/np-automerge-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"}
+    {"glob": "engine/setup/np-automerge-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"},
+    {"glob": "engine/setup/doc-coupling.json", "tier": "high", "why": "SELF: the trigger list for the documentation-coupling check. A list that can be emptied in a standard-tier diff is not a list."},
+    {"glob": "engine/setup/np_doc_coupling.py", "tier": "high", "why": "SELF: the check that reads it"},
+    {"glob": "engine/setup/np-doc-coupling-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"}
   ]
 }
