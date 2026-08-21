@@ -5,6 +5,19 @@ on:
   pull_request:
   workflow_dispatch:        # ad-hoc manual runs from the Actions UI
 
+# Least privilege for every job that does not say otherwise (#255/F9). Without
+# this the whole workflow ran with the repository default, which on a repo
+# configured for write is a token that can push to main sitting in a job that
+# only ever needed to read the tree. The three jobs that genuinely need more
+# declare their own `permissions:` block, and a job-level block REPLACES this
+# one rather than adding to it - so each of them restates `contents: read`.
+#
+# Note `pull_request` (never `pull_request_target`): a fork's token is read-only
+# regardless of what is written here, so the fork case fails closed with no
+# conditional to get wrong.
+permissions:
+  contents: read
+
 jobs:
   syntax:
     name: Syntax sweep (stdlib-only)
@@ -345,7 +358,7 @@ jobs:
 
       - name: Emit structured gate verdict
         if: always()
-        run: python3 engine/setup/np-gate-verdict.py --gate "spec-guard" --status "${{ job.status }}" --reason "change-specs/ coverage check (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-spec-guard.json
+        run: python3 engine/setup/np-gate-verdict.py --gate "spec-guard" --status "${{ job.status }}" --reason "change-specs/ coverage check" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-spec-guard.json
 
       - name: Upload gate verdict
         if: always()
@@ -439,18 +452,22 @@ jobs:
           path: gate-verdict-diff-review.json
 
   tier-gate:
-    name: Tier gate (differential gating, advisory)
+    name: Tier gate (differential gating)
     runs-on: ubuntu-latest
     # always(): this must run even when an upstream gate FAILED. Reading "which
     # required verdicts are missing" is the whole job - needs' default gating
     # would skip it exactly when it has the most to say.
     if: always() && github.event_name == 'pull_request'
     needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
-    # Advisory (#254/F8), per this repo's "ship any new gate advisory first,
-    # then promote" rule. It reports its real exit code regardless, because an
-    # advisory period that reports nothing measures nothing. Promotion is the
-    # first step of #255, after it has been watched on real pull requests.
-    continue-on-error: true
+    # PROMOTED to required (#255/F9), which change spec 0010 named as this
+    # issue's first step. It shipped advisory in #254/F8 and reported correctly
+    # on every pull request since. `continue-on-error` is gone: with it set the
+    # job reports success even when the script exits 1, which would make the
+    # required check vacuous - and auto-merge is about to trust this verdict.
+    #
+    # Consequence worth knowing: a high-tier pull request whose `diff-review`
+    # SKIPPED can no longer merge without an admin bypass, and `diff-review`
+    # always skips on a fork. See change-specs/feat-f9-automerge.md.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -485,7 +502,7 @@ jobs:
 
       - name: Emit structured gate verdict
         if: always()
-        run: python3 engine/setup/np-gate-verdict.py --gate "tier-gate" --status "${{ job.status }}" --reason "Tier requirement set applied to this diff (advisory)" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-tier-gate.json
+        run: python3 engine/setup/np-gate-verdict.py --gate "tier-gate" --status "${{ job.status }}" --reason "Tier requirement set applied to this diff" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-tier-gate.json
 
       - name: Upload gate verdict
         if: always()
@@ -510,6 +527,103 @@ jobs:
           name: tier-policy
           path: tier-policy.json
 
+  auto-merge:
+    name: Auto-merge decision (standard tier)
+    runs-on: ubuntu-latest
+    # always(): a decision is recorded on EVERY pull request, including one
+    # where tier-gate failed. A record that exists only when the mechanism fires
+    # cannot be audited for the case that matters - the one where it fired and
+    # should not have.
+    if: always() && github.event_name == 'pull_request'
+    needs: [tier-gate]
+    permissions:
+      # `gh pr merge --auto` needs BOTH. This is the scope GitHub's own
+      # "Automating Dependabot with GitHub Actions" example declares for exactly
+      # this call, and guessing lower fails in the worst possible way: the enable
+      # step errors, the pull request simply never auto-merges, and nothing about
+      # that looks different from "not eligible".
+      #
+      # `contents: write` here cannot push to `main`. The branch ruleset requires
+      # a pull request, forbids non-fast-forward and deletion, and GITHUB_TOKEN
+      # is not in its bypass-actor list - so the ruleset, not the token scope, is
+      # what stands between this job and the default branch.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Download the tier policy
+        # Tolerant on purpose: download-artifact errors hard when the artifact is
+        # absent, and this job now runs even when tier-gate died before its
+        # upload. A missing policy is not a crash here - np_automerge reads it as
+        # "nothing is known about what this pull request touched", which blocks.
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: tier-policy
+
+      - name: Decide
+        id: decide
+        # PR_AUTHOR is github.event.pull_request.user.login - the pull request's
+        # AUTHOR. Never github.actor, which is the last identity to ACT on the
+        # pull request: an attacker who can cause any bot activity on a pull
+        # request they control flips that context and inherits this path. It is
+        # a login string from an untrusted source, so it goes through env and is
+        # read as a shell variable, never ${{ }}-interpolated into the script.
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          python3 engine/setup/np-automerge-gate.py \
+            --tier-policy tier-policy.json \
+            --author "$PR_AUTHOR" \
+            --out automerge-decision.json
+
+      # Native auto-merge, never a merge API call. GitHub holds the pull request
+      # until every required check and ruleset requirement is satisfied, then
+      # merges - a WAITING mechanism, on the same side of the gate as a human
+      # clicking the button. A step that merged directly would hold a token able
+      # to merge whether or not the gates passed.
+      - name: Enable native auto-merge
+        if: steps.decide.outputs.will_enable == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # gh prints its own specific error, so this adds only what gh cannot
+          # know: what the failure means for this pull request. Without that
+          # line, a red step next to a decision record saying will_enable=true
+          # reads as "it merged something it should not have".
+          gh pr merge "${{ github.event.pull_request.number }}" --auto --squash --repo "${{ github.repository }}" || {
+            echo "::error::could not enable auto-merge (see the gh error above)."
+            echo "::error::The pull request is UNCHANGED - nothing merged, and nothing"
+            echo "::error::will merge unattended. It now needs a human to merge it."
+            exit 1
+          }
+
+      - name: Emit structured gate verdict
+        if: always()
+        run: python3 engine/setup/np-gate-verdict.py --gate "auto-merge" --status "${{ job.status }}" --reason "Auto-merge decision recorded (will_enable=${{ steps.decide.outputs.will_enable }})" --evidence-ref "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" --rules-sha "${{ github.sha }}" --out gate-verdict-auto-merge.json
+
+      - name: Upload gate verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-verdict-auto-merge
+          path: gate-verdict-auto-merge.json
+
+      # Separate artifact, same reasoning as tier-policy: the summary job reads
+      # every *.json in the merged gate-verdict-* directory as a verdict, and
+      # this file has no `gate` field.
+      - name: Upload the decision
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: automerge-decision
+          path: automerge-decision.json
+
   gate-verdicts-summary:
     name: Gate verdicts summary
     runs-on: ubuntu-latest
@@ -517,7 +631,7 @@ jobs:
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
     if: always() && github.event_name == 'pull_request'
-    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate]
+    needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate, auto-merge]
     permissions:
       pull-requests: write   # to post/update the summary comment
       contents: read

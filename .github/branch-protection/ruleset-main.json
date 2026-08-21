@@ -66,6 +66,9 @@
           },
           {
             "context": "Spec guard (change-specs)"
+          },
+          {
+            "context": "Tier gate (differential gating)"
           }
         ]
       }

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "comment": "Policy for confidence-gated auto-merge (F9/#255). Read by np_automerge.py and applied by the auto-merge CI job. This file classifies itself high: widening it must cost a spec, a rollback plan and the adversarial lens, or the cheapest path through every gate would be to add a tier here.",
+  "enabled": false,
+  "enabled_note": "SHIPS OFF. The decision still runs and still writes gate-verdict-auto-merge.json on every pull request, so a watch period shows what WOULD have merged before anything does. Flipping this to true is a one-line, audited change. This mirrors the repo rule that a new mechanism ships advisory and gets promoted, rather than arriving live.",
+  "allowed_tiers": ["standard"],
+  "allowed_tiers_note": "Deliberately redundant with tier-policy.json's auto_merge_eligible, which is already standard-only. The redundancy is the point: widening auto-merge means editing THIS file, which is high tier.",
+  "trusted_authors": ["pat-browne"],
+  "trusted_authors_note": "Matched against github.event.pull_request.user.login, the pull request's AUTHOR. Never github.actor, which is the last identity to ACT on the pull request - an attacker who can cause any bot activity on a pull request they control flips it and inherits the privileged path."
+}
