@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "The classic branch protection that governed `main` until #254 replaced it",
+    "with a ruleset. This is NOT a raw API dump: it is the exact body to PUT",
+    "back, so that the rollback in change-specs/feat-f8-tier-gate.md is a",
+    "command rather than a reconstruction job.",
+    "",
+    "  gh api -X PUT repos/pat-browne/nervepack/branches/main/protection \\",
+    "    --input .github/branch-protection/classic-main.backup.json",
+    "",
+    "Captured 2026-08-20 from the live API. Strip the _comment key first if",
+    "GitHub ever starts rejecting unknown fields; today it ignores them."
+  ],
+  "required_status_checks": {
+    "strict": false,
+    "contexts": [
+      "Syntax sweep (stdlib-only)",
+      "Regression suite (zero-dep)",
+      "Secret/PII guard (terminal gate)",
+      "Windows suite (Git-bash)",
+      "Bash-free MCP suite (no Git-bash)"
+    ]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
+  "restrictions": null,
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "block_creations": false,
+  "required_conversation_resolution": true
+}
