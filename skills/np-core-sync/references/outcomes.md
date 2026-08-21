@@ -50,3 +50,17 @@ Do NOT auto-resolve. Ask the user how to proceed. Defaults:
   conflicts with the user.
 - If the divergence is a real edit collision → consider whether the user
   wants to keep both sides; surface the diffs.
+
+**Check the local-only side before calling it noise.** Local-only commits on
+`main` are not always leftover work from someone else. Read each one. A local
+commit can be this session's own finished, unpushed feature. Check its date
+and message against open issues with `gh issue list` or `gh issue view`. Treat
+it as real work that needs a proper branch and PR. Never rebase or force-push
+over it silently.
+
+**Re-check issue and PR state before trusting a plan doc's last snapshot.**
+Remote-only commits can represent an entire wave of a tracked epic landing
+through a concurrent agent or session while this one was away. A plan doc
+written even a day earlier can be stale in a way `git log` alone will not
+flag. Confirm against `gh issue view <n>` before reporting a wave as still
+open or resuming "next" work on it.
