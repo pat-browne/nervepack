@@ -183,20 +183,24 @@ def _core_check(cap_id, np):
         # report, then say so. "My XDG_CACHE_HOME is being ignored" has to be
         # answerable without reading source (#299), and this is the check that
         # already proves the config layer is reachable.
-        try:
-            np_dirs.cache_dir()
-            np_dirs.config_dir()
-        except np_dirs.DirectoryError as exc:
-            # A relative XDG_* value raises by design. Crashing here would make
-            # the doctor die on precisely the misconfiguration it exists to
-            # report, which is the worst possible moment for it to stop working.
-            return "FAIL (%s)" % exc
+        # Resolve both state directories so the markers below have something to
+        # report. Neither call raises: np_dirs ignores an unusable value rather
+        # than raising, because sixteen fail-open hooks resolve through here.
+        np_dirs.cache_dir()
+        np_dirs.config_dir()
+        invalid = np_dirs.invalid_values()
+        if invalid:
+            return ("FAIL (%s — relative, so it is ignored per the XDG spec and "
+                    "state stays at the default. Set an absolute path or unset it.)"
+                    % ", ".join("%s=%r" % kv for kv in sorted(invalid.items())))
         ignored = np_dirs.legacy_overrides()
         if ignored:
             return ("PASS (%s set but ignored: an existing directory takes "
                     "precedence, so nothing moved. Move it to relocate.)"
                     % ", ".join(ignored))
-        return "PASS"  # np_toggle imported successfully -> the resolver is reachable
+        # Reaching here means np_toggle imported AND both state directories
+        # resolved cleanly through np_dirs.
+        return "PASS"
     if cap_id == "content":
         cdir = np_content.content_dir()
         if not cdir or not os.path.isdir(cdir):

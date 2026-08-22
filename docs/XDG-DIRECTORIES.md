@@ -43,16 +43,21 @@ mv ~/.cache/nervepack "$XDG_CACHE_HOME/nervepack"
 `cli.py doctor` reports when legacy precedence is in effect, so "my
 `XDG_CACHE_HOME` is being ignored" is answerable without reading source.
 
-## A relative value is an error
+## A relative value is ignored, and reported
 
 ```
-XDG_CACHE_HOME=relative/path   ->  raises
+XDG_CACHE_HOME=relative/path   ->  falls back to ~/.cache/nervepack
+                                   doctor: FAIL, naming the value
 ```
 
-The XDG specification says a relative value is invalid. Normalising it silently
-would anchor nervepack's state to the process's working directory — and these
-paths resolve inside hooks, which start in whatever project the user happened to
-open. That is the worst available outcome, so it fails loudly instead.
+The XDG specification says a relative value "should be considered invalid and
+ignored", and that is what happens. It is never normalised: a relative path
+would anchor nervepack's state to whatever directory a hook started in.
+
+**Why it does not raise.** `np_toggle` resolves through this module, sixteen hook
+modules read toggles, and hooks fail open. Raising would let one bad environment
+variable silently disable the whole session lifecycle — no error, nothing red.
+Ignoring keeps every hook working; the doctor keeps the mistake visible.
 
 ## macOS: a contested convention
 

@@ -69,11 +69,13 @@ relocate an existing install will not be relocated. That is the safer of the two
 surprises, because it is visible (the state is where it always was) rather than
 invisible (the state is gone and the pipeline silently restarts empty).
 
-**A relative `XDG_*` value is a hard configuration error.** The XDG spec says a
-relative path is invalid and must be ignored; Go's stdlib raises. Silently
-normalising it would put nervepack's state at a path that moves with the
-process's working directory, which for a hook that runs from an arbitrary
-project directory is the worst available outcome.
+**A relative `XDG_*` value is ignored and reported.** The XDG spec says exactly
+that: such a value "should be considered invalid and ignored". It is never
+normalised, because a relative path would anchor nervepack's state to whatever
+directory a hook started in.
+
+The first draft of this change *raised* instead, following Go's stdlib. See the
+Deviations note: that was wrong for this codebase.
 
 ## macOS: a contested convention, and which side this picks
 
@@ -219,3 +221,21 @@ toggle and credential paths through the same resolution.
   `spec-guard` caught this on the committed diff, after I had already run the
   full suite green. A passing suite says the code works; it says nothing about
   whether the change stayed inside what it declared.
+- 2026-08-22 — a relative `XDG_*` value now **falls back and is reported**
+  instead of raising. The review on #301 asked me to document the raise at three
+  call sites, and three call sites wanting the same caveat was the signal that
+  the caveat was the defect.
+
+  `np_toggle` resolves through `np_dirs`, **sixteen hook modules read toggles**,
+  and hooks fail open by ARCHITECTURE invariant 1. Raising would therefore have
+  let one bad environment variable silently disable the entire session
+  lifecycle: no error, nothing red, nothing to notice. That is the exact
+  silent-total-failure shape #295 removed from hook registration, reintroduced
+  one layer down.
+
+  The XDG spec agrees with the outcome — it says ignore — so this is also the
+  more standards-faithful reading. Go raises because a Go library is not sitting
+  underneath sixteen fail-open callbacks.
+
+  The doctor reports it as FAIL and names the offending value, so ignoring the
+  variable does not mean hiding the mistake.

@@ -28,12 +28,21 @@ existing install will not be relocated. That is the safer surprise, because it
 is visible (the state is where it always was) rather than invisible (the state
 is gone and the pipeline restarts empty).
 
-## A relative XDG value is an error, not a path
+## A relative XDG value is IGNORED, and reported
 
-The XDG spec says a relative value is invalid and must be ignored. Normalising
-it silently would anchor nervepack's state to the process's working directory --
-and these run from hooks, which start in whatever project the user happened to
-open. That is the worst available outcome, so it raises.
+The XDG spec is explicit: a relative value is invalid and "should be considered
+invalid and ignored". This module does exactly that, falling back to the default,
+and records it so the doctor can report it.
+
+An earlier draft raised instead, following Go's stdlib. That was wrong for THIS
+codebase: `np_toggle` resolves through here, sixteen hook modules read toggles,
+and hooks fail open by ARCHITECTURE invariant 1. Raising would therefore have
+made one bad environment variable silently disable the entire session lifecycle
+-- no error, nothing red, the exact silent-total-failure shape #295 removed from
+hook registration.
+
+Ignoring keeps every hook working. Reporting keeps the mistake visible. Raising
+achieved neither.
 
 ## macOS
 
@@ -58,8 +67,9 @@ APP = "nervepack"
 _legacy_wins = set()
 
 
-class DirectoryError(Exception):
-    """An XDG variable is set to something that cannot be a base directory."""
+# Set to something that cannot be a base directory. Reported, never raised: see
+# the module docstring on why raising here would disable the session lifecycle.
+_invalid = {}
 
 
 def _home():
@@ -77,10 +87,13 @@ def _resolve(env_var, default_rel):
         _legacy_wins.discard(env_var)
         return legacy
     if not os.path.isabs(base):
-        raise DirectoryError(
-            "%s is %r, which is relative. The XDG spec requires an absolute "
-            "path, and a relative one would anchor nervepack's state to "
-            "whatever directory a hook happened to start in." % (env_var, base))
+        # Ignored per the XDG spec, and recorded so the doctor can say so. A
+        # relative value would anchor state to whatever directory a hook started
+        # in, which is why it cannot simply be normalised.
+        _invalid[env_var] = base
+        _legacy_wins.discard(env_var)
+        return legacy
+    _invalid.pop(env_var, None)
     derived = os.path.join(base, APP)
     # Legacy precedence, deliberately: see the module docstring.
     if os.path.isdir(legacy) and not os.path.isdir(derived):
@@ -109,6 +122,13 @@ def cache_path(*parts):
 def config_path(*parts):
     """A path under config_dir(). Nothing is created."""
     return os.path.join(config_dir(), *parts)
+
+
+def invalid_values():
+    """{variable: value} for XDG variables set to something unusable, currently.
+    Empty unless a resolution actually hit one, so the doctor reports it only
+    when it is true right now."""
+    return dict(_invalid)
 
 
 def legacy_overrides():

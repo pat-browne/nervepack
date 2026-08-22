@@ -37,6 +37,7 @@ class _Env(object):
             else:
                 os.environ[key] = value
         np_dirs._legacy_wins.clear()
+        np_dirs._invalid.clear()
         return self
 
     def __exit__(self, *exc):
@@ -46,6 +47,7 @@ class _Env(object):
             else:
                 os.environ[key] = value
         np_dirs._legacy_wins.clear()
+        np_dirs._invalid.clear()
 
 
 class TestTheDefaultIsUnchanged(unittest.TestCase):
@@ -87,32 +89,47 @@ class TestAnAbsoluteXdgValueIsHonoured(unittest.TestCase):
                              os.path.join(home, ".cache", "nervepack"))
 
 
-class TestARelativeXdgValueRaises(unittest.TestCase):
-    """The XDG spec calls a relative value invalid. Normalising it would anchor
-    state to whatever directory a hook happened to start in."""
+class TestARelativeXdgValueIsIgnoredAndReported(unittest.TestCase):
+    """The XDG spec says a relative value "should be considered invalid and
+    ignored". An earlier draft raised, following Go's stdlib. That was wrong
+    here: np_toggle resolves through np_dirs, sixteen hook modules read toggles,
+    and hooks fail open -- so raising would have let one bad environment variable
+    silently disable the whole session lifecycle."""
 
-    def test_it_raises_rather_than_normalising(self):
+    def test_it_falls_back_to_the_default(self):
         with tempfile.TemporaryDirectory() as home, \
                 _Env(home, XDG_CACHE_HOME="relative/path"):
-            with self.assertRaises(np_dirs.DirectoryError):
-                np_dirs.cache_dir()
+            self.assertEqual(np_dirs.cache_dir(),
+                             os.path.join(home, ".cache", "nervepack"))
 
-    def test_the_message_says_why(self):
+    def test_it_does_not_raise(self):
+        """The whole point. A raise here reaches sixteen fail-open hooks."""
         with tempfile.TemporaryDirectory() as home, \
                 _Env(home, XDG_CONFIG_HOME="also/relative"):
-            try:
-                np_dirs.config_dir()
-            except np_dirs.DirectoryError as exc:
-                self.assertIn("relative", str(exc))
-                self.assertIn("XDG_CONFIG_HOME", str(exc))
-            else:
-                self.fail("a relative XDG_CONFIG_HOME was accepted")
+            np_dirs.config_dir()
+
+    def test_it_is_reported_with_the_offending_value(self):
+        with tempfile.TemporaryDirectory() as home, \
+                _Env(home, XDG_CONFIG_HOME="also/relative"):
+            np_dirs.config_dir()
+            self.assertEqual(np_dirs.invalid_values(),
+                             {"XDG_CONFIG_HOME": "also/relative"})
 
     def test_a_dot_prefixed_value_is_still_relative(self):
         with tempfile.TemporaryDirectory() as home, \
                 _Env(home, XDG_CACHE_HOME="./cache"):
-            with self.assertRaises(np_dirs.DirectoryError):
-                np_dirs.cache_dir()
+            self.assertEqual(np_dirs.cache_dir(),
+                             os.path.join(home, ".cache", "nervepack"))
+            self.assertIn("XDG_CACHE_HOME", np_dirs.invalid_values())
+
+    def test_fixing_the_value_clears_the_report(self):
+        with tempfile.TemporaryDirectory() as home, \
+                tempfile.TemporaryDirectory() as good, \
+                _Env(home, XDG_CACHE_HOME="relative/path"):
+            np_dirs.cache_dir()
+            os.environ["XDG_CACHE_HOME"] = good
+            np_dirs.cache_dir()
+            self.assertEqual(np_dirs.invalid_values(), {})
 
 
 class TestLegacyPrecedence(unittest.TestCase):
@@ -281,12 +298,12 @@ class TestTheDoctorSurvivesTheMisconfigurationItReports(unittest.TestCase):
         import np_doctor
         return np_doctor
 
-    def test_a_relative_value_reports_fail_rather_than_raising(self):
+    def test_a_relative_value_reports_fail_and_names_the_value(self):
         with tempfile.TemporaryDirectory() as home, \
                 _Env(home, XDG_CACHE_HOME="relative/oops"):
             result = self._doctor()._core_check("toggles", _ENGINE_SETUP)
         self.assertTrue(result.startswith("FAIL"), result)
-        self.assertIn("relative", result)
+        self.assertIn("relative/oops", result)
 
     def test_a_relative_config_value_is_caught_too(self):
         with tempfile.TemporaryDirectory() as home, \
