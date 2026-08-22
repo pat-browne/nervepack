@@ -31,6 +31,7 @@ import subprocess
 import sys
 
 import np_paths
+import np_dirs
 import np_toggle
 import np_content
 import np_model
@@ -56,9 +57,9 @@ def _caps_path():
 
 
 def _adapter_path():
-    # Mirror np-doctor.sh: ADAPTER="${NP_ADAPTER:-$HOME/.config/nervepack/adapter.json}".
-    return os.environ.get("NP_ADAPTER") or os.path.join(
-        os.path.expanduser("~"), ".config", "nervepack", "adapter.json")
+    # Mirror np-doctor.sh: ADAPTER="${NP_ADAPTER:-$HOME/.config/nervepack/adapter.json}",
+    # with the base directory now resolved through np_dirs (XDG-aware, #299).
+    return os.environ.get("NP_ADAPTER") or np_dirs.config_path("adapter.json")
 
 
 def _git_ok(np):
@@ -178,7 +179,37 @@ def _core_check(cap_id, np):
     if cap_id == "git-sync":
         return "PASS" if _git_ok(np) else "FAIL"
     if cap_id == "toggles":
-        return "PASS"  # np_toggle imported successfully -> the resolver is reachable
+        # Resolve both state directories so legacy_overrides() has something to
+        # report, then say so. "My XDG_CACHE_HOME is being ignored" has to be
+        # answerable without reading source (#299), and this is the check that
+        # already proves the config layer is reachable.
+        # Resolve both state directories, which populates the markers read below
+        # and answers "where does my state actually live". Neither call raises:
+        # np_dirs ignores an unusable value rather than raising, because sixteen
+        # fail-open hooks resolve through here.
+        cache, config = np_dirs.cache_dir(), np_dirs.config_dir()
+        invalid = np_dirs.invalid_values()
+        if invalid:
+            return ("FAIL (%s — relative, so it is ignored per the XDG spec and "
+                    "state stays at the default. Set an absolute path or unset it.)"
+                    % ", ".join("%s=%r" % kv for kv in sorted(invalid.items())))
+        ignored = np_dirs.legacy_overrides()
+        if ignored:
+            return ("PASS (%s set but ignored: an existing directory takes "
+                    "precedence, so nothing moved. Move it to relocate.)"
+                    % ", ".join(ignored))
+        # Reaching here means np_toggle imported AND both state directories
+        # resolved cleanly through np_dirs. Name them when they are NOT the
+        # historical defaults: a credential in an unexpected place is exactly
+        # what someone runs the doctor to find, and printing them unconditionally
+        # would bury that in noise on every ordinary machine.
+        moved = [("cache", cache, np_dirs.DEFAULT_CACHE_REL),
+                 ("config", config, np_dirs.DEFAULT_CONFIG_REL)]
+        unusual = ["%s=%s" % (label, path) for label, path, rel in moved
+                   if path != os.path.join(np_dirs._home(), rel, np_dirs.APP)]
+        if unusual:
+            return "PASS (%s)" % ", ".join(unusual)
+        return "PASS"
     if cap_id == "content":
         cdir = np_content.content_dir()
         if not cdir or not os.path.isdir(cdir):

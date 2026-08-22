@@ -20,6 +20,17 @@ import hashlib
 import json
 import os
 import posixpath
+import sys
+
+# engine/setup holds np_dirs (the XDG-aware state-directory resolver) alongside
+# np_paths and the config files. Add it so this module resolves them whether it
+# is imported in-process or run standalone, matching the sibling modules.
+_SETUP = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "setup"))
+if _SETUP not in sys.path:
+    sys.path.insert(0, _SETUP)
+
+import np_dirs
 
 SCHEMA = 1
 
@@ -446,8 +457,7 @@ def cache_path(root):
     real = os.path.realpath(root)
     slug = hashlib.sha256(real.encode("utf-8")).hexdigest()[:16]
     base = os.path.basename(real) or "layer"
-    return os.path.join(_home(), ".config", "nervepack", "layouts",
-                        "%s-%s.json" % (base, slug))
+    return np_dirs.config_path("layouts", "%s-%s.json" % (base, slug))
 
 
 def _write_atomic(path, data):

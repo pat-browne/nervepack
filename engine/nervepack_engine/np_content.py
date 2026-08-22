@@ -21,6 +21,7 @@ import posixpath
 import sys
 
 import np_paths
+import np_dirs
 import np_toggle
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +35,7 @@ def _home():
 
 
 def _cfg(name):
-    return os.path.join(_home(), ".config", "nervepack", name)
+    return np_dirs.config_path(name)
 
 
 def _first_line(path):

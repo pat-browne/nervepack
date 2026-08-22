@@ -37,7 +37,9 @@ STUB
 chmod +x "$tmp/bin/claude"
 
 run() {  # stdin answers piped in by the caller
-  HOME="$home" PATH="$tmp/bin:$PATH" python3 "$INSTALL"
+  HOME="$home" PATH="$tmp/bin:$PATH" \
+    XDG_CONFIG_HOME="$home/.config" XDG_CACHE_HOME="$home/.cache" \
+    python3 "$INSTALL"
 }
 
 # --- interactive path: content + team provided ---

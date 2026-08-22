@@ -18,14 +18,14 @@ import os
 import shlex
 
 import np_token_status
+import np_dirs
 
 
 def claude_token_file():
     override = os.environ.get("NP_CLAUDE_TOKEN_FILE")
     if override:
         return override
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.path.join(home, ".config", "nervepack", "claude-oauth-token")
+    return np_dirs.config_path("claude-oauth-token")
 
 
 def claude_token_env_prefix():

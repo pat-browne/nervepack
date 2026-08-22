@@ -31,7 +31,7 @@ NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/engine/nervepack_engine" "$NP/das
 # np_aggregate + np_paths stay in engine/setup; np_toggle + np_content were relocated
 # into engine/nervepack_engine (phase 20b-2). Mirror that split so np_aggregate's
 # self-bootstrap finds them under ../nervepack_engine.
-cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$NP/engine/setup/"
+cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$SETUP/np_dirs.py" "$NP/engine/setup/"
 cp "$SETUP/../nervepack_engine/np_toggle.py" "$SETUP/../nervepack_engine/np_content.py" \
    "$NP/engine/nervepack_engine/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
@@ -71,7 +71,7 @@ before="$(cd "$NP" && git rev-parse HEAD)"
 # unset NP_CONTENT_DIR; point HOME at a config-less home so the resolver falls back.
 # `env -u NP_CONTENT_DIR` scrubs any value inherited from the suite's own environment.
 unset NP_CONTENT_DIR
-run_agg -u NP_CONTENT_DIR "HOME=$EMPTY_HOME"
+run_agg -u NP_CONTENT_DIR "HOME=$EMPTY_HOME" "XDG_CONFIG_HOME=$EMPTY_HOME/.config" "XDG_CACHE_HOME=$EMPTY_HOME/.cache"
 after="$(cd "$NP" && git rev-parse HEAD)"
 [[ "$before" == "$after" ]] \
   || { echo "FAIL (A): implicit-fallback run created a commit (HEAD moved $before -> $after)"; \
@@ -105,7 +105,7 @@ LEGACY_HOME="$tmp/home_legacy"; mkdir -p "$LEGACY_HOME/.config/nervepack"
 printf '%s\n' "$NP" > "$LEGACY_HOME/.config/nervepack/content-dir"   # deliberate single-repo
 seed_record c
 before="$(cd "$NP" && git rev-parse HEAD)"
-run_agg -u NP_CONTENT_DIR "HOME=$LEGACY_HOME"   # (C) deliberate single-repo via config file
+run_agg -u NP_CONTENT_DIR "HOME=$LEGACY_HOME" "XDG_CONFIG_HOME=$LEGACY_HOME/.config" "XDG_CACHE_HOME=$LEGACY_HOME/.cache"   # (C) deliberate single-repo via config file
 after="$(cd "$NP" && git rev-parse HEAD)"
 [[ "$before" != "$after" ]] \
   || { echo "FAIL (C): deliberate single-repo (config==engine root) did NOT commit — legacy broken"; exit 1; }

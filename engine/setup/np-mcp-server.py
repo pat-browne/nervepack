@@ -9,6 +9,7 @@ import glob
 import json
 import os
 import subprocess
+import np_dirs
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -494,7 +495,7 @@ def _tool_onboard(args):
         raise Disabled("nervepack_onboard needs bash — its steps are setup/installer "
                        "scripts (not supported on a bash-free host)")
     # Optionally point at the overlays first, mirroring ~/.config/nervepack/{content,team}-dir.
-    cfg = os.path.join(os.path.expanduser("~"), ".config", "nervepack")
+    cfg = np_dirs.config_dir()
     for key, fname in (("content_dir", "content-dir"), ("team_dir", "team-dir")):
         val = (args.get(key) or "").strip()
         if val:

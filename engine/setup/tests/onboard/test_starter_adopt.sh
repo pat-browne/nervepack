@@ -24,7 +24,7 @@ command -v python3 >/dev/null 2>&1 || { echo "SKIP test_starter_adopt: no python
 _wmix() { command -v cygpath >/dev/null 2>&1 && cygpath -m "$1" || printf '%s' "$1"; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 tmp="$(_wmix "$tmp")"
-HOME="$tmp" NP_STARTER_ADOPT_FORCE=decline python3 "$INSTALL" --starter-only >/dev/null 2>&1
+XDG_CONFIG_HOME="$tmp/.config" XDG_CACHE_HOME="$tmp/.cache" HOME="$tmp" NP_STARTER_ADOPT_FORCE=decline python3 "$INSTALL" --starter-only >/dev/null 2>&1
 rc=$?
 chk "decline exits 0"                 "[ $rc -eq 0 ]"
 chk "decline writes no content-dir"   "[ ! -f '$tmp/.config/nervepack/content-dir' ]"
@@ -38,7 +38,7 @@ git -C "$src" init -q
 git -C "$src" -c user.email=t@t -c user.name=t commit --allow-empty -q -m init
 dest="$tmp2/home/Code/starter-content"
 
-HOME="$tmp2/home" NP_STARTER_ADOPT_FORCE=adopt NP_STARTER_ADOPT_SOURCE="$src" \
+XDG_CONFIG_HOME="$tmp2/home/.config" XDG_CACHE_HOME="$tmp2/home/.cache" HOME="$tmp2/home" NP_STARTER_ADOPT_FORCE=adopt NP_STARTER_ADOPT_SOURCE="$src" \
   NP_STARTER_ADOPT_PATH="$dest" python3 "$INSTALL" --starter-only >/dev/null 2>&1
 rc2=$?
 chk "adopt exits 0"          "[ $rc2 -eq 0 ]"
@@ -51,7 +51,7 @@ tmp3="$(mktemp -d)"; trap 'rm -rf "$tmp" "$tmp2" "$tmp3"' EXIT
 tmp3="$(_wmix "$tmp3")"
 mkdir -p "$tmp3/.config/nervepack"
 printf '%s\n' "/already/configured" > "$tmp3/.config/nervepack/content-dir"
-HOME="$tmp3" NP_STARTER_ADOPT_FORCE=adopt python3 "$INSTALL" --starter-only >/dev/null 2>&1
+XDG_CONFIG_HOME="$tmp3/.config" XDG_CACHE_HOME="$tmp3/.cache" HOME="$tmp3" NP_STARTER_ADOPT_FORCE=adopt python3 "$INSTALL" --starter-only >/dev/null 2>&1
 rc3=$?
 chk "already-configured overlay: exits 0" "[ $rc3 -eq 0 ]"
 chk "already-configured overlay: config left untouched" \
@@ -76,7 +76,7 @@ exit 0
 STUB
 chmod +x "$tmp4/bin/claude"
 
-out4="$(printf '\n%s\n' "$team4" | HOME="$home4" PATH="$tmp4/bin:$PATH" \
+out4="$(printf '\n%s\n' "$team4" | XDG_CONFIG_HOME="$home4/.config" XDG_CACHE_HOME="$home4/.cache" HOME="$home4" PATH="$tmp4/bin:$PATH" \
   env -u NP_STARTER_ADOPT_FORCE python3 "$INSTALL" 2>&1)"
 chk "guided flow: team-dir IS written (not swallowed by the starter offer)" \
   "[ \"\$(cat '$home4/.config/nervepack/team-dir' 2>/dev/null)\" = '$team4' ]"
