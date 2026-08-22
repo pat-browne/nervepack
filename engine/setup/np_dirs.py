@@ -60,6 +60,10 @@ Pure stdlib.
 import os
 
 APP = "nervepack"
+# The historical locations, and still the defaults. Exported so the doctor can
+# say when a resolution landed somewhere else without re-deriving the rule.
+DEFAULT_CACHE_REL = ".cache"
+DEFAULT_CONFIG_REL = ".config"
 
 # The reason a marker exists rather than a log line: this resolves inside hooks,
 # which must not write to the session's streams. The doctor reads it to answer
@@ -79,41 +83,37 @@ def _home():
 def _resolve(env_var, default_rel):
     base = os.environ.get(env_var)
     legacy = os.path.join(_home(), default_rel, APP)
+    # Clear both markers ONCE, here, before any branch decides anything. Each
+    # branch below then only ever ADDS. Clearing per-branch is how this module
+    # shipped a stale marker twice -- a new branch simply forgot one -- and
+    # making that structurally impossible is worth more than the two lines.
+    _legacy_wins.discard(env_var)
+    _invalid.pop(env_var, None)
     if not base:
-        # Clear BOTH markers before returning. A long-lived process -- the
-        # dashboard server, the MCP server -- can resolve more than once, and a
-        # stale entry in either would make the doctor report a variable that is
-        # no longer set at all. Both are cleared here rather than one, because
-        # doing only the first is a mistake this module already made twice.
-        _legacy_wins.discard(env_var)
-        _invalid.pop(env_var, None)
         return legacy
     if not os.path.isabs(base):
         # Ignored per the XDG spec, and recorded so the doctor can say so. A
         # relative value would anchor state to whatever directory a hook started
         # in, which is why it cannot simply be normalised.
         _invalid[env_var] = base
-        _legacy_wins.discard(env_var)
         return legacy
-    _invalid.pop(env_var, None)
     derived = os.path.join(base, APP)
     # Legacy precedence, deliberately: see the module docstring.
     if os.path.isdir(legacy) and not os.path.isdir(derived):
         _legacy_wins.add(env_var)
         return legacy
-    _legacy_wins.discard(env_var)
     return derived
 
 
 def cache_dir():
     """Per-machine cache: queues, logs, resume state. `XDG_CACHE_HOME`."""
-    return _resolve("XDG_CACHE_HOME", ".cache")
+    return _resolve("XDG_CACHE_HOME", DEFAULT_CACHE_REL)
 
 
 def config_dir():
     """Per-machine config: toggles, layer pointers, the OAuth token.
     `XDG_CONFIG_HOME`."""
-    return _resolve("XDG_CONFIG_HOME", ".config")
+    return _resolve("XDG_CONFIG_HOME", DEFAULT_CONFIG_REL)
 
 
 def cache_path(*parts):

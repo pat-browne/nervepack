@@ -324,5 +324,60 @@ class TestTheDoctorSurvivesTheMisconfigurationItReports(unittest.TestCase):
         self.assertTrue(result.startswith("FAIL"), result)
 
 
+
+class TestTheDoctorSaysWhereStateActuallyLives(unittest.TestCase):
+    """"Where is my credential" is what someone runs the doctor to find out.
+    Named only when it is NOT the historical default, because printing it
+    unconditionally buries the interesting case in noise on every machine."""
+
+    def _doctor(self):
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(_ENGINE_SETUP), "nervepack_engine"))
+        import np_doctor
+        return np_doctor
+
+    def test_a_default_machine_says_only_pass(self):
+        with tempfile.TemporaryDirectory() as home, _Env(home):
+            self.assertEqual(
+                self._doctor()._core_check("toggles", _ENGINE_SETUP), "PASS")
+
+    def test_a_relocated_config_is_named(self):
+        with tempfile.TemporaryDirectory() as home, \
+                tempfile.TemporaryDirectory() as xdg, \
+                _Env(home, XDG_CONFIG_HOME=xdg):
+            result = self._doctor()._core_check("toggles", _ENGINE_SETUP)
+        self.assertIn("config=", result)
+        self.assertIn(xdg, result)
+
+    def test_a_relocated_cache_is_named(self):
+        with tempfile.TemporaryDirectory() as home, \
+                tempfile.TemporaryDirectory() as xdg, \
+                _Env(home, XDG_CACHE_HOME=xdg):
+            result = self._doctor()._core_check("toggles", _ENGINE_SETUP)
+        self.assertIn("cache=", result)
+
+
+class TestANewBranchCannotLeaveAStaleMarker(unittest.TestCase):
+    """Both markers are cleared once at the top of _resolve, before any branch
+    decides anything, so a future branch that forgets to clear cannot reintroduce
+    the staleness this module shipped twice."""
+
+    def test_resolve_clears_before_it_branches(self):
+        with open(os.path.join(_ENGINE_SETUP, "np_dirs.py"), encoding="utf-8") as fh:
+            body = fh.read().split("def _resolve", 1)[1].split("def cache_dir", 1)[0]
+        clear_at = body.index("_invalid.pop(env_var, None)")
+        first_branch = body.index("if not base:")
+        self.assertLess(clear_at, first_branch,
+                        "markers must be cleared before the first branch")
+
+    def test_no_branch_clears_a_marker_itself(self):
+        """Each branch may only ADD. A discard inside one is the shape of the bug."""
+        with open(os.path.join(_ENGINE_SETUP, "np_dirs.py"), encoding="utf-8") as fh:
+            body = fh.read().split("def _resolve", 1)[1].split("def cache_dir", 1)[0]
+        after = body[body.index("if not base:"):]
+        self.assertNotIn("discard", after)
+        self.assertNotIn(".pop(", after)
+
+
 if __name__ == "__main__":
     unittest.main()
