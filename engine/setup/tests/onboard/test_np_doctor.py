@@ -51,7 +51,12 @@ class DoctorTest(unittest.TestCase):
         self._saved_env = dict(os.environ)
         self._saved_complete = np_model.complete
         # Point everything the doctor reads at hermetic temp locations.
+        # HOME alone no longer isolates state: np_dirs honours XDG_CACHE_HOME
+        # and XDG_CONFIG_HOME (#299), and the shell harness exports both. Point
+        # them at the new HOME so this stays hermetic.
         os.environ["HOME"] = os.path.join(self.tmp, "home")
+        for _v in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+            os.environ.pop(_v, None)
         os.makedirs(os.path.join(self.tmp, "home", ".config", "nervepack"))
         os.environ["NP_CAPABILITIES"] = os.path.abspath(_CAPS)
         os.environ["NP_ADAPTER"] = os.path.join(self.tmp, "adapter.json")
@@ -364,7 +369,12 @@ class TestLayerLayoutCheck(unittest.TestCase):
         self._saved = {k: os.environ.get(k)
                        for k in ("NP_CONTENT_DIR", "NP_TEAM_DIR", "HOME")}
         os.environ["NP_CONTENT_DIR"] = self.root
+        # HOME alone no longer isolates state: np_dirs honours XDG_CACHE_HOME
+        # and XDG_CONFIG_HOME (#299), and the shell harness exports both. Point
+        # them at the new HOME so this stays hermetic.
         os.environ["HOME"] = self.home
+        for _v in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+            os.environ.pop(_v, None)
         os.environ.pop("NP_TEAM_DIR", None)
 
     def tearDown(self):

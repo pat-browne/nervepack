@@ -23,6 +23,7 @@ if _ENGINE_PKG not in sys.path:
 
 import os
 import shutil
+import np_dirs
 import subprocess
 import sys
 
@@ -37,8 +38,8 @@ def _home():
 
 
 def _cfg_dir():
-    # np_content resolves config from $HOME/.config/nervepack (not XDG) — match it.
-    return os.path.join(_home(), ".config", "nervepack")
+    # np_content resolves config through np_dirs (XDG-aware since #299) — match it.
+    return np_dirs.config_dir()
 
 
 def _expand(s):

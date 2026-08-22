@@ -19,7 +19,12 @@ class TestRecord(unittest.TestCase):
         self.root = tempfile.mkdtemp(prefix="nplayout-")
         self.home = tempfile.mkdtemp(prefix="nphome-")
         self._old_home = os.environ.get("HOME")
+        # HOME alone no longer isolates state: np_dirs honours XDG_CACHE_HOME
+        # and XDG_CONFIG_HOME (#299), and the shell harness exports both. Point
+        # them at the new HOME so this stays hermetic.
         os.environ["HOME"] = self.home
+        for _v in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+            os.environ.pop(_v, None)
 
     def tearDown(self):
         if self._old_home is None:

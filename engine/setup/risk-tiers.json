@@ -34,6 +34,7 @@
     {"glob": "engine/setup/np-automerge-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"},
     {"glob": "engine/setup/doc-coupling.json", "tier": "high", "why": "SELF: the trigger list for the documentation-coupling check. A list that can be emptied in a standard-tier diff is not a list."},
     {"glob": "engine/setup/np_doc_coupling.py", "tier": "high", "why": "SELF: the check that reads it"},
-    {"glob": "engine/setup/np-doc-coupling-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"}
+    {"glob": "engine/setup/np-doc-coupling-gate.py", "tier": "high", "why": "SELF: the CI job that applies it"},
+    {"glob": "engine/setup/np_dirs.py", "tier": "high", "why": "resolves where per-machine state lives, including ~/.config/nervepack/claude-oauth-token. A wrong answer either exposes the credential at an unexpected path or makes every scheduled job fail to find it."}
   ]
 }
