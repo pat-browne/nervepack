@@ -6,6 +6,9 @@ tier: high
 blast_radius:
   - engine/setup/np_dirs.py
   - engine/setup/tests/docs/test_np_dirs.py
+  - engine/setup/tests/content/**
+  - engine/setup/tests/layout/**
+  - engine/setup/tests/onboard/**
   - engine/nervepack_engine/**
   - engine/setup/np_*.py
   - engine/setup/np-*.py
@@ -203,3 +206,16 @@ mv "${XDG_CONFIG_HOME}/nervepack" ~/.config/nervepack
 
 Verify with `python3 engine/nervepack_engine/cli.py doctor`, which reads the
 toggle and credential paths through the same resolution.
+
+## Deviations
+
+- 2026-08-22 — widened to `tests/content/**`, `tests/layout/**` and
+  `tests/onboard/**`. The spec declared only the new resolver's own test,
+  because the design did not predict that honouring `XDG_*` would break
+  isolation in tests that redirect `HOME` alone. Seven files needed it, and the
+  need is the finding rather than a side effect: the same correction applies to
+  any cron or wrapper that redirects nervepack by setting `HOME`.
+
+  `spec-guard` caught this on the committed diff, after I had already run the
+  full suite green. A passing suite says the code works; it says nothing about
+  whether the change stayed inside what it declared.
