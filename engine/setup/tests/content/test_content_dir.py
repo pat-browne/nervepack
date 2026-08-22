@@ -28,6 +28,10 @@ def _run(verb, env=None, home=None):
     e.pop("NP_CONTENT_DIR", None)
     if home is not None:
         e["HOME"] = home
+        # np_dirs honours XDG_CONFIG_HOME (#299) and the shell harness exports
+        # it, so HOME alone no longer redirects config. Drop it.
+        for _v in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+            e.pop(_v, None)
     if env:
         e.update(env)
     return subprocess.run([sys.executable, NP_CONTENT, verb],
@@ -152,6 +156,8 @@ class TestContentDir(unittest.TestCase):
                 "NP_CONTENT_DIR": u(overlay),
                 "NP_SKILLS_DST": u(dst),
                 "NP_DIR": u(fake_np),      # hermetic engine root (INDEX + engine skills)
+                "XDG_CACHE_HOME": u(fake_np) + "/.cache",
+                "XDG_CONFIG_HOME": u(fake_np) + "/.config",
                 "HOME": u(fake_np),
             })
             e.pop("NP_TEAM_DIR", None)
@@ -181,6 +187,8 @@ class TestContentDir(unittest.TestCase):
                 "NP_CONTENT_DIR": u(overlay),
                 "NP_SKILLS_DST": u(dst),
                 "NP_DIR": u(fake_np),      # hermetic engine root (INDEX + engine skills)
+                "XDG_CACHE_HOME": u(fake_np) + "/.cache",
+                "XDG_CONFIG_HOME": u(fake_np) + "/.config",
                 "HOME": u(fake_np),
             })
             e.pop("NP_TEAM_DIR", None)
@@ -272,6 +280,8 @@ class TestContentDir(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             e = {k: v for k, v in os.environ.items() if k != "NP_CONTENT_DIR"}
             e["HOME"] = u(home)
+            for _v in ("XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+                e.pop(_v, None)
             r = _doctor(e)
             cline = [l for l in (r.stdout + r.stderr).splitlines() if "content" in l.lower()]
             self.assertTrue(cline, "doctor produced no 'content' capability line")

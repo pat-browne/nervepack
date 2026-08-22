@@ -31,6 +31,7 @@ import subprocess
 import sys
 
 import np_paths
+import np_dirs
 import np_toggle
 import np_content
 import np_model
@@ -56,9 +57,9 @@ def _caps_path():
 
 
 def _adapter_path():
-    # Mirror np-doctor.sh: ADAPTER="${NP_ADAPTER:-$HOME/.config/nervepack/adapter.json}".
-    return os.environ.get("NP_ADAPTER") or os.path.join(
-        os.path.expanduser("~"), ".config", "nervepack", "adapter.json")
+    # Mirror np-doctor.sh: ADAPTER="${NP_ADAPTER:-$HOME/.config/nervepack/adapter.json}",
+    # with the base directory now resolved through np_dirs (XDG-aware, #299).
+    return os.environ.get("NP_ADAPTER") or np_dirs.config_path("adapter.json")
 
 
 def _git_ok(np):

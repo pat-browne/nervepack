@@ -30,6 +30,7 @@ import os
 import subprocess
 import sys
 import time
+import np_dirs
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -66,7 +67,7 @@ _IMPLEMENT_OVERRIDE = os.environ.get("NP_IMPLEMENT")
 IMPLEMENT_ARGV = ([_IMPLEMENT_OVERRIDE] if _IMPLEMENT_OVERRIDE else
                   [sys.executable, os.path.join(os.path.dirname(HERE), "nervepack_engine", "cli.py"),
                    "implement-suggestion"])
-TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or os.path.expanduser("~/.config/nervepack/toggles.local")
+TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggles.local")
 # Toggles the dashboard's OWN gating — flipping any of these from the panel would
 # disable the very server/panel serving that click, so the panel renders them
 # read-only and the server refuses to write them even if asked directly.

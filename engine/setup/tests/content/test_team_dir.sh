@@ -13,6 +13,10 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # match the bash-side assertions. On Windows that's the mixed form; no-op off it.
 if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -m "$tmp")"; fi
 export HOME="$tmp"   # isolate ~/.config
+# HOME alone no longer isolates state: np_dirs honours XDG_CACHE_HOME and
+# XDG_CONFIG_HOME (#299), and the harness exports both. Clear them so these
+# cases resolve under the HOME they set.
+unset XDG_CACHE_HOME XDG_CONFIG_HOME
 mkdir -p "$tmp/team" "$tmp/cfgteam" "$tmp/.config/nervepack"
 
 # 1) env set + dir exists -> prints it, origin=env
