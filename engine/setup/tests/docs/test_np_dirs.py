@@ -277,6 +277,18 @@ class TestTheMarkerReflectsOnlyTheCurrentEnvironment(unittest.TestCase):
     more than once. A stale entry would report a variable that is no longer set
     at all."""
 
+    def test_unsetting_clears_the_INVALID_marker_too(self):
+        """Both markers, not one. Clearing only `_legacy_wins` on the unset path
+        is a bug this module shipped twice: once in `_legacy_wins` itself, and
+        again in `_invalid` the moment it was added."""
+        with tempfile.TemporaryDirectory() as home:
+            with _Env(home, XDG_CONFIG_HOME="relative/oops"):
+                np_dirs.config_dir()
+                self.assertIn("XDG_CONFIG_HOME", np_dirs.invalid_values())
+                os.environ.pop("XDG_CONFIG_HOME")
+                np_dirs.config_dir()
+                self.assertEqual(np_dirs.invalid_values(), {})
+
     def test_unsetting_the_variable_clears_the_marker(self):
         with tempfile.TemporaryDirectory() as home:
             with _Env(home, XDG_CACHE_HOME=os.path.join(home, "elsewhere")):

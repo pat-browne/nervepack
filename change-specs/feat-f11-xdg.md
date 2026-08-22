@@ -182,7 +182,7 @@ paths are byte-identical to today's.
 ## Confirmation
 
 - `test_np_dirs.py` asserts: unset falls back to today's paths; an absolute
-  `XDG_*` is honoured; a **relative** one raises; legacy precedence fires only
+  `XDG_*` is honoured; a **relative** one falls back and is reported; legacy precedence fires only
   when legacy exists and the derived directory does not; and the resolver creates
   nothing.
 - A test asserts no nervepack module builds `.cache`/`.config` + `nervepack`

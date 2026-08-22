@@ -80,11 +80,13 @@ def _resolve(env_var, default_rel):
     base = os.environ.get(env_var)
     legacy = os.path.join(_home(), default_rel, APP)
     if not base:
-        # Clear any earlier override before returning. A long-lived process --
-        # the dashboard server, the MCP server -- can resolve more than once,
-        # and a stale entry would make legacy_overrides() report a variable that
-        # is no longer set at all.
+        # Clear BOTH markers before returning. A long-lived process -- the
+        # dashboard server, the MCP server -- can resolve more than once, and a
+        # stale entry in either would make the doctor report a variable that is
+        # no longer set at all. Both are cleared here rather than one, because
+        # doing only the first is a mistake this module already made twice.
         _legacy_wins.discard(env_var)
+        _invalid.pop(env_var, None)
         return legacy
     if not os.path.isabs(base):
         # Ignored per the XDG spec, and recorded so the doctor can say so. A
