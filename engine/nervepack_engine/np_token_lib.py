@@ -25,7 +25,6 @@ def claude_token_file():
     override = os.environ.get("NP_CLAUDE_TOKEN_FILE")
     if override:
         return override
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     return np_dirs.config_path("claude-oauth-token")
 
 

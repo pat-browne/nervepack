@@ -179,6 +179,17 @@ def _core_check(cap_id, np):
     if cap_id == "git-sync":
         return "PASS" if _git_ok(np) else "FAIL"
     if cap_id == "toggles":
+        # Resolve both state directories so legacy_overrides() has something to
+        # report, then say so. "My XDG_CACHE_HOME is being ignored" has to be
+        # answerable without reading source (#299), and this is the check that
+        # already proves the config layer is reachable.
+        np_dirs.cache_dir()
+        np_dirs.config_dir()
+        ignored = np_dirs.legacy_overrides()
+        if ignored:
+            return ("PASS (%s set but ignored: an existing directory takes "
+                    "precedence, so nothing moved. Move it to relocate.)"
+                    % ", ".join(ignored))
         return "PASS"  # np_toggle imported successfully -> the resolver is reachable
     if cap_id == "content":
         cdir = np_content.content_dir()

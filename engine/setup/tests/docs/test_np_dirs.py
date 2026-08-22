@@ -229,5 +229,30 @@ class TestTheConfigSitesAreConverted(unittest.TestCase):
             self.assertIn('".cache", "np-core-sync-status"', fh.read())
 
 
+
+class TestTheDoctorActuallyReportsIt(unittest.TestCase):
+    """The spec and docs/XDG-DIRECTORIES.md both promise the doctor surfaces
+    legacy precedence. A promise with no call site is the same defect as an
+    unreachable branch: it advertises an intent the code does not implement."""
+
+    def test_the_toggles_check_names_the_ignored_variable(self):
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(_ENGINE_SETUP), "nervepack_engine"))
+        import np_doctor
+        with tempfile.TemporaryDirectory() as home, \
+                _Env(home, XDG_CACHE_HOME=os.path.join(home, "elsewhere")):
+            os.makedirs(os.path.join(home, ".cache", "nervepack"))
+            result = np_doctor._core_check("toggles", _ENGINE_SETUP)
+        self.assertIn("XDG_CACHE_HOME", result)
+        self.assertTrue(result.startswith("PASS"), result)
+
+    def test_it_says_plain_pass_when_nothing_is_ignored(self):
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(_ENGINE_SETUP), "nervepack_engine"))
+        import np_doctor
+        with tempfile.TemporaryDirectory() as home, _Env(home):
+            self.assertEqual(np_doctor._core_check("toggles", _ENGINE_SETUP), "PASS")
+
+
 if __name__ == "__main__":
     unittest.main()

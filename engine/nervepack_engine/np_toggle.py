@@ -37,7 +37,6 @@ def _conf_path():
 
 def _local_path():
     # Bash default: "$HOME/.config/nervepack/toggles.local".
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     return os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggles.local")
 
 
