@@ -70,6 +70,11 @@ def _resolve(env_var, default_rel):
     base = os.environ.get(env_var)
     legacy = os.path.join(_home(), default_rel, APP)
     if not base:
+        # Clear any earlier override before returning. A long-lived process --
+        # the dashboard server, the MCP server -- can resolve more than once,
+        # and a stale entry would make legacy_overrides() report a variable that
+        # is no longer set at all.
+        _legacy_wins.discard(env_var)
         return legacy
     if not os.path.isabs(base):
         raise DirectoryError(

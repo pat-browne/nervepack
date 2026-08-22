@@ -183,8 +183,14 @@ def _core_check(cap_id, np):
         # report, then say so. "My XDG_CACHE_HOME is being ignored" has to be
         # answerable without reading source (#299), and this is the check that
         # already proves the config layer is reachable.
-        np_dirs.cache_dir()
-        np_dirs.config_dir()
+        try:
+            np_dirs.cache_dir()
+            np_dirs.config_dir()
+        except np_dirs.DirectoryError as exc:
+            # A relative XDG_* value raises by design. Crashing here would make
+            # the doctor die on precisely the misconfiguration it exists to
+            # report, which is the worst possible moment for it to stop working.
+            return "FAIL (%s)" % exc
         ignored = np_dirs.legacy_overrides()
         if ignored:
             return ("PASS (%s set but ignored: an existing directory takes "

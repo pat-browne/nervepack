@@ -254,5 +254,46 @@ class TestTheDoctorActuallyReportsIt(unittest.TestCase):
             self.assertEqual(np_doctor._core_check("toggles", _ENGINE_SETUP), "PASS")
 
 
+
+class TestTheMarkerReflectsOnlyTheCurrentEnvironment(unittest.TestCase):
+    """A long-lived process -- the dashboard server, the MCP server -- resolves
+    more than once. A stale entry would report a variable that is no longer set
+    at all."""
+
+    def test_unsetting_the_variable_clears_the_marker(self):
+        with tempfile.TemporaryDirectory() as home:
+            with _Env(home, XDG_CACHE_HOME=os.path.join(home, "elsewhere")):
+                os.makedirs(os.path.join(home, ".cache", "nervepack"))
+                np_dirs.cache_dir()
+                self.assertEqual(np_dirs.legacy_overrides(), ["XDG_CACHE_HOME"])
+                os.environ.pop("XDG_CACHE_HOME")
+                np_dirs.cache_dir()
+                self.assertEqual(np_dirs.legacy_overrides(), [])
+
+
+class TestTheDoctorSurvivesTheMisconfigurationItReports(unittest.TestCase):
+    """A relative XDG_* value raises by design. The doctor calling the resolver
+    must not die on precisely the misconfiguration it exists to diagnose."""
+
+    def _doctor(self):
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(_ENGINE_SETUP), "nervepack_engine"))
+        import np_doctor
+        return np_doctor
+
+    def test_a_relative_value_reports_fail_rather_than_raising(self):
+        with tempfile.TemporaryDirectory() as home, \
+                _Env(home, XDG_CACHE_HOME="relative/oops"):
+            result = self._doctor()._core_check("toggles", _ENGINE_SETUP)
+        self.assertTrue(result.startswith("FAIL"), result)
+        self.assertIn("relative", result)
+
+    def test_a_relative_config_value_is_caught_too(self):
+        with tempfile.TemporaryDirectory() as home, \
+                _Env(home, XDG_CONFIG_HOME="also/relative"):
+            result = self._doctor()._core_check("toggles", _ENGINE_SETUP)
+        self.assertTrue(result.startswith("FAIL"), result)
+
+
 if __name__ == "__main__":
     unittest.main()
