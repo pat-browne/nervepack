@@ -94,7 +94,11 @@ class TestSecurityRecall(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("NP_SECURITY_RECALL_STATE", None)
             d = security_recall._state_dir()
-        self.assertEqual(d, os.path.join(os.path.expanduser("~"), ".cache",
+        # HOME-first, matching np_dirs and the other fourteen hooks. This
+        # hook used a bare expanduser("~") before #299, which diverges from
+        # $HOME on Windows -- so it resolved somewhere no other hook did.
+        home = os.environ.get("HOME") or os.path.expanduser("~")
+        self.assertEqual(d, os.path.join(home, ".cache",
                                          "nervepack", "security-recall-state"))
 
 

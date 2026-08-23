@@ -57,6 +57,24 @@ the exports were masking: a developer with a real `XDG_CACHE_HOME` in their shel
 would previously have had it overridden, and would now have it leak in. Unsetting
 handles both.
 
+## Two hooks change behaviour on Windows, and that is the fix
+
+`security_recall.py` and `skill_trigger_recall.py` resolved their state with a
+bare `os.path.expanduser("~")`. Every other hook uses
+`os.environ.get("HOME") or os.path.expanduser("~")`, and `np_dirs` follows the
+majority.
+
+On Linux and macOS the two are the same. **On Windows they are not** — Python's
+`expanduser` prefers `USERPROFILE`, so those two hooks were writing their state
+somewhere no other hook did. The Windows CI lane is what surfaced it: their tests
+asserted the old resolution and failed once the hooks went through `np_dirs`.
+
+The tests now assert the HOME-first form, because the hooks agreeing with each
+other is the correct outcome rather than a regression to absorb. The consequence
+is that on a Windows machine where `$HOME` and `USERPROFILE` differ, those two
+state files resolve somewhere new. Both hold recall state — which skills were
+surfaced recently — which regenerates on its own, so nothing is lost.
+
 ## Considered options
 
 1. **Unset in the harness** (chosen) — Good, because one line fixes eight tests
