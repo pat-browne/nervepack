@@ -124,6 +124,22 @@ def _core_check(cap_id, np):
         return "PASS" if out else "FAIL"
     if cap_id == "hook-scripts":
         settings_path = np_host.settings_path()
+        # Report a manifest key that could not be used. It is ignored rather
+        # than raised (hooks fail open), so this check is the only place a
+        # relative `paths` value becomes visible instead of silently doing
+        # nothing.
+        unusable = np_host.invalid_values()
+        if unusable:
+            return ("FAIL (adapter.json paths %s are relative and were ignored; "
+                    "use an absolute path or ~)"
+                    % ", ".join("%s=%r" % kv for kv in sorted(unusable.items())))
+        if settings_path != np_host.default_for("settings"):
+            # "Why did it pick that path" now has three possible answers, so say
+            # which one won. Only when it is NOT the default, or every ordinary
+            # machine pays a line of noise for the rare interesting case.
+            suffix = " (resolved to %s)" % settings_path
+        else:
+            suffix = ""
         if not os.path.isfile(settings_path):
             return "PASS (no settings.json at %s)" % settings_path
         try:
@@ -145,7 +161,7 @@ def _core_check(cap_id, np):
             if not os.path.exists(script):
                 broken.append(script)
         if not broken:
-            return "PASS"
+            return "PASS" + suffix
         return "FAIL (%d missing script(s): %s)" % (len(broken), " ".join(broken))
     if cap_id == "scheduled-auth-token":
         st = np_token_lib.claude_token_status()

@@ -324,5 +324,80 @@ class TestTheCoreNoLongerNamesTheHost(unittest.TestCase):
         self.assertEqual(len(self.ADAPTER_LAYER), 3)
 
 
+
+class TestTheDoctorReportsWhatTheResolverDid(unittest.TestCase):
+    """The spec, HOST-ADAPTERS.md and the ARCHITECTURE row all promised this.
+    Promising it in three places and wiring it in none is the same defect as an
+    unreachable branch -- and the same one #301 shipped, one pull request ago."""
+
+    def _doctor(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(_ENGINE_SETUP),
+                                        "nervepack_engine"))
+        import np_doctor
+        return np_doctor
+
+    def test_a_relative_manifest_value_is_reported(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            a = _adapter(t, {"settings": "relative/oops.json"})
+            with _Env(home, NP_ADAPTER=a):
+                result = self._doctor()._core_check("hook-scripts", _ENGINE_SETUP)
+        self.assertTrue(result.startswith("FAIL"), result)
+        self.assertIn("relative/oops.json", result)
+
+    def test_a_moved_settings_path_is_named(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            moved = os.path.join(t, "settings.json")
+            with open(moved, "w", encoding="utf-8") as fh:
+                fh.write("{}")
+            a = _adapter(t, {"settings": moved})
+            with _Env(home, NP_ADAPTER=a):
+                result = self._doctor()._core_check("hook-scripts", _ENGINE_SETUP)
+        self.assertIn(moved, result)
+
+    def test_a_default_machine_is_not_annotated(self):
+        """Every ordinary machine would otherwise pay a line of noise for the
+        rare interesting case."""
+        with tempfile.TemporaryDirectory() as home, _Env(home):
+            result = self._doctor()._core_check("hook-scripts", _ENGINE_SETUP)
+        self.assertNotIn("resolved to", result)
+
+    def test_the_exported_helpers_have_a_caller(self):
+        """default_for and invalid_values existed with no reader, which is what
+        made the promise hollow. Assert the doctor still uses both."""
+        path = os.path.join(os.path.dirname(_ENGINE_SETUP),
+                            "nervepack_engine", "np_doctor.py")
+        with open(path, encoding="utf-8") as fh:
+            source = fh.read()
+        self.assertIn("np_host.invalid_values()", source)
+        self.assertIn('np_host.default_for("settings")', source)
+
+
+class TestTheRegistrarWritesWhereTheResolverSays(unittest.TestCase):
+    """np_host resolving correctly is worth nothing if np_hook writes elsewhere.
+    A refactor of either could break the pair without a unit test noticing."""
+
+    def test_install_hooks_writes_to_the_adapter_declared_path(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            declared = os.path.join(t, "host-settings.json")
+            a = _adapter(t, {"settings": declared})
+            env = dict(os.environ, HOME=home, NP_ADAPTER=a, NP_HOOK_WRAP="0")
+            for var in ("CLAUDE_SETTINGS", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+                env.pop(var, None)
+            cli = os.path.join(os.path.dirname(_ENGINE_SETUP),
+                               "nervepack_engine", "cli.py")
+            result = subprocess.run([sys.executable, cli, "setup", "install-hooks"],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(os.path.isfile(declared),
+                            "install-hooks did not write to the adapter's path")
+            with open(declared, encoding="utf-8") as fh:
+                written = json.load(fh)
+            self.assertIn("hooks", written)
+            self.assertFalse(
+                os.path.exists(os.path.join(home, ".claude", "settings.json")),
+                "it also wrote to the default path")
+
+
 if __name__ == "__main__":
     unittest.main()
