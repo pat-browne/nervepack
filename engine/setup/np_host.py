@@ -131,12 +131,16 @@ def _adapter_paths():
 
 
 def _resolve(key):
+    # Cleared ONCE, before any branch decides anything; every branch below only
+    # ever ADDS. This is the shape np_dirs settled on after shipping a stale
+    # marker twice -- a branch that forgets to clear cannot exist if there is
+    # nothing to forget. It did not carry over to this module on the first pass.
+    _invalid.pop(key, None)
+
     env = os.environ.get(_ENV[key])
     if env:
-        _invalid.pop(key, None)
         return env
 
-    _invalid.pop(key, None)
     declared = _adapter_paths().get(key)
     if isinstance(declared, str) and declared.strip():
         expanded = _expanduser(declared.strip())

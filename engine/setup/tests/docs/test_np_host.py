@@ -477,5 +477,34 @@ class TestTheRegistrarWritesWhereTheResolverSays(unittest.TestCase):
                 "it also wrote to the default path")
 
 
+
+class TestANewBranchCannotLeaveAStaleMarker(unittest.TestCase):
+    """The same structural rule np_dirs settled on: clear once at the top, and
+    every branch only adds. It did not carry over here on the first pass."""
+
+    def test_resolve_clears_before_it_branches(self):
+        with open(os.path.join(_ENGINE_SETUP, "np_host.py"), encoding="utf-8") as fh:
+            body = fh.read().split("def _resolve", 1)[1].split("def settings_path", 1)[0]
+        self.assertLess(body.index("_invalid.pop(key, None)"),
+                        body.index("env = os.environ.get"))
+
+    def test_no_branch_clears_the_marker_itself(self):
+        with open(os.path.join(_ENGINE_SETUP, "np_host.py"), encoding="utf-8") as fh:
+            body = fh.read().split("def _resolve", 1)[1].split("def settings_path", 1)[0]
+        after = body[body.index("env = os.environ.get"):]
+        self.assertNotIn("_invalid.pop", after)
+
+    def test_switching_from_invalid_to_env_clears_it(self):
+        """The behaviour the structure protects."""
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            a = _adapter(t, {"settings": "relative/oops.json"})
+            with _Env(home, NP_ADAPTER=a):
+                np_host.settings_path()
+                self.assertIn("settings", np_host.invalid_values())
+                os.environ["CLAUDE_SETTINGS"] = os.path.join(t, "s.json")
+                np_host.settings_path()
+                self.assertEqual(np_host.invalid_values(), {})
+
+
 if __name__ == "__main__":
     unittest.main()
