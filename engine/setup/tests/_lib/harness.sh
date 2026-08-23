@@ -12,6 +12,10 @@ np_hermetic_env() {
   # and it broke isolation for every test that redirects HOME on its own, which
   # kept reading the harness's directories instead of its own. Unsetting also
   # stops a developer's real XDG_* leaking in, which the export used to mask.
+  #
+  # CONSEQUENCE FOR TEST AUTHORS: the harness no longer guarantees these are set.
+  # A test that wants to exercise XDG behaviour must set them itself, alongside
+  # HOME -- see tests/mcp/test_mcp_lifecycle.py, which already does exactly that.
   unset XDG_CACHE_HOME XDG_CONFIG_HOME
   mkdir -p "$NP_TEST_HOME/.cache/nervepack" "$NP_TEST_HOME/.config/nervepack"
   local stub="$NP_TEST_HOME/claude-stub"
