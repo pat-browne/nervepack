@@ -153,7 +153,6 @@ def _parse_merge_wait_args(argv):
 
 
 def _log_path():
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     return os.environ.get("NERVEPACK_CLI_LOG") or np_dirs.cache_path("nervepack-cli.log")
 
 

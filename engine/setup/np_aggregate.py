@@ -94,7 +94,6 @@ def aggregate():
         return "skipped: evaluator.aggregate disabled"
 
     content = np_content.content_dir()
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     inbox = os.environ.get("EVAL_INBOX") or np_dirs.cache_path("evaluator-inbox")
     metrics = os.environ.get("METRICS_FILE") or os.path.join(content, "dashboard", "data", "metrics.jsonl")
     resolved = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(

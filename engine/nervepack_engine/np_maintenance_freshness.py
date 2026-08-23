@@ -68,7 +68,6 @@ class Row(object):
 
 
 def _cache_dir():
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     return np_dirs.cache_dir()
 
 

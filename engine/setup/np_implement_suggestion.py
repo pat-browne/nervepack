@@ -450,7 +450,6 @@ def implement(text, edited=None, repo=None, log_path=None, lock_path=None, statu
     receives, and it is recorded next to the original in the ledger."""
     if os.environ.get("NERVEPACK_AGENT"):
         return 0  # never recurse if already inside an agent
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     repo = repo or os.environ.get("IMPLEMENT_REPO") or _NP
     log_path = log_path or os.environ.get("IMPLEMENT_LOG") or np_dirs.cache_path("implement.log")
     lock_path = lock_path or os.environ.get("IMPLEMENT_LOCK") or np_dirs.cache_path("implement.lock")

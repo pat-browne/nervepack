@@ -35,7 +35,6 @@ _RESPONSES = ("Either widen the spec's blast_radius and record why in its "
 
 
 def _log_path():
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     return os.environ.get("NP_DRIFT_GUARD_LOG") or np_dirs.cache_path("drift-guard.log")
 
 
