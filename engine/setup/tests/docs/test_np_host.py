@@ -422,6 +422,21 @@ class TestTheDoctorReportsWhatTheResolverDid(unittest.TestCase):
         self.assertTrue(result.startswith("FAIL"), result)
         self.assertIn("relative/oops.json", result)
 
+    def test_a_relative_value_on_ANY_key_is_reported(self):
+        """invalid_values() only reports keys that were actually resolved, so a
+        check that asks for `settings` alone leaves a relative `skills_dir`
+        permanently invisible -- empty marker, PASS, nothing wrong on screen."""
+        for key in ("settings", "skills_dir", "transcripts"):
+            with self.subTest(key=key):
+                with tempfile.TemporaryDirectory() as home, \
+                        tempfile.TemporaryDirectory() as t:
+                    a = _adapter(t, {key: "relative/oops"})
+                    with _Env(home, NP_ADAPTER=a):
+                        result = self._doctor()._core_check("hook-scripts",
+                                                            _ENGINE_SETUP)
+                self.assertTrue(result.startswith("FAIL"), result)
+                self.assertIn(key, result)
+
     def test_a_moved_settings_path_is_named(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
             moved = os.path.join(t, "settings.json")

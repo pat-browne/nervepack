@@ -123,7 +123,13 @@ def _core_check(cap_id, np):
         out = out.rstrip("\n") if out else out
         return "PASS" if out else "FAIL"
     if cap_id == "hook-scripts":
+        # Resolve ALL THREE, not just settings. invalid_values() only reports
+        # keys that have actually been resolved, so asking for one would make a
+        # relative `skills_dir` or `transcripts` permanently invisible -- the
+        # marker would be empty and the check would say PASS.
         settings_path = np_host.settings_path()
+        np_host.skills_dir()
+        np_host.transcripts_dir()
         # Report a manifest key that could not be used. It is ignored rather
         # than raised (hooks fail open), so this check is the only place a
         # relative `paths` value becomes visible instead of silently doing
