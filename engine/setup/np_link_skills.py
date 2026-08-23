@@ -27,6 +27,7 @@ import os
 import sys
 
 import np_content
+import np_host
 import np_generate_index
 import np_toggle
 
@@ -64,8 +65,7 @@ def link(np_dir=None, out=None):
     engine_root = _engine_root(np_dir)
     overlay_root = _overlay_root(engine_root)
     bases = _bases(engine_root, overlay_root)
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    dst = os.environ.get("NP_SKILLS_DST") or os.path.join(home, ".claude", "skills")
+    dst = np_host.skills_dir()
     os.makedirs(dst, exist_ok=True)
 
     def _is_known_base(path):

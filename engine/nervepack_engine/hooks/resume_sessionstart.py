@@ -15,6 +15,7 @@ import time
 
 import np_toggle
 import np_transcripts
+import np_host
 from nervepack_engine.hooks import resume_write
 
 
@@ -46,7 +47,7 @@ def run(payload_text):
     cur_sid = payload.get("session_id") or ""
     cur_cwd = payload.get("cwd") or ""
 
-    projects_dir = os.environ.get("CLAUDE_PROJECTS_DIR") or os.path.join(_home(), ".claude", "projects")
+    projects_dir = np_host.transcripts_dir()
     if not os.path.isdir(projects_dir):
         return ""
 

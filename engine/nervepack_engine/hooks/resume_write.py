@@ -19,6 +19,7 @@ import time
 
 import np_toggle
 import np_transcripts
+import np_host
 import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -60,7 +61,7 @@ def _mtime(path):
 
 
 def _discover_active(active_window):
-    projects_dir = os.environ.get("CLAUDE_PROJECTS_DIR") or os.path.join(_home(), ".claude", "projects")
+    projects_dir = np_host.transcripts_dir()
     if not os.path.isdir(projects_dir):
         return None, None, None
     candidates = []

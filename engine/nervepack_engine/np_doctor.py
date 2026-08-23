@@ -39,6 +39,7 @@ import np_maintenance_freshness
 import np_episodic_freshness
 import np_layout
 import np_dirs          # engine/setup, reachable via the _SETUP bootstrap above
+import np_host
 
 
 def _load_json(path):
@@ -122,8 +123,33 @@ def _core_check(cap_id, np):
         out = out.rstrip("\n") if out else out
         return "PASS" if out else "FAIL"
     if cap_id == "hook-scripts":
-        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
-            os.path.expanduser("~"), ".claude", "settings.json")
+        # Resolve ALL THREE, not just settings. invalid_values() only reports
+        # keys that have actually been resolved, so asking for one would make a
+        # relative `skills_dir` or `transcripts` permanently invisible -- the
+        # marker would be empty and the check would say PASS.
+        settings_path = np_host.settings_path()
+        np_host.skills_dir()
+        np_host.transcripts_dir()
+        # Report a manifest key that could not be used. It is ignored rather
+        # than raised (hooks fail open), so this check is the only place a
+        # relative `paths` value becomes visible instead of silently doing
+        # nothing.
+        broken_adapter = np_host.unreadable_adapter()
+        if broken_adapter:
+            return ("FAIL (adapter.json is present and unusable, so host paths "
+                    "fell back to their defaults -- %s)" % broken_adapter)
+        unusable = np_host.invalid_values()
+        if unusable:
+            return ("FAIL (adapter.json paths %s are relative and were ignored; "
+                    "use an absolute path or ~)"
+                    % ", ".join("%s=%r" % kv for kv in sorted(unusable.items())))
+        if settings_path != np_host.default_for("settings"):
+            # "Why did it pick that path" now has three possible answers, so say
+            # which one won. Only when it is NOT the default, or every ordinary
+            # machine pays a line of noise for the rare interesting case.
+            suffix = " (resolved to %s)" % settings_path
+        else:
+            suffix = ""
         if not os.path.isfile(settings_path):
             return "PASS (no settings.json at %s)" % settings_path
         try:
@@ -145,7 +171,7 @@ def _core_check(cap_id, np):
             if not os.path.exists(script):
                 broken.append(script)
         if not broken:
-            return "PASS"
+            return "PASS" + suffix
         return "FAIL (%d missing script(s): %s)" % (len(broken), " ".join(broken))
     if cap_id == "scheduled-auth-token":
         st = np_token_lib.claude_token_status()
@@ -259,8 +285,7 @@ def _core_check(cap_id, np):
         if not os.path.isfile(writer):
             return ("WARN (resume_write.py missing — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)")
-        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
-            os.path.expanduser("~"), ".claude", "settings.json")
+        settings_path = np_host.settings_path()
         if not os.path.isfile(settings_path):
             return ("WARN (no settings.json at %s — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)

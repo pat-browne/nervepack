@@ -31,7 +31,7 @@ NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/engine/nervepack_engine" "$NP/das
 # np_aggregate + np_paths stay in engine/setup; np_toggle + np_content were relocated
 # into engine/nervepack_engine (phase 20b-2). Mirror that split so np_aggregate's
 # self-bootstrap finds them under ../nervepack_engine.
-cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$SETUP/np_dirs.py" "$NP/engine/setup/"
+cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$SETUP/np_dirs.py" "$SETUP/np_host.py" "$NP/engine/setup/"
 cp "$SETUP/../nervepack_engine/np_toggle.py" "$SETUP/../nervepack_engine/np_content.py" \
    "$NP/engine/nervepack_engine/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"

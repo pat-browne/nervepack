@@ -47,6 +47,7 @@ import np_content
 import np_evaluator
 import np_model
 import np_toggle
+import np_host
 import np_transcripts
 import np_dirs
 
@@ -77,7 +78,7 @@ def _log(msg):
 
 
 def _projects_dir():
-    return os.environ.get("CLAUDE_PROJECTS_DIR") or os.path.join(_home(), ".claude", "projects")
+    return np_host.transcripts_dir()
 
 
 def _seen_dir():

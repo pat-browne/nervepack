@@ -2,11 +2,32 @@
   "host": "claude-code",
   "os": "macos",
   "comment": "Reference adapter for Claude Code on macOS. Identical to claude-code.example.json except scheduled-maint: macOS schedules via launchd LaunchAgents (cli.py setup install-memory-launchd), not crontab. The ~/.claude layout (skills/, settings.json) is the same as on Linux, so the other verify commands are unchanged. Copy to ~/.config/nervepack/adapter.json (per-machine; not committed).",
+  "paths": {
+    "settings": "~/.claude/settings.json",
+    "skills_dir": "~/.claude/skills",
+    "transcripts": "~/.claude/projects"
+  },
+  "paths_note": "OPTIONAL, and optional per key. Omit the block, or any single key, and nervepack uses its built-in ~/.claude/... default for whatever is missing -- every manifest written before #300 has no paths block and keeps working unchanged. The matching environment variable (CLAUDE_SETTINGS / NP_SKILLS_DST / CLAUDE_PROJECTS_DIR) still wins over both. A relative value is ignored and reported by the doctor.",
   "capabilities": {
-    "knowledge":           { "status": "wired", "verify": "test -e ~/.claude/skills/np-core-sync/SKILL.md" },
-    "session-start":       { "status": "wired", "verify": "grep -q nervepack-session-directive ~/.claude/settings.json" },
-    "session-end-capture": { "status": "wired", "verify": "grep -q episodic-capture ~/.claude/settings.json" },
-    "session-end-flush":   { "status": "wired", "verify": "grep -q np-session-flush ~/.claude/settings.json" },
-    "scheduled-maint":     { "status": "wired", "verify": "launchctl list 2>/dev/null | grep -q com.nervepack" }
+    "knowledge": {
+      "status": "wired",
+      "verify": "test -e ~/.claude/skills/np-core-sync/SKILL.md"
+    },
+    "session-start": {
+      "status": "wired",
+      "verify": "grep -q nervepack-session-directive ~/.claude/settings.json"
+    },
+    "session-end-capture": {
+      "status": "wired",
+      "verify": "grep -q episodic-capture ~/.claude/settings.json"
+    },
+    "session-end-flush": {
+      "status": "wired",
+      "verify": "grep -q np-session-flush ~/.claude/settings.json"
+    },
+    "scheduled-maint": {
+      "status": "wired",
+      "verify": "launchctl list 2>/dev/null | grep -q com.nervepack"
+    }
   }
 }

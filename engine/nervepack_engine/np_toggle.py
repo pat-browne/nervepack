@@ -25,6 +25,7 @@ import tempfile
 
 import np_paths
 import np_dirs
+import np_host
 
 _WS = " \t\r\v\f"            # POSIX [[:space:]] minus the per-line newline
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -363,12 +364,9 @@ def _allowlist_path():
 
 
 def _settings_path():
-    """CLAUDE_SETTINGS env -> ~/.claude/settings.json (same resolution as np_hook)."""
-    env = os.environ.get("CLAUDE_SETTINGS")
-    if env:
-        return env
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.path.join(home, ".claude", "settings.json")
+    """The host's settings file, resolved once in np_host: CLAUDE_SETTINGS ->
+    adapter.json `paths.settings` -> ~/.claude/settings.json."""
+    return np_host.settings_path()
 
 
 def _read_allowlist():

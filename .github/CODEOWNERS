@@ -74,3 +74,5 @@ engine/setup/np_doc_coupling.py    @pat-browne
 engine/setup/np-doc-coupling-gate.py    @pat-browne
 # resolves where per-machine state lives, including ~/.config/nervepack/claude-oauth-token. A wrong answer either exposes the credential at an unexpected path or makes every scheduled job fail to find it.
 engine/setup/np_dirs.py    @pat-browne
+# resolves the HOST files nervepack WRITES to, above all the settings file the hook registrar rewrites. A wrong answer edits the wrong file or registers hooks nowhere.
+engine/setup/np_host.py    @pat-browne
