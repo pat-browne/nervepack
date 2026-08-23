@@ -78,6 +78,35 @@ existing install needs, and it respects an explicit setting from someone who wen
 out of their way to make one. Moving macOS to `~/Library/Application Support`
 would relocate every existing macOS install to settle a convention argument.
 
+## Windows only: two hooks moved once
+
+`security-recall-state` and `skill-trigger-state` used to resolve with a bare
+`expanduser("~")`, which on Windows prefers `USERPROFILE`. Every other hook uses
+`$HOME` first, and since #302 these two do as well.
+
+On a Windows machine where `$HOME` and `USERPROFILE` point at different places —
+Git-bash is the usual reason — the old copies are left behind at:
+
+```
+%USERPROFILE%\.cache\nervepack\security-recall-state
+%USERPROFILE%\.cache\nervepack\skill-trigger-state
+```
+
+Both hold recall state, which regenerates on its own, so nothing is lost by
+ignoring them. They are safe to delete once the hooks have run from the new
+location. **Nothing deletes them automatically**: removing files under a path
+nervepack has just stopped owning is a worse failure mode than leaving two small
+directories behind.
+
+Linux and macOS are unaffected — there the two resolutions are the same path.
+
+## One path deliberately stays outside
+
+`~/.cache/np-core-sync-status` sits directly under `.cache`, not under
+`nervepack/`. Routing it through `cache_path()` would move it, and the
+`np-core-sync` skill documents that path for a human to read. A test asserts it
+stays put.
+
 ## Setting HOME alone no longer isolates state
 
 A process that redirects `HOME` and leaves `XDG_*` inherited resolves to the
@@ -87,6 +116,12 @@ silently kept reading the harness's directories.
 
 A cron or wrapper that sets `HOME` to redirect nervepack must set `XDG_*` too,
 or accept that it did not redirect anything.
+
+The test harness now **unsets** both instead of exporting them. It used to export
+`XDG_CACHE_HOME="$HOME/.cache"`, which is exactly what the resolver derives from
+`HOME` anyway — so the exports duplicated the default while breaking isolation for
+every test that redirected `HOME` on its own. Unsetting also stops a developer's
+real `XDG_*` leaking into a test run, which the export had been masking.
 
 This is inherent to honouring the variables. The alternative — ignoring `XDG_*`
 whenever `HOME` looks unusual — is a heuristic, and a wrong heuristic would put a

@@ -28,6 +28,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+_SETUP = os.path.normpath(os.path.join(_HERE, "..", "setup"))
+if _SETUP not in sys.path:
+    sys.path.insert(0, _SETUP)   # np_dirs lives in engine/setup
+
+import np_dirs
 import np_content  # noqa: E402
 import np_toggle  # noqa: E402
 
@@ -48,7 +53,7 @@ def _grace_days():
 def _inbox_dir():
     return os.environ.get(
         "NP_EPISODIC_INBOX",
-        os.path.join(os.path.expanduser("~"), ".cache", "nervepack", "episodic-inbox"))
+        np_dirs.cache_path("episodic-inbox"))
 
 
 def _index_path():

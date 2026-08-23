@@ -48,6 +48,7 @@ import np_evaluator
 import np_model
 import np_toggle
 import np_transcripts
+import np_dirs
 
 # Transient capture failures (empty/non-JSON model output) release the claim so a
 # later sweep retries; after this many failed passes we give up and mark the
@@ -61,8 +62,7 @@ def _home():
 
 
 def _log_path():
-    return os.environ.get("BACKCAPTURE_LOG") or os.path.join(
-        _home(), ".cache", "nervepack", "backcapture.log")
+    return os.environ.get("BACKCAPTURE_LOG") or np_dirs.cache_path("backcapture.log")
 
 
 def _log(msg):
@@ -81,18 +81,15 @@ def _projects_dir():
 
 
 def _seen_dir():
-    return os.environ.get("BACKCAPTURE_SEEN_DIR") or os.path.join(
-        _home(), ".cache", "nervepack", "backcapture-seen")
+    return os.environ.get("BACKCAPTURE_SEEN_DIR") or np_dirs.cache_path("backcapture-seen")
 
 
 def _queue_dir():
-    return os.environ.get("BACKCAPTURE_QUEUE_DIR") or os.path.join(
-        _home(), ".cache", "nervepack", "backcapture-queue")
+    return os.environ.get("BACKCAPTURE_QUEUE_DIR") or np_dirs.cache_path("backcapture-queue")
 
 
 def _lock_path():
-    return os.environ.get("BACKCAPTURE_LOCK") or os.path.join(
-        _home(), ".cache", "nervepack", "backcapture-sweep.lock")
+    return os.environ.get("BACKCAPTURE_LOCK") or np_dirs.cache_path("backcapture-sweep.lock")
 
 
 def _pid_alive(pid):

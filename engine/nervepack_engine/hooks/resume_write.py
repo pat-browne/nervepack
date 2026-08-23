@@ -19,6 +19,7 @@ import time
 
 import np_toggle
 import np_transcripts
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TRANSCRIPT_EXTRACT = os.path.normpath(os.path.join(_HERE, "..", "..", "setup", "np-transcript-extract.py"))
@@ -29,7 +30,7 @@ def _home():
 
 
 def _log_path():
-    return os.environ.get("NP_RESUME_LOG") or os.path.join(_home(), ".cache", "nervepack", "resume.log")
+    return os.environ.get("NP_RESUME_LOG") or np_dirs.cache_path("resume.log")
 
 
 def _bail(msg):
@@ -44,11 +45,11 @@ def _bail(msg):
 
 
 def _pointer_path():
-    return os.environ.get("NP_RESUME_POINTER") or os.path.join(_home(), ".cache", "nervepack", "resume-pointer.json")
+    return os.environ.get("NP_RESUME_POINTER") or np_dirs.cache_path("resume-pointer.json")
 
 
 def _stamp_path():
-    return os.environ.get("NP_RESUME_STAMP") or os.path.join(_home(), ".cache", "nervepack", "last-resume-write")
+    return os.environ.get("NP_RESUME_STAMP") or np_dirs.cache_path("last-resume-write")
 
 
 def _mtime(path):

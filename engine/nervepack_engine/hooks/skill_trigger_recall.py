@@ -9,6 +9,7 @@ import os
 import re
 
 import np_toggle
+import np_dirs
 
 _PATTERN = re.compile(r"skill.*refactor|refactor.*skill|skill\.md")
 _MSG = ("Skill-writing trigger (Nervepack): this prompt matches a skill-writing pattern. "
@@ -18,8 +19,7 @@ _MSG = ("Skill-writing trigger (Nervepack): this prompt matches a skill-writing 
 
 
 def _state_dir():
-    return os.environ.get("NP_SKILL_TRIGGER_STATE") or os.path.join(
-        os.path.expanduser("~"), ".cache", "nervepack", "skill-trigger-state")
+    return os.environ.get("NP_SKILL_TRIGGER_STATE") or np_dirs.cache_path("skill-trigger-state")
 
 
 def run(payload_text):

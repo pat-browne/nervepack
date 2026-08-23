@@ -198,12 +198,21 @@ class TestTheResolverCreatesNothing(unittest.TestCase):
 
 
 
-class TestTheConfigSitesAreConverted(unittest.TestCase):
-    """The 8 config sites now go through np_dirs. This keeps them from regrowing
-    inline, which is how there came to be 51 of them."""
+class TestEverySiteIsConverted(unittest.TestCase):
+    """No module builds either state directory inline any more.
+
+    Stated as an invariant rather than a count on purpose: a number in a
+    docstring is a snapshot that rots, and the assertion below is what actually
+    holds the line. Two paths are deliberately outside it and each has its own
+    test: VS Code's `~/.config/Code/User/settings.json`, which is not
+    nervepack's, and `~/.cache/np-core-sync-status`, which lives outside the app
+    directory and whose path a skill documents.
+    """
 
     REPO = os.path.normpath(os.path.join(_ENGINE_SETUP, "..", ".."))
-    INLINE = re.compile(r'"\.config"\s*,\s*"nervepack"|expanduser\("~/\.config/nervepack')
+    INLINE = re.compile(
+        r'"\.(?:config|cache)"\s*,\s*"nervepack"'
+        r'|expanduser\("~/\.(?:config|cache)/nervepack')
 
     def _sources(self):
         for dirpath, dirnames, files in os.walk(os.path.join(self.REPO, "engine")):
@@ -213,7 +222,7 @@ class TestTheConfigSitesAreConverted(unittest.TestCase):
                 if name.endswith(".py") and name != "np_dirs.py":
                     yield os.path.join(dirpath, name)
 
-    def test_no_module_builds_the_config_dir_inline(self):
+    def test_no_module_builds_either_dir_inline(self):
         offenders = []
         for path in self._sources():
             with open(path, encoding="utf-8") as fh:

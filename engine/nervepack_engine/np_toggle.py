@@ -146,9 +146,7 @@ def signal(sid, message):
     np_signal function in the retired np-toggle-lib.sh.)"""
     if not enabled("evaluator.signals"):
         return
-    d = os.environ.get("NP_SIGNAL_DIR") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"),
-        ".cache", "nervepack", "session-signals")
+    d = os.environ.get("NP_SIGNAL_DIR") or np_dirs.cache_path("session-signals")
     try:
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, sid.replace("/", "_") + ".log"), "a", encoding="utf-8") as fh:

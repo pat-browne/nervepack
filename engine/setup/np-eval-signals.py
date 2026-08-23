@@ -28,6 +28,7 @@ _ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
 if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 import np_toggle  # noqa: E402  in-process toggle resolver (bash-free, parity-locked)
+import np_dirs
 
 
 def cmd_fingerprint(cmd):
@@ -39,7 +40,7 @@ def cmd_fingerprint(cmd):
 
 def signal_log_path(sid):
     base = os.environ.get(
-        "NP_SIGNAL_DIR", os.path.expanduser("~/.cache/nervepack/session-signals")
+        "NP_SIGNAL_DIR", np_dirs.cache_path("session-signals")
     )
     return os.path.join(base, sid.replace("/", "_") + ".log")
 
@@ -102,7 +103,7 @@ def episodic_struggles(sid):
     read it across-pipeline, matched by session_id. Take the max across duplicate
     captures (PreCompact checkpoint + session-end). Fail-open 0."""
     base = os.environ.get(
-        "EPISODIC_INBOX", os.path.expanduser("~/.cache/nervepack/episodic-inbox")
+        "EPISODIC_INBOX", np_dirs.cache_path("episodic-inbox")
     )
     best = 0
     try:

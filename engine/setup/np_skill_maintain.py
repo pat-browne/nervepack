@@ -30,6 +30,7 @@ import np_llm_agent
 import np_skill_budget
 import np_skill_validate
 import np_toggle
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))       # engine/setup/
 _NP = os.path.abspath(os.path.join(_HERE, "..", ".."))   # engine repo root
@@ -44,8 +45,7 @@ def _home():
 
 
 def _log_path():
-    return os.environ.get("SKILL_MAINTAIN_LOG") or os.path.join(
-        _home(), ".cache", "nervepack", "skill-maintain.log")
+    return os.environ.get("SKILL_MAINTAIN_LOG") or np_dirs.cache_path("skill-maintain.log")
 
 
 def _log(msg):
@@ -104,7 +104,7 @@ def _architecture_freshness():
         return
     _log(lines[-1] if lines else "")
     stale = [ln for ln in lines if ln.startswith("STALE:")]
-    marker = os.path.join(_home(), ".cache", "nervepack", "architecture-stale")
+    marker = np_dirs.cache_path("architecture-stale")
     if stale:
         for ln in stale:
             _log(ln)
@@ -135,8 +135,7 @@ def _graduation_scan():
     except Exception:
         return
     cands = result.get("candidates", [])
-    marker = os.environ.get("GRADUATION_MARKER") or os.path.join(
-        _home(), ".cache", "nervepack", "graduation-candidates")
+    marker = os.environ.get("GRADUATION_MARKER") or np_dirs.cache_path("graduation-candidates")
     data = os.path.join(content, "dashboard", "data", "graduation-candidates.json")
     blob = json.dumps(result, separators=(",", ":"))
     if cands:

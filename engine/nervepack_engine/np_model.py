@@ -33,6 +33,7 @@ import uuid
 import np_bashlib
 import np_paths
 import np_token_lib
+import np_dirs
 
 # Long-lived nervepack processes (the dashboard server, backgrounded SessionStart
 # hooks) are spawned from inside an interactive Claude Code session and inherit its
@@ -78,9 +79,7 @@ def check_auth(text):
 
 
 def own_sessions_dir():
-    return os.environ.get("NP_OWN_SESSIONS_DIR") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"),
-        ".cache", "nervepack", "own-sessions")
+    return os.environ.get("NP_OWN_SESSIONS_DIR") or np_dirs.cache_path("own-sessions")
 
 
 def is_own_session(sid):

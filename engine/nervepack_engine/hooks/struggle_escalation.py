@@ -12,6 +12,7 @@ import json
 import os
 
 import np_toggle
+import np_dirs
 
 
 def _min_struggles():
@@ -33,8 +34,7 @@ def _state_dir():
 
 
 def _signal_log_path(sid):
-    base = os.environ.get("NP_SIGNAL_DIR") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "session-signals")
+    base = os.environ.get("NP_SIGNAL_DIR") or np_dirs.cache_path("session-signals")
     return os.path.join(base, sid.replace("/", "_") + ".log")
 
 
