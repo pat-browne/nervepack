@@ -39,6 +39,7 @@ import np_maintenance_freshness
 import np_episodic_freshness
 import np_layout
 import np_dirs          # engine/setup, reachable via the _SETUP bootstrap above
+import np_host
 
 
 def _load_json(path):
@@ -122,8 +123,7 @@ def _core_check(cap_id, np):
         out = out.rstrip("\n") if out else out
         return "PASS" if out else "FAIL"
     if cap_id == "hook-scripts":
-        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
-            os.path.expanduser("~"), ".claude", "settings.json")
+        settings_path = np_host.settings_path()
         if not os.path.isfile(settings_path):
             return "PASS (no settings.json at %s)" % settings_path
         try:
@@ -259,8 +259,7 @@ def _core_check(cap_id, np):
         if not os.path.isfile(writer):
             return ("WARN (resume_write.py missing — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)")
-        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
-            os.path.expanduser("~"), ".claude", "settings.json")
+        settings_path = np_host.settings_path()
         if not os.path.isfile(settings_path):
             return ("WARN (no settings.json at %s — run: "
                     "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)

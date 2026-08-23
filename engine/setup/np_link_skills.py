@@ -15,6 +15,7 @@ that fails is reported and skipped (never aborts the run) so the INDEX regen —
 host-agnostic half — still happens. stdlib only.
 """
 import os
+import np_host
 import sys
 # self-bootstrap (phase 20b-2): np_toggle/np_content/np_model and the other library
 # modules were relocated into engine/nervepack_engine/; add that package dir so this
@@ -64,8 +65,7 @@ def link(np_dir=None, out=None):
     engine_root = _engine_root(np_dir)
     overlay_root = _overlay_root(engine_root)
     bases = _bases(engine_root, overlay_root)
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    dst = os.environ.get("NP_SKILLS_DST") or os.path.join(home, ".claude", "skills")
+    dst = np_host.skills_dir()
     os.makedirs(dst, exist_ok=True)
 
     def _is_known_base(path):
