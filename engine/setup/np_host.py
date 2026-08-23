@@ -77,6 +77,22 @@ def _home():
     return os.environ.get("HOME") or os.path.expanduser("~")
 
 
+def _expanduser(value):
+    """Expand a leading `~` against the SAME home the defaults use.
+
+    Not os.path.expanduser: on Windows it prefers USERPROFILE while `_home()`
+    prefers $HOME, so a manifest saying "~/x" would resolve against a different
+    directory than the built-in default beside it -- inconsistent inside one
+    module. That divergence is exactly what #302 removed from two hooks, and it
+    came straight back here.
+    """
+    if value == "~":
+        return _home()
+    if value.startswith("~/") or value.startswith("~\\"):
+        return os.path.join(_home(), value[2:])
+    return value
+
+
 def _adapter_paths():
     """The manifest's `paths` block, or {} for any reason at all.
 
@@ -103,7 +119,7 @@ def _resolve(key):
     _invalid.pop(key, None)
     declared = _adapter_paths().get(key)
     if isinstance(declared, str) and declared.strip():
-        expanded = os.path.expanduser(declared.strip())
+        expanded = _expanduser(declared.strip())
         if os.path.isabs(expanded):
             return expanded
         # Ignored, and recorded so the doctor can say so. A relative value would

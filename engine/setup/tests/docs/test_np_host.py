@@ -137,12 +137,35 @@ class TestThePathsBlockIsOptionalPerKey(unittest.TestCase):
 
 
 class TestAManifestIsHandWrittenSoTildeExpands(unittest.TestCase):
+    """Expanded against the same home the defaults use, not os.path.expanduser.
+
+    On Windows expanduser prefers USERPROFILE while _home() prefers $HOME, so a
+    manifest saying "~/x" would land somewhere the default beside it does not.
+    The Windows lane caught this; the same divergence is what #302 removed from
+    two hooks.
+    """
+
     def test_a_tilde_is_expanded(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
             a = _adapter(t, {"skills_dir": "~/elsewhere/skills"})
             with _Env(home, NP_ADAPTER=a):
                 self.assertEqual(np_host.skills_dir(),
                                  os.path.join(home, "elsewhere", "skills"))
+
+    def test_it_expands_against_the_same_home_as_the_default(self):
+        """The invariant the Windows lane broke: a manifest "~/x" and the
+        built-in default must agree about which directory `~` means."""
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            a = _adapter(t, {"settings": "~/.claude/settings.json"})
+            with _Env(home, NP_ADAPTER=a):
+                self.assertEqual(np_host.settings_path(),
+                                 np_host.default_for("settings"))
+
+    def test_a_bare_tilde_is_the_home_itself(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            a = _adapter(t, {"skills_dir": "~"})
+            with _Env(home, NP_ADAPTER=a):
+                self.assertEqual(np_host.skills_dir(), home)
 
 
 class TestARelativeValueIsIgnoredAndReported(unittest.TestCase):
