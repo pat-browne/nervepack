@@ -85,28 +85,47 @@ class TestTheDefaultIsUnchanged(unittest.TestCase):
 
 
 class TestPrecedence(unittest.TestCase):
-    """env -> adapter -> default. The environment keeps winning because it
+    """env -> adapter -> default.
+
+    Absolute paths are built from a temp directory rather than written as
+    "/from/adapter.json". On Windows a leading slash with no drive letter is
+    DRIVE-relative, and Python 3.13 changed ntpath.isabs to say so -- 3.12
+    returns True for it, 3.14 returns False -- so a POSIX literal is accepted or
+    rejected depending on the interpreter. Building the path from tempfile makes
+    the test say what it means on every platform and version.
+
+    This is NOT the #295 trap, despite involving the same function. There the
+    string was embedded in a bash command destined for a possibly-different
+    machine, so absoluteness had to be judged from the string alone. Here the
+    path is opened locally, so os.path.isabs is the correct call and the POSIX
+    literals were the mistake. The environment keeps winning because it
     already did: capabilities.json tells a non-Claude host to set
     CLAUDE_SETTINGS, and a manifest that could not be overridden would be worse
     than no manifest."""
 
     def test_the_environment_beats_the_adapter(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
-            a = _adapter(t, {"settings": "/from/adapter.json"})
-            with _Env(home, NP_ADAPTER=a, CLAUDE_SETTINGS="/from/env.json"):
-                self.assertEqual(np_host.settings_path(), "/from/env.json")
+            from_adapter = os.path.join(t, "from-adapter.json")
+            from_env = os.path.join(t, "from-env.json")
+            a = _adapter(t, {"settings": from_adapter})
+            with _Env(home, NP_ADAPTER=a, CLAUDE_SETTINGS=from_env):
+                self.assertEqual(np_host.settings_path(), from_env)
 
     def test_the_adapter_beats_the_default(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
-            a = _adapter(t, {"settings": "/from/adapter.json"})
+            from_adapter = os.path.join(t, "from-adapter.json")
+            a = _adapter(t, {"settings": from_adapter})
             with _Env(home, NP_ADAPTER=a):
-                self.assertEqual(np_host.settings_path(), "/from/adapter.json")
+                self.assertEqual(np_host.settings_path(), from_adapter)
 
     def test_each_key_has_its_own_env_var(self):
         with tempfile.TemporaryDirectory() as home:
-            with _Env(home, NP_SKILLS_DST="/s", CLAUDE_PROJECTS_DIR="/p"):
-                self.assertEqual(np_host.skills_dir(), "/s")
-                self.assertEqual(np_host.transcripts_dir(), "/p")
+            with _Env(home, NP_SKILLS_DST="skills-verbatim",
+                      CLAUDE_PROJECTS_DIR="projects-verbatim"):
+                # An env value is used verbatim, absolute or not: it is the
+                # user's explicit, current instruction.
+                self.assertEqual(np_host.skills_dir(), "skills-verbatim")
+                self.assertEqual(np_host.transcripts_dir(), "projects-verbatim")
                 self.assertEqual(np_host.settings_path(),
                                  os.path.join(home, ".claude", "settings.json"))
 
@@ -117,9 +136,10 @@ class TestThePathsBlockIsOptionalPerKey(unittest.TestCase):
 
     def test_an_omitted_key_falls_back(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
-            a = _adapter(t, {"settings": "/only/settings.json"})
+            only = os.path.join(t, "only-settings.json")
+            a = _adapter(t, {"settings": only})
             with _Env(home, NP_ADAPTER=a):
-                self.assertEqual(np_host.settings_path(), "/only/settings.json")
+                self.assertEqual(np_host.settings_path(), only)
                 self.assertEqual(np_host.skills_dir(),
                                  os.path.join(home, ".claude", "skills"))
 
