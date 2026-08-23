@@ -11,6 +11,7 @@ summary. Ignore-list skips always-on infra + installers/utilities that carry no
 toggle by design (session-flush, *install*, link/index/toggle scripts).
 """
 import os
+import np_host
 import sys
 # self-bootstrap (phase 20b-2): np_toggle/np_content/np_model and the other library
 # modules were relocated into engine/nervepack_engine/; add that package dir so this
@@ -148,8 +149,7 @@ def run(settings_path=None, crontab_fn=None, out=None):
         except (ValueError, OSError):
             pass
     if settings_path is None:
-        settings_path = os.environ.get("CLAUDE_SETTINGS") or os.path.join(
-            os.environ.get("HOME") or os.path.expanduser("~"), ".claude", "settings.json")
+        settings_path = np_host.settings_path()
     crontab_fn = crontab_fn or _crontab
 
     commands = []

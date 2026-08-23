@@ -44,6 +44,7 @@ import sys
 import tempfile
 
 import np_paths
+import np_host
 
 _MANIFEST = os.path.join(np_paths.SETUP_DIR, "hooks.manifest")
 
@@ -77,11 +78,7 @@ _LEGACY_PURGES = (
 def _settings_path(settings_path=None):
     if settings_path:
         return settings_path
-    env = os.environ.get("CLAUDE_SETTINGS")
-    if env:
-        return env
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.path.join(home, ".claude", "settings.json")
+    return np_host.settings_path()
 
 
 def _load(path):
