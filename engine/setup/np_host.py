@@ -85,12 +85,21 @@ def _expanduser(value):
     directory than the built-in default beside it -- inconsistent inside one
     module. That divergence is exactly what #302 removed from two hooks, and it
     came straight back here.
+
+    The result is normpath'ed because a manifest is hand-written and will use
+    forward slashes: joining "elsewhere/skills" onto a Windows home produced
+    `C:\\...\\elsewhere/skills`, which the OS accepts and every string comparison
+    does not. This is S1075's often-missed sub-rule -- do not hardcode the
+    separator -- applied to a value that arrives from outside.
+
+    Only manifest values are normalised. An environment variable is the user's
+    explicit, current instruction and is used verbatim.
     """
     if value == "~":
         return _home()
     if value.startswith("~/") or value.startswith("~\\"):
-        return os.path.join(_home(), value[2:])
-    return value
+        return os.path.normpath(os.path.join(_home(), value[2:]))
+    return os.path.normpath(value)
 
 
 def _adapter_paths():

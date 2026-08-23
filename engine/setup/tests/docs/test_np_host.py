@@ -161,6 +161,25 @@ class TestAManifestIsHandWrittenSoTildeExpands(unittest.TestCase):
                 self.assertEqual(np_host.settings_path(),
                                  np_host.default_for("settings"))
 
+    def test_forward_slashes_from_a_manifest_are_normalised(self):
+        """A manifest is hand-written and will use forward slashes. Joining them
+        onto a Windows home produced C:\\...\\elsewhere/skills -- valid to the OS,
+        and not equal to anything. S1075's separator sub-rule, applied to a value
+        that arrives from outside."""
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            a = _adapter(t, {"skills_dir": "~/a/b/c"})
+            with _Env(home, NP_ADAPTER=a):
+                got = np_host.skills_dir()
+        self.assertEqual(got, os.path.join(home, "a", "b", "c"))
+        self.assertEqual(got, os.path.normpath(got))
+
+    def test_an_environment_value_is_used_verbatim(self):
+        """The env var is the user's explicit, current instruction. Only manifest
+        values get normalised."""
+        with tempfile.TemporaryDirectory() as home:
+            with _Env(home, NP_SKILLS_DST="/a//b/./c"):
+                self.assertEqual(np_host.skills_dir(), "/a//b/./c")
+
     def test_a_bare_tilde_is_the_home_itself(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
             a = _adapter(t, {"skills_dir": "~"})
