@@ -21,8 +21,8 @@ import posixpath
 import sys
 
 import np_paths
-import np_dirs
 import np_toggle
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Bash: _npc_engine="$_npc_setup/../.." — the engine repo root (this file's dir is

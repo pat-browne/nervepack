@@ -30,6 +30,7 @@ import subprocess
 import np_bashlib
 import np_toggle
 import np_token_lib
+import np_dirs
 
 # One canonical schedule -- (name, hour, minute, weekly) -- rendered into each
 # backend's row shape by the _*_rows() generators below. Previously the same six jobs
@@ -199,7 +200,7 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
 
     home = _home()
     la_dir = la_dir or os.environ.get("NP_LAUNCHAGENTS_DIR") or os.path.join(home, "Library", "LaunchAgents")
-    log_dir = log_dir or os.environ.get("NP_LAUNCHD_LOG_DIR") or os.path.join(home, ".cache", "nervepack")
+    log_dir = log_dir or os.environ.get("NP_LAUNCHD_LOG_DIR") or np_dirs.cache_dir()
     setup_dir = setup_dir or os.environ.get("NP_LAUNCHD_SETUP_DIR") or os.path.join(home, "Code", "nervepack", "engine", "setup")
     os.makedirs(la_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)

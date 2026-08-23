@@ -27,6 +27,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+_SETUP = os.path.normpath(os.path.join(_HERE, "..", "setup"))
+if _SETUP not in sys.path:
+    sys.path.insert(0, _SETUP)   # np_dirs lives in engine/setup
+
+import np_dirs
 import np_toggle  # noqa: E402
 
 # One row per scheduled maintenance job: (name, log basename, cadence in days,
@@ -63,8 +68,7 @@ class Row(object):
 
 
 def _cache_dir():
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.path.join(home, ".cache", "nervepack")
+    return np_dirs.cache_dir()
 
 
 def _now():

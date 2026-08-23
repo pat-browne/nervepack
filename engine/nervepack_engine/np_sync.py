@@ -51,6 +51,7 @@ import np_content
 import np_layout
 import np_link_skills
 import np_toggle
+import np_dirs
 
 
 def _home():
@@ -262,8 +263,7 @@ def sync(mode="backup", verbose=False):
     if not np_toggle.enabled("sync"):
         return "nervepack-sync: disabled via toggle — skipping"
 
-    stamp = os.environ.get("NP_SYNC_STAMP") or os.path.join(
-        _home(), ".cache", "nervepack", "last-sync")
+    stamp = os.environ.get("NP_SYNC_STAMP") or np_dirs.cache_path("last-sync")
     if mode != "exit":
         try:
             interval = int(np_toggle.param("sync.interval", "86400") or "86400")

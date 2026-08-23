@@ -30,6 +30,7 @@ for _p in (_HERE, _ENGINE_DIR, _ENGINE_SETUP):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import np_dirs
 from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
 from nervepack_engine.hooks import drift_guard  # noqa: E402
 from nervepack_engine.hooks import episodic_capture  # noqa: E402
@@ -152,9 +153,7 @@ def _parse_merge_wait_args(argv):
 
 
 def _log_path():
-    home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.environ.get("NERVEPACK_CLI_LOG") or os.path.join(
-        home, ".cache", "nervepack", "nervepack-cli.log")
+    return os.environ.get("NERVEPACK_CLI_LOG") or np_dirs.cache_path("nervepack-cli.log")
 
 
 def _bail(context, msg):

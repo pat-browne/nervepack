@@ -32,6 +32,7 @@ import os
 import subprocess
 import sys
 import time
+import np_dirs
 
 import np_toggle          # resolved via cli.py's sys.path setup, as in the sibling hooks
 
@@ -49,8 +50,7 @@ _STEP_PATHS = [
 
 
 def _log_path():
-    return os.environ.get("SESSION_FLUSH_LOG") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "session-flush.log")
+    return os.environ.get("SESSION_FLUSH_LOG") or np_dirs.cache_path("session-flush.log")
 
 
 def _log(msg):
@@ -65,13 +65,11 @@ def _log(msg):
 
 
 def _stamp_path():
-    return os.environ.get("SESSION_FLUSH_STAMP") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "last-flush")
+    return os.environ.get("SESSION_FLUSH_STAMP") or np_dirs.cache_path("last-flush")
 
 
 def _lock_path():
-    return os.environ.get("SESSION_FLUSH_LOCK") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "session-flush.lock")
+    return os.environ.get("SESSION_FLUSH_LOCK") or np_dirs.cache_path("session-flush.lock")
 
 
 def _throttle_ok():

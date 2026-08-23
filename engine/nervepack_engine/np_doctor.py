@@ -31,7 +31,6 @@ import subprocess
 import sys
 
 import np_paths
-import np_dirs
 import np_toggle
 import np_content
 import np_model
@@ -39,6 +38,7 @@ import np_token_lib
 import np_maintenance_freshness
 import np_episodic_freshness
 import np_layout
+import np_dirs          # engine/setup, reachable via the _SETUP bootstrap above
 
 
 def _load_json(path):

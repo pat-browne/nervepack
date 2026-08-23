@@ -55,6 +55,7 @@ import np_content
 import np_model
 import np_suggestion_resolve
 import np_toggle
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))  # engine/setup -> engine -> repo root
@@ -449,11 +450,10 @@ def implement(text, edited=None, repo=None, log_path=None, lock_path=None, statu
     receives, and it is recorded next to the original in the ledger."""
     if os.environ.get("NERVEPACK_AGENT"):
         return 0  # never recurse if already inside an agent
-    home = os.environ.get("HOME") or os.path.expanduser("~")
     repo = repo or os.environ.get("IMPLEMENT_REPO") or _NP
-    log_path = log_path or os.environ.get("IMPLEMENT_LOG") or os.path.join(home, ".cache", "nervepack", "implement.log")
-    lock_path = lock_path or os.environ.get("IMPLEMENT_LOCK") or os.path.join(home, ".cache", "nervepack", "implement.lock")
-    status_dir = status_dir or os.environ.get("IMPLEMENT_STATUS_DIR") or os.path.join(home, ".cache", "nervepack", "implement-status")
+    log_path = log_path or os.environ.get("IMPLEMENT_LOG") or np_dirs.cache_path("implement.log")
+    lock_path = lock_path or os.environ.get("IMPLEMENT_LOCK") or np_dirs.cache_path("implement.lock")
+    status_dir = status_dir or os.environ.get("IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status")
     prompt_file = prompt_file or os.environ.get("IMPLEMENT_PROMPT") or os.path.join(_NP, "agents", "np-flow-implement-suggestion.md")
     agent_fn = agent_fn or _default_agent_fn
     resolve_fn = resolve_fn or _default_resolve

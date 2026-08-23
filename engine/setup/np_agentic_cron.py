@@ -37,6 +37,7 @@ import np_content
 import np_llm_agent
 import np_model
 import np_toggle
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))       # engine/setup/
 _NP = os.path.abspath(os.path.join(_HERE, "..", ".."))    # engine repo root
@@ -89,7 +90,7 @@ def _log_path(cfg):
     override = os.environ.get(cfg.log_env)
     if override:
         return override
-    return os.path.join(_home(), ".cache", "nervepack", cfg.log_basename)
+    return np_dirs.cache_path(cfg.log_basename)
 
 
 def _log(cfg, msg):
