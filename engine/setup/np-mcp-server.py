@@ -9,7 +9,6 @@ import glob
 import json
 import os
 import subprocess
-import np_dirs
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -73,6 +72,7 @@ _ENGINE_DIR = os.path.dirname(HERE)
 if _ENGINE_DIR not in sys.path:
     sys.path.insert(0, _ENGINE_DIR)
 
+import np_dirs
 
 def run(cmd, stdin=None, env=None):
     e = dict(os.environ)

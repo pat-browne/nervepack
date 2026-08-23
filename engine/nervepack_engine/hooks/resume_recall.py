@@ -13,6 +13,7 @@ import os
 import time
 
 import np_toggle
+import np_dirs
 from nervepack_engine.hooks import resume_write
 
 
@@ -21,11 +22,11 @@ def _home():
 
 
 def _pointer_path():
-    return os.environ.get("NP_RESUME_POINTER") or os.path.join(_home(), ".cache", "nervepack", "resume-pointer.json")
+    return os.environ.get("NP_RESUME_POINTER") or np_dirs.cache_path("resume-pointer.json")
 
 
 def _state_dir():
-    return os.environ.get("NP_RESUME_STATE_DIR") or os.path.join(_home(), ".cache", "nervepack", "resume-recall-state")
+    return os.environ.get("NP_RESUME_STATE_DIR") or np_dirs.cache_path("resume-recall-state")
 
 
 def _is_fresh(age, max_age):

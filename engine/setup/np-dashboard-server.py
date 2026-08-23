@@ -30,7 +30,6 @@ import os
 import subprocess
 import sys
 import time
-import np_dirs
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -48,6 +47,7 @@ _ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
 if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 import np_bashlib  # noqa: E402
+import np_dirs
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
@@ -73,8 +73,8 @@ TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggl
 # read-only and the server refuses to write them even if asked directly.
 SELF_LOCKOUT_FEATURES = {"evaluator"}
 SELF_LOCKOUT_PARAMS = {"evaluator.dashboard_open", "evaluator.dashboard_serve", "evaluator.toggle_ui"}
-IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or os.path.expanduser("~/.cache/nervepack/implement-status")
-LOG = os.path.join(os.path.expanduser("~"), ".cache", "nervepack", "dashboard-server.log")
+IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status")
+LOG = np_dirs.cache_path("dashboard-server.log")
 
 PORT = int(os.environ.get("NP_DASH_PORT", "8787") or "8787")
 TOP = int(os.environ.get("NP_SUGGESTIONS_TOP", "10") or "10")

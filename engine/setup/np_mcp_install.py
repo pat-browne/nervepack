@@ -23,11 +23,11 @@ if _ENGINE_PKG not in sys.path:
 
 import os
 import shutil
-import np_dirs
 import subprocess
 import sys
 
 import np_bashlib
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))            # engine repo root

@@ -12,6 +12,7 @@ import sys
 
 import np_dashboard
 import np_toggle
+import np_dirs
 
 _ENGINE_SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP_DIR = os.path.normpath(os.path.join(_ENGINE_SETUP_DIR, "..", "..", "setup"))
@@ -61,8 +62,7 @@ def run(payload_text, aggregate_fn=None, opener_fn=None):
         return ""
 
     # --- once per boot: actually open a browser window ------------------------
-    marker = os.environ.get("NP_DASH_MARKER") or os.path.join(
-        os.environ.get("HOME") or os.path.expanduser("~"), ".cache", "nervepack", "dashboard-open-boot")
+    marker = os.environ.get("NP_DASH_MARKER") or np_dirs.cache_path("dashboard-open-boot")
     boot = np_dashboard.boot_id()
     try:
         with open(marker, encoding="utf-8") as fh:

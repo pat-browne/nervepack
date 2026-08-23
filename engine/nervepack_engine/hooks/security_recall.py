@@ -7,6 +7,7 @@ import os
 import re
 
 import np_toggle
+import np_dirs
 
 _PATTERN = re.compile(r"security|vulnerabilit|exploit|injection|xss|csrf|cve")
 _MSG = ("Security-review trigger (Nervepack): this prompt mentions security or "
@@ -16,8 +17,7 @@ _MSG = ("Security-review trigger (Nervepack): this prompt mentions security or "
 
 
 def _state_dir():
-    return os.environ.get("NP_SECURITY_RECALL_STATE") or os.path.join(
-        os.path.expanduser("~"), ".cache", "nervepack", "security-recall-state")
+    return os.environ.get("NP_SECURITY_RECALL_STATE") or np_dirs.cache_path("security-recall-state")
 
 
 def run(payload_text):

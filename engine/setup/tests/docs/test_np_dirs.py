@@ -198,12 +198,14 @@ class TestTheResolverCreatesNothing(unittest.TestCase):
 
 
 
-class TestTheConfigSitesAreConverted(unittest.TestCase):
-    """The 8 config sites now go through np_dirs. This keeps them from regrowing
-    inline, which is how there came to be 51 of them."""
+class TestEverySiteIsConverted(unittest.TestCase):
+    """All 50 sites now go through np_dirs -- 8 config in #301, 42 cache here.
+    This keeps them from regrowing inline, which is how there came to be 51."""
 
     REPO = os.path.normpath(os.path.join(_ENGINE_SETUP, "..", ".."))
-    INLINE = re.compile(r'"\.config"\s*,\s*"nervepack"|expanduser\("~/\.config/nervepack')
+    INLINE = re.compile(
+        r'"\.(?:config|cache)"\s*,\s*"nervepack"'
+        r'|expanduser\("~/\.(?:config|cache)/nervepack')
 
     def _sources(self):
         for dirpath, dirnames, files in os.walk(os.path.join(self.REPO, "engine")):
@@ -213,7 +215,7 @@ class TestTheConfigSitesAreConverted(unittest.TestCase):
                 if name.endswith(".py") and name != "np_dirs.py":
                     yield os.path.join(dirpath, name)
 
-    def test_no_module_builds_the_config_dir_inline(self):
+    def test_no_module_builds_either_dir_inline(self):
         offenders = []
         for path in self._sources():
             with open(path, encoding="utf-8") as fh:

@@ -29,6 +29,7 @@ import time
 
 import np_content
 import np_toggle
+import np_dirs
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE = os.path.dirname(os.path.dirname(_HERE))
@@ -94,7 +95,7 @@ def aggregate():
 
     content = np_content.content_dir()
     home = os.environ.get("HOME") or os.path.expanduser("~")
-    inbox = os.environ.get("EVAL_INBOX") or os.path.join(home, ".cache", "nervepack", "evaluator-inbox")
+    inbox = os.environ.get("EVAL_INBOX") or np_dirs.cache_path("evaluator-inbox")
     metrics = os.environ.get("METRICS_FILE") or os.path.join(content, "dashboard", "data", "metrics.jsonl")
     resolved = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
         content, "dashboard", "data", "resolved-suggestions.txt")

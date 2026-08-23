@@ -27,6 +27,7 @@ import os
 
 import np_change_spec
 import np_toggle
+import np_dirs
 
 _RESPONSES = ("Either widen the spec's blast_radius and record why in its "
               "## Deviations section, or supersede the spec with a new one. "
@@ -35,8 +36,7 @@ _RESPONSES = ("Either widen the spec's blast_radius and record why in its "
 
 def _log_path():
     home = os.environ.get("HOME") or os.path.expanduser("~")
-    return os.environ.get("NP_DRIFT_GUARD_LOG") or os.path.join(
-        home, ".cache", "nervepack", "drift-guard.log")
+    return os.environ.get("NP_DRIFT_GUARD_LOG") or np_dirs.cache_path("drift-guard.log")
 
 
 def _log(verdict, sid, detail):
