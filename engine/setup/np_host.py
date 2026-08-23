@@ -60,6 +60,9 @@ import np_dirs  # noqa: E402  -- same directory; needed for the adapter path
 # the recall hooks resolve through here, and hooks fail open, so raising would
 # turn one bad manifest key into a silently dead lifecycle (see np_dirs).
 _invalid = {}
+# The adapter exists and could not be used. Distinct from absent, which is the
+# ordinary state on a machine that never onboarded a non-default host.
+_unreadable = {}
 
 _DEFAULTS = {
     "settings": (".claude", "settings.json"),
@@ -110,10 +113,18 @@ def _adapter_paths():
     falling back to the defaults keeps every hook working while that gets fixed.
     """
     path = os.environ.get("NP_ADAPTER") or np_dirs.config_path("adapter.json")
+    _unreadable.pop("adapter", None)
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        # Absent is the normal case: most machines have no adapter at all.
+        return {}
+    except (OSError, ValueError) as exc:
+        # PRESENT but unusable -- a permission error or malformed JSON. Recorded
+        # separately from "not found", because "your adapter is being ignored"
+        # and "you have no adapter" need different answers from the doctor.
+        _unreadable["adapter"] = "%s: %s" % (path, exc)
         return {}
     paths = data.get("paths") if isinstance(data, dict) else None
     return paths if isinstance(paths, dict) else {}
@@ -160,5 +171,20 @@ def default_for(key):
 
 
 def invalid_values():
-    """{key: value} for `paths` entries that could not be used, currently."""
+    """{key: value} for `paths` entries that could not be used.
+
+    EPHEMERAL: this reflects the last resolution of each key, not a history. A
+    key is cleared the moment it resolves cleanly, so a caller that wants a true
+    answer must resolve first and read second -- which is what the doctor does.
+    Empty on a machine with no adapter, or one whose `paths` are all usable.
+    """
     return dict(_invalid)
+
+
+def unreadable_adapter():
+    """The adapter file exists and could not be parsed, or "" if it is fine.
+
+    Distinct from absent on purpose: "you have no adapter" and "your adapter is
+    being ignored" need different answers, and both resolve to the defaults.
+    """
+    return _unreadable.get("adapter", "")

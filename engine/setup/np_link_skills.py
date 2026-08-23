@@ -15,7 +15,6 @@ that fails is reported and skipped (never aborts the run) so the INDEX regen —
 host-agnostic half — still happens. stdlib only.
 """
 import os
-import np_host
 import sys
 # self-bootstrap (phase 20b-2): np_toggle/np_content/np_model and the other library
 # modules were relocated into engine/nervepack_engine/; add that package dir so this
@@ -28,6 +27,7 @@ import os
 import sys
 
 import np_content
+import np_host
 import np_generate_index
 import np_toggle
 

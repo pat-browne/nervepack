@@ -41,6 +41,7 @@ class _Env(object):
         os.environ["HOME"] = self.home
         os.environ.update(self.over)
         np_host._invalid.clear()
+        np_host._unreadable.clear()
         return self
 
     def __exit__(self, *exc):
@@ -50,6 +51,7 @@ class _Env(object):
             else:
                 os.environ[key] = value
         np_host._invalid.clear()
+        np_host._unreadable.clear()
 
 
 def _adapter(tmp, paths):
@@ -233,6 +235,42 @@ class TestABrokenAdapterNeverBreaksResolution(unittest.TestCase):
                 self.assertEqual(np_host.skills_dir(),
                                  os.path.join(home, ".claude", "skills"))
 
+    def test_an_unreadable_adapter_is_reported_separately_from_an_absent_one(self):
+        """"You have no adapter" and "your adapter is being ignored" need
+        different answers, and both resolve to the defaults."""
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            path = os.path.join(t, "adapter.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("{not json")
+            with _Env(home, NP_ADAPTER=path):
+                np_host.settings_path()
+                self.assertIn("adapter.json", np_host.unreadable_adapter())
+
+    def test_an_absent_adapter_is_not_reported_as_unreadable(self):
+        with tempfile.TemporaryDirectory() as home:
+            with _Env(home, NP_ADAPTER="/nonexistent/adapter.json"):
+                np_host.settings_path()
+                self.assertEqual(np_host.unreadable_adapter(), "")
+
+    def test_the_report_clears_once_the_adapter_is_fixed(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
+            path = os.path.join(t, "adapter.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("{not json")
+            with _Env(home, NP_ADAPTER=path):
+                np_host.settings_path()
+                self.assertTrue(np_host.unreadable_adapter())
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump({"host": "x"}, fh)
+                np_host.settings_path()
+                self.assertEqual(np_host.unreadable_adapter(), "")
+
+    def test_the_env_name_regex_needs_a_word_boundary(self):
+        """MY_CLAUDE_SETTINGS is somebody else's variable, not this one."""
+        cls = TestTheCoreNoLongerNamesTheHost
+        self.assertIsNone(cls.ENV_NAMES.search('x = os.environ["MY_CLAUDE_SETTINGS"]'))
+        self.assertIsNotNone(cls.ENV_NAMES.search('x = os.environ["CLAUDE_SETTINGS"]'))
+
     def test_a_paths_block_that_is_not_an_object_falls_back(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as t:
             path = os.path.join(t, "adapter.json")
@@ -263,7 +301,8 @@ class TestTheCoreNoLongerNamesTheHost(unittest.TestCase):
     # descend into, beside ".git" and "node_modules" -- that is membership, not
     # resolution, and flagging it would push a correct skip-list into an
     # exemption list.
-    ENV_NAMES = re.compile(r'CLAUDE_SETTINGS|CLAUDE_PROJECTS_DIR|NP_SKILLS_DST')
+    ENV_NAMES = re.compile(
+        r'\b(?:CLAUDE_SETTINGS|CLAUDE_PROJECTS_DIR|NP_SKILLS_DST)\b')
     BUILDS_PATH = re.compile(r'\.claude')
     JOINING = re.compile(r'join\(|expanduser\(')
 

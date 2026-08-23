@@ -128,6 +128,10 @@ def _core_check(cap_id, np):
         # than raised (hooks fail open), so this check is the only place a
         # relative `paths` value becomes visible instead of silently doing
         # nothing.
+        broken_adapter = np_host.unreadable_adapter()
+        if broken_adapter:
+            return ("FAIL (adapter.json is present and unusable, so host paths "
+                    "fell back to their defaults -- %s)" % broken_adapter)
         unusable = np_host.invalid_values()
         if unusable:
             return ("FAIL (adapter.json paths %s are relative and were ignored; "
