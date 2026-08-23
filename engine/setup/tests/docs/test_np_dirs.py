@@ -199,8 +199,15 @@ class TestTheResolverCreatesNothing(unittest.TestCase):
 
 
 class TestEverySiteIsConverted(unittest.TestCase):
-    """All 50 sites now go through np_dirs -- 8 config in #301, 42 cache here.
-    This keeps them from regrowing inline, which is how there came to be 51."""
+    """No module builds either state directory inline any more.
+
+    Stated as an invariant rather than a count on purpose: a number in a
+    docstring is a snapshot that rots, and the assertion below is what actually
+    holds the line. Two paths are deliberately outside it and each has its own
+    test: VS Code's `~/.config/Code/User/settings.json`, which is not
+    nervepack's, and `~/.cache/np-core-sync-status`, which lives outside the app
+    directory and whose path a skill documents.
+    """
 
     REPO = os.path.normpath(os.path.join(_ENGINE_SETUP, "..", ".."))
     INLINE = re.compile(
