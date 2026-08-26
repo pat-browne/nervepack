@@ -1,5 +1,6 @@
 """Tests for hooks.form_gate -- the PreToolUse durable-text form gate."""
 import json
+import ntpath
 import os
 import sys
 import tempfile
@@ -234,6 +235,70 @@ class TestChannels(unittest.TestCase):
             out = self._run(self._write("Mine.\n\n> Theirs; quoted.\n"))
         self.assertEqual(out, "")
         self.assertNotIn(";", captured["text"])
+
+
+class TestFormGateGlobSeparator(unittest.TestCase):
+    """The exempt-glob list is separator-delimited, and a Windows absolute path
+    opens with a drive letter and a colon. Splitting the list on a bare colon
+    shreds `C:\\Users\\x` into `C` and `\\Users\\x`, and neither fragment matches
+    anything. That fails toward "nothing is exempt", which is the direction that
+    fires the gate on voiced prose."""
+
+    def test_windows_drive_letter_survives_the_split(self):
+        self.assertEqual(
+            form_gate._split_globs(r"C:\Users\pat\Code\pbrowne-net\**"),
+            [r"C:\Users\pat\Code\pbrowne-net\**"])
+
+    def test_two_windows_globs_split_on_semicolon(self):
+        self.assertEqual(
+            form_gate._split_globs(r"C:\Users\pat\a\**;D:\notes\**"),
+            [r"C:\Users\pat\a\**", r"D:\notes\**"])
+
+    def test_posix_list_still_splits_on_colon(self):
+        self.assertEqual(form_gate._split_globs("/home/pat/a/**:/srv/notes/**"),
+                         ["/home/pat/a/**", "/srv/notes/**"])
+
+    def test_blank_fragments_are_dropped(self):
+        self.assertEqual(form_gate._split_globs(" : ;/home/pat/a/** "),
+                         ["/home/pat/a/**"])
+
+    def test_empty_value_yields_no_globs(self):
+        self.assertEqual(form_gate._split_globs(""), [])
+
+
+class TestFormGateWindowsPaths(unittest.TestCase):
+    """`_is_exempt_path` under ntpath semantics, asserted on every platform.
+
+    The Windows lane covers this too, but only there. Driving the module's own
+    path helpers through ntpath keeps the case honest on Linux, where the whole
+    class of separator bug is invisible."""
+
+    def _under_ntpath(self, target, glob):
+        with mock.patch.object(form_gate.os, "path", ntpath), \
+             mock.patch.object(form_gate.np_toggle, "param",
+                               side_effect=lambda k, d=None:
+                               glob if k == "form_gate.exempt_globs" else d):
+            return form_gate._is_exempt_path(target)
+
+    def test_forward_slash_glob_matches_backslash_target(self):
+        self.assertTrue(self._under_ntpath(
+            r"C:\Users\pat\Code\pbrowne-net\src\post.md",
+            "C:/Users/pat/Code/pbrowne-net/**"))
+
+    def test_backslash_glob_matches_backslash_target(self):
+        self.assertTrue(self._under_ntpath(
+            r"C:\Users\pat\Code\pbrowne-net\src\post.md",
+            r"C:\Users\pat\Code\pbrowne-net\**"))
+
+    def test_unrelated_windows_path_is_not_exempt(self):
+        self.assertFalse(self._under_ntpath(
+            r"C:\Users\pat\Code\nervepack\README.md",
+            "C:/Users/pat/Code/pbrowne-net/**"))
+
+    def test_wildcardless_directory_glob_covers_its_children(self):
+        self.assertTrue(self._under_ntpath(
+            r"C:\Users\pat\Code\pbrowne-net\src\post.md",
+            "C:/Users/pat/Code/pbrowne-net"))
 
 
 if __name__ == "__main__":

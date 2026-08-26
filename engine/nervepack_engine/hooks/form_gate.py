@@ -43,15 +43,38 @@ def _is_prose_path(path):
     return bool(path) and path.lower().endswith(_PROSE_EXT)
 
 
+def _split_globs(raw):
+    """Split the exempt-glob list without shredding a Windows drive letter.
+
+    Both platform separators are accepted, so a config synced between machines
+    keeps working. A colon directly after a single letter that opens a fragment
+    is a drive, not a separator: splitting "C:\\Users\\pat" on a bare colon
+    yields "C" and "\\Users\\pat", and neither fragment matches anything. That
+    fails toward "nothing is exempt", which is the direction that fires the
+    gate on voiced prose.
+    """
+    merged = []
+    for part in re.split(r"[;:]", raw or ""):
+        if (merged and len(merged[-1]) == 1 and merged[-1].isalpha()
+                and part[:1] in ("\\", "/")):
+            merged[-1] = "%s:%s" % (merged[-1], part)
+        else:
+            merged.append(part)
+    return [p.strip() for p in merged if p.strip()]
+
+
 def _exempt_globs():
-    """Colon-separated globs from the toggle, with ~ expanded.
+    """Globs from the toggle, with ~ expanded and separators normalized.
 
     np_toggle does NOT expand ~. An unexpanded glob matches nothing, which
     fails open into "nothing is exempt" -- the direction that fires the gate
     on voiced prose. Expand here or the exemption is silently dead.
+
+    normpath puts the glob on the same separator as the target, which
+    _is_exempt_path normalizes through abspath. It leaves * and ** untouched.
     """
     raw = np_toggle.param("form_gate.exempt_globs", "") or ""
-    return [os.path.expanduser(g) for g in raw.split(":") if g.strip()]
+    return [os.path.normpath(os.path.expanduser(g)) for g in _split_globs(raw)]
 
 
 def _is_exempt_path(path):
@@ -63,9 +86,10 @@ def _is_exempt_path(path):
     for glob in _exempt_globs():
         if fnmatch.fnmatch(target, glob):
             return True
-        # fnmatch does not treat ** as crossing separators; a prefix test does.
-        base = glob.rstrip("*").rstrip(os.sep)
-        if base and target.startswith(base + os.sep):
+        # A glob naming a directory with no wildcard still covers what sits
+        # under it, which fnmatch on its own would not match.
+        base = glob.rstrip("*").rstrip(os.path.sep)
+        if base and target.startswith(base + os.path.sep):
             return True
     return False
 
