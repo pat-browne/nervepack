@@ -5,7 +5,7 @@ date: 2026-08-25
 tier: high
 blast_radius:
   - .github/workflows/ci.yml
-  - change-specs/**
+  - change-specs/chore-download-artifact-v8.md
 ---
 
 # 0019: actions/download-artifact v7 to v8
