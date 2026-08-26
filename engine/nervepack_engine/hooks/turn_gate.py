@@ -91,7 +91,21 @@ def _lint_score(text, timeout_s):
 def _check_diff(turn):
     md = [p for p in turn.edits
           if p.lower().endswith(".md") and not _SPEC_DOC.search(p)]
-    if not md or any("np-md-diff" in d for d in turn.delivery):
+    if not md:
+        return ""
+    if any("np-md-diff" in d for d in turn.delivery):
+        return ""
+    # A hand-typed diff pasted straight into the response is a valid delivery
+    # too -- np-md-diff.py is one way to produce a diff, not the only one.
+    if np_turn_parse.has_diff_shape(turn.final_text):
+        return ""
+    # SendUserFile fully delivers a file this turn CREATED (no base version
+    # exists, so the skill prescribes sending the whole file, not a diff). An
+    # EDITED file still needs a diff -- whole-filing it without one is exactly
+    # the workaround the skill rules out, so this only clears when every
+    # undelivered .md path was created, not merely edited, this turn.
+    sent_file = any("sent a file to the user" in d for d in turn.delivery)
+    if sent_file and all(p in turn.created for p in md):
         return ""
     names = ", ".join(sorted({os.path.basename(p) for p in md})[:5])
     return ("This turn changed %s without delivering a rendered diff. "

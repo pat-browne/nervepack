@@ -17,12 +17,33 @@ _VIEWER_TOOL = re.compile(r"mcp__.*(screenshot|browser|playwright|simulator)", r
 _OPEN_CMD = re.compile(r"(?:^|[|;&\s])(open|xdg-open)\s", re.I)
 _EDIT_TOOLS = ("Edit", "Write", "NotebookEdit")
 
+_FENCE = re.compile(r"```([a-zA-Z0-9_+-]*)\n(.*?)```", re.S)
+_DIFF_MARKER = re.compile(r"^(?:@@ .*@@|--- |\+\+\+ )", re.M)
+
+
+def has_diff_shape(text):
+    """True if text contains a fenced code block that looks like a rendered
+    unified diff: a ``diff``-tagged fence, or one whose body has a unified-diff
+    line marker (a hunk header, or a --- /+++ file-header pair). Covers a
+    hand-typed diff pasted straight into the response, which np-md-diff.py
+    never touches and turn.delivery never records."""
+    if not text:
+        return False
+    for m in _FENCE.finditer(text):
+        lang = (m.group(1) or "").strip().lower()
+        if lang == "diff" or _DIFF_MARKER.search(m.group(2)):
+            return True
+    return False
+
 
 class Turn(object):
     """One turn's observable facts. Always fully populated, never None."""
 
     def __init__(self):
         self.edits = []       # file paths written or edited
+        self.created = []     # subset of edits written via a tool that implies
+                               # no pre-existing base (Write) -- Edit always
+                               # requires a prior Read, so it never lands here
         self.delivery = []    # labels describing how something was shown
         self.final_text = ""  # the closing assistant text block
 
@@ -76,6 +97,8 @@ def _scan(rec, turn):
 
             if name in _EDIT_TOOLS and path:
                 turn.edits.append(path)
+                if name == "Write":
+                    turn.created.append(path)
             if name == "Read" and path.lower().endswith(_IMAGE_EXT):
                 turn.delivery.append("read an image")
             if name == "SendUserFile":

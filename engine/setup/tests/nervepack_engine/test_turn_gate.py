@@ -17,11 +17,12 @@ import np_turn_parse  # noqa: E402
 from hooks import turn_gate  # noqa: E402
 
 
-def _turn(edits=(), delivery=(), final_text=""):
+def _turn(edits=(), delivery=(), final_text="", created=()):
     t = np_turn_parse.Turn()
     t.edits = list(edits)
     t.delivery = list(delivery)
     t.final_text = final_text
+    t.created = list(created)
     return t
 
 
@@ -110,6 +111,26 @@ class TestTurnGate(unittest.TestCase):
 
     def test_markdown_edit_with_diff_is_silent(self):
         turn = _turn(edits=["/docs/guide.md"], delivery=["ran np-md-diff.py"])
+        self.assertEqual(self._run(turn), "")
+
+    def test_send_user_file_on_created_md_is_silent(self):
+        # SendUserFile is exactly the skill's prescribed delivery for a file
+        # this turn CREATED (no base version exists to diff against).
+        turn = _turn(edits=["/docs/new.md"], delivery=["sent a file to the user"],
+                     created=["/docs/new.md"])
+        self.assertEqual(self._run(turn), "")
+
+    def test_send_user_file_on_edited_md_still_warns(self):
+        # An EDITED file still needs a diff first -- whole-filing it without
+        # one is the workaround the skill explicitly rules out.
+        turn = _turn(edits=["/docs/existing.md"], delivery=["sent a file to the user"])
+        self.assertNotEqual(self._run(turn), "")
+
+    def test_typed_diff_in_final_text_is_silent(self):
+        diff_text = ("Done. The rendered diff:\n\n```diff\n"
+                     "--- a/docs/guide.md\n+++ b/docs/guide.md\n@@ -1,2 +1,2 @@\n"
+                     "-old line\n+new line\n```\n")
+        turn = _turn(edits=["/docs/guide.md"], final_text=diff_text)
         self.assertEqual(self._run(turn), "")
 
     def test_spec_and_plan_docs_are_exempt_from_diff(self):

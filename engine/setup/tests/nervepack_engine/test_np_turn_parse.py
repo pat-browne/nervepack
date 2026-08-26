@@ -123,6 +123,39 @@ class TestTurnParse(unittest.TestCase):
         self.assertEqual(turn.delivery, [])
         self.assertEqual(turn.final_text, "")
 
+    def test_write_tool_marks_path_as_created(self):
+        p = self._write([_user("go"),
+                         _tool_use("Write", {"file_path": "/docs/new.md"})])
+        turn = np_turn_parse.parse(p)
+        self.assertEqual(turn.edits, ["/docs/new.md"])
+        self.assertEqual(turn.created, ["/docs/new.md"])
+
+    def test_edit_tool_does_not_mark_path_as_created(self):
+        # Edit requires a pre-existing file (the harness enforces read-before-
+        # edit), so it never implies a fresh file with no base to diff against.
+        p = self._write([_user("go"),
+                         _tool_use("Edit", {"file_path": "/docs/existing.md"})])
+        turn = np_turn_parse.parse(p)
+        self.assertEqual(turn.edits, ["/docs/existing.md"])
+        self.assertEqual(turn.created, [])
+
+    def test_has_diff_shape_detects_diff_tagged_fence(self):
+        text = "Done.\n\n```diff\n+ a new line\n```\n"
+        self.assertTrue(np_turn_parse.has_diff_shape(text))
+
+    def test_has_diff_shape_detects_unified_markers_without_language_tag(self):
+        text = ("The change:\n\n```\n--- a/x.md\n+++ b/x.md\n"
+                 "@@ -1,1 +1,1 @@\n-old\n+new\n```\n")
+        self.assertTrue(np_turn_parse.has_diff_shape(text))
+
+    def test_has_diff_shape_false_for_plain_prose(self):
+        self.assertFalse(np_turn_parse.has_diff_shape(
+            "I updated the doc to fix a typo, no code blocks here."))
+
+    def test_has_diff_shape_false_for_non_diff_fence(self):
+        text = "```python\nprint('hello')\n```\n"
+        self.assertFalse(np_turn_parse.has_diff_shape(text))
+
     def test_no_typed_user_message_scans_whole_file(self):
         # A transcript with no typed prompt still yields its edits rather than
         # silently returning empty, so the gate degrades to conservative.
