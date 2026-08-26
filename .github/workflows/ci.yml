@@ -478,7 +478,7 @@ jobs:
           python-version: "3.x"
 
       - name: Download every gate-verdict-* artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: gate-verdict-*
           path: verdicts
@@ -645,7 +645,7 @@ jobs:
         # upload. A missing policy is not a crash here - np_automerge reads it as
         # "nothing is known about what this pull request touched", which blocks.
         continue-on-error: true
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: tier-policy
 
@@ -726,7 +726,7 @@ jobs:
           python-version: "3.x"
 
       - name: Download every gate-verdict-* artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: gate-verdict-*
           path: verdicts
