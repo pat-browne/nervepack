@@ -68,3 +68,11 @@ UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-re
 PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
 # --- 64: turn-completion gate (Stop-scoped; the one hook permitted to block) ---
 Stop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
+# --- 65: durable-text form gate (PreToolUse). One row per matcher: Claude Code
+# only invokes a PreToolUse hook for a REGISTERED matcher, same constraint the
+# six lesson-guard rows above exist for.
+PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+PreToolUse|Artifact|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+PreToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+PreToolUse|mcp__.*|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate

@@ -138,6 +138,18 @@ class TestTurnGate(unittest.TestCase):
                   "/c/docs/superpowers/plans/x.md"):
             self.assertEqual(self._run(_turn(edits=[p])), "", p)
 
+    def test_form_threshold_renders_fractional_value(self):
+        """%.0f previously truncated 2.5 to "2", under-reporting the gate's
+        own configured threshold in the message it shows the user."""
+        turn = _turn(final_text="prose")
+        with mock.patch.object(turn_gate, "_lint_score",
+                               return_value=(30.0, [("em_dash", 9)])):
+            data = json.loads(self._run(turn, params={"turn_gate.form_threshold": "2.5"}))
+        context = data["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("threshold of 2.5", context)
+        self.assertNotIn("threshold of 2 ", context)
+
+
     def test_form_warn_when_linter_scores_above_threshold(self):
         turn = _turn(final_text="prose")
         with mock.patch.object(turn_gate, "_lint_score",

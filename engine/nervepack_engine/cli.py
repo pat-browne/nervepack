@@ -36,6 +36,7 @@ from nervepack_engine.hooks import drift_guard  # noqa: E402
 from nervepack_engine.hooks import episodic_capture  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
 from nervepack_engine.hooks import evaluator  # noqa: E402
+from nervepack_engine.hooks import form_gate  # noqa: E402
 from nervepack_engine.hooks import lesson_guard  # noqa: E402
 from nervepack_engine.hooks import lesson_recall  # noqa: E402
 from nervepack_engine.hooks import open_artifact  # noqa: E402
@@ -76,6 +77,7 @@ _HOOKS = {
     "episodic-capture": episodic_capture.run,
     "episodic-recall": episodic_recall.run,
     "evaluator": evaluator.run,
+    "form-gate": form_gate.run,
     "lesson-guard": lesson_guard.run,
     "lesson-recall": lesson_recall.run,
     "open-artifact": open_artifact.run,
