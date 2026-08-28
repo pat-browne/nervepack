@@ -32,12 +32,13 @@ NP="$tmp/np"; mkdir -p "$NP/engine/setup" "$NP/engine/nervepack_engine" "$NP/das
 # into engine/nervepack_engine (phase 20b-2). Mirror that split so np_aggregate's
 # self-bootstrap finds them under ../nervepack_engine.
 cp "$SETUP/np_aggregate.py" "$SETUP/np_paths.py" "$SETUP/np_dirs.py" "$SETUP/np_host.py" "$NP/engine/setup/"
-# np_git_publish is a dependency of BOTH np_aggregate and np_toggle (the cron
-# publish guard). Omit it and the hermetic sandbox raises ImportError, which the
-# fail-open assertion below reports as a non-zero exit.
 cp "$SETUP/../nervepack_engine/np_toggle.py" "$SETUP/../nervepack_engine/np_content.py" \
-   "$SETUP/../nervepack_engine/np_git_publish.py" \
    "$NP/engine/nervepack_engine/"
+# np_git_publish is a dependency of BOTH np_aggregate and np_toggle (the cron
+# publish guard), and it lives in engine/setup beside np_paths. Omit it and the
+# hermetic sandbox raises ImportError, which the fail-open assertion reports as
+# a non-zero exit.
+cp "$SETUP/np_git_publish.py" "$NP/engine/setup/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
 printf 'evaluator.dashboard=off\n' > "$tmp/local"   # no build.py in this minimal repo
 ORIGIN="$tmp/origin.git"; git init -q --bare "$ORIGIN"

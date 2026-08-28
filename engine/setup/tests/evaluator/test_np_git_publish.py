@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..", "..", "nervepack_engine")))
+sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..")))  # engine/setup, where np_git_publish sits beside np_paths
 
 import np_git_publish  # noqa: E402
 
