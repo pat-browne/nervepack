@@ -22,8 +22,12 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
-if SETUP not in sys.path:
-    sys.path.insert(0, SETUP)
+# np_content lives beside np_toggle in nervepack_engine, and the lazy import in
+# _content_conf_path resolves against sys.path the same way cli.py sets it up.
+ENGINE = os.path.normpath(os.path.join(SETUP, "..", "nervepack_engine"))
+for _p in (SETUP, ENGINE):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 def _load_np_toggle():
@@ -157,6 +161,56 @@ class ContentLayerTest(unittest.TestCase):
     def test_scope_prefers_the_content_row(self):
         self._write_content("turn_gate|local|runtime|on|form=block\n")
         self.assertEqual(np_toggle.scope("turn_gate"), "local")
+
+
+class ContentLayerReentrancyTest(unittest.TestCase):
+    """The latch in _content_conf_path.
+
+    content_dir() does not read a toggle today. If it ever does, every param()
+    call would recurse until the stack died, and the symptom (a hook that
+    silently dies mid-session) points nowhere near the cause.
+    """
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.makedirs(os.path.join(self.tmp.name, "config"))
+        with open(os.path.join(self.tmp.name, "config", "toggles.conf"), "w") as fh:
+            fh.write("focus|shared|runtime|off|\n")
+        for key, value in (("NP_CONTENT_DIR", self.tmp.name),
+                           ("NP_TOGGLES_LOCAL", os.path.join(self.tmp.name, "none"))):
+            prior = os.environ.get(key)
+            os.environ[key] = value
+            self.addCleanup(
+                lambda k=key, p=prior: os.environ.__setitem__(k, p)
+                if p is not None else os.environ.pop(k, None))
+        prior = os.environ.pop("NP_TOGGLES_CONTENT", None)
+        if prior is not None:
+            self.addCleanup(os.environ.__setitem__, "NP_TOGGLES_CONTENT", prior)
+
+    def test_layer_resolves_through_the_real_content_resolver(self):
+        """Not just through the env override the other tests use."""
+        self.assertFalse(np_toggle.enabled("focus"))
+
+    def test_a_toggle_read_inside_content_dir_does_not_recurse(self):
+        import np_content
+        original = np_content.content_dir
+
+        def chatty():
+            np_toggle.param("team.merge", "override")
+            return original()
+
+        np_content.content_dir = chatty
+        self.addCleanup(setattr, np_content, "content_dir", original)
+        self.assertFalse(np_toggle.enabled("focus"))
+
+    def test_the_latch_is_released_after_a_failed_lookup(self):
+        import np_content
+        original = np_content.content_dir
+        np_content.content_dir = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        self.addCleanup(setattr, np_content, "content_dir", original)
+        np_toggle.enabled("focus")                       # swallows the error
+        np_content.content_dir = original
+        self.assertFalse(np_toggle.enabled("focus"))     # layer works again
 
 
 if __name__ == "__main__":

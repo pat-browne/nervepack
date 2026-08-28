@@ -41,6 +41,15 @@ def _local_path():
     return os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggles.local")
 
 
+# Re-entrancy latch for _content_conf_path. content_dir() does NOT read a toggle
+# today, but it is one edit away from doing so, and that edit would make every
+# param() call recurse until the stack died. Cheap to guard, impossible to debug
+# from the symptom. Single flag, not a lock: hooks are one-shot processes, and a
+# threaded caller racing this reads the engine layer for one call, which is the
+# same answer it gets on a machine with no overlay.
+_IN_CONTENT_LOOKUP = False
+
+
 def _content_conf_path():
     """The content overlay's toggle manifest, or "" when there is none.
 
@@ -57,11 +66,17 @@ def _content_conf_path():
     env = os.environ.get("NP_TOGGLES_CONTENT")
     if env is not None:
         return env
+    global _IN_CONTENT_LOOKUP
+    if _IN_CONTENT_LOOKUP:
+        return ""                          # asked while resolving: engine only
+    _IN_CONTENT_LOOKUP = True
     try:
         import np_content
         root = np_content.content_dir()
     except Exception:                      # resolver missing, or misconfigured
         return ""
+    finally:
+        _IN_CONTENT_LOOKUP = False
     if not root or os.path.normpath(root) == os.path.normpath(np_paths.REPO_ROOT):
         # A single-repo user's content dir IS the engine root. There is no
         # second layer there, only the same file reached by another name.

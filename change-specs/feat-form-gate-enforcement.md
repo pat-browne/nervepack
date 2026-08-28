@@ -167,4 +167,7 @@ hook rows from `~/.claude/settings.json`.
 
 ## Deviations
 
-<none yet>
+- 2026-08-28: self-review added a re-entrancy latch to `_content_conf_path` and
+  three tests for it. Inside the declared blast radius, recorded because the
+  guard defends against a failure that does not exist yet: `content_dir()` reads
+  no toggle today, and would recurse forever if it ever did.
