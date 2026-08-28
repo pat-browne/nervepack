@@ -4,7 +4,7 @@ status: proposed
 date: 2026-08-28
 tier: normal
 blast_radius:
-  - engine/nervepack_engine/np_git_publish.py
+  - engine/setup/np_git_publish.py
   - engine/nervepack_engine/np_toggle.py
   - engine/setup/np_aggregate.py
   - engine/setup/np_skill_maintain.py
