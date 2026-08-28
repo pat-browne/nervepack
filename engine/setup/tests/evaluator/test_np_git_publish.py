@@ -120,6 +120,16 @@ class PushToMain(unittest.TestCase):
             self.assertIn("exit", why)          # the status is always carried
             self.assertRegex(why, r"exit \d+")  # and it is a real number
 
+    def test_a_rejected_push_detail_stays_one_bounded_line(self):
+        """Git's rejection stderr is multi-line. A status line must stay parseable."""
+        import np_git_publish as m
+        self.assertEqual(m._one_line("a\nb\n  c  "), "a b c")
+        self.assertEqual(m._one_line(""), "")
+        long = m._one_line("x" * 900)
+        self.assertLessEqual(len(long), 300)
+        self.assertTrue(long.endswith("..."))
+        self.assertNotIn("\n", m._one_line("one\ntwo"))
+
     def test_never_raises_on_a_missing_path(self):
         ok, why = np_git_publish.push_to_main("/nonexistent/path/xyz")
         self.assertFalse(ok)

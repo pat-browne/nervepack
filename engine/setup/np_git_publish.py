@@ -19,6 +19,22 @@ returns git's stderr rather than swallowing it.
 import subprocess
 
 
+_MAX_DETAIL = 300
+
+
+def _one_line(text, limit=_MAX_DETAIL):
+    """Collapse git's stderr to one bounded line.
+
+    A push rejection is routinely multi-line, and these strings land in a
+    caller's status line and in a cron log. Left raw they turn one event into
+    several log lines that no longer parse as one record.
+    """
+    if not text:
+        return ""
+    flat = " ".join(text.split())
+    return flat if len(flat) <= limit else flat[:limit - 3] + "..."
+
+
 def current_branch(repo):
     """Branch name at HEAD, or None when detached or not a repo."""
     try:
@@ -57,7 +73,7 @@ def push_to_main(repo, branch="main"):
         # `push rejected: returncode 1` alone tells an operator nothing, and a
         # quiet failure is the exact class of fault this module exists to end.
         detail = "exit %d" % r.returncode
-        err = r.stderr.strip()
+        err = _one_line(r.stderr)
         if err:
             detail += ": %s" % err
         return False, "push rejected (%s)" % detail
