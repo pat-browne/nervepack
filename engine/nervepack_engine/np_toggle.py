@@ -41,6 +41,80 @@ def _local_path():
     return os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggles.local")
 
 
+# Re-entrancy latch for _content_conf_path. content_dir() does NOT read a toggle
+# today, but it is one edit away from doing so, and that edit would make every
+# param() call recurse until the stack died. Cheap to guard, impossible to debug
+# from the symptom. Single flag, not a lock: hooks are one-shot processes, and a
+# threaded caller racing this reads the engine layer for one call, which is the
+# same answer it gets on a machine with no overlay.
+_IN_CONTENT_LOOKUP = False
+
+
+def _content_conf_path():
+    """The content overlay's toggle manifest, or "" when there is none.
+
+    This is the layer that makes a preference BOTH portable and personal. The
+    local file is portable to nothing (untracked, one machine) and the engine
+    file is personal to nobody (committed, shared with every forker). The
+    content overlay is a git repo that already syncs across machines and
+    already holds everything personal, so the preference belongs there.
+
+    np_content imports np_toggle, so the import has to be lazy or the module
+    graph is a cycle. An empty NP_TOGGLES_CONTENT means "no content layer" and
+    is how the tests pin the absent case; unset falls through to the resolver.
+    """
+    env = os.environ.get("NP_TOGGLES_CONTENT")
+    if env is not None:
+        return env
+    global _IN_CONTENT_LOOKUP
+    if _IN_CONTENT_LOOKUP:
+        return ""                          # asked while resolving: engine only
+    _IN_CONTENT_LOOKUP = True
+    try:
+        import np_content
+        root = np_content.content_dir()
+    except Exception:                      # resolver missing, or misconfigured
+        return ""
+    finally:
+        _IN_CONTENT_LOOKUP = False
+    if not root or os.path.normpath(root) == os.path.normpath(np_paths.REPO_ROOT):
+        # A single-repo user's content dir IS the engine root. There is no
+        # second layer there, only the same file reached by another name.
+        return ""
+    return os.path.join(root, "config", "toggles.conf")
+
+
+def _conf_paths():
+    """Every toggle manifest, highest precedence first.
+
+    Readers below take the FIRST match across this chain, which is what gives
+    the content layer its precedence. Because _conf_param keeps scanning rows
+    after a family matches, a content row may name only the params it changes
+    and the engine row still supplies the rest.
+    """
+    paths = []
+    content = _content_conf_path()
+    if content and os.path.isfile(content):
+        paths.append(content)
+    paths.append(_conf_path())
+    return paths
+
+
+def _write_conf_path():
+    """Where a shared-scope WRITE lands.
+
+    Once a content toggle file exists, the user has opted into the layer, so a
+    dashboard or CLI flip must land there rather than in the engine repo.
+    Writing to the engine would be both un-portable to their other machines and
+    a personal value committed to a repo other people fork. With no content
+    file present this is the engine conf, exactly as before.
+    """
+    content = _content_conf_path()
+    if content and os.path.isfile(content):
+        return content
+    return _conf_path()
+
+
 def _local_get(key):
     """Mirror _np_local_get: last `^\\s*key\\s*=value` line wins; value trimmed.
 
@@ -65,21 +139,34 @@ def _local_get(key):
     return val
 
 
-def _iter_conf_rows():
-    """Yield the '|'-split `fields` list for each non-comment row of toggles.conf.
+def _iter_rows(path):
+    """Yield the '|'-split `fields` list for each non-comment row of ONE manifest.
     The row format lives here once -- open newline='' (raw; the file is LF-pinned via
     .gitattributes), strip the trailing newline, skip comment rows (leading '#'), split
     on '|' -- so the five readers below don't each re-implement it (drift between
-    all_params and _conf_param would silently desync rendering from resolution). (#176)"""
-    path = _conf_path()
-    if not os.path.isfile(path):
+    all_params and _conf_param would silently desync rendering from resolution). (#176)
+
+    Strips \r as well as \n. The ENGINE manifest is LF-pinned via .gitattributes,
+    but the content-overlay manifest is a file the user authors in their own repo,
+    where no such pin applies. A CRLF line leaves the trailing \r on the LAST
+    field, so `form=block\r` resolves to "block\r" and compares equal to nothing.
+    `_local_get` has always stripped \r for the same reason.
+    """
+    if not path or not os.path.isfile(path):
         return
     with open(path, "r", newline="") as f:
         for line in f:
-            line = line.rstrip("\n")
+            line = line.rstrip("\r\n")
             if re.match(r'^[' + _WS + r']*#', line):
                 continue
             yield line.split("|")
+
+
+def _iter_conf_rows():
+    """Rows of every manifest, highest-precedence layer first. First match wins."""
+    for path in _conf_paths():
+        for fields in _iter_rows(path):
+            yield fields
 
 
 def _conf_state(feature):
@@ -176,7 +263,12 @@ def features():
     out = []
     for fields in _iter_conf_rows():
         if len(fields) >= 4:
-            out.append(fields[0].strip(" "))
+            name = fields[0].strip(" ")
+            # A feature declared in both the content layer and the engine is
+            # ONE feature, listed once. Without this the toggle menu would show
+            # every overridden family twice.
+            if name not in out:
+                out.append(name)
     return out
 
 
@@ -188,20 +280,21 @@ def all_params(family):
     key of one family at once — param() only fetches a single key, which is
     enough for a runtime check but not for rendering an entire panel."""
     out = {}
-    for fields in _iter_conf_rows():
-        if not fields or fields[0] != family:
-            continue
-        params = fields[4] if len(fields) > 4 else ""
-        for tok in re.split(r'[ ,]+', params):
-            if not tok:
+    for path in _conf_paths():                 # highest-precedence layer first
+        for fields in _iter_rows(path):
+            if not fields or fields[0] != family:
                 continue
-            kv = tok.split("=")
-            key = kv[0].strip(" ")
-            if not key:
-                continue
-            conf_val = kv[1] if len(kv) > 1 else ""
-            out[key] = _local_get(family + "." + key) or conf_val
-        break                                  # only the first matching family row
+            params = fields[4] if len(fields) > 4 else ""
+            for tok in re.split(r'[ ,]+', params):
+                if not tok:
+                    continue
+                kv = tok.split("=")
+                key = kv[0].strip(" ")
+                if not key or key in out:
+                    continue                   # a higher layer already set it
+                conf_val = kv[1] if len(kv) > 1 else ""
+                out[key] = _local_get(family + "." + key) or conf_val
+            break                              # only the first matching row PER FILE
     return out
 
 
@@ -268,14 +361,16 @@ def _atomic_write(path, text):
 def set_conf_state(feature, state):
     """Rewrite column $4 (state) of the matching toggles.conf row. Mirrors
     _set_conf_state: comment rows verbatim; a row whose col1 == feature has its
-    4th field replaced (OFS='|'); every other row is preserved byte-for-byte."""
-    path = _conf_path()
+    4th field replaced (OFS='|'); every other row is preserved byte-for-byte.
+
+    Writes land in the content layer once one exists -- see _write_conf_path."""
+    path = _write_conf_path()
     if not os.path.isfile(path):
         return
     out = []
     with open(path, "r", newline="") as f:
         for line in f:
-            body = line.rstrip("\n")
+            body = line.rstrip("\r\n")   # see _iter_rows on CRLF
             if re.match(r'^[' + _WS + r']*#', body):
                 out.append(line)
                 continue
@@ -299,13 +394,13 @@ def set_conf_param(key, value):
         feat, pkey = key.split(".", 1)
     else:
         feat = pkey = key
-    path = _conf_path()
+    path = _write_conf_path()
     if not os.path.isfile(path):
         return
     out = []
     with open(path, "r", newline="") as f:
         for line in f:
-            body = line.rstrip("\n")
+            body = line.rstrip("\r\n")   # see _iter_rows on CRLF
             if re.match(r'^[' + _WS + r']*#', body):
                 out.append(line)
                 continue
@@ -333,6 +428,20 @@ def set_conf_param(key, value):
     _atomic_write(path, "".join(out))
 
 
+def _repo_root_for(path):
+    """The git work tree containing `path`, or "" when there is none."""
+    import np_bashlib
+    try:
+        proc = subprocess.run(
+            np_bashlib.argv(["git", "-C", os.path.dirname(path) or ".",
+                             "rev-parse", "--show-toplevel"]),
+            stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    except OSError:
+        return ""
+    root = (proc.stdout or "").strip()
+    return root if proc.returncode == 0 and root else ""
+
+
 def commit_shared(message, np_root=None):
     """Path-limited commit+push of toggles.conf (issue-#11 discipline: never a bare
     `git commit` that would sweep a concurrent session's staged index). Best-effort,
@@ -341,8 +450,16 @@ def commit_shared(message, np_root=None):
     if os.environ.get("NP_TOGGLE_NO_COMMIT") == "1":
         return
     import np_bashlib
-    np = np_root or np_paths.REPO_ROOT
-    conf = _conf_path()
+    conf = _write_conf_path()
+    # Commit in the repo that OWNS the file. Once writes land in the content
+    # overlay, committing from the engine root would stage nothing and push an
+    # unrelated branch. Ask git for the root rather than assuming the file's
+    # parent is one: a nested path would still work by git's upward search, but
+    # a conf outside any repo would silently commit into whatever repo encloses
+    # the process instead.
+    np = np_root or _repo_root_for(conf)
+    if not np:
+        return
 
     def _git(args):
         try:
