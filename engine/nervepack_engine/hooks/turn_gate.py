@@ -1,12 +1,22 @@
-"""Stop hook: the turn-completion gate.
+"""Stop and SubagentStop hook: the turn-completion gate.
 
-Blocks a turn ONCE when it edited UI files and never showed the result. This is
-the single hook in nervepack permitted to block, per the amended ARCHITECTURE
-invariant 1. Every one of its own error paths still returns "" and allows.
+Blocks a turn ONCE when it edited UI files and never showed the result, or
+(when `turn_gate.form` is `block`) when the closing message fails the form
+contract. This is the single hook in nervepack permitted to block, per the
+amended ARCHITECTURE invariant 1. Every one of its own error paths still
+returns "" and allows.
 
 Order matters: stop_hook_active is checked before any parsing, toggle read, or
 file access. The harness caps consecutive blocks at 8, but this gate must never
 depend on that backstop.
+
+**What blocking here can and cannot do.** A Stop hook fires after the closing
+message already streamed to the reader. Blocking cannot un-send it; it can only
+force a correction into the same turn. So every finding rides on ONE decision
+and the reason forbids restating, which makes the continuation a replacement
+rather than a second full answer. Keeping the FIRST draft clean is the job of
+the `form_directive` UserPromptSubmit hook. This gate is the backstop for the
+drafts prevention misses. See change-specs/feat-form-gate-enforcement.md.
 """
 import json
 import os
@@ -24,6 +34,13 @@ _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules|dis
                      r"([/\\]|$)|\.min\.", re.I)
 _SPEC_DOC = re.compile(r"[/\\]docs[/\\]superpowers[/\\](?:specs|plans)[/\\]", re.I)
 
+# Sent with every block. Without it the model answers again in full and the
+# reader sees the same content twice, which is the failure mode that kept this
+# check pinned to warn.
+_NO_RESTATE = ("Do not restate, re-explain, or summarize the message you just "
+               "sent. The reader already has it. Send only the rewritten "
+               "closing message, with nothing before or after it.")
+
 _LADDER = ("Serve it and open it in the browser, or take a screenshot and show it. "
            "If the change has no visual surface (a refactor, a comment, a build "
            "tweak), say so plainly and finish -- that is a valid resolution and "
@@ -37,6 +54,13 @@ def _is_ui(path):
 def _mode(param, default):
     value = (np_toggle.param(param, default) or default).strip().lower()
     return value if value in ("block", "warn", "off") else default
+
+
+def _on(param, default):
+    """A plain on/off toggle. `_mode` reads the block/warn/off ladder, which is
+    a different vocabulary; sharing one reader would silently accept 'block' as
+    an answer to 'should this lane run at all'."""
+    return (np_toggle.param(param, default) or default).strip().lower() != "off"
 
 
 def _block(reason):
@@ -148,31 +172,44 @@ def run(payload_text, *_args):
     except Exception:
         return ""
 
-    ui_mode = _mode("turn_gate.ui", "block")
+    # A subagent hands text back to its caller and shows nothing to a human, so
+    # the delivery checks (did you show the UI, did you render the diff) have no
+    # subject there. Its prose still reaches a reader through the caller, so the
+    # form check does apply.
+    subagent = payload.get("hook_event_name") == "SubagentStop"
+    if subagent and not _on("turn_gate.subagent", "on"):
+        return ""
 
     try:
         timeout_s = float(np_toggle.param("turn_gate.timeout_s", "5") or 5)
     except (TypeError, ValueError):
         timeout_s = 5.0
 
-    warns = []
-    if _mode("turn_gate.diff", "warn") != "off":
-        warns.append(_check_diff(turn))
-    if _mode("turn_gate.form", "warn") != "off":
-        warns.append(_check_form(turn, timeout_s))
-    warns = [w for w in warns if w]
+    # Each finding is filed under the severity its own toggle names. Everything
+    # blocking then leaves on a SINGLE decision -- blocking twice for one turn
+    # would produce exactly the duplicate output this mode exists to avoid.
+    blocking, advisory = [], []
 
-    ui_files = [p for p in turn.edits if _is_ui(p)]
-    ui_tripped = ui_mode != "off" and bool(ui_files) and not turn.delivery
+    def _file(mode, message):
+        if message:
+            (blocking if mode == "block" else advisory).append(message)
 
-    if ui_tripped:
-        names = ", ".join(sorted({os.path.basename(p) for p in ui_files})[:5])
-        message = ("This turn edited %s but never showed the result. %s"
-                   % (names, _LADDER))
-        # A block and a warn are different top-level contracts. Fold warns into
-        # the reason so no finding is lost and no undefined shape is emitted.
-        if warns:
-            message += " Also: " + " ".join(warns)
-        return _block(message) if ui_mode == "block" else _warn(message)
+    form_mode = _mode("turn_gate.form", "warn")
+    if form_mode != "off":
+        _file(form_mode, _check_form(turn, timeout_s))
 
-    return _warn(" ".join(warns)) if warns else ""
+    if not subagent:
+        diff_mode = _mode("turn_gate.diff", "warn")
+        if diff_mode != "off":
+            _file(diff_mode, _check_diff(turn))
+
+        ui_mode = _mode("turn_gate.ui", "block")
+        ui_files = [p for p in turn.edits if _is_ui(p)]
+        if ui_mode != "off" and ui_files and not turn.delivery:
+            names = ", ".join(sorted({os.path.basename(p) for p in ui_files})[:5])
+            _file(ui_mode, "This turn edited %s but never showed the result. %s"
+                  % (names, _LADDER))
+
+    if blocking:
+        return _block(" ".join(blocking + advisory) + " " + _NO_RESTATE)
+    return _warn(" ".join(advisory)) if advisory else ""
