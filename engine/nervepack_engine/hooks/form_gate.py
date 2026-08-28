@@ -28,6 +28,11 @@ _PROSE_EXT_DEFAULT = ".md,.mdx,.markdown,.html,.txt,.rst,.adoc"
 # Text keys worth linting on a tool whose payload shape is not worth hardcoding.
 # MCP schemas drift, and a gate that silently stops matching after a server
 # renames a field is worse than one that scans a short candidate list.
+# Both payload walkers are recursive over attacker-shaped JSON. Real payloads
+# nest three or four levels; a pathological one would blow the stack and take
+# the tool call with it. A hook that crashes a session gets uninstalled.
+_MAX_WALK_DEPTH = 24
+
 _TEXT_KEYS = ("content", "text", "body", "comment", "markdown", "message",
               "description")
 
@@ -182,6 +187,11 @@ def _added_text(path, content):
     reads as added, which is also correct. Any read error means the file is new
     or unreadable, so everything in it counts as new.
     """
+    if not path:
+        # A Write with no file_path never reaches _prose_file's own guard,
+        # because this runs first. open(None) raises TypeError, not OSError,
+        # so the except below would not catch it and the hook would die.
+        return content
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             before = set(fh.read().splitlines())
@@ -260,18 +270,20 @@ def _keyed_prose(tool_input):
     """
     chunks = []
 
-    def walk(node, keyed):
+    def walk(node, keyed, depth):
+        if depth > _MAX_WALK_DEPTH:
+            return
         if isinstance(node, str):
             if keyed:
                 chunks.append(node)
         elif isinstance(node, list):
             for item in node:
-                walk(item, keyed)
+                walk(item, keyed, depth + 1)
         elif isinstance(node, dict):
             for key, value in node.items():
-                walk(value, keyed or key in _TEXT_KEYS)
+                walk(value, keyed or key in _TEXT_KEYS, depth + 1)
 
-    walk(tool_input, False)
+    walk(tool_input, False, 0)
     joined = "\n".join(c for c in chunks if c.strip())
     return joined or None
 
@@ -285,16 +297,18 @@ def _notion_prose(tool_input):
     """
     chunks = []
 
-    def walk(node):
+    def walk(node, depth=0):
+        if depth > _MAX_WALK_DEPTH:
+            return
         if isinstance(node, str):
             chunks.append(node)
         elif isinstance(node, list):
             for item in node:
-                walk(item)
+                walk(item, depth + 1)
         elif isinstance(node, dict):
             for key, value in node.items():
                 if key in ("content", "new_str", "text", "body"):
-                    walk(value)
+                    walk(value, depth + 1)
 
     walk(tool_input.get("command") or tool_input.get("pages")
          or tool_input.get("content") or tool_input)

@@ -163,6 +163,46 @@ class ContentLayerTest(unittest.TestCase):
         self.assertEqual(np_toggle.scope("turn_gate"), "local")
 
 
+class ContentLayerCrlfTest(ContentLayerTest):
+    """The engine manifest is LF-pinned via .gitattributes. The content-overlay
+    manifest is a file the user authors in their OWN repo, where no such pin
+    applies, so a Windows-authored file arrives with CRLF. A trailing \r rides
+    on the LAST field of each row, which made `form=block` resolve to "block\r".
+    Caught by the Git-bash CI lane, not by any Linux or macOS run.
+
+    Re-runs the whole parent suite against a CRLF content file.
+    """
+    def _write_content(self, text=CONTENT_CONF):
+        with open(self.content, "w", newline="\r\n") as fh:
+            fh.write(text)
+        self._set("NP_TOGGLES_CONTENT", self.content)
+
+    def test_the_fixture_really_is_crlf(self):
+        """Without this, a future editor could 'fix' the newline= above and
+        quietly turn every inherited case back into a duplicate of the parent."""
+        self._write_content()
+        with open(self.content, "rb") as fh:
+            self.assertIn(b"\r\n", fh.read())
+
+
+class RepoRootTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_outside_a_repo_returns_empty(self):
+        """commit_shared bails on "" rather than committing into whatever repo
+        happens to enclose the process."""
+        self.assertEqual(
+            np_toggle._repo_root_for(os.path.join(self.tmp.name, "toggles.conf")), "")
+
+    def test_inside_a_repo_returns_the_work_tree_root(self):
+        root = np_toggle._repo_root_for(os.path.abspath(__file__))
+        self.assertTrue(root)
+        self.assertTrue(os.path.isdir(os.path.join(root, ".git"))
+                        or os.path.isfile(os.path.join(root, ".git")))
+
+
 class ContentLayerReentrancyTest(unittest.TestCase):
     """The latch in _content_conf_path.
 

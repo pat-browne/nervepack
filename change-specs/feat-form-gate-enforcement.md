@@ -12,6 +12,7 @@ blast_radius:
   - engine/nervepack_engine/hooks/form_directive.py
   - engine/setup/hooks.manifest
   - engine/setup/toggles.conf
+  - engine/setup/toggle-schema.json
   - engine/setup/tests/nervepack_engine/**
   - engine/setup/tests/toggles/**
   - engine/setup/tests/content/**
@@ -171,3 +172,23 @@ hook rows from `~/.claude/settings.json`.
   three tests for it. Inside the declared blast radius, recorded because the
   guard defends against a failure that does not exist yet: `content_dir()` reads
   no toggle today, and would recurse forever if it ever did.
+- 2026-08-28: `spec-guard` failed on `engine/setup/toggle-schema.json`, outside
+  the declared blast radius. Widened rather than superseded. The omission was an
+  authoring miss, not a change of plan: every new toggle param has to be declared
+  in the schema or the dashboard cannot render or edit it, so the file was always
+  implied by decision D. Recorded here because the guard exists to make exactly
+  this visible, and widening it in silence is the failure it prevents.
+- 2026-08-28: the Git-bash CI lane failed on `toggles.conf` rows read from a CRLF
+  file, leaving a trailing carriage return on each row's last field. This is a
+  defect in the new layer rather than in the test: the engine manifest is
+  LF-pinned by `.gitattributes`, and the content-overlay manifest lives in a repo
+  where that pin does not apply. Fixed in the reader and both writers, and pinned
+  by re-running the whole content-layer suite against a CRLF fixture.
+- 2026-08-28: the advisory diff review found three ways to make the hook raise
+  rather than fail open: `open(None)` on a `Write` with no `file_path` (TypeError,
+  which the OSError handler misses), and unbounded recursion in each of the two
+  payload walkers. All three fixed and tested. A PreToolUse hook that raises does
+  not fail open, it fails the tool call, so these were worth taking seriously
+  despite being advisory. The fourth finding, `commit_shared` inferring a repo
+  root from a parent directory, is now derived with `git rev-parse --show-toplevel`
+  and bails when there is none.

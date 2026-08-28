@@ -198,5 +198,35 @@ class FormGateCoverageTest(unittest.TestCase):
                                    **{"form_gate.categorical": "ask"}), "")
 
 
+class FormGateRobustnessTest(unittest.TestCase):
+    """Every path a malformed payload can take into this hook.
+
+    A PreToolUse hook that raises does not fail open, it fails the tool call.
+    These are the three ways the diff review found to make it raise.
+    """
+    def test_write_without_a_file_path_does_not_raise(self):
+        """open(None) raises TypeError, which the OSError handler misses."""
+        self.assertEqual(form_gate._added_text(None, "some text"), "some text")
+        self.assertEqual(form_gate._added_text("", "some text"), "some text")
+
+    def _deep(self, levels):
+        node = root = {}
+        for _ in range(levels):
+            node["content"] = node = {}
+        node["content"] = DIRTY
+        return root
+
+    def test_deeply_nested_payload_does_not_blow_the_stack(self):
+        deep = self._deep(5000)
+        self.assertIsNone(form_gate._keyed_prose(deep))
+        self.assertIsNone(form_gate._notion_prose(deep))
+
+    def test_a_realistically_nested_payload_is_still_read(self):
+        """The bound must not be so tight that it stops gating real payloads."""
+        shallow = self._deep(4)
+        self.assertIn(DIRTY, form_gate._keyed_prose(shallow) or "")
+        self.assertIn(DIRTY, form_gate._notion_prose(shallow) or "")
+
+
 if __name__ == "__main__":
     unittest.main()

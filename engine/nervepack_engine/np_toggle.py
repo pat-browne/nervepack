@@ -144,12 +144,19 @@ def _iter_rows(path):
     The row format lives here once -- open newline='' (raw; the file is LF-pinned via
     .gitattributes), strip the trailing newline, skip comment rows (leading '#'), split
     on '|' -- so the five readers below don't each re-implement it (drift between
-    all_params and _conf_param would silently desync rendering from resolution). (#176)"""
+    all_params and _conf_param would silently desync rendering from resolution). (#176)
+
+    Strips \r as well as \n. The ENGINE manifest is LF-pinned via .gitattributes,
+    but the content-overlay manifest is a file the user authors in their own repo,
+    where no such pin applies. A CRLF line leaves the trailing \r on the LAST
+    field, so `form=block\r` resolves to "block\r" and compares equal to nothing.
+    `_local_get` has always stripped \r for the same reason.
+    """
     if not path or not os.path.isfile(path):
         return
     with open(path, "r", newline="") as f:
         for line in f:
-            line = line.rstrip("\n")
+            line = line.rstrip("\r\n")
             if re.match(r'^[' + _WS + r']*#', line):
                 continue
             yield line.split("|")
@@ -363,7 +370,7 @@ def set_conf_state(feature, state):
     out = []
     with open(path, "r", newline="") as f:
         for line in f:
-            body = line.rstrip("\n")
+            body = line.rstrip("\r\n")   # see _iter_rows on CRLF
             if re.match(r'^[' + _WS + r']*#', body):
                 out.append(line)
                 continue
@@ -393,7 +400,7 @@ def set_conf_param(key, value):
     out = []
     with open(path, "r", newline="") as f:
         for line in f:
-            body = line.rstrip("\n")
+            body = line.rstrip("\r\n")   # see _iter_rows on CRLF
             if re.match(r'^[' + _WS + r']*#', body):
                 out.append(line)
                 continue
@@ -421,6 +428,20 @@ def set_conf_param(key, value):
     _atomic_write(path, "".join(out))
 
 
+def _repo_root_for(path):
+    """The git work tree containing `path`, or "" when there is none."""
+    import np_bashlib
+    try:
+        proc = subprocess.run(
+            np_bashlib.argv(["git", "-C", os.path.dirname(path) or ".",
+                             "rev-parse", "--show-toplevel"]),
+            stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    except OSError:
+        return ""
+    root = (proc.stdout or "").strip()
+    return root if proc.returncode == 0 and root else ""
+
+
 def commit_shared(message, np_root=None):
     """Path-limited commit+push of toggles.conf (issue-#11 discipline: never a bare
     `git commit` that would sweep a concurrent session's staged index). Best-effort,
@@ -432,8 +453,13 @@ def commit_shared(message, np_root=None):
     conf = _write_conf_path()
     # Commit in the repo that OWNS the file. Once writes land in the content
     # overlay, committing from the engine root would stage nothing and push an
-    # unrelated branch.
-    np = np_root or os.path.dirname(conf) or np_paths.REPO_ROOT
+    # unrelated branch. Ask git for the root rather than assuming the file's
+    # parent is one: a nested path would still work by git's upward search, but
+    # a conf outside any repo would silently commit into whatever repo encloses
+    # the process instead.
+    np = np_root or _repo_root_for(conf)
+    if not np:
+        return
 
     def _git(args):
         try:
