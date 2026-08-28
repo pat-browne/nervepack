@@ -117,7 +117,8 @@ class PushToMain(unittest.TestCase):
             ok, why = np_git_publish.push_to_main(local)
             self.assertFalse(ok)
             self.assertIn("rejected", why)
-            self.assertNotEqual(why.strip(), "push rejected:")
+            self.assertIn("exit", why)          # the status is always carried
+            self.assertRegex(why, r"exit \d+")  # and it is a real number
 
     def test_never_raises_on_a_missing_path(self):
         ok, why = np_git_publish.push_to_main("/nonexistent/path/xyz")

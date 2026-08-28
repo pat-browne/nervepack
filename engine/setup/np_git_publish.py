@@ -53,5 +53,12 @@ def push_to_main(repo, branch="main"):
     except OSError as exc:
         return False, "push failed: %s" % exc
     if r.returncode != 0:
-        return False, "push rejected: %s" % (r.stderr.strip() or "returncode %d" % r.returncode)
+        # Always carry the exit status, and add git's own words when it gave any.
+        # `push rejected: returncode 1` alone tells an operator nothing, and a
+        # quiet failure is the exact class of fault this module exists to end.
+        detail = "exit %d" % r.returncode
+        err = r.stderr.strip()
+        if err:
+            detail += ": %s" % err
+        return False, "push rejected (%s)" % detail
     return True, ""
