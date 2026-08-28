@@ -66,8 +66,12 @@ SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-sessio
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-recall
 # --- 63: open artifact on write (Write-scoped) ---
 PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
-# --- 64: turn-completion gate (Stop-scoped; the one hook permitted to block) ---
+# --- 64: turn-completion gate (Stop + SubagentStop; the one hook permitted to
+# block). The SubagentStop row exists because a fan-out's agents write and report
+# with no other form check; turn_gate skips the delivery checks on that event
+# (turn_gate.subagent controls the lane).
 Stop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
+SubagentStop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
 # --- 65: durable-text form gate (PreToolUse). One row per matcher: Claude Code
 # only invokes a PreToolUse hook for a REGISTERED matcher, same constraint the
 # six lesson-guard rows above exist for.
@@ -75,4 +79,10 @@ PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
 PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
 PreToolUse|Artifact|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
 PreToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+PreToolUse|SendUserFile|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
 PreToolUse|mcp__.*|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gate
+# --- 66: form directive (UserPromptSubmit). The PREVENTIVE half of the form
+# pair. turn-gate above is corrective, and correction on a Stop event always
+# arrives after the reader saw the text -- this puts the contract in front of
+# the model while it drafts, so the block above stays rare.
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-directive

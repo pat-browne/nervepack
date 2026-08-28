@@ -1,281 +1,305 @@
 {
- "memory.cap_bytes": {
-  "type": "number",
-  "min": 1,
-  "description": "Byte cap for the memory-store inbox before promotion."
- },
- "memory.backcapture_days": {
-  "type": "number",
-  "min": 1,
-  "description": "Max discovery window (days) for the back-capture sweep."
- },
- "memory.backcapture_max": {
-  "type": "number",
-  "min": 1,
-  "description": "Per-sweep cap on sessions the back-capture sweep processes."
- },
- "lessons.enforce": {
-  "type": "bool",
-  "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
- },
- "sync.interval": {
-  "type": "number",
-  "min": 60,
-  "description": "Throttle (seconds) between SessionStart backup syncs."
- },
- "sync.content": {
-  "type": "bool",
-  "description": "Fast-forward-pull the personal content overlay too (same strict-safe ff-only treatment as team layers). No-op on a single-repo legacy layout."
- },
- "evaluator.cap_bytes": {
-  "type": "number",
-  "min": 1,
-  "description": "Byte cap for the evaluator inbox before aggregation."
- },
- "evaluator.dashboard_sessions": {
-  "type": "number",
-  "min": 1,
-  "description": "Ceiling on how many sessions the dashboard renders (the day window is the primary selector)."
- },
- "evaluator.dashboard_days": {
-  "type": "number",
-  "min": 0,
-  "description": "Days of activity the dashboard renders, anchored to the newest session. 0 = no time bound."
- },
- "evaluator.min_tool_calls": {
-  "type": "number",
-  "min": 0,
-  "description": "Fewest tool calls a session needs to appear in the dashboard trend. 0 = render every session."
- },
- "evaluator.dashboard_open": {
-  "type": "bool",
-  "description": "Auto-open the dashboard once per boot on SessionStart. Dashboard self-gating — read-only in the panel."
- },
- "evaluator.dashboard_serve": {
-  "type": "bool",
-  "description": "Serve the dashboard via the local backend instead of a static file. Dashboard self-gating — read-only in the panel."
- },
- "evaluator.dashboard_port": {
-  "type": "number",
-  "min": 1024,
-  "max": 65535,
-  "description": "Port the dashboard server binds to."
- },
- "evaluator.suggestions_top": {
-  "type": "number",
-  "min": 1,
-  "description": "How many open suggestions the Review pass ranks."
- },
- "evaluator.implement": {
-  "type": "bool",
-  "description": "Enable the suggestion Implement/Reject pipeline."
- },
- "evaluator.implement_mode": {
-  "type": "enum",
-  "options": [
-   "pr",
-   "direct"
-  ],
-  "description": "How an implement job lands its commit."
- },
- "evaluator.escalation_min_struggles": {
-  "type": "number",
-  "min": 1,
-  "description": "Struggles required before mid-session escalation fires."
- },
- "evaluator.escalation_min_prompts": {
-  "type": "number",
-  "min": 1,
-  "description": "Prompts required before mid-session escalation fires."
- },
- "evaluator.retain_days": {
-  "type": "number",
-  "min": 0,
-  "description": "Metrics retention (days); 0 = unlimited."
- },
- "evaluator.wiki_nav": {
-  "type": "bool",
-  "description": "Render the wiki sidebar nav in the dashboard."
- },
- "evaluator.wiki_mermaid": {
-  "type": "bool",
-  "description": "Render mermaid diagrams in rendered wiki pages."
- },
- "evaluator.toggle_ui": {
-  "type": "bool",
-  "description": "Render the Feature Toggles panel and expose its API routes. Dashboard self-gating — read-only in the panel."
- },
- "skills.split_kb": {
-  "type": "number",
-  "min": 1,
-  "description": "Hard KB budget before a skill body is split."
- },
- "skills.soft_kb": {
-  "type": "number",
-  "min": 1,
-  "description": "Soft KB budget warning threshold for a skill body."
- },
- "skills.catalog_tok": {
-  "type": "number",
-  "min": 1,
-  "description": "Token budget for the always-loaded skill catalog."
- },
- "skills.max_per_run": {
-  "type": "number",
-  "min": 1,
-  "description": "Max skills the daily maintenance pass will split per run."
- },
- "skills.graduate_seen": {
-  "type": "number",
-  "min": 1,
-  "description": "`seen` count at which a lesson is flagged overdue to graduate."
- },
- "skills.graduate_kb": {
-  "type": "number",
-  "min": 1,
-  "description": "Body size (KB) at which a lesson is flagged overdue to graduate."
- },
- "team.merge": {
-  "type": "enum",
-  "options": [
-   "override",
-   "concatenate",
-   "team-only"
-  ],
-  "description": "How team + personal content layers combine."
- },
- "mcp.writes": {
-  "type": "bool",
-  "description": "Allow the MCP server to perform local toggle writes."
- },
- "mcp.contribute": {
-  "type": "bool",
-  "description": "Allow the MCP server to invoke np-core-contribute."
- },
- "resume.interval": {
-  "type": "number",
-  "min": 1,
-  "description": "Minimum seconds between resume-note writes."
- },
- "resume.max_age": {
-  "type": "number",
-  "min": 1,
-  "description": "How long (seconds) a resume note stays eligible for recall before going stale."
- },
- "resume.cron": {
-  "type": "bool",
-  "description": "Also write resume notes on a periodic cron, in addition to the SessionStart/UserPromptSubmit triggers. Off by default."
- },
- "resume.cron_min": {
-  "type": "number",
-  "min": 1,
-  "description": "Minutes between cron-triggered resume writes, when resume.cron is on."
- },
- "resume.active_window": {
-  "type": "number",
-  "min": 1,
-  "description": "Seconds of recent activity considered \"active\" when deciding whether to write a fresh resume note."
- },
- "memory": {
-  "description": "Episodic working-memory capture, the back-capture sweep, and local promotion into memory/episodic/."
- },
- "lessons": {
-  "description": "Auto-distilled patterns from past sessions (failure→recovery and proven wins), optionally enforced at the tool call."
- },
- "gates": {
-  "description": "Per-gate override for the local spec-driven-development hooks (spec-guard, drift-guard, tier-guard) — a logged warn instead of a block, never a silent disable. CI-enforced required checks are unaffected; those use the GitHub ruleset bypass-actor list."
- },
- "directive": {
-  "description": "The \"consult nervepack first\" directive injected into every session at SessionStart."
- },
- "sync": {
-  "description": "Cross-machine sync of this nervepack checkout with origin/main."
- },
- "allowlist": {
-  "description": "Managed permission allowlist for common read-only tool calls."
- },
- "evaluator": {
-  "description": "Per-session performance scoring, the dashboard, and the suggestion review/implement pipeline."
- },
- "skills": {
-  "description": "Daily skill-body budget enforcement — auto-splits oversized skills into references/."
- },
- "team": {
-  "description": "Optional team content overlay, layered above your personal overlay."
- },
- "mcp": {
-  "description": "The model-agnostic MCP server surface (tool-neutral access to nervepack's recall/toggle/sync)."
- },
- "maintain": {
-  "description": "Weekly engine maintenance — parent toggle for the refine and compact passes."
- },
- "memory.drain_grace_days": {
-  "type": "number",
-  "min": 0,
-  "description": "Days a note may sit in the episodic inbox with the episodic layer unmoved before the doctor's episodic-freshness check calls the drain broken."
- },
- "maintain.freshness_grace_days": {
-  "type": "number",
-  "min": 0,
-  "description": "Extra days past a maintenance job's cadence before the doctor's maintenance-freshness check calls it stale."
- },
- "maintain.refine": {
-  "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
- },
- "maintain.compact": {
-  "description": "Weekly skill dedup + split-proposal pass."
- },
- "pii_filter": {
-  "description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."
- },
- "resume": {
-  "description": "Deterministic \"where we left off\" pointer — writes and recalls a resume note across sessions."
- },
- "turn_gate.ui": {
-  "type": "enum",
-  "options": [
-   "block",
-   "warn",
-   "off"
-  ],
-  "description": "Turn edited a UI file but never showed the result. Blocks once per turn."
- },
- "turn_gate.diff": {
-  "type": "enum",
-  "options": [
-   "warn",
-   "off"
-  ],
-  "description": "Turn edited markdown but delivered no rendered diff."
- },
- "turn_gate.form": {
-  "type": "enum",
-  "options": [
-   "warn",
-   "off"
-  ],
-  "description": "Closing message scores above the form threshold on the STE linter."
- },
- "turn_gate.form_threshold": {
-  "type": "number",
-  "min": 1,
-  "description": "Violations per 100 words before the form check warns. Engine docs average 5.17."
- },
- "turn_gate.timeout_s": {
-  "type": "number",
-  "min": 1,
-  "description": "Timeout (seconds) for the form check's linter subprocess. On timeout that check is skipped; the gate itself has no other blocking call."
- },
- "gates.spec_guard.enforce": {
-  "type": "bool",
-  "description": "Whether the local spec-guard pre-check blocks or warns at the tool call. Does not affect the spec-guard CI job — that is a separate, already-logged override via the GitHub ruleset bypass-actor list."
- },
- "gates.drift_guard.enforce": {
-  "type": "bool",
-  "description": "Whether the drift-guard hook blocks or warns when an edit falls outside a change-spec's declared blast_radius."
- },
- "gates.tier_guard.enforce": {
-  "type": "bool",
-  "description": "Whether the tier-guard pre-check blocks or warns when a change's declared tier does not match its touched paths."
- }
+  "memory.cap_bytes": {
+    "type": "number",
+    "min": 1,
+    "description": "Byte cap for the memory-store inbox before promotion."
+  },
+  "memory.backcapture_days": {
+    "type": "number",
+    "min": 1,
+    "description": "Max discovery window (days) for the back-capture sweep."
+  },
+  "memory.backcapture_max": {
+    "type": "number",
+    "min": 1,
+    "description": "Per-sweep cap on sessions the back-capture sweep processes."
+  },
+  "lessons.enforce": {
+    "type": "bool",
+    "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
+  },
+  "sync.interval": {
+    "type": "number",
+    "min": 60,
+    "description": "Throttle (seconds) between SessionStart backup syncs."
+  },
+  "sync.content": {
+    "type": "bool",
+    "description": "Fast-forward-pull the personal content overlay too (same strict-safe ff-only treatment as team layers). No-op on a single-repo legacy layout."
+  },
+  "evaluator.cap_bytes": {
+    "type": "number",
+    "min": 1,
+    "description": "Byte cap for the evaluator inbox before aggregation."
+  },
+  "evaluator.dashboard_sessions": {
+    "type": "number",
+    "min": 1,
+    "description": "Ceiling on how many sessions the dashboard renders (the day window is the primary selector)."
+  },
+  "evaluator.dashboard_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Days of activity the dashboard renders, anchored to the newest session. 0 = no time bound."
+  },
+  "evaluator.min_tool_calls": {
+    "type": "number",
+    "min": 0,
+    "description": "Fewest tool calls a session needs to appear in the dashboard trend. 0 = render every session."
+  },
+  "evaluator.dashboard_open": {
+    "type": "bool",
+    "description": "Auto-open the dashboard once per boot on SessionStart. Dashboard self-gating \u2014 read-only in the panel."
+  },
+  "evaluator.dashboard_serve": {
+    "type": "bool",
+    "description": "Serve the dashboard via the local backend instead of a static file. Dashboard self-gating \u2014 read-only in the panel."
+  },
+  "evaluator.dashboard_port": {
+    "type": "number",
+    "min": 1024,
+    "max": 65535,
+    "description": "Port the dashboard server binds to."
+  },
+  "evaluator.suggestions_top": {
+    "type": "number",
+    "min": 1,
+    "description": "How many open suggestions the Review pass ranks."
+  },
+  "evaluator.implement": {
+    "type": "bool",
+    "description": "Enable the suggestion Implement/Reject pipeline."
+  },
+  "evaluator.implement_mode": {
+    "type": "enum",
+    "options": [
+      "pr",
+      "direct"
+    ],
+    "description": "How an implement job lands its commit."
+  },
+  "evaluator.escalation_min_struggles": {
+    "type": "number",
+    "min": 1,
+    "description": "Struggles required before mid-session escalation fires."
+  },
+  "evaluator.escalation_min_prompts": {
+    "type": "number",
+    "min": 1,
+    "description": "Prompts required before mid-session escalation fires."
+  },
+  "evaluator.retain_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Metrics retention (days); 0 = unlimited."
+  },
+  "evaluator.wiki_nav": {
+    "type": "bool",
+    "description": "Render the wiki sidebar nav in the dashboard."
+  },
+  "evaluator.wiki_mermaid": {
+    "type": "bool",
+    "description": "Render mermaid diagrams in rendered wiki pages."
+  },
+  "evaluator.toggle_ui": {
+    "type": "bool",
+    "description": "Render the Feature Toggles panel and expose its API routes. Dashboard self-gating \u2014 read-only in the panel."
+  },
+  "skills.split_kb": {
+    "type": "number",
+    "min": 1,
+    "description": "Hard KB budget before a skill body is split."
+  },
+  "skills.soft_kb": {
+    "type": "number",
+    "min": 1,
+    "description": "Soft KB budget warning threshold for a skill body."
+  },
+  "skills.catalog_tok": {
+    "type": "number",
+    "min": 1,
+    "description": "Token budget for the always-loaded skill catalog."
+  },
+  "skills.max_per_run": {
+    "type": "number",
+    "min": 1,
+    "description": "Max skills the daily maintenance pass will split per run."
+  },
+  "skills.graduate_seen": {
+    "type": "number",
+    "min": 1,
+    "description": "`seen` count at which a lesson is flagged overdue to graduate."
+  },
+  "skills.graduate_kb": {
+    "type": "number",
+    "min": 1,
+    "description": "Body size (KB) at which a lesson is flagged overdue to graduate."
+  },
+  "team.merge": {
+    "type": "enum",
+    "options": [
+      "override",
+      "concatenate",
+      "team-only"
+    ],
+    "description": "How team + personal content layers combine."
+  },
+  "mcp.writes": {
+    "type": "bool",
+    "description": "Allow the MCP server to perform local toggle writes."
+  },
+  "mcp.contribute": {
+    "type": "bool",
+    "description": "Allow the MCP server to invoke np-core-contribute."
+  },
+  "resume.interval": {
+    "type": "number",
+    "min": 1,
+    "description": "Minimum seconds between resume-note writes."
+  },
+  "resume.max_age": {
+    "type": "number",
+    "min": 1,
+    "description": "How long (seconds) a resume note stays eligible for recall before going stale."
+  },
+  "resume.cron": {
+    "type": "bool",
+    "description": "Also write resume notes on a periodic cron, in addition to the SessionStart/UserPromptSubmit triggers. Off by default."
+  },
+  "resume.cron_min": {
+    "type": "number",
+    "min": 1,
+    "description": "Minutes between cron-triggered resume writes, when resume.cron is on."
+  },
+  "resume.active_window": {
+    "type": "number",
+    "min": 1,
+    "description": "Seconds of recent activity considered \"active\" when deciding whether to write a fresh resume note."
+  },
+  "memory": {
+    "description": "Episodic working-memory capture, the back-capture sweep, and local promotion into memory/episodic/."
+  },
+  "lessons": {
+    "description": "Auto-distilled patterns from past sessions (failure\u2192recovery and proven wins), optionally enforced at the tool call."
+  },
+  "gates": {
+    "description": "Per-gate override for the local spec-driven-development hooks (spec-guard, drift-guard, tier-guard) \u2014 a logged warn instead of a block, never a silent disable. CI-enforced required checks are unaffected; those use the GitHub ruleset bypass-actor list."
+  },
+  "directive": {
+    "description": "The \"consult nervepack first\" directive injected into every session at SessionStart."
+  },
+  "sync": {
+    "description": "Cross-machine sync of this nervepack checkout with origin/main."
+  },
+  "allowlist": {
+    "description": "Managed permission allowlist for common read-only tool calls."
+  },
+  "evaluator": {
+    "description": "Per-session performance scoring, the dashboard, and the suggestion review/implement pipeline."
+  },
+  "skills": {
+    "description": "Daily skill-body budget enforcement \u2014 auto-splits oversized skills into references/."
+  },
+  "team": {
+    "description": "Optional team content overlay, layered above your personal overlay."
+  },
+  "mcp": {
+    "description": "The model-agnostic MCP server surface (tool-neutral access to nervepack's recall/toggle/sync)."
+  },
+  "maintain": {
+    "description": "Weekly engine maintenance \u2014 parent toggle for the refine and compact passes."
+  },
+  "memory.drain_grace_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Days a note may sit in the episodic inbox with the episodic layer unmoved before the doctor's episodic-freshness check calls the drain broken."
+  },
+  "maintain.freshness_grace_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Extra days past a maintenance job's cadence before the doctor's maintenance-freshness check calls it stale."
+  },
+  "maintain.refine": {
+    "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
+  },
+  "maintain.compact": {
+    "description": "Weekly skill dedup + split-proposal pass."
+  },
+  "pii_filter": {
+    "description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."
+  },
+  "resume": {
+    "description": "Deterministic \"where we left off\" pointer \u2014 writes and recalls a resume note across sessions."
+  },
+  "turn_gate.ui": {
+    "type": "enum",
+    "options": [
+      "block",
+      "warn",
+      "off"
+    ],
+    "description": "Turn edited a UI file but never showed the result. Blocks once per turn."
+  },
+  "turn_gate.diff": {
+    "type": "enum",
+    "options": [
+      "warn",
+      "off"
+    ],
+    "description": "Turn edited markdown but delivered no rendered diff."
+  },
+  "turn_gate.form": {
+    "type": "enum",
+    "options": [
+      "block",
+      "warn",
+      "off"
+    ],
+    "description": "Closing message scores above the form threshold on the STE linter. `block` forces a rewrite in the same turn; the reader still saw the first draft once, so keep form_directive on to make that rare."
+  },
+  "turn_gate.form_threshold": {
+    "type": "number",
+    "min": 1,
+    "description": "Violations per 100 words before the form check warns. Engine docs average 5.17."
+  },
+  "turn_gate.timeout_s": {
+    "type": "number",
+    "min": 1,
+    "description": "Timeout (seconds) for the form check's linter subprocess. On timeout that check is skipped; the gate itself has no other blocking call."
+  },
+  "gates.spec_guard.enforce": {
+    "type": "bool",
+    "description": "Whether the local spec-guard pre-check blocks or warns at the tool call. Does not affect the spec-guard CI job \u2014 that is a separate, already-logged override via the GitHub ruleset bypass-actor list."
+  },
+  "gates.drift_guard.enforce": {
+    "type": "bool",
+    "description": "Whether the drift-guard hook blocks or warns when an edit falls outside a change-spec's declared blast_radius."
+  },
+  "gates.tier_guard.enforce": {
+    "type": "bool",
+    "description": "Whether the tier-guard pre-check blocks or warns when a change's declared tier does not match its touched paths."
+  },
+  "turn_gate.subagent": {
+    "type": "enum",
+    "options": [
+      "on",
+      "off"
+    ],
+    "description": "Run the form check on SubagentStop as well as Stop. The delivery checks (UI, diff) never run for a subagent."
+  },
+  "form_gate.prose_ext": {
+    "type": "string",
+    "description": "Comma-separated file extensions the form gate treats as prose. Empty uses the built-in list. Source files stay out: the linter strips code and scoring the remainder is noise."
+  },
+  "form_directive": {
+    "description": "Inject the output contract on every prompt, so the first draft is clean instead of corrected after the reader saw it. Text is overridable at <content_dir>/config/form-directive.txt."
+  },
+  "form_directive.cadence": {
+    "type": "enum",
+    "options": [
+      "turn",
+      "session"
+    ],
+    "description": "`turn` injects every prompt (the default, and what makes prevention hold late in a long session). `session` injects once."
+  }
 }

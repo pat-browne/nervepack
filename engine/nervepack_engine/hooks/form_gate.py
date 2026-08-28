@@ -23,7 +23,36 @@ import sys
 import np_content
 import np_toggle
 
-_PROSE_EXT = (".md", ".mdx", ".html", ".txt")
+_PROSE_EXT_DEFAULT = ".md,.mdx,.markdown,.html,.txt,.rst,.adoc"
+
+# Text keys worth linting on a tool whose payload shape is not worth hardcoding.
+# MCP schemas drift, and a gate that silently stops matching after a server
+# renames a field is worse than one that scans a short candidate list.
+_TEXT_KEYS = ("content", "text", "body", "comment", "markdown", "message",
+              "description")
+
+# suffix -> label. The four originals plus the surfaces the skill names and the
+# gate never saw: review-thread replies, work-item comments, wiki upserts,
+# Notion page creation, Slack drafts and canvases, mail.
+_GATED_MCP = {
+    "slack_send_message": "Slack message",
+    "slack_send_message_draft": "Slack draft",
+    "slack_schedule_message": "Slack message",
+    "slack_create_canvas": "Slack canvas",
+    "slack_update_canvas": "Slack canvas",
+    "repo_pull_request_write": "PR description",
+    "repo_pull_request_thread_write": "PR thread reply",
+    "wit_work_item_write": "work-item description",
+    "wit_work_item_comment_write": "work-item comment",
+    "wiki_upsert_page": "wiki page",
+    "notion-update-page": "Notion page",
+    "notion-create-pages": "Notion page",
+    "notion-create-comment": "Notion comment",
+    "create_draft": "mail draft",
+    "send_message": "message",
+    "reply": "mail reply",
+    "forward": "mail forward",
+}
 
 # Mirrors turn_gate._EXEMPT so the two prose gates agree on what is not prose.
 _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules"
@@ -39,8 +68,20 @@ _RULE_LABEL = {
 }
 
 
+def _prose_ext():
+    """Extensions the gate treats as prose, from the toggle.
+
+    A param rather than a constant so one person can widen it without the
+    engine imposing that choice on a forker. Source files stay out by default:
+    the linter strips code, and scoring what is left of a module is noise.
+    """
+    raw = np_toggle.param("form_gate.prose_ext", _PROSE_EXT_DEFAULT) or _PROSE_EXT_DEFAULT
+    exts = tuple(e.strip().lower() for e in raw.split(",") if e.strip())
+    return exts or tuple(_PROSE_EXT_DEFAULT.split(","))
+
+
 def _is_prose_path(path):
-    return bool(path) and path.lower().endswith(_PROSE_EXT)
+    return bool(path) and path.lower().endswith(_prose_ext())
 
 
 def _split_globs(raw):
@@ -127,6 +168,29 @@ def _strip_quoted(text):
     return text
 
 
+def _added_text(path, content):
+    """Only what this write ADDS to the file already on disk.
+
+    Write replaces a whole file, so linting the payload scores prose the author
+    may never have touched. Edit already lints only `new_string`. Matching that
+    here is what removes the 579 pre-existing violations as a reason to keep
+    `categorical` at warn: a rewrite of an old doc is judged on what it
+    introduces, not on what it inherited.
+
+    A line-set comparison, not a real diff. A moved line reads as unchanged,
+    which is correct (it was already the author's text), and a reworded line
+    reads as added, which is also correct. Any read error means the file is new
+    or unreadable, so everything in it counts as new.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            before = set(fh.read().splitlines())
+    except OSError:
+        return content
+    return "\n".join(line for line in (content or "").splitlines()
+                      if line.strip() and line not in before)
+
+
 def _prose_file(path, content):
     if not _is_prose_path(path) or _is_exempt_path(path):
         return (None, "")
@@ -150,12 +214,18 @@ def _mcp_suffix(tool_name):
 def _extract(tool_name, tool_input):
     """Return (text, label) for a gated tool, or (None, "") to allow."""
     if tool_name == "Write":
-        return _prose_file(tool_input.get("file_path"),
-                           tool_input.get("content"))
+        path = tool_input.get("file_path")
+        return _prose_file(path, _added_text(path, tool_input.get("content")))
     if tool_name == "Edit":
         return _prose_file(tool_input.get("file_path"),
                            tool_input.get("new_string"))
+    if tool_name == "SendUserFile":
+        # The files themselves were gated when they were written. The caption
+        # is new prose that nothing else sees.
+        return (tool_input.get("caption") or None, "file caption")
     if tool_name == "Artifact":
+        if tool_input.get("action") == "reply":
+            return (tool_input.get("text") or None, "artifact comment reply")
         path = tool_input.get("file_path")
         if not _is_prose_path(path) or _is_exempt_path(path):
             return (None, "")
@@ -169,15 +239,41 @@ def _extract(tool_name, tool_input):
         return (message, "commit message") if message else (None, "")
 
     suffix = _mcp_suffix(tool_name)
-    if suffix == "slack_send_message":
-        return (tool_input.get("text") or None, "Slack message")
-    if suffix == "repo_pull_request_write":
-        return (tool_input.get("description") or None, "PR description")
-    if suffix == "notion-update-page":
-        return (_notion_prose(tool_input), "Notion page")
+    label = _GATED_MCP.get(suffix)
+    if not label:
+        return (None, "")
+    # Two payloads need structure walked rather than keys read.
+    if suffix.startswith("notion-"):
+        return (_notion_prose(tool_input), label)
     if suffix == "wit_work_item_write":
-        return (_work_item_prose(tool_input), "work-item description")
-    return (None, "")
+        return (_work_item_prose(tool_input), label)
+    if suffix == "repo_pull_request_write":
+        return (tool_input.get("description") or None, label)
+    return (_keyed_prose(tool_input), label)
+
+
+def _keyed_prose(tool_input):
+    """Concatenate the string values under any known text key, at any depth.
+
+    Depth matters: a Slack canvas and a wiki upsert both nest their body one or
+    two levels down, and a top-level-only read would gate neither.
+    """
+    chunks = []
+
+    def walk(node, keyed):
+        if isinstance(node, str):
+            if keyed:
+                chunks.append(node)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, keyed)
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, keyed or key in _TEXT_KEYS)
+
+    walk(tool_input, False)
+    joined = "\n".join(c for c in chunks if c.strip())
+    return joined or None
 
 
 def _notion_prose(tool_input):
@@ -200,7 +296,8 @@ def _notion_prose(tool_input):
                 if key in ("content", "new_str", "text", "body"):
                     walk(value)
 
-    walk(tool_input.get("command") or tool_input.get("content") or tool_input)
+    walk(tool_input.get("command") or tool_input.get("pages")
+         or tool_input.get("content") or tool_input)
     joined = "\n".join(c for c in chunks if c.strip())
     return joined or None
 

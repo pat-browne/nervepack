@@ -81,7 +81,8 @@ class TestFormGateComposition(unittest.TestCase):
             rows = [r for r in fh if "form-gate" in r and not r.startswith("#")]
         matchers = {r.split("|")[1] for r in rows}
         self.assertEqual(matchers,
-                         {"Write", "Edit", "Artifact", "Bash", "mcp__.*"})
+                         {"Write", "Edit", "Artifact", "Bash", "SendUserFile",
+                          "mcp__.*"})
 
     def test_toggle_row_exists_with_expected_params(self):
         with open(_TOGGLES, encoding="utf-8") as fh:
@@ -89,7 +90,7 @@ class TestFormGateComposition(unittest.TestCase):
         self.assertEqual(len(row), 1, "exactly one form_gate row")
         params = row[0].split("|")[4]
         for key in ("categorical=", "rate=", "rate_threshold=", "timeout_s=",
-                    "exempt_globs="):
+                    "exempt_globs=", "prose_ext="):
             self.assertIn(key, params)
         self.assertNotIn(" ", params.strip(),
                          "np_toggle splits params on space or comma")
