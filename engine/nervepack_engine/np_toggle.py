@@ -26,6 +26,7 @@ import tempfile
 import np_paths
 import np_dirs
 import np_host
+import np_git_publish
 
 _WS = " \t\r\v\f"            # POSIX [[:space:]] minus the per-line newline
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -472,7 +473,9 @@ def commit_shared(message, np_root=None):
     _git(["add", conf])
     r = _git(["commit", "-q", "-m", message, "--", conf])
     if r is not None and r.returncode == 0:
-        _git(["push", "-q", "origin", "HEAD:main"])
+        ok, why = np_git_publish.push_to_main(np)
+        if not ok:
+            print("np-toggle: %s" % why, file=sys.stderr)
 
 
 # --- managed allowlist (90/91-*.sh ported to stdlib json) -------------------

@@ -9,6 +9,19 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Fixed
+- **The scheduled writers publish loudly or not at all.** `np_aggregate`,
+  `np_skill_maintain` and `np_toggle` each pushed `HEAD:main` without checking that
+  HEAD was `main`, and discarded the result (`check=False`, both streams to
+  `DEVNULL`). Park a checkout on a feature branch and every push became a rejected
+  non-fast-forward while the job still exited 0. Observed 2026-08-28 on
+  `nervepack-content`: 33 cron commits accumulated over two days on a branch 198
+  behind `main`, silently, and the skills those crons had split were unreadable on
+  that machine. The new `np_git_publish.push_to_main()` refuses when HEAD is not
+  `main`, returns git's stderr when a push is rejected, and never raises. Each caller
+  prints the reason and carries it in its status line. `NP_AGG_NO_PUSH=1` mirrors the
+  existing `SKILL_MAINTAIN_NO_PUSH=1` for tests that cover commit behaviour only.
+
 ### Changed
 - **The bash model-seam wrapper `np-llm.sh` is retired; `np_model.py` is the sole
   model seam (phase 19 of the bash→Python migration — the highest-blast-radius seam,

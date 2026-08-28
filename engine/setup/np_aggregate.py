@@ -28,6 +28,7 @@ import sys
 import time
 
 import np_content
+import np_git_publish
 import np_toggle
 import np_dirs
 
@@ -185,9 +186,16 @@ def aggregate():
             time.strftime("%Y-%m-%d", time.gmtime()), n)
         commit = subprocess.run(["git", "-C", content, "commit", "-q", "-m", msg, "--"] + paths,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if commit.returncode == 0:
-            subprocess.run(["git", "-C", content, "push", "-q", "origin", "HEAD:main"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        # NP_AGG_NO_PUSH mirrors SKILL_MAINTAIN_NO_PUSH: commit locally, publish
+        # never. Tests that assert commit behaviour set it, so a sandbox with no
+        # reachable origin does not report a publish failure it never wanted.
+        if commit.returncode == 0 and os.environ.get("NP_AGG_NO_PUSH") != "1":
+            ok, why = np_git_publish.push_to_main(content)
+            if not ok:
+                # Loud, not silent. A discarded push result stranded 33 commits
+                # for two days (see np_git_publish's module docstring).
+                print("np-aggregate: %s" % why, file=sys.stderr)
+                return "aggregated (NOT PUBLISHED: %s)" % why
     except OSError:
         pass
     return "aggregated"
