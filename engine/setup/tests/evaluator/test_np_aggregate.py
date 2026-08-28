@@ -54,6 +54,10 @@ class TestNpAggregate(unittest.TestCase):
             "NP_CONTENT_DIR": self.repo,
             "EVAL_INBOX": self.inbox,
             "METRICS_FILE": self.metrics,
+            # These tests cover commit behaviour, not publishing. The sandbox has
+            # no reachable origin, so without this every case would report the
+            # publish failure the branch guard now surfaces (2026-08-28).
+            "NP_AGG_NO_PUSH": "1",
             "NP_RESOLVED_SUGGESTIONS": os.path.join(self.repo, "dashboard", "data", "resolved-suggestions.txt"),
         }, clear=False)
         self._env.start()

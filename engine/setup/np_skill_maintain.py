@@ -25,6 +25,7 @@ import tempfile
 
 import np_architecture_freshness
 import np_content
+import np_git_publish
 import np_graduation_detect
 import np_llm_agent
 import np_skill_budget
@@ -306,8 +307,15 @@ def maintain():
             if repo not in commit_repos:
                 commit_repos.append(repo)
 
+    unpublished = []
     if os.environ.get("SKILL_MAINTAIN_NO_PUSH") != "1":
         for repo in commit_repos:
-            _git(repo, "push", "-q", "origin", "HEAD:main")
+            ok, why = np_git_publish.push_to_main(repo)
+            if not ok:
+                print("np-skill-maintain: %s" % why, file=sys.stderr)
+                unpublished.append(why)
 
-    return "split %d skill(s) across %d repo(s)" % (committed, len(commit_repos))
+    status = "split %d skill(s) across %d repo(s)" % (committed, len(commit_repos))
+    if unpublished:
+        status += " (NOT PUBLISHED: %s)" % "; ".join(unpublished)
+    return status
