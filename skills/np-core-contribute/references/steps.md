@@ -68,11 +68,10 @@
    git -C "$REPO" commit -m "skill(<name>): <what changed>" -- <changed paths>
    ```
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
-9. **Ask before pushing.** Push is the action that affects another machine.
-   Default to `git -C "$REPO" push` only after the user confirms — unless
-   they've said "auto-push" or this run was invoked from a scheduled agent
-   (which has a standing mandate; see `agents/np-flow-scheduled-refine.md` and
-   `agents/np-flow-weekly-compact.md`). **Engine changes never direct-push** —
-   `np-core-*`/`np-flow-*` skills and anything under `engine/` or `dashboard/` go
-   through a PR that merges on green CI, with a company-neutral message. The private
-   overlay has no CI gate and may be pushed directly.
+9. **Push the overlay without asking.** Fetch, rebase onto `origin/main`, then
+   `git -C "$REPO" push` — no confirmation gate. The private overlay has no CI
+   gate, so asking turns a finished capture into an extra round trip. Fast-forward
+   `origin/main` when the branch is exactly main plus this commit. **Engine
+   changes never direct-push** — `np-core-*`/`np-flow-*` skills and anything
+   under `engine/` or `dashboard/` still go through a PR that merges on green
+   CI, with a company-neutral message.
