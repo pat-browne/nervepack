@@ -144,11 +144,14 @@ def _comment_ext():
 
 def _comment_block_max():
     try:
-        return int(np_toggle.param("form_gate.comment_block_max",
+        value = int(np_toggle.param("form_gate.comment_block_max",
                                     str(_COMMENT_BLOCK_MAX_DEFAULT))
-                   or _COMMENT_BLOCK_MAX_DEFAULT)
+                    or _COMMENT_BLOCK_MAX_DEFAULT)
     except (TypeError, ValueError):
         return _COMMENT_BLOCK_MAX_DEFAULT
+    # A nonpositive ceiling would make every comment block exceed it and block
+    # all comments. Treat a misconfigured value as the default.
+    return value if value > 0 else _COMMENT_BLOCK_MAX_DEFAULT
 
 
 def _is_comment_path(path):

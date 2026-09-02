@@ -468,6 +468,15 @@ class TestCommentLint(unittest.TestCase):
         else:
             os.environ["FORM_GATE_RETRY_DIR"] = self._prior
 
+    def test_nonpositive_block_max_falls_back_to_default(self):
+        for bad in ("-5", "0"):
+            with mock.patch.object(
+                    form_gate.np_toggle, "param",
+                    side_effect=lambda k, d=None, b=bad:
+                    b if k == "form_gate.comment_block_max" else d):
+                self.assertEqual(form_gate._comment_block_max(),
+                                 form_gate._COMMENT_BLOCK_MAX_DEFAULT)
+
     def _run(self, payload, params=None, lint=None):
         params = dict(params or {})
         patches = [
