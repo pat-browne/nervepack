@@ -501,8 +501,13 @@ def _emit_escalation_struggle(sid, payload, label, detail):
             }],
         }
         np_capture.append_note(record)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fail-open: a struggle-capture loss must never change the decision. Log
+        # a signal so an operator can see the escalation pattern went unrecorded.
+        try:
+            np_toggle.signal(sid, "form-gate-struggle-emit-failed :: %s" % exc)
+        except Exception:
+            pass
 
 
 def _run_block(sid, target, label, violations, payload):
@@ -517,10 +522,14 @@ def _run_block(sid, target, label, violations, payload):
     # persisted. A failed write falls through to escalation, never to another
     # deny -- otherwise an unwritable cache dir traps the user in permanent
     # denies with no way out.
-    if count < 2 and _write_retry(sid, target, count + 1):
-        message = ("%s breaks an absolute rule of np-flow-concise-output: %s. "
-                   "Rewrite without them and retry." % (label, detail))
-        return _deny(message)
+    if count < 2:
+        if _write_retry(sid, target, count + 1):
+            message = ("%s breaks an absolute rule of np-flow-concise-output: %s. "
+                       "Rewrite without them and retry." % (label, detail))
+            return _deny(message)
+        # Counter did not persist. Escalate rather than loop, and signal so this
+        # is distinguishable from a genuine third strike when debugging.
+        np_toggle.signal(sid, "form-gate-cache-write-failed :: %s" % label)
 
     _clear_retry(sid, target)
     message = ("%s still breaks an absolute rule of np-flow-concise-output: %s. "
