@@ -15,6 +15,36 @@ structure, and extended them with nervepack-specific rules.
 Source: https://github.com/multica-ai/andrej-karpathy-skills
 
 ------------------------------------------------------------------------------
+designer-skills (design process sequence)
+------------------------------------------------------------------------------
+The `np-flow-design` skill's sequence (mode, interrogate, brief, tokens, build,
+review), its `.design/<feature>/` artifact layout, and the review checklist and
+severity buckets in `np-kb-design-critique` adapt material from
+"designer-skills" (julianoczkowski/designer-skills), Apache License 2.0.
+nervepack condensed eight skills into one flow, replaced the browser-only
+capture step with a per-surface table, and added the Flutter arm.
+Source: https://github.com/julianoczkowski/designer-skills
+
+------------------------------------------------------------------------------
+impeccable (design vocabulary and modes)
+------------------------------------------------------------------------------
+The `np-flow-design` skill's four surface modes (Persuade, Operate, Read,
+Experience), its steering-verb table, the brief-wins and refinement-versus-
+redesign rules, and the bounded-verification rule adapt material from
+"impeccable" (pbakaus/impeccable), Apache License 2.0. nervepack took the
+vocabulary and the rules only; none of the project's scripts, hooks, CLI, or
+PRODUCT.md / DESIGN.md artifact machinery is used.
+Source: https://github.com/pbakaus/impeccable
+
+------------------------------------------------------------------------------
+material-3-skill (Material Design 3 roles)
+------------------------------------------------------------------------------
+The Material 3 color-role vocabulary and the component name mapping in
+`np-kb-flutter-ui-design` adapt material from "material-3-skill"
+(hamen/material-3-skill), MIT License.
+Source: https://github.com/hamen/material-3-skill
+
+------------------------------------------------------------------------------
 superpowers (process workflow patterns)
 ------------------------------------------------------------------------------
 nervepack's process expectations (explore-before-build, test-first, root-cause
