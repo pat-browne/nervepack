@@ -21,6 +21,13 @@ back to "" / allow, never a crash.
 
 Channel A reads the linter's own violation counts and never reimplements its
 regexes. The linter already excludes possessives from the contraction count.
+
+`comment_ext` (empty by default -- inert until set) additionally scopes
+source-file comments/docstrings into the same linter, via
+`np_comment_extract.py`. In `block` mode only, a comment block longer than
+`comment_block_max` lines injects a synthetic `long_comment_block` violation
+that rides the same deny/retry/escalate machine as every other blocking rule.
+See change-specs/feat-form-gate-comment-lint.md.
 """
 import fnmatch
 import hashlib
@@ -32,11 +39,18 @@ import sys
 import time
 
 import np_capture
+import np_comment_extract
 import np_content
 import np_dirs
 import np_toggle
 
 _PROSE_EXT_DEFAULT = ".md,.mdx,.markdown,.html,.txt,.rst,.adoc"
+
+# Empty by default: the comment-lint feature is inert until a maintainer
+# opts a source-file scope in via the toggle. See change-specs/
+# feat-form-gate-comment-lint.md.
+_COMMENT_EXT_DEFAULT = ""
+_COMMENT_BLOCK_MAX_DEFAULT = 20
 
 # Text keys worth linting on a tool whose payload shape is not worth hardcoding.
 # MCP schemas drift, and a gate that silently stops matching after a server
@@ -85,7 +99,7 @@ _CATEGORICAL = ("em_dash", "semicolon", "contraction", "marketing_adjective")
 # the `(>20w)`/`(>6s)` suffixes -- a bare `long_sentence` would `.get()` to 0
 # against the real linter and silently never block.
 _BLOCKING = ("em_dash", "semicolon", "marketing_adjective",
-             "long_sentence(>20w)", "long_paragraph(>6s)")
+             "long_sentence(>20w)", "long_paragraph(>6s)", "long_comment_block")
 
 _RULE_LABEL = {
     "em_dash": "em dash",
@@ -94,6 +108,10 @@ _RULE_LABEL = {
     "marketing_adjective": "marketing adjective",
     "long_sentence(>20w)": "long sentence (>20w)",
     "long_paragraph(>6s)": "long paragraph (>6s)",
+    # Static fallback only -- run() always supplies the real threshold via
+    # _blocking_hits' extra_labels, since the ceiling is a toggle param, not
+    # a constant.
+    "long_comment_block": "long comment block",
 }
 
 
@@ -111,6 +129,39 @@ def _prose_ext():
 
 def _is_prose_path(path):
     return bool(path) and path.lower().endswith(_prose_ext())
+
+
+def _comment_ext():
+    """Extensions the gate scans for comment prose, from the toggle.
+
+    Empty by default -- unlike `_prose_ext`, an unset value means the
+    comment-lint feature is INERT, not "fall back to a built-in list". A
+    maintainer opts a scope in explicitly.
+    """
+    raw = np_toggle.param("form_gate.comment_ext", _COMMENT_EXT_DEFAULT) or _COMMENT_EXT_DEFAULT
+    return tuple(e.strip().lower() for e in raw.split(",") if e.strip())
+
+
+def _comment_block_max():
+    try:
+        value = int(np_toggle.param("form_gate.comment_block_max",
+                                    str(_COMMENT_BLOCK_MAX_DEFAULT))
+                    or _COMMENT_BLOCK_MAX_DEFAULT)
+    except (TypeError, ValueError):
+        return _COMMENT_BLOCK_MAX_DEFAULT
+    # A nonpositive ceiling would make every comment block exceed it and block
+    # all comments. Treat a misconfigured value as the default.
+    return value if value > 0 else _COMMENT_BLOCK_MAX_DEFAULT
+
+
+def _is_comment_path(path):
+    """A source file in the comment-lint scope. Prose files are excluded
+    outright -- they already have their own path through `_prose_file`, and
+    must never also pick up the comment-lint synthetic violation key."""
+    if not path:
+        return False
+    exts = _comment_ext()
+    return bool(exts) and path.lower().endswith(exts) and not _is_prose_path(path)
 
 
 def _split_globs(raw):
@@ -231,6 +282,33 @@ def _prose_file(path, content):
     return (content or None, os.path.basename(path))
 
 
+def _comment_source_text(tool_name, tool_input):
+    """(path, content) for a Write/Edit, the same content each already lints
+    as prose -- the text this write ADDS for Write, `new_string` for Edit."""
+    path = tool_input.get("file_path")
+    if tool_name == "Write":
+        return path, _added_text(path, tool_input.get("content"))
+    return path, tool_input.get("new_string")
+
+
+def _comment_prose(path, content):
+    """(comment_text, max_block_lines) for a comment-scoped path, via
+    np_comment_extract. ("", 0) for anything it can't handle."""
+    return np_comment_extract.extract_comments(content, os.path.splitext(path or "")[1])
+
+
+def _comment_max_block(tool_name, tool_input):
+    """max_block_lines for a comment-scoped Write/Edit, else 0 -- including
+    for every prose file, so the length ceiling never fires on prose."""
+    if tool_name not in ("Write", "Edit"):
+        return 0
+    path, content = _comment_source_text(tool_name, tool_input)
+    if not _is_comment_path(path) or _is_exempt_path(path):
+        return 0
+    _, max_block = _comment_prose(path, content)
+    return max_block
+
+
 def _git_commit_message(command):
     if not command or not _GIT_COMMIT.search(command):
         return None
@@ -247,12 +325,14 @@ def _mcp_suffix(tool_name):
 
 def _extract(tool_name, tool_input):
     """Return (text, label) for a gated tool, or (None, "") to allow."""
-    if tool_name == "Write":
-        path = tool_input.get("file_path")
-        return _prose_file(path, _added_text(path, tool_input.get("content")))
-    if tool_name == "Edit":
-        return _prose_file(tool_input.get("file_path"),
-                           tool_input.get("new_string"))
+    if tool_name in ("Write", "Edit"):
+        path, content = _comment_source_text(tool_name, tool_input)
+        if _is_comment_path(path) and not _is_exempt_path(path):
+            comment_text, _ = _comment_prose(path, content)
+            if not comment_text:
+                return (None, "")
+            return (comment_text, os.path.basename(path))
+        return _prose_file(path, content)
     if tool_name == "SendUserFile":
         # The files themselves were gated when they were written. The caption
         # is new prose that nothing else sees.
@@ -409,8 +489,9 @@ def _categorical_hits(violations):
             if int(violations.get(rule) or 0) > 0]
 
 
-def _blocking_hits(violations):
-    return [(_RULE_LABEL[rule], int(violations.get(rule) or 0))
+def _blocking_hits(violations, extra_labels=None):
+    labels = _RULE_LABEL if not extra_labels else dict(_RULE_LABEL, **extra_labels)
+    return [(labels[rule], int(violations.get(rule) or 0))
             for rule in _BLOCKING
             if int(violations.get(rule) or 0) > 0]
 
@@ -510,8 +591,8 @@ def _emit_escalation_struggle(sid, payload, label, detail):
             pass
 
 
-def _run_block(sid, target, label, violations, payload):
-    hits = _blocking_hits(violations)
+def _run_block(sid, target, label, violations, payload, extra_labels=None):
+    hits = _blocking_hits(violations, extra_labels)
     if not hits:
         _clear_retry(sid, target)
         return ""
@@ -577,8 +658,16 @@ def run(payload_text):
     categorical = _mode("form_gate.categorical", "ask", ("ask", "warn", "off", "block"))
 
     if categorical == "block":
+        extra_labels = None
+        comment_block_max = _comment_block_max()
+        max_block = _comment_max_block(tool_name, tool_input)
+        if max_block > comment_block_max:
+            violations = dict(violations)
+            violations["long_comment_block"] = 1
+            extra_labels = {"long_comment_block":
+                            "long comment block (>%d lines)" % comment_block_max}
         target = _target(tool_name, tool_input, label)
-        return _run_block(sid, target, label, violations, payload)
+        return _run_block(sid, target, label, violations, payload, extra_labels)
 
     hits = _categorical_hits(violations) if categorical != "off" else []
 

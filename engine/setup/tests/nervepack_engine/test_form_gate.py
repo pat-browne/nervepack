@@ -454,5 +454,113 @@ class TestBlockMode(unittest.TestCase):
         self.assertEqual(notes, [])
 
 
+class TestCommentLint(unittest.TestCase):
+    """form_gate.comment_ext -- code-comment linting, inert by default."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self._prior = os.environ.get("FORM_GATE_RETRY_DIR")
+        os.environ["FORM_GATE_RETRY_DIR"] = os.path.join(self.tmp, "form-gate-retry")
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("FORM_GATE_RETRY_DIR", None)
+        else:
+            os.environ["FORM_GATE_RETRY_DIR"] = self._prior
+
+    def test_nonpositive_block_max_falls_back_to_default(self):
+        for bad in ("-5", "0"):
+            with mock.patch.object(
+                    form_gate.np_toggle, "param",
+                    side_effect=lambda k, d=None, b=bad:
+                    b if k == "form_gate.comment_block_max" else d):
+                self.assertEqual(form_gate._comment_block_max(),
+                                 form_gate._COMMENT_BLOCK_MAX_DEFAULT)
+
+    def _run(self, payload, params=None, lint=None):
+        params = dict(params or {})
+        patches = [
+            mock.patch.object(form_gate.np_toggle, "enabled", return_value=True),
+            mock.patch.object(form_gate.np_toggle, "param",
+                              side_effect=lambda k, d=None: params.get(k, d)),
+            mock.patch.object(form_gate.np_toggle, "signal", return_value=None),
+            mock.patch.object(form_gate.np_capture, "append_note", return_value=True),
+        ]
+        if lint is not None:
+            patches.append(mock.patch.object(form_gate, "_lint", return_value=lint))
+        for p in patches:
+            p.start()
+        try:
+            return form_gate.run(payload)
+        finally:
+            for p in reversed(patches):
+                p.stop()
+
+    def _write(self, content, name="a.py", sid="s1"):
+        return json.dumps({"session_id": sid, "cwd": "/x", "tool_name": "Write",
+                           "tool_input": {"file_path": "/x/" + name,
+                                          "content": content}})
+
+    def _clean(self):
+        return {"violations": {
+            "em_dash": 0, "semicolon": 0, "contraction": 0,
+            "marketing_adjective": 0, "long_sentence(>20w)": 0,
+            "long_paragraph(>6s)": 0}, "total_per100w": 0.0}
+
+    def _dirty(self, **over):
+        v = {"em_dash": 0, "semicolon": 0, "contraction": 0,
+             "marketing_adjective": 0, "long_sentence(>20w)": 0,
+             "long_paragraph(>6s)": 0}
+        v.update(over)
+        return {"violations": v, "total_per100w": 0.0}
+
+    def test_scoped_python_comment_with_semicolon_blocks(self):
+        payload = self._write("# a clause; another clause\ncode = 1\n")
+        out = self._run(payload,
+                        params={"form_gate.categorical": "block",
+                                "form_gate.comment_ext": ".py"},
+                        lint=self._dirty(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+        self.assertIn("semicolon", data["permissionDecisionReason"])
+
+    def test_clean_python_comment_passes(self):
+        payload = self._write("# a clean note\ncode = 1\n")
+        out = self._run(payload,
+                        params={"form_gate.categorical": "block",
+                                "form_gate.comment_ext": ".py"},
+                        lint=self._clean())
+        self.assertEqual(out, "")
+
+    def test_long_comment_block_blocks_with_label(self):
+        content = "\n".join("# line %d" % i for i in range(1, 6)) + "\ncode = 1\n"
+        payload = self._write(content)
+        out = self._run(payload,
+                        params={"form_gate.categorical": "block",
+                                "form_gate.comment_ext": ".py",
+                                "form_gate.comment_block_max": "3"},
+                        lint=self._clean())
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+        self.assertIn("long comment block", data["permissionDecisionReason"])
+        self.assertIn("3", data["permissionDecisionReason"])
+
+    def test_comment_ext_empty_by_default_leaves_python_write_ungated(self):
+        payload = self._write("# a clause; another clause\ncode = 1\n")
+        out = self._run(payload,
+                        params={"form_gate.categorical": "block"},
+                        lint=self._dirty(semicolon=1))
+        self.assertEqual(out, "")
+
+    def test_prose_file_path_unchanged_and_never_gets_long_comment_block(self):
+        payload = self._write("A short clean sentence.", name="a.md")
+        out = self._run(payload,
+                        params={"form_gate.categorical": "block",
+                                "form_gate.comment_ext": ".py",
+                                "form_gate.comment_block_max": "1"},
+                        lint=self._clean())
+        self.assertEqual(out, "")
+
+
 if __name__ == "__main__":
     unittest.main()
