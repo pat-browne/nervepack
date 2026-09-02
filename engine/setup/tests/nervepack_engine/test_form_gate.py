@@ -301,5 +301,158 @@ class TestFormGateWindowsPaths(unittest.TestCase):
             "C:/Users/pat/Code/pbrowne-net"))
 
 
+class TestBlockMode(unittest.TestCase):
+    """form_gate.categorical=block: deny-retry-twice-then-escalate."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self._prior = os.environ.get("FORM_GATE_RETRY_DIR")
+        os.environ["FORM_GATE_RETRY_DIR"] = os.path.join(self.tmp, "form-gate-retry")
+
+    def tearDown(self):
+        if self._prior is None:
+            os.environ.pop("FORM_GATE_RETRY_DIR", None)
+        else:
+            os.environ["FORM_GATE_RETRY_DIR"] = self._prior
+
+    def _run(self, payload, params=None, lint=None):
+        params = dict(params or {})
+        params.setdefault("form_gate.categorical", "block")
+        notes = []
+        patches = [
+            mock.patch.object(form_gate.np_toggle, "enabled", return_value=True),
+            mock.patch.object(form_gate.np_toggle, "param",
+                              side_effect=lambda k, d=None: params.get(k, d)),
+            mock.patch.object(form_gate.np_toggle, "signal", return_value=None),
+            mock.patch.object(form_gate.np_capture, "append_note",
+                              side_effect=lambda rec: notes.append(rec) or True),
+        ]
+        if lint is not None:
+            patches.append(mock.patch.object(form_gate, "_lint", return_value=lint))
+        for p in patches:
+            p.start()
+        try:
+            out = form_gate.run(payload)
+        finally:
+            for p in reversed(patches):
+                p.stop()
+        return out, notes
+
+    def _write(self, content, name="a.md", sid="s1"):
+        return json.dumps({"session_id": sid, "cwd": "/x", "tool_name": "Write",
+                           "tool_input": {"file_path": "/x/" + name,
+                                          "content": content}})
+
+    def _violations(self, over=None, **kw):
+        # Keys mirror np-ste-lint.py verbatim, including the (>20w)/(>6s)
+        # suffixes the real linter emits. Pass the suffixed length keys via the
+        # `over` dict, since they are not valid Python kwarg names.
+        v = {"em_dash": 0, "semicolon": 0, "contraction": 0,
+             "marketing_adjective": 0, "long_sentence(>20w)": 0,
+             "long_paragraph(>6s)": 0}
+        v.update(kw)
+        if over:
+            v.update(over)
+        return {"violations": v, "total_per100w": 0.0}
+
+    def test_deny_under_budget(self):
+        out, notes = self._run(self._write("A clause; another."),
+                               lint=self._violations(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+        self.assertIn("semicolon", data["permissionDecisionReason"])
+        self.assertEqual(notes, [])
+
+    def test_escalates_to_ask_at_counter_two_and_emits_struggle(self):
+        payload = self._write("A clause; another.")
+        lint = self._violations(semicolon=1)
+        out1, notes1 = self._run(payload, lint=lint)
+        out2, notes2 = self._run(payload, lint=lint)
+        out3, notes3 = self._run(payload, lint=lint)
+
+        self.assertEqual(json.loads(out1)["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(json.loads(out2)["hookSpecificOutput"]["permissionDecision"], "deny")
+        data3 = json.loads(out3)["hookSpecificOutput"]
+        self.assertEqual(data3["permissionDecision"], "ask")
+        self.assertIn("tuning", data3["permissionDecisionReason"])
+        self.assertIn("np-ste-lint.py", data3["permissionDecisionReason"])
+
+        self.assertEqual(notes1, [])
+        self.assertEqual(notes2, [])
+        self.assertEqual(len(notes3), 1)
+        self.assertEqual(notes3[0]["session_id"], "s1")
+        self.assertEqual(len(notes3[0]["struggles"]), 1)
+        self.assertIn("semicolon", notes3[0]["struggles"][0]["symptom"])
+
+    def test_counter_clears_after_clean_pass(self):
+        payload = self._write("A clause; another.")
+        dirty = self._violations(semicolon=1)
+        clean = self._violations()
+
+        out1, _ = self._run(payload, lint=dirty)
+        self.assertEqual(json.loads(out1)["hookSpecificOutput"]["permissionDecision"], "deny")
+
+        out2, _ = self._run(payload, lint=clean)
+        self.assertEqual(out2, "")
+
+        # counter was cleared by the clean pass, so this starts over at deny
+        # rather than escalating.
+        out3, _ = self._run(payload, lint=dirty)
+        self.assertEqual(json.loads(out3)["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_fail_open_on_corrupt_counter_file(self):
+        payload = self._write("A clause; another.")
+        path = form_gate._retry_path("s1", "/x/a.md")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("not-a-number")
+
+        out, _ = self._run(payload, lint=self._violations(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+
+    def test_contraction_alone_does_not_block(self):
+        out, _ = self._run(self._write("It's fine."),
+                           lint=self._violations(contraction=1))
+        self.assertEqual(out, "")
+
+    def test_long_sentence_blocks(self):
+        out, _ = self._run(self._write("Text"),
+                           lint=self._violations({"long_sentence(>20w)": 1}))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+        self.assertIn("long sentence", data["permissionDecisionReason"])
+
+    def test_long_paragraph_blocks(self):
+        out, _ = self._run(self._write("Text"),
+                           lint=self._violations({"long_paragraph(>6s)": 1}))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "deny")
+        self.assertIn("long paragraph", data["permissionDecisionReason"])
+
+    def test_failed_counter_write_escalates_not_denies(self):
+        # If the retry counter cannot be persisted, the gate must escalate to
+        # ask rather than deny -- a stuck counter reads 0 forever, so denying
+        # would trap the user in permanent denies with no escalation.
+        payload = self._write("A clause; another.")
+        with mock.patch.object(form_gate, "_write_retry", return_value=False):
+            out, notes = self._run(payload, lint=self._violations(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "ask")
+        self.assertIn("tuning", data["permissionDecisionReason"])
+        self.assertEqual(len(notes), 1)
+
+    def test_ask_mode_unaffected_by_block_helpers(self):
+        """ask/warn/off keep returning ask/allow, never deny, when categorical
+        is not block -- TestChannels covers the bulk of this; this asserts the
+        new `block` branch in run() does not leak into the other modes."""
+        out, notes = self._run(self._write("A clause; another."),
+                               params={"form_gate.categorical": "ask"},
+                               lint=self._violations(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "ask")
+        self.assertEqual(notes, [])
+
+
 if __name__ == "__main__":
     unittest.main()
