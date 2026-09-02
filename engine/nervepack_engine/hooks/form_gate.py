@@ -122,8 +122,12 @@ def _prose_ext():
     engine imposing that choice on a forker. Source files stay out by default:
     the linter strips code, and scoring what is left of a module is noise.
     """
+    # Split on comma OR colon: np_toggle tokenizes the params field on
+    # `[ ,]+`, so a comma-joined list in toggles.conf gets shredded. A
+    # conf-set value must use `:` (as exempt_globs does); the Python default
+    # constant uses commas. Accept both.
     raw = np_toggle.param("form_gate.prose_ext", _PROSE_EXT_DEFAULT) or _PROSE_EXT_DEFAULT
-    exts = tuple(e.strip().lower() for e in raw.split(",") if e.strip())
+    exts = tuple(e.strip().lower() for e in re.split(r"[,:]", raw) if e.strip())
     return exts or tuple(_PROSE_EXT_DEFAULT.split(","))
 
 
@@ -138,8 +142,11 @@ def _comment_ext():
     comment-lint feature is INERT, not "fall back to a built-in list". A
     maintainer opts a scope in explicitly.
     """
+    # Split on comma OR colon. np_toggle tokenizes the params field on `[ ,]+`,
+    # so a conf-set comment_ext MUST be colon-joined (`.py:.ts:.sh`) to survive;
+    # a comma value resolves to only its first extension. See _prose_ext.
     raw = np_toggle.param("form_gate.comment_ext", _COMMENT_EXT_DEFAULT) or _COMMENT_EXT_DEFAULT
-    return tuple(e.strip().lower() for e in raw.split(",") if e.strip())
+    return tuple(e.strip().lower() for e in re.split(r"[,:]", raw) if e.strip())
 
 
 def _comment_block_max():

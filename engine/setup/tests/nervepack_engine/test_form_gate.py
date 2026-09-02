@@ -468,6 +468,15 @@ class TestCommentLint(unittest.TestCase):
         else:
             os.environ["FORM_GATE_RETRY_DIR"] = self._prior
 
+    def test_comment_ext_accepts_colon_joined_list(self):
+        # np_toggle splits the params field on commas, so a conf-set list must
+        # be colon-joined. _comment_ext must split it back into every extension.
+        with mock.patch.object(
+                form_gate.np_toggle, "param",
+                side_effect=lambda k, d=None:
+                ".py:.ts:.sh" if k == "form_gate.comment_ext" else d):
+            self.assertEqual(form_gate._comment_ext(), (".py", ".ts", ".sh"))
+
     def test_nonpositive_block_max_falls_back_to_default(self):
         for bad in ("-5", "0"):
             with mock.patch.object(
