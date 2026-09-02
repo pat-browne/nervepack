@@ -81,16 +81,19 @@ _CATEGORICAL = ("em_dash", "semicolon", "contraction", "marketing_adjective")
 # The `block` mode's violation set. Narrower than _CATEGORICAL: contraction is
 # common enough in ordinary writing that a hard block on it would fire
 # constantly, so it stays counted toward the rate channel only, never blocking.
-_BLOCKING = ("em_dash", "semicolon", "marketing_adjective", "long_sentence",
-             "long_paragraph")
+# The length keys MUST match np-ste-lint.py's own dict keys verbatim, including
+# the `(>20w)`/`(>6s)` suffixes -- a bare `long_sentence` would `.get()` to 0
+# against the real linter and silently never block.
+_BLOCKING = ("em_dash", "semicolon", "marketing_adjective",
+             "long_sentence(>20w)", "long_paragraph(>6s)")
 
 _RULE_LABEL = {
     "em_dash": "em dash",
     "semicolon": "semicolon",
     "contraction": "contraction",
     "marketing_adjective": "marketing adjective",
-    "long_sentence": "long sentence (>20w)",
-    "long_paragraph": "long paragraph (>6s)",
+    "long_sentence(>20w)": "long sentence (>20w)",
+    "long_paragraph(>6s)": "long paragraph (>6s)",
 }
 
 
@@ -447,12 +450,18 @@ def _read_retry(sid, target):
 
 
 def _write_retry(sid, target, count):
+    """Persist the retry count. Returns True on success, False if the counter
+    could not be written. The caller MUST NOT hard-deny on a False return: a
+    counter that never persists would read 0 every time, so the budget would
+    never fill and the user would be trapped in permanent denies with no
+    escalation. A failed write escalates instead."""
     try:
         os.makedirs(_retry_dir(), exist_ok=True)
         with open(_retry_path(sid, target), "w", encoding="utf-8") as fh:
             fh.write(str(count))
+        return True
     except OSError:
-        pass
+        return False
 
 
 def _clear_retry(sid, target):
@@ -504,14 +513,17 @@ def _run_block(sid, target, label, violations, payload):
 
     detail = ", ".join("%s x%d" % (name, count) for name, count in hits)
     count = _read_retry(sid, target)
-    if count < 2:
-        _write_retry(sid, target, count + 1)
+    # Deny only while the budget has room AND the incremented count actually
+    # persisted. A failed write falls through to escalation, never to another
+    # deny -- otherwise an unwritable cache dir traps the user in permanent
+    # denies with no way out.
+    if count < 2 and _write_retry(sid, target, count + 1):
         message = ("%s breaks an absolute rule of np-flow-concise-output: %s. "
                    "Rewrite without them and retry." % (label, detail))
         return _deny(message)
 
     _clear_retry(sid, target)
-    message = ("%s still breaks an absolute rule after 2 rewrites: %s. "
+    message = ("%s still breaks an absolute rule of np-flow-concise-output: %s. "
                "The linting rules may need tuning -- see np-ste-lint.py and "
                "np-flow-concise-output." % (label, detail))
     np_toggle.signal(sid, "form-gate-escalation :: %s :: %s" % (label, detail))

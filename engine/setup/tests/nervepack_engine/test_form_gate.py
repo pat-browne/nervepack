@@ -343,10 +343,16 @@ class TestBlockMode(unittest.TestCase):
                            "tool_input": {"file_path": "/x/" + name,
                                           "content": content}})
 
-    def _violations(self, **over):
+    def _violations(self, over=None, **kw):
+        # Keys mirror np-ste-lint.py verbatim, including the (>20w)/(>6s)
+        # suffixes the real linter emits. Pass the suffixed length keys via the
+        # `over` dict, since they are not valid Python kwarg names.
         v = {"em_dash": 0, "semicolon": 0, "contraction": 0,
-             "marketing_adjective": 0, "long_sentence": 0, "long_paragraph": 0}
-        v.update(over)
+             "marketing_adjective": 0, "long_sentence(>20w)": 0,
+             "long_paragraph(>6s)": 0}
+        v.update(kw)
+        if over:
+            v.update(over)
         return {"violations": v, "total_per100w": 0.0}
 
     def test_deny_under_budget(self):
@@ -412,17 +418,29 @@ class TestBlockMode(unittest.TestCase):
 
     def test_long_sentence_blocks(self):
         out, _ = self._run(self._write("Text"),
-                           lint=self._violations(long_sentence=1))
+                           lint=self._violations({"long_sentence(>20w)": 1}))
         data = json.loads(out)["hookSpecificOutput"]
         self.assertEqual(data["permissionDecision"], "deny")
         self.assertIn("long sentence", data["permissionDecisionReason"])
 
     def test_long_paragraph_blocks(self):
         out, _ = self._run(self._write("Text"),
-                           lint=self._violations(long_paragraph=1))
+                           lint=self._violations({"long_paragraph(>6s)": 1}))
         data = json.loads(out)["hookSpecificOutput"]
         self.assertEqual(data["permissionDecision"], "deny")
         self.assertIn("long paragraph", data["permissionDecisionReason"])
+
+    def test_failed_counter_write_escalates_not_denies(self):
+        # If the retry counter cannot be persisted, the gate must escalate to
+        # ask rather than deny -- a stuck counter reads 0 forever, so denying
+        # would trap the user in permanent denies with no escalation.
+        payload = self._write("A clause; another.")
+        with mock.patch.object(form_gate, "_write_retry", return_value=False):
+            out, notes = self._run(payload, lint=self._violations(semicolon=1))
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "ask")
+        self.assertIn("tuning", data["permissionDecisionReason"])
+        self.assertEqual(len(notes), 1)
 
     def test_ask_mode_unaffected_by_block_helpers(self):
         """ask/warn/off keep returning ask/allow, never deny, when categorical
