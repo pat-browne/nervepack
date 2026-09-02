@@ -3,24 +3,37 @@
 Enforces the categorical rules of np-flow-concise-output (no em dash, no
 semicolon, no contraction, no marketing adjective) on text that persists:
 files, artifacts, Notion pages, Slack posts, work-item descriptions, and
-commit messages. Categorical hits return "ask". Rate-based findings (passive
-voice, sentence length) only ever add context.
+commit messages. `form_gate.categorical` selects the mode: `ask`/`warn`/`off`
+return "ask" or `allow`+context, exactly as before. Rate-based findings
+(passive voice, sentence length) only ever add context in every mode.
 
-Fails open everywhere, per ARCHITECTURE invariant 1. "ask" is a permission
-prompt rather than a block, so this hook needs no amendment to that invariant;
-it follows the precedent lesson_guard already set.
+`block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
+write carrying em_dash, semicolon, marketing_adjective, an over-length
+sentence, or an over-length paragraph is denied outright, up to two retries
+per (session, target). A third strike escalates to `ask` and emits a
+struggles[] record to the episodic inbox so episodic-maintain can distill the
+pattern. `contraction` never blocks -- it stays a rate-channel signal only.
+The engine ships `categorical=warn`. `block` is opt-in.
+
+Fails open everywhere, per ARCHITECTURE invariant 1: every counter-file and
+inbox-write path is wrapped so a corrupt cache file or any exception falls
+back to "" / allow, never a crash.
 
 Channel A reads the linter's own violation counts and never reimplements its
 regexes. The linter already excludes possessives from the contraction count.
 """
 import fnmatch
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 
+import np_capture
 import np_content
+import np_dirs
 import np_toggle
 
 _PROSE_EXT_DEFAULT = ".md,.mdx,.markdown,.html,.txt,.rst,.adoc"
@@ -65,11 +78,19 @@ _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules"
 
 _CATEGORICAL = ("em_dash", "semicolon", "contraction", "marketing_adjective")
 
+# The `block` mode's violation set. Narrower than _CATEGORICAL: contraction is
+# common enough in ordinary writing that a hard block on it would fire
+# constantly, so it stays counted toward the rate channel only, never blocking.
+_BLOCKING = ("em_dash", "semicolon", "marketing_adjective", "long_sentence",
+             "long_paragraph")
+
 _RULE_LABEL = {
     "em_dash": "em dash",
     "semicolon": "semicolon",
     "contraction": "contraction",
     "marketing_adjective": "marketing adjective",
+    "long_sentence": "long sentence (>20w)",
+    "long_paragraph": "long paragraph (>6s)",
 }
 
 
@@ -363,6 +384,14 @@ def _ask(reason):
     }}, separators=(",", ":"))
 
 
+def _deny(reason):
+    return json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}, separators=(",", ":"))
+
+
 def _allow_with_context(context):
     return json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -375,6 +404,119 @@ def _categorical_hits(violations):
     return [(_RULE_LABEL[rule], int(violations.get(rule) or 0))
             for rule in _CATEGORICAL
             if int(violations.get(rule) or 0) > 0]
+
+
+def _blocking_hits(violations):
+    return [(_RULE_LABEL[rule], int(violations.get(rule) or 0))
+            for rule in _BLOCKING
+            if int(violations.get(rule) or 0) > 0]
+
+
+def _target(tool_name, tool_input, label):
+    """The `block` retry counter's key subject: the file path for a file
+    write, or the MCP/tool label for anything else (an MCP send, a commit
+    message, an artifact comment reply)."""
+    if tool_name in ("Write", "Edit"):
+        path = tool_input.get("file_path")
+        if path:
+            return path
+    if tool_name == "Artifact" and tool_input.get("action") != "reply":
+        path = tool_input.get("file_path")
+        if path:
+            return path
+    return label
+
+
+def _retry_dir():
+    return os.environ.get("FORM_GATE_RETRY_DIR") or np_dirs.cache_path("form-gate-retry")
+
+
+def _retry_path(sid, target):
+    key = hashlib.sha256(("%s\x1f%s" % (sid, target)).encode("utf-8", "replace")).hexdigest()
+    return os.path.join(_retry_dir(), key + ".count")
+
+
+def _read_retry(sid, target):
+    """Current retry count for this (session, target). Fail-open 0: a corrupt
+    or missing counter file is treated as a fresh start, never as a crash."""
+    try:
+        with open(_retry_path(sid, target), encoding="utf-8") as fh:
+            return int((fh.read() or "0").strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def _write_retry(sid, target, count):
+    try:
+        os.makedirs(_retry_dir(), exist_ok=True)
+        with open(_retry_path(sid, target), "w", encoding="utf-8") as fh:
+            fh.write(str(count))
+    except OSError:
+        pass
+
+
+def _clear_retry(sid, target):
+    try:
+        os.remove(_retry_path(sid, target))
+    except OSError:
+        pass
+
+
+def _emit_escalation_struggle(sid, payload, label, detail):
+    """Append a struggles[] record to the episodic inbox so episodic-maintain
+    distills this pattern into memory/lessons/. Every part of this fails open:
+    an error here must never change the gate's decision, so the whole thing is
+    one try/except with no re-raise."""
+    try:
+        cwd = payload.get("cwd") or os.getcwd()
+        project = os.path.basename(cwd.rstrip(os.sep) or "unknown") or "unknown"
+        symptom = ("form gate escalated to ask after 2 blocks on %s: %s"
+                   % (label, detail))
+        record = {
+            "session_id": sid,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "project": project,
+            "cwd": cwd,
+            "mode": "form-gate-escalation",
+            "headline": "form gate escalated to ask on %s" % label,
+            "body": "%s. Rewrite could not satisfy the linter." % symptom,
+            "candidate_topics": ["form-gate"],
+            "keywords": ["form-gate", "escalation", label],
+            "struggles": [{
+                "symptom": symptom,
+                "cause": "rewrite could not satisfy the linter after 2 attempts",
+                "fix": "tune np-ste-lint.py or the np-flow-concise-output rule calibration",
+                "tool_match": "",
+                "topic_triggers": ["form-gate", "np-ste-lint", "np-flow-concise-output"],
+                "destructive": False,
+            }],
+        }
+        np_capture.append_note(record)
+    except Exception:
+        pass
+
+
+def _run_block(sid, target, label, violations, payload):
+    hits = _blocking_hits(violations)
+    if not hits:
+        _clear_retry(sid, target)
+        return ""
+
+    detail = ", ".join("%s x%d" % (name, count) for name, count in hits)
+    count = _read_retry(sid, target)
+    if count < 2:
+        _write_retry(sid, target, count + 1)
+        message = ("%s breaks an absolute rule of np-flow-concise-output: %s. "
+                   "Rewrite without them and retry." % (label, detail))
+        return _deny(message)
+
+    _clear_retry(sid, target)
+    message = ("%s still breaks an absolute rule after 2 rewrites: %s. "
+               "The linting rules may need tuning -- see np-ste-lint.py and "
+               "np-flow-concise-output." % (label, detail))
+    np_toggle.signal(sid, "form-gate-escalation :: %s :: %s" % (label, detail))
+    _emit_escalation_struggle(sid, payload, label, detail)
+    return _ask(message)
 
 
 def run(payload_text):
@@ -411,7 +553,12 @@ def run(payload_text):
     violations = report.get("violations") or {}
     sid = payload.get("session_id") or "unknown"
 
-    categorical = _mode("form_gate.categorical", "ask", ("ask", "warn", "off"))
+    categorical = _mode("form_gate.categorical", "ask", ("ask", "warn", "off", "block"))
+
+    if categorical == "block":
+        target = _target(tool_name, tool_input, label)
+        return _run_block(sid, target, label, violations, payload)
+
     hits = _categorical_hits(violations) if categorical != "off" else []
 
     if hits:

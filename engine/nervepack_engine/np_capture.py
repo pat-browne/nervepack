@@ -81,6 +81,26 @@ def was_captured(payload):
         return False
 
 
+def append_note(record):
+    """Append an already-built episodic-inbox record to today's inbox file,
+    scrubbed the same way capture() scrubs its own note. Shared write path so
+    the JSONL line shape and the scrub step stay defined in exactly one place
+    -- capture() uses it for its own envelope, and form_gate's escalation
+    struggle (the other in-process writer) reuses it rather than hand-rolling
+    the same JSON+scrub steps. Fail-open: any OSError returns False and writes
+    nothing; never raises."""
+    inbox = os.environ.get("EPISODIC_INBOX") or np_dirs.cache_path("episodic-inbox")
+    line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+    scrubbed = np_scrub.scrub(line.encode("utf-8") + b"\n")
+    try:
+        os.makedirs(inbox, exist_ok=True)
+        with open(os.path.join(inbox, time.strftime("%Y-%m-%d", time.gmtime()) + ".jsonl"), "ab") as fh:
+            fh.write(scrubbed)
+    except OSError:
+        return False
+    return True
+
+
 def capture(payload, mode="session-end"):
     """Summarize `payload` (dict: transcript_path, cwd, session_id) into an inbox
     note. Returns a short status string; never raises (fail-open)."""
@@ -112,7 +132,6 @@ def capture(payload, mode="session-end"):
         return "captured"
     project = os.path.basename(cwd or "unknown")
 
-    inbox = os.environ.get("EPISODIC_INBOX") or np_dirs.cache_path("episodic-inbox")
     seen_dir = os.environ.get("EPISODIC_SEEN_DIR") or np_dirs.cache_path("capture-seen")
     seen_file = os.path.join(seen_dir, re.sub(r'[^A-Za-z0-9._-]', '_', sid))
     try:
@@ -147,13 +166,10 @@ def capture(payload, mode="session-end"):
 
     envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note
-    line = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))  # jq -nc
-    scrubbed = np_scrub.scrub(line.encode("utf-8") + b"\n")
+    if not append_note(envelope):
+        return "captured"
 
     try:
-        os.makedirs(inbox, exist_ok=True)
-        with open(os.path.join(inbox, time.strftime("%Y-%m-%d", time.gmtime()) + ".jsonl"), "ab") as fh:
-            fh.write(scrubbed)
         os.makedirs(seen_dir, exist_ok=True)
         with open(seen_file, "w", encoding="utf-8") as fh:
             fh.write(fp)
