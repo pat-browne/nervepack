@@ -288,10 +288,16 @@ def main(argv=None):
         # problem logs one line and returns 0, releasing the lock so the
         # suggestion stays retryable) -- its own NERVEPACK_AGENT guard covers
         # the re-entrancy case, so no extra check needed here.
-        text = argv[1] if len(argv) > 1 else ""
+        # --target=<t> is the evaluator's layer classification, which picks the
+        # repo to try first. It is a flag, not a 3rd positional, so the optional
+        # Modify rewrite never has to be padded with an empty slot.
+        rest = [a for a in argv[1:] if not a.startswith("--target=")]
+        target = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--target=")), None)
+        text = rest[0] if rest else ""
         try:
-            # argv[2], when present, is the dashboard Modify box's rewrite of argv[1].
-            return np_implement_suggestion.implement(text, argv[2] if len(argv) > 2 else None)
+            # rest[1], when present, is the dashboard Modify box's rewrite of the text.
+            return np_implement_suggestion.implement(
+                text, rest[1] if len(rest) > 1 else None, target=target)
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0

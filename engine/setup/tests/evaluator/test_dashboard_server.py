@@ -63,7 +63,7 @@ class TestServer(unittest.TestCase):
         cls.impl_sentinel = os.path.join(d, "impl-ran.txt")
         impl = os.path.join(d, "implement-stub.sh")
         with open(impl, "w") as fh:
-            fh.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$1" >> "{cls.impl_sentinel}"\n')
+            fh.write(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{cls.impl_sentinel}"\n')
         os.chmod(impl, 0o755)
         cls.impl = impl
         cls.status_dir = os.path.join(d, "implement-status"); os.makedirs(cls.status_dir)
@@ -255,6 +255,22 @@ class TestServer(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ok"])
         self.assertIn("count", json.loads(body))
+
+    def test_implement_forwards_the_evaluator_target(self):
+        """The target picks which repo the job tries first, so it must survive
+        the hop from the row to the detached job."""
+        try: os.remove(self.impl_sentinel)
+        except OSError: pass
+        status, _ = self._post("/api/implement", {"text": "Do delta", "target": "skills"})
+        self.assertEqual(status, 200)
+        for _ in range(60):
+            if os.path.exists(self.impl_sentinel):
+                seen = open(self.impl_sentinel).read()
+                if "Do delta" in seen:
+                    self.assertIn("--target=skills", seen)
+                    return
+            time.sleep(0.05)
+        self.fail("implement job was not spawned")
 
     def test_implement_spawns_job(self):
         # remove any prior sentinel so we assert on THIS spawn
