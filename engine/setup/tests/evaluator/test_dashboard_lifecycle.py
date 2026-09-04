@@ -39,6 +39,9 @@ for _p in (_ENGINE_DIR, _ENGINE_SETUP, os.path.join(_ENGINE_DIR, "nervepack_engi
 import np_dashboard  # noqa: E402
 
 
+_SERVER = "np-dashboard-server.py"
+
+
 def free_port():
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -78,11 +81,22 @@ class DashboardLifecycleTest(unittest.TestCase):
 
         # dashboard_url() owns the spawn, so wrap Popen to keep the handles and
         # guarantee teardown never leaks a detached server onto the test host.
+        #
+        # Count ONLY backend spawns. mock.patch.object on np_dashboard.subprocess
+        # patches the shared subprocess module, so every subprocess.run() in the
+        # code under test lands here too -- including boot_id()'s `sysctl -n
+        # kern.boottime` macOS fallback, which runs once per hook call. Counting
+        # those made the idempotence assertion read 4 != 2 on macOS while staying
+        # green on Linux, where boot_id() reads /proc and never spawns anything.
         real_popen = subprocess.Popen
 
         def _tracking_popen(*a, **kw):
             p = real_popen(*a, **kw)
-            self.spawned.append(p)
+            argv = a[0] if a else kw.get("args") or []
+            if isinstance(argv, (str, bytes)):
+                argv = [argv]
+            if any(_SERVER in str(arg) for arg in argv):
+                self.spawned.append(p)
             return p
 
         self._popen = mock.patch.object(np_dashboard.subprocess, "Popen",
