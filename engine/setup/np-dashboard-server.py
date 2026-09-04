@@ -309,6 +309,11 @@ class Handler(BaseHTTPRequestHandler):
                 # it reaches the agent prompt, which caps and data-fences it again.
                 edited = (body.get("edited") or "").strip()[:2000]
                 extra = [edited] if edited and edited != text else []
+                # The evaluator's own layer classification, forwarded so the job
+                # can try the right repo first. The job allowlists it.
+                target = (body.get("target") or "").strip()[:32]
+                if target:
+                    extra = extra + ["--target=" + target]
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
