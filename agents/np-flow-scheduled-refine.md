@@ -28,7 +28,7 @@ machine. Do these steps in order, then stop.
 ### 1. Verify repo
 
 ```bash
-ls CLAUDE.md skills setup agents .claude-plugin >/dev/null
+ls CLAUDE.md skills engine/setup agents .claude-plugin >/dev/null
 ```
 
 If any are missing, stop and report.
