@@ -87,8 +87,12 @@ def _newest_under(root, rel_dir):
         return None, 0
     cutoff = _STALE_DAYS * 86400
     now = datetime.datetime.now().timestamp()
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return None, 0  # unreadable directory is OUR error, not a policy failure
     best, best_mtime = None, 0
-    for name in os.listdir(d):
+    for name in names:
         if not name.endswith(".md"):
             continue
         full = os.path.join(d, name)

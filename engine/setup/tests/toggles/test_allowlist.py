@@ -131,19 +131,38 @@ class TestFlipRoutesToManaged(unittest.TestCase):
         self.tmp = self._tmp.name
         self.settings = os.path.join(self.tmp, "settings.json")
         self.local = os.path.join(self.tmp, "toggles.local")
+        self.conf = os.path.join(self.tmp, "toggles.conf")
+        # NP_TOGGLES_CONF matters as much as NP_TOGGLES_LOCAL here. flip() on a
+        # SHARED family writes set_conf_state() straight into the committed
+        # toggles.conf, so a test that isolates only the local file mutates the
+        # repo -- which is exactly how `focus` was flipped off in the first draft
+        # of this class. Copy the real manifest so scope/enforce lookups still
+        # resolve, then let every write land on the copy.
+        self.real_conf = np_toggle._conf_path()
+        with open(self.real_conf, encoding="utf-8") as fh:
+            self.conf_before = fh.read()
+        with open(self.conf, "w", encoding="utf-8") as fh:
+            fh.write(self.conf_before)
         self._prev = {k: os.environ.get(k)
-                      for k in ("CLAUDE_SETTINGS", "NP_TOGGLES_LOCAL")}
+                      for k in ("CLAUDE_SETTINGS", "NP_TOGGLES_LOCAL",
+                                "NP_TOGGLES_CONF", "NP_TOGGLES_CONTENT")}
         os.environ["CLAUDE_SETTINGS"] = self.settings
         os.environ["NP_TOGGLES_LOCAL"] = self.local
+        os.environ["NP_TOGGLES_CONF"] = self.conf
+        os.environ["NP_TOGGLES_CONTENT"] = ""      # pin "no content layer"
         self.entries = np_toggle._read_allowlist()
 
     def tearDown(self):
+        with open(self.real_conf, encoding="utf-8") as fh:
+            after = fh.read()
         self._tmp.cleanup()
         for k, v in self._prev.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        self.assertEqual(self.conf_before, after,
+                         "a test in this class wrote to the committed toggles.conf")
 
     def _allow(self):
         with open(self.settings) as fh:
