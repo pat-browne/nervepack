@@ -225,5 +225,35 @@ class TestFailsOpen(_Base):
         self.assertEqual(self._decision(self._run("engine/thing.py")), "ask")
 
 
+class TestReceiptPathIsContained(_Base):
+    """The receipt filename is built from a payload-supplied session id. No id
+    may name a path outside the cache directory -- on Windows the separator is a
+    backslash, and "." or ".." name directories on both."""
+
+    def _path(self, sid):
+        return os.path.realpath(spec_review._receipt_path(sid))
+
+    def test_a_normal_id_is_kept_verbatim(self):
+        self.assertEqual(os.path.basename(self._path("abc-123.def")),
+                         "abc-123.def")
+
+    def test_every_hostile_id_stays_inside_the_directory(self):
+        root = os.path.realpath(self.seen)
+        for sid in ("../../etc/passwd", "..", ".", "a/../../b",
+                    "a\\..\\..\\windows", "....//....//x", "/abs/path"):
+            got = self._path(sid)
+            self.assertEqual(os.path.dirname(got), root, sid)
+            self.assertNotIn(os.sep + "..", got, sid)
+
+    def test_an_empty_or_dotted_id_still_names_a_file(self):
+        for sid in ("", "...", "/"):
+            self.assertTrue(os.path.basename(self._path(sid)), repr(sid))
+
+    def test_a_hostile_id_round_trips_as_a_receipt(self):
+        out = self._run("engine/thing.py", sid="../../escape")
+        self.assertEqual(self._decision(out), "ask")
+        self.assertEqual(self._run("engine/other.py", sid="../../escape"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,7 @@ is confirmed again and an unchanged one is never asked about twice.
 import datetime
 import json
 import os
+import re
 
 import np_change_spec
 import np_toggle
@@ -129,8 +130,21 @@ def _governing_document(root, branch):
     return None, 0
 
 
+# A receipt filename is built from the session id, which arrives in the hook
+# payload. It is a UUID in practice, but nothing here should depend on that: an
+# id of ".." or one carrying a separator would name a path outside the cache
+# directory, and on Windows the separator is a backslash. Keep the safe
+# characters rather than trying to strip the dangerous ones, then drop leading
+# dots so no id can resolve to "." or "..".
+_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _safe_sid(sid):
+    return (_UNSAFE.sub("_", sid).lstrip(".") or "unknown")[:128]
+
+
 def _receipt_path(sid):
-    return os.path.join(_seen_dir(), sid.replace("/", "_"))
+    return os.path.join(_seen_dir(), _safe_sid(sid))
 
 
 def _already_confirmed(sid, key):
