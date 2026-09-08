@@ -259,6 +259,21 @@ def scope(family):
     return ""
 
 
+def enforcement(family):
+    """The conf 'enforce' column ($3) for a family, or '' if absent.
+
+    Separate from scope() because the two columns answer different questions and
+    a row uses both: `allowlist|local|managed|on|` is local-SCOPE (state lives in
+    toggles.local) with managed ENFORCEMENT (flipping it installs or removes
+    permission entries). flip() read only scope() for years, so the managed
+    branch was unreachable and install_permissions() had no production caller.
+    """
+    for fields in _iter_conf_rows():
+        if fields and fields[0] == family:
+            return fields[2].strip(" ") if len(fields) > 2 else ""
+    return ""
+
+
 def features():
     """Declared feature names (conf rows with >=4 columns). Mirrors _features."""
     out = []
@@ -592,7 +607,10 @@ def flip(feat, state):
     'feat -> state'."""
     fam = feat if _is_declared(feat) else feat.split(".", 1)[0]
     sc = scope(fam)
-    if sc == "managed":
+    # The enforce column is what declares a family managed; the scope check is
+    # kept so a row that puts "managed" there still routes the same way.
+    # managed() ends in set_local(), which is the right write for local scope.
+    if enforcement(fam) == "managed" or sc == "managed":
         managed(feat, state)
     elif sc == "local":
         set_local(feat, state)

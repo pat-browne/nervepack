@@ -225,6 +225,42 @@ finishes typing the "spec written, please review" message — the file pops
 open in your editor/default `.md` handler, already in focus. You read it right
 there instead of trusting a chat summary.
 
+## Spec-review gate — confirm the doc was read before implementation starts
+
+**Purpose.** "Open artifact on write" puts the spec in front of you. Nothing
+checks that you read it. `superpowers:brainstorming` states the review gate in
+prose, and prose is a gate a session can talk itself out of — the same failure
+that put `drift-guard` in a hook rather than a paragraph. This closes the other
+half: the approval moves off the write, where nothing has gone wrong yet, and
+onto the first implementation edit, where it can still save the work.
+
+**Workflow.** Two `PreToolUse` rows, matchers `Write` and `Edit`:
+`cli.py hook spec-review` → `engine/nervepack_engine/hooks/spec_review.py`. It
+resolves the governing document as `change-specs/<branch-slug>.md`, falling back
+to the newest file modified in the last 14 days under
+`docs/superpowers/plans/` then `docs/superpowers/specs/` — a plan is dated, not
+branch-named, so no exact link exists to inherit. Writes into any of those three
+directories return silently: **authoring the record is never gated**, and the
+permission entries added to `engine/setup/allowlist-entries.txt` stop those
+writes prompting at all. On the first implementation edit it returns an `ask`
+naming the document. It never denies — whether a human read something is not a
+fact a hook can establish, so its only honest verdict is a question. A receipt
+keyed on (session, document, mtime) holds it to one ask per revision of that
+document per session; editing the document asks again.
+
+**Assets.** `engine/nervepack_engine/hooks/spec_review.py`, registered via
+`cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Log:
+`~/.cache/nervepack/spec-review.log`, decoded in np-core-doctor's
+`references/log-patterns.md`. Toggle: `gates` and `gates.spec_review` — the
+latter declared **local** scope, so `cli.py toggle gates.spec_review off` writes
+to `~/.config/nervepack/toggles.local` and binds this machine only.
+
+**Situational example.** The session writes a plan, which opens in your editor
+with no permission prompt. You skim the chat instead of the file, then say
+"go". The first edit to a source file stops and names the plan. You either read
+it, or approve knowingly — but you never implement against a document nobody
+opened.
+
 ## Lessons — auto-distilled, provenance-tagged, optionally enforced ("in situation X, do/avoid Y — or the approach that worked is Z")
 
 **Purpose.** Auto-distilled patterns from past sessions, both failure→recovery and
@@ -696,8 +732,11 @@ credentials onto a machine without the secret values entering the model context
 (secrets refresh).
 
 **Workflow.** The allowlist is a local-scope managed toggle (install/remove paired).
-`np-env-secrets-refresh` pulls from Bitwarden and applies to aws-vault / get-secret.sh
-out-of-band.
+Entries live in `engine/setup/allowlist-entries.txt` — read-only `Bash(...)` calls,
+plus `Write`/`Edit` on `docs/superpowers/specs/`, `docs/superpowers/plans/` and
+`change-specs/`, so authoring a spec or plan costs no approval (the spec-review
+gate asks later instead). `np-env-secrets-refresh` pulls from Bitwarden and
+applies to aws-vault / get-secret.sh out-of-band.
 
 **Assets.** `engine/nervepack_engine/np_toggle.py` (`install_permissions`/`remove_permissions`, via `cli.py toggle`), `np-env-secrets-refresh`. Toggle: `allowlist`.
 

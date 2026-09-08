@@ -271,6 +271,9 @@
     "type": "bool",
     "description": "Whether the local spec-guard pre-check blocks or warns at the tool call. Does not affect the spec-guard CI job \u2014 that is a separate, already-logged override via the GitHub ruleset bypass-actor list."
   },
+  "gates.spec_review": {
+    "description": "Whether the spec-review hook asks, before the first implementation edit, that the branch's governing spec or plan has been read. Local scope: turning it off applies to this machine only."
+  },
   "gates.drift_guard.enforce": {
     "type": "bool",
     "description": "Whether the drift-guard hook blocks or warns when an edit falls outside a change-spec's declared blast_radius."

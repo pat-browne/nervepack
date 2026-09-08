@@ -61,3 +61,27 @@ broken".
 To confirm the hook is wired at all, check that `settings.json` carries both
 rows — `grep -c 'hook drift-guard' ~/.claude/settings.json` returns 2 — rather
 than reading anything into an empty log.
+
+## `~/.cache/nervepack/spec-review.log` — the spec-review gate
+
+One line per adjudication, shaped
+`<ts> spec-review <VERDICT> sid=<session> <detail>`.
+
+| Pattern | Meaning | What to do |
+|---|---|---|
+| `ASK <doc> not yet confirmed; asked before <path>` | The first implementation edit of the session stopped to name the governing document | Read the document, then approve. This is the normal case once per revision |
+| `PASS <doc> already confirmed for <path>` | The receipt for this session and this revision exists | Nothing; the gate has already had its one ask |
+| `OFF <doc> not confirmed; gate disabled on this machine` | The gate had jurisdiction and stood down | `gates.spec_review` is off in `~/.config/nervepack/toggles.local`. Turn it back on, or accept that implementation can start against an unread document |
+
+**An empty log is the expected state on most machines**, for the same reason
+drift-guard's is: the hook is silent outside a git repo, in a repo with no
+governing spec or plan, and on every write into `change-specs/`,
+`docs/superpowers/specs/` or `docs/superpowers/plans/` — authoring is never
+gated and never logged.
+
+Receipts live in `~/.cache/nervepack/spec-review-seen/<session-id>`, one
+`<doc>@<mtime>` line each. Delete a session's file to make the gate ask again
+without editing the document.
+
+To confirm the hook is wired, check both rows are registered —
+`grep -c 'hook spec-review' ~/.claude/settings.json` returns 2.

@@ -49,6 +49,7 @@ from nervepack_engine.hooks import session_directive  # noqa: E402
 from nervepack_engine.hooks import security_recall  # noqa: E402
 from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
+from nervepack_engine.hooks import spec_review  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 from nervepack_engine.hooks import turn_gate  # noqa: E402
 import np_aggregate  # noqa: E402
@@ -90,6 +91,7 @@ _HOOKS = {
     "security-recall": security_recall.run,
     "session-flush": session_flush.run,
     "skill-trigger-recall": skill_trigger_recall.run,
+    "spec-review": spec_review.run,
     "struggle-escalation": struggle_escalation.run,
     "turn-gate": turn_gate.run,
 }
