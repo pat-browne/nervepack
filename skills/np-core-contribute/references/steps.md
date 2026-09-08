@@ -72,27 +72,38 @@
    asking turns a finished capture into an extra round trip.
    ```bash
    git -C "$REPO" fetch origin main
-   git -C "$REPO" rebase origin/main    # stop here if it conflicts
+   git -C "$REPO" rebase origin/main || {
+     git -C "$REPO" diff --name-only --diff-filter=U    # capture BEFORE aborting
+     git -C "$REPO" rebase --abort
+     exit 1
+   }
    git -C "$REPO" push origin HEAD:main
    ```
    The push is a fast-forward when the local branch is `origin/main` plus this
    one commit, which is the normal case for a capture.
 
    **Both commands can fail, and dropping the confirmation gate is what makes
-   that worth writing down.** Nobody is watching the terminal any more.
+   that worth writing down.** The user is still there — what is gone is the
+   prompt that used to make them look. Your reply in chat is now the only signal
+   that the push happened, so it has to carry the outcome.
 
-   - **Rebase conflicts:** run `git -C "$REPO" rebase --abort` and tell the user
-     which files conflicted. Never resolve a conflict in someone else's capture
-     to get the push through — the commit is already safe on the local branch,
-     and an unpushed capture costs one round trip while a wrong resolution
-     silently rewrites their content.
+   - **Rebase conflicts:** list the conflicted paths with `git diff --name-only
+     --diff-filter=U` **before** `git -C "$REPO" rebase --abort` — the abort
+     clears the rebase state, and with it the record of what conflicted. Name
+     those paths in your reply. Never resolve a conflict in someone else's
+     capture to get the push through: the commit is already safe on the local
+     branch, and an unpushed capture costs one round trip while a wrong
+     resolution silently rewrites their content.
    - **Push rejected** (someone landed between the fetch and the push): fetch and
      rebase once more, then push again. Stop after the second rejection and say
      so, rather than looping against a branch another session is writing to.
    - **Push fails on auth or the network:** say which, and leave the commit where
      it is. It is not lost; it is one `git push` away on the next run.
-   - **Report the outcome either way.** Name the remote and the SHA on success.
-     Silence reads as success, and a capture nobody pushed is one nobody has.
+   - **Report the outcome either way, in the reply itself.** Name the remote and
+     the short SHA on success, and the failure and the affected paths otherwise.
+     There is no log to check and no alert to page: a skill runs inside a
+     session, and the reply is the whole reporting surface. Silence reads as
+     success, and a capture nobody pushed is one nobody has.
 
    **Engine changes never direct-push** — `np-core-*`/`np-flow-*` skills and
    anything under `engine/` or `dashboard/` still go through a PR that merges on
