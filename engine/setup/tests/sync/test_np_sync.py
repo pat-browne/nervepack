@@ -343,6 +343,23 @@ class NpSync(unittest.TestCase):
         self.assertIn("setup link-skills failed (exit 2)", err)
         self.assertIn("boom", err)
 
+    def test_a_hanging_setup_step_is_bounded_and_reported(self):
+        """Sync runs unattended from SessionStart, so a wedged step must not hang
+        it forever. Patch the timeout down rather than sleeping past 120s."""
+        d = os.path.join(self.target, "engine", "nervepack_engine")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(self.target, ".git", "info", "exclude"), "a", encoding="utf-8") as fh:
+            fh.write("\nengine/\n")
+        with open(os.path.join(d, "cli.py"), "w", encoding="utf-8") as fh:
+            fh.write("import time\ntime.sleep(30)\n")
+        self._advance_remote()
+        env = self._env()
+        env["NP_SETUP_STEP_TIMEOUT"] = "1"
+        r = subprocess.run([sys.executable, _PY, "exit"], capture_output=True,
+                           text=True, env=env, timeout=60)
+        self.assertIn("fast-forwarded", r.stdout)
+        self.assertIn("setup link-skills timed out after 1s", r.stderr)
+
     def test_the_setup_steps_sync_asks_for_actually_exist(self):
         """np_sync names these steps as strings, and cli.py owns the table they
         resolve against. Nothing else couples the two, so a renamed step would

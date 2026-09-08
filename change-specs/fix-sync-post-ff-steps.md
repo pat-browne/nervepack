@@ -75,6 +75,12 @@ is the honest condition and a wrong signal is worse than an extra call.
 
 - Security: the subprocess runs `cli.py` from the synced target by absolute
   path, with no shell, and is skipped when that file is absent.
+- Availability: each step is bounded by a 120s timeout
+  (`NP_SETUP_STEP_TIMEOUT` overrides, which is how the test drives it). Sync
+  runs unattended from SessionStart, so a step wedged on a network filesystem
+  would otherwise hang with nothing to show for it. Generous rather than
+  tight, since a slow but working machine must not lose its relink to the
+  clock.
 - Privacy: none.
 - Observability: the steps stay best-effort, but a non-zero exit writes an
   stderr note naming the step, the code and the first line of its own stderr.

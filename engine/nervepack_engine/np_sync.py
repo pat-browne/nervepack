@@ -198,10 +198,21 @@ def _setup_step(target, step):
     if not os.path.isfile(cli):
         sys.stderr.write("np-core-sync: no cli.py at %s — skipped setup %s\n" % (cli, step))
         return
+    # Bounded, because sync runs unattended from SessionStart: a step wedged on a
+    # network filesystem would otherwise hang forever with nothing to show for it.
+    # Generous rather than tight — these finish in well under a second on a healthy
+    # box, and a slow-but-working machine must not lose its relink to the clock.
+    try:
+        limit = int(os.environ.get("NP_SETUP_STEP_TIMEOUT") or 120)
+    except ValueError:
+        limit = 120
     try:
         done = subprocess.run([sys.executable, cli, "setup", step],
                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.PIPE, text=True)
+                              stderr=subprocess.PIPE, text=True, timeout=limit)
+    except subprocess.TimeoutExpired:
+        sys.stderr.write("np-core-sync: setup %s timed out after %ds\n" % (step, limit))
+        return
     except OSError as exc:
         sys.stderr.write("np-core-sync: could not run setup %s: %s\n" % (step, exc))
         return
