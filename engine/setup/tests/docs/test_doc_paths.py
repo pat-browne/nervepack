@@ -22,12 +22,15 @@ explanation of what was removed.
 """
 import os
 import re
-import tempfile
 import subprocess
+import sys
+import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "_lib"))
+from nptest import git_ignored  # noqa: E402
 
 LITERAL = "~/Code/nervepack"
 # A command WORD. Scoped to the enclosing code span, never to the whole line:
@@ -46,33 +49,6 @@ SHELL_FENCES = ("bash", "sh", "shell", "console")
 CREATES_THE_CHECKOUT = re.compile(r"\bgit\s+clone\b")
 
 
-def _git_ignored(rels):
-    """The subset of `rels` git ignores, or an empty set on any git failure.
-
-    Tool scratch lands in the checkout and is git-ignored for exactly the reason
-    it should not be scanned here: nobody wrote it as documentation and nobody
-    can fix it. `.superpowers/` is the case that forced this -- a superpowers
-    run left task reports naming a literal install path, and the check failed on
-    files that are not part of the repo. Asking git beats a hardcoded skip list,
-    because the next tool to write scratch is one nobody has thought of yet.
-
-    A filter, never a gate: if git is missing or REPO is not a repo (the tests
-    below repoint REPO at a temp dir), nothing is filtered and the scan is
-    exactly what it was.
-    """
-    if not rels:
-        return set()
-    try:
-        out = subprocess.run(["git", "-C", REPO, "check-ignore", "--stdin"],
-                             input="\n".join(rels), capture_output=True, text=True)
-    except OSError:
-        return set()
-    if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
-        return set()
-    return {line.strip().replace(os.sep, "/")
-            for line in out.stdout.splitlines() if line.strip()}
-
-
 def _markdown_files():
     out = []
     for dirpath, dirnames, filenames in os.walk(REPO):
@@ -86,7 +62,7 @@ def _markdown_files():
             if rel.startswith("change-specs/"):
                 continue
             out.append(rel)
-    ignored = _git_ignored(out)
+    ignored = git_ignored(REPO, out)
     return sorted(r for r in out if r not in ignored)
 
 
@@ -332,26 +308,73 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
 
     def test_no_git_ignored_path_is_scanned(self):
         rels = _markdown_files()
-        self.assertEqual(sorted(_git_ignored(rels)), [])
+        self.assertEqual(sorted(git_ignored(REPO, rels)), [])
+
+    def test_a_git_error_fails_open_but_says_so(self):
+        """Exit 1 is a legitimate 'nothing matched' and stays quiet. Above it git
+        itself failed, and a silently unfiltered scan is what §15 is about."""
+        import contextlib
+        import io as _io
+        err = _io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = os.path.join(tmp, "not-a-repo")
+            os.makedirs(bad)
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(git_ignored(bad, ["a.md"]), set())
+        message = err.getvalue()
+        self.assertIn("git check-ignore failed", message)
+        self.assertIn("repo=", message)          # names WHICH repo, not just that it failed
+
+    def test_reporting_never_breaks_the_caller(self):
+        """stderr can be closed. Raising there would replace a filtered scan
+        with a crash, which is worse than the failure being reported."""
+        import contextlib
+
+        class Closed:
+            def write(self, _):
+                raise ValueError("I/O operation on closed file")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = os.path.join(tmp, "not-a-repo")
+            os.makedirs(bad)
+            with contextlib.redirect_stderr(Closed()):
+                self.assertEqual(git_ignored(bad, ["a.md"]), set())
 
     def test_the_filter_actually_ignores_something_here(self):
-        """Guard against a filter that silently matches nothing: this checkout
-        does hold ignored markdown, and git must say so."""
-        planted = [r for r in [".superpowers/sdd/progress.md"]
-                   if os.path.isfile(os.path.join(REPO, r))]
-        if not planted:
-            self.skipTest("no ignored markdown present in this checkout")
-        self.assertEqual(sorted(_git_ignored(planted)), sorted(planted))
+        """Guard against a filter that silently matches nothing, which reads
+        exactly like a clean scan.
+
+        This used to skip when the checkout held no ignored markdown, so it
+        never ran in CI -- and the filter was in fact dead on the Windows lane,
+        where a text-mode stdin pipe sent git "path\r". Plant the file instead
+        of skipping, so the assertion always runs."""
+        rel = ".superpowers/np-filter-probe.md"
+        path = os.path.join(REPO, rel)
+        try:
+            ignored_here = subprocess.run(
+                ["git", "-C", REPO, "check-ignore", "-q", rel]).returncode == 0
+        except OSError:
+            self.skipTest("git not available")
+        if not ignored_here:
+            self.skipTest(".superpowers/ is not git-ignored in this checkout")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# probe\n")
+            self.assertEqual(sorted(git_ignored(REPO, [rel])), [rel])
+        finally:
+            # Every step attempted: one failing must not skip the next, and a
+            # probe left behind would change what the next run scans.
+            for remove, target in ((os.remove, path),
+                                   (os.rmdir, os.path.dirname(path))):
+                try:
+                    remove(target)
+                except OSError:
+                    pass
 
     def test_it_fails_open_outside_a_git_repo(self):
-        global REPO
-        prev = REPO
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                REPO = tmp
-                self.assertEqual(_git_ignored(["a.md"]), set())
-        finally:
-            REPO = prev
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(git_ignored(tmp, ["a.md"]), set())
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ Usage:
 """
 import os
 import subprocess
+import sys
 
 _WIN = os.name == "nt"
 
@@ -57,3 +58,56 @@ def bash_eval(snippet, **kwargs):
     """Run `bash -c <snippet>`. The caller must u()-convert any paths embedded in
     the snippet (this helper can't know which substrings are paths)."""
     return subprocess.run([_BASH, "-c", snippet], **kwargs)
+
+
+def git_ignored(repo, rels):
+    """The subset of `rels` that git ignores, or an empty set on any git failure.
+
+    Tool scratch lands in the checkout and is git-ignored for exactly the reason
+    it should not be scanned by a doc/source guard: nobody wrote it as part of
+    the repo and nobody can fix it. A guard that reads it is red locally and
+    green in CI, which teaches people to ignore it (#307).
+
+    A filter, never a gate: if git is missing or `repo` is not a repo (several
+    callers repoint their REPO at a temp dir), nothing is filtered and the scan
+    is exactly what it was.
+
+    `rels` are repo-relative and slash-separated. Returns the same form.
+    """
+    rels = list(rels)
+    if not rels:
+        return set()
+    # BYTES, not text=True. A text-mode stdin pipe translates "\n" to os.linesep
+    # on write, so on Windows git reads "path\r" and matches nothing. That fails
+    # open to "nothing is ignored", which reads exactly like a clean scan -- the
+    # filter was silently dead on the Windows lane before this.
+    def warn(detail):
+        """Fail open, but say so, and never let the reporting break the caller.
+
+        Exit 1 is a legitimate "nothing matched" and stays quiet. Every other
+        failure leaves the scan silently unfiltered, which is the thing a filter
+        must never do quietly. stderr can itself be closed, and raising here
+        would replace a filtered scan with a crash.
+        """
+        try:
+            sys.stderr.write("nptest.git_ignored: %s (repo=%s)\n" % (detail, repo))
+        except (OSError, ValueError):
+            pass
+
+    try:
+        out = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"],
+                             input=("\n".join(rels) + "\n").encode("utf-8"),
+                             capture_output=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        warn("git check-ignore timed out after 10s")
+        return set()
+    except OSError as exc:
+        warn("could not run git check-ignore: %r" % exc)
+        return set()
+    if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
+        warn("git check-ignore failed (exit %d): %s"
+             % (out.returncode, out.stderr.decode("utf-8", "replace").strip()[:200]))
+        return set()
+    return {line.strip().replace(os.sep, "/")
+            for line in out.stdout.decode("utf-8", "replace").splitlines()
+            if line.strip()}

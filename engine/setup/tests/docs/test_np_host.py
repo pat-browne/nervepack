@@ -18,8 +18,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:
     sys.path.insert(0, _ENGINE_SETUP)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_lib"))
 
 import np_host  # noqa: E402
+from nptest import git_ignored  # noqa: E402
 
 REPO = os.path.normpath(os.path.join(_ENGINE_SETUP, "..", ".."))
 KEYS = ("settings", "skills_dir", "transcripts")
@@ -359,29 +361,33 @@ class TestTheCoreNoLongerNamesTheHost(unittest.TestCase):
 
     def test_no_tool_neutral_module_names_it_in_code(self):
         offenders = []
-        for dirpath, dirnames, files in os.walk(os.path.join(REPO, "engine")):
-            if "tests" in dirpath.split(os.sep):
+        # Same #307 filter as test_np_dirs: git-ignored scratch under engine/ is
+        # not code this repo ships, and reading it fails only on the machine that
+        # happens to hold it.
+        scanned = [os.path.join(d, n)
+                   for d, _dn, fs in os.walk(os.path.join(REPO, "engine"))
+                   if "tests" not in d.split(os.sep)
+                   for n in sorted(fs) if n.endswith(".py")]
+        repo_rels = [os.path.relpath(p, REPO).replace(os.sep, "/") for p in scanned]
+        ignored = git_ignored(REPO, repo_rels)
+        for path, repo_rel in zip(scanned, repo_rels):
+            if repo_rel in ignored:
                 continue
-            for name in sorted(files):
-                if not name.endswith(".py"):
+            rel = os.path.relpath(path, os.path.join(REPO, "engine")).replace(os.sep, "/")
+            if any(rel.startswith(a) or rel == a for a in self.ADAPTER_LAYER):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                source = fh.read()
+            prose = self._prose_lines(source)
+            for number, line in enumerate(source.split("\n"), 1):
+                stripped = line.strip()
+                if stripped.startswith("#") or number in prose:
                     continue
-                path = os.path.join(dirpath, name)
-                rel = os.path.relpath(path, os.path.join(REPO, "engine"))
-                rel = rel.replace(os.sep, "/")
-                if any(rel.startswith(a) or rel == a for a in self.ADAPTER_LAYER):
-                    continue
-                with open(path, encoding="utf-8") as fh:
-                    source = fh.read()
-                prose = self._prose_lines(source)
-                for number, line in enumerate(source.split("\n"), 1):
-                    stripped = line.strip()
-                    if stripped.startswith("#") or number in prose:
-                        continue
-                    hit = (self.ENV_NAMES.search(line)
-                           or (self.BUILDS_PATH.search(line)
-                               and self.JOINING.search(line)))
-                    if hit:
-                        offenders.append("%s:%d %s" % (rel, number, stripped[:70]))
+                hit = (self.ENV_NAMES.search(line)
+                       or (self.BUILDS_PATH.search(line)
+                           and self.JOINING.search(line)))
+                if hit:
+                    offenders.append("%s:%d %s" % (rel, number, stripped[:70]))
         self.assertEqual(offenders, [],
                          "route these through np_host:\n  " + "\n  ".join(offenders))
 
