@@ -200,6 +200,28 @@ class TestTheResolverCreatesNothing(unittest.TestCase):
 
 
 
+def engine_sources(repo, skip="np_dirs.py"):
+    """Every engine .py outside tests/, minus git-ignored scratch.
+
+    Another session's scratch under engine/ (a .claude/ worktree, say) is
+    ignored, unfixable, and not something a clone elsewhere would run. Reading
+    it makes this guard red on one machine and green in CI (#307).
+
+    Module level, not a method: the tests below need the same list without
+    standing up a TestCase to get at it.
+    """
+    found = []
+    for dirpath, dirnames, files in os.walk(os.path.join(repo, "engine")):
+        if "tests" in dirpath.split(os.sep):
+            continue
+        for name in sorted(files):
+            if name.endswith(".py") and name != skip:
+                found.append(os.path.join(dirpath, name))
+    rels = [os.path.relpath(f, repo).replace(os.sep, "/") for f in found]
+    ignored = git_ignored(repo, rels)
+    return [f for f, r in zip(found, rels) if r not in ignored]
+
+
 class TestEverySiteIsConverted(unittest.TestCase):
     """No module builds either state directory inline any more.
 
@@ -217,19 +239,7 @@ class TestEverySiteIsConverted(unittest.TestCase):
         r'|expanduser\("~/\.(?:config|cache)/nervepack')
 
     def _sources(self):
-        found = []
-        for dirpath, dirnames, files in os.walk(os.path.join(self.REPO, "engine")):
-            if "tests" in dirpath.split(os.sep):
-                continue
-            for name in sorted(files):
-                if name.endswith(".py") and name != "np_dirs.py":
-                    found.append(os.path.join(dirpath, name))
-        # Another session's scratch under engine/ (a .claude/ worktree, say) is
-        # git-ignored, unfixable, and not something a clone elsewhere would run.
-        # Reading it makes this guard red locally and green in CI (#307).
-        rels = [os.path.relpath(f, self.REPO).replace(os.sep, "/") for f in found]
-        ignored = git_ignored(self.REPO, rels)
-        return [f for f, r in zip(found, rels) if r not in ignored]
+        return engine_sources(self.REPO)
 
     def test_no_module_builds_either_dir_inline(self):
         offenders = []
@@ -415,18 +425,19 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
         try:
             with open(scratch, "w", encoding="utf-8") as fh:
                 fh.write('import os\np = os.path.expanduser("~/.config/nervepack/x")\n')
-            case = TestEverySiteIsConverted()
-            self.assertNotIn(scratch, list(case._sources()))
+            self.assertNotIn(scratch, engine_sources(repo))
         finally:
-            os.remove(scratch)
-            try:
-                os.rmdir(os.path.dirname(scratch))
-            except OSError:
-                pass
+            for remove, path in ((os.remove, scratch),
+                                 (os.rmdir, os.path.dirname(scratch))):
+                try:
+                    remove(path)
+                except OSError:
+                    pass          # one cleanup failing must not skip the next
 
     def test_real_engine_sources_are_still_scanned(self):
         """Guard against a filter that swallows everything."""
-        found = list(TestEverySiteIsConverted()._sources())
+        repo = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+        found = engine_sources(repo)
         self.assertTrue(any(f.endswith("np_sync.py") for f in found), found[:5])
 
 

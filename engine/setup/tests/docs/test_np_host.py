@@ -368,10 +368,10 @@ class TestTheCoreNoLongerNamesTheHost(unittest.TestCase):
                    for d, _dn, fs in os.walk(os.path.join(REPO, "engine"))
                    if "tests" not in d.split(os.sep)
                    for n in sorted(fs) if n.endswith(".py")]
-        ignored = git_ignored(REPO, [os.path.relpath(p, REPO).replace(os.sep, "/")
-                                     for p in scanned])
-        for path in scanned:
-            if os.path.relpath(path, REPO).replace(os.sep, "/") in ignored:
+        repo_rels = [os.path.relpath(p, REPO).replace(os.sep, "/") for p in scanned]
+        ignored = git_ignored(REPO, repo_rels)
+        for path, repo_rel in zip(scanned, repo_rels):
+            if repo_rel in ignored:
                 continue
             rel = os.path.relpath(path, os.path.join(REPO, "engine")).replace(os.sep, "/")
             if any(rel.startswith(a) or rel == a for a in self.ADAPTER_LAYER):
