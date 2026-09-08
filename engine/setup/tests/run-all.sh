@@ -103,6 +103,14 @@ _restore_dash(){
 # had staged. The two dashboard files are excluded because _restore_dash above
 # already owns them and runs on the EXIT trap, after this check.
 _tracked_state(){ git -C "$NP_ROOT" status --porcelain --untracked-files=no 2>/dev/null | sort; }
+# Say so when the guard cannot run. A safety check that disables itself in
+# silence is the same class of bug it exists to catch: the suite would report
+# green while protecting nothing.
+_guard_live=1
+if ! git -C "$NP_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  _guard_live=0
+  echo "  ⚠️  repo-mutation guard OFF: $NP_ROOT is not a git checkout (or git is missing)"
+fi
 _repo_before="$(_tracked_state)"
 
 tsv="$(mktemp)"; trap 'rm -f "$tsv"; np_hermetic_cleanup; _restore_dash' EXIT
@@ -126,8 +134,11 @@ for t in "${TESTS[@]}"; do
 done
 secs=$((SECONDS - start))
 
-_leaked="$(comm -13 <(printf '%s\n' "$_repo_before") <(printf '%s\n' "$(_tracked_state)") \
-           | grep -vE 'dashboard/data/metrics\.(js|jsonl)$' || true)"
+_leaked=""
+if [[ $_guard_live -eq 1 ]]; then
+  _leaked="$(comm -13 <(printf '%s\n' "$_repo_before") <(printf '%s\n' "$(_tracked_state)") \
+             | grep -vE 'dashboard/data/metrics\.(js|jsonl)$' || true)"
+fi
 if [[ -n "$_leaked" ]]; then
   fail=$((fail+1))
   echo "  ❌ repo-mutation guard: a test wrote to a committed file"

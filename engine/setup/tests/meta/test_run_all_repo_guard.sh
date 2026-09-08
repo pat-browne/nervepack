@@ -11,14 +11,30 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER="$HERE/../run-all.sh"
 NP_ROOT="$(cd "$HERE/../../../.." && pwd)"
 
-VICTIM="$NP_ROOT/VERSION"
-[[ -f "$VICTIM" ]] || { echo "FAIL: no committed VERSION file to use as the victim"; exit 1; }
+# Any tracked file will do, so ask git for one rather than naming a path that a
+# later refactor can move. The guard watches tracked files, so the victim only
+# has to be tracked and currently unmodified -- a file with a pending edit would
+# already show in the before-snapshot and prove nothing.
+_pick_victim(){
+  local f
+  while IFS= read -r f; do
+    [[ -f "$NP_ROOT/$f" ]] || continue
+    git -C "$NP_ROOT" diff --quiet -- "$f" 2>/dev/null || continue
+    printf '%s\n' "$NP_ROOT/$f"; return 0
+  done < <(git -C "$NP_ROOT" ls-files -- 'VERSION' '*.md' '*.txt' 2>/dev/null)
+  return 1
+}
+VICTIM="$(_pick_victim)" || {
+  echo "SKIP: no clean tracked text file in $NP_ROOT to use as the victim"
+  echo "      (the guard needs one unmodified tracked file; commit or stash your edits)"
+  exit 0
+}
 
 tmp="$(mktemp -d)"
 # Restore by BYTES, never `git checkout --`: the developer may have their own
 # uncommitted edit to this file, and the test must not eat it.
-cp -p "$VICTIM" "$tmp/VERSION.orig"
-trap 'cp -p "$tmp/VERSION.orig" "$VICTIM"; rm -rf "$tmp"' EXIT
+cp -p "$VICTIM" "$tmp/victim.orig"
+trap 'cp -p "$tmp/victim.orig" "$VICTIM"; rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/tests/leaky"
 cat > "$tmp/tests/leaky/test_writes_the_repo.sh" <<T
@@ -39,7 +55,7 @@ fi
 if ! grep -q "repo-mutation guard" "$tmp/out"; then
   echo "FAIL: guard did not report the mutation"; sed 's/^/  /' "$tmp/out"; fails=1
 fi
-if ! grep -q "VERSION" "$tmp/out"; then
+if ! grep -qF "$(basename "$VICTIM")" "$tmp/out"; then
   echo "FAIL: guard did not name the file that changed"; fails=1
 fi
 # The fixture itself must have passed, or this proves nothing about the guard:
