@@ -85,8 +85,8 @@ the target repo's own convention, never a relative file path (see
 references/cross-reference-convention.md)) → guarantee an inbound
 `[[wikilink]]` → new engine skill only: register it in `plugin.json` →
 relink + regenerate INDEX → diff → commit (explicit paths, no LLM
-attribution) → ask before pushing. Full 9-step recipe with commands:
-references/steps.md
+attribution) → push (overlay: no confirmation gate; engine: PR). Full 9-step
+recipe with commands: references/steps.md
 
 ## Concurrency — both repos are one shared working tree
 
