@@ -49,6 +49,13 @@ UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook lesson-re
 # such spec, which is every repo but this one today.
 PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook drift-guard
 PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook drift-guard
+# --- 53c: spec-review gate (Write/Edit-scoped; the THIRD hook permitted to
+# interrupt -- see ARCHITECTURE invariant 1). Asks ONCE before the first
+# implementation edit on a branch whose governing spec or plan has not been
+# confirmed as reviewed. Never gates the authoring of that document, and is
+# silent in any repo that has adopted neither convention.
+PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-review
+PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-review
 # --- 54: performance evaluator ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook evaluator &
 # --- 55: promotion flush (LAST SessionEnd row -- see header) ---
