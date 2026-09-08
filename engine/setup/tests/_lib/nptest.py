@@ -83,8 +83,8 @@ def git_ignored(repo, rels):
     try:
         out = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"],
                              input=("\n".join(rels) + "\n").encode("utf-8"),
-                             capture_output=True)
-    except OSError:
+                             capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
         return set()
     if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
         return set()

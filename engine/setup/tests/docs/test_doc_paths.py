@@ -320,7 +320,12 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
         of skipping, so the assertion always runs."""
         rel = ".superpowers/np-filter-probe.md"
         path = os.path.join(REPO, rel)
-        if subprocess.run(["git", "-C", REPO, "check-ignore", "-q", rel]).returncode != 0:
+        try:
+            ignored_here = subprocess.run(
+                ["git", "-C", REPO, "check-ignore", "-q", rel]).returncode == 0
+        except OSError:
+            self.skipTest("git not available")
+        if not ignored_here:
             self.skipTest(".superpowers/ is not git-ignored in this checkout")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
@@ -328,7 +333,14 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
                 fh.write("# probe\n")
             self.assertEqual(sorted(git_ignored(REPO, [rel])), [rel])
         finally:
-            os.remove(path)
+            # Every step attempted: one failing must not skip the next, and a
+            # probe left behind would change what the next run scans.
+            for remove, target in ((os.remove, path),
+                                   (os.rmdir, os.path.dirname(path))):
+                try:
+                    remove(target)
+                except OSError:
+                    pass
 
     def test_it_fails_open_outside_a_git_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
