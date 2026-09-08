@@ -327,6 +327,22 @@ class NpSync(unittest.TestCase):
         self.assertIn("fast-forwarded", out)
 
 
+    def test_a_failing_setup_step_is_reported_not_swallowed(self):
+        """Best-effort must not mean silent. A step that exits non-zero leaves
+        skills unlinked or hooks unregistered while sync reports a clean
+        fast-forward, which is the exact failure this change exists to remove."""
+        d = os.path.join(self.target, "engine", "nervepack_engine")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(self.target, ".git", "info", "exclude"), "a", encoding="utf-8") as fh:
+            fh.write("\nengine/\n")
+        with open(os.path.join(d, "cli.py"), "w", encoding="utf-8") as fh:
+            fh.write("import sys\nsys.stderr.write('boom\\n')\nsys.exit(2)\n")
+        self._advance_remote()
+        out, err = self._run_full("exit")
+        self.assertIn("fast-forwarded", out)
+        self.assertIn("setup link-skills failed (exit 2)", err)
+        self.assertIn("boom", err)
+
     def test_the_setup_steps_sync_asks_for_actually_exist(self):
         """np_sync names these steps as strings, and cli.py owns the table they
         resolve against. Nothing else couples the two, so a renamed step would

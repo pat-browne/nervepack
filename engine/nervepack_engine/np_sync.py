@@ -196,13 +196,24 @@ def _setup_step(target, step):
     """
     cli = os.path.join(target, "engine", "nervepack_engine", "cli.py")
     if not os.path.isfile(cli):
+        sys.stderr.write("np-core-sync: no cli.py at %s — skipped setup %s\n" % (cli, step))
         return
     try:
-        subprocess.run([sys.executable, cli, "setup", step],
-                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
+        done = subprocess.run([sys.executable, cli, "setup", step],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.PIPE, text=True)
+    except OSError as exc:
+        sys.stderr.write("np-core-sync: could not run setup %s: %s\n" % (step, exc))
+        return
+    # Best-effort, so a failure never stops the sync — but it must not be silent
+    # either. That is the failure mode this whole change is about: skills stay
+    # unlinked or hooks unregistered, and sync reports success. Same stderr
+    # channel _ff_only_layer_sync already uses for a layer it could not pull.
+    if done.returncode != 0:
+        detail = (done.stderr or "").strip().splitlines()
+        sys.stderr.write("np-core-sync: setup %s failed (exit %d)%s\n"
+                         % (step, done.returncode,
+                            ": " + detail[0] if detail else ""))
 
 
 def _relink_skills(target):

@@ -76,8 +76,11 @@ is the honest condition and a wrong signal is worse than an extra call.
 - Security: the subprocess runs `cli.py` from the synced target by absolute
   path, with no shell, and is skipped when that file is absent.
 - Privacy: none.
-- Observability: the steps stay best-effort with output discarded, matching
-  the bash installers beside them.
+- Observability: the steps stay best-effort, but a non-zero exit writes an
+  stderr note naming the step, the code and the first line of its own stderr.
+  Discarding it would leave skills unlinked while sync reported a clean
+  fast-forward, which is the failure shape this spec exists to remove. Same
+  channel `_ff_only_layer_sync` already uses for a layer it could not pull.
 
 ## Consequences
 
