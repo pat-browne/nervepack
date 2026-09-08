@@ -68,10 +68,32 @@
    git -C "$REPO" commit -m "skill(<name>): <what changed>" -- <changed paths>
    ```
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
-9. **Push the overlay without asking.** Fetch, rebase onto `origin/main`, then
-   `git -C "$REPO" push` — no confirmation gate. The private overlay has no CI
-   gate, so asking turns a finished capture into an extra round trip. Fast-forward
-   `origin/main` when the branch is exactly main plus this commit. **Engine
-   changes never direct-push** — `np-core-*`/`np-flow-*` skills and anything
-   under `engine/` or `dashboard/` still go through a PR that merges on green
-   CI, with a company-neutral message.
+9. **Push the overlay without asking.** The private overlay has no CI gate, so
+   asking turns a finished capture into an extra round trip.
+   ```bash
+   git -C "$REPO" fetch origin main
+   git -C "$REPO" rebase origin/main    # stop here if it conflicts
+   git -C "$REPO" push origin HEAD:main
+   ```
+   The push is a fast-forward when the local branch is `origin/main` plus this
+   one commit, which is the normal case for a capture.
+
+   **Both commands can fail, and dropping the confirmation gate is what makes
+   that worth writing down.** Nobody is watching the terminal any more.
+
+   - **Rebase conflicts:** run `git -C "$REPO" rebase --abort` and tell the user
+     which files conflicted. Never resolve a conflict in someone else's capture
+     to get the push through — the commit is already safe on the local branch,
+     and an unpushed capture costs one round trip while a wrong resolution
+     silently rewrites their content.
+   - **Push rejected** (someone landed between the fetch and the push): fetch and
+     rebase once more, then push again. Stop after the second rejection and say
+     so, rather than looping against a branch another session is writing to.
+   - **Push fails on auth or the network:** say which, and leave the commit where
+     it is. It is not lost; it is one `git push` away on the next run.
+   - **Report the outcome either way.** Name the remote and the SHA on success.
+     Silence reads as success, and a capture nobody pushed is one nobody has.
+
+   **Engine changes never direct-push** — `np-core-*`/`np-flow-*` skills and
+   anything under `engine/` or `dashboard/` still go through a PR that merges on
+   green CI, with a company-neutral message.
