@@ -360,6 +360,19 @@ class NpSync(unittest.TestCase):
         self.assertIn("fast-forwarded", r.stdout)
         self.assertIn("setup link-skills timed out after 1s", r.stderr)
 
+    def test_a_zero_timeout_cannot_switch_the_steps_off(self):
+        """NP_SETUP_STEP_TIMEOUT=0 would expire every step instantly, which is an
+        off switch wearing a tuning knob's clothes."""
+        marker = self._stub_cli()
+        self._advance_remote()
+        env = self._env()
+        env["NP_SETUP_STEP_TIMEOUT"] = "0"
+        r = subprocess.run([sys.executable, _PY, "exit"], capture_output=True,
+                           text=True, env=env, timeout=60)
+        self.assertIn("fast-forwarded", r.stdout)
+        self.assertEqual(self._setup_calls(marker),
+                         ["setup link-skills", "setup install-hooks"])
+
     def test_the_setup_steps_sync_asks_for_actually_exist(self):
         """np_sync names these steps as strings, and cli.py owns the table they
         resolve against. Nothing else couples the two, so a renamed step would

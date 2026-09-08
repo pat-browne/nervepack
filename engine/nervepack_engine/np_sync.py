@@ -203,7 +203,10 @@ def _setup_step(target, step):
     # Generous rather than tight — these finish in well under a second on a healthy
     # box, and a slow-but-working machine must not lose its relink to the clock.
     try:
-        limit = int(os.environ.get("NP_SETUP_STEP_TIMEOUT") or 120)
+        # Floor of 1s: NP_SETUP_STEP_TIMEOUT=0 would expire every step instantly,
+        # turning the env var into an off switch for the post-pull steps — the
+        # silent no-op this change exists to remove, reintroduced by a typo.
+        limit = max(1, int(os.environ.get("NP_SETUP_STEP_TIMEOUT") or 120))
     except ValueError:
         limit = 120
     try:
