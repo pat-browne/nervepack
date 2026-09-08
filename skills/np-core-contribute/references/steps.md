@@ -102,9 +102,10 @@
    - **Report the outcome, and know who is reading.** Name the remote and the
      short SHA on success, the failure and the affected paths otherwise.
      Interactively, your reply is the whole reporting surface — there is no log
-     to check and no alert to page. **Run from a cron or a backgrounded hook
-     there is no reply at all**, so write the same line to the job's log
-     (`np-core-doctor` § log-patterns) and exit non-zero. The scheduled agents
+     to check and no alert to page. **When you run from a cron or a backgrounded
+     hook there is no reply at all**, so write the same line to the job's log
+     (`np-core-doctor` § log-patterns), and exit non-zero on a failure so the
+     job itself is marked failed rather than quietly clean. The scheduled agents
      in `agents/np-flow-scheduled-refine.md` and `agents/np-flow-weekly-compact.md`
      take this path. Silence reads as success, and a capture nobody pushed is
      one nobody has.
