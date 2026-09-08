@@ -117,6 +117,19 @@ class TestNpEvaluator(unittest.TestCase):
         with open(os.environ["EVAL_JUDGE_LOG"], encoding="utf-8") as fh:
             self.assertIn("bail", fh.read())
 
+    def test_6_empty_transcript_extraction_bails_before_the_judge(self):
+        """np-transcript-extract.py documents 'read/parse error -> empty stdout,
+        exit 0 (the caller bails cleanly)'; evaluate() must honour that instead
+        of scoring an empty log and banking the judge's complaint as a record."""
+        payload = dict(self._payload(), transcript_path=os.path.join(self.tmp, "gone.jsonl"))
+        with mock.patch.object(np_evaluator.np_model, "complete") as m:
+            status = np_evaluator.evaluate(payload)
+            m.assert_not_called()
+        self.assertEqual(status, "evaluated")
+        self.assertFalse(os.path.isdir(os.environ["EVAL_INBOX"]) and os.listdir(os.environ["EVAL_INBOX"]))
+        with open(os.environ["EVAL_JUDGE_LOG"], encoding="utf-8") as fh:
+            self.assertIn("empty transcript", fh.read())
+
 
 if __name__ == "__main__":
     unittest.main()

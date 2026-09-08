@@ -135,6 +135,10 @@ def evaluate(payload):
     cap = os.environ.get("EVAL_CAP_BYTES") or np_toggle.param("evaluator.cap_bytes", "32000")
     convo = subprocess.run([sys.executable, os.path.join(np_paths.SETUP_DIR, "np-transcript-extract.py"),
                             transcript or os.devnull, str(cap)], capture_output=True, text=True).stdout
+    # The extractor fails open to empty stdout; scoring that banks the judge's
+    # "give me a log" reply as a real 0-score record (224 of them by 2026-09-08).
+    if not convo.strip():
+        return bail("empty transcript extraction for %s" % (transcript or "<no path>"))
 
     raw = np_model.complete(_PROMPT_HEAD + convo + _prompt_tail(signals), _SYS)
     if not raw.strip():
