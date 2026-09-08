@@ -14,7 +14,9 @@ Invoked today as a direct script path (no install step required):
 
 Preserves invariant 1 (fail-open: every path returns 0, logs one dated bail
 line) and invariant 2 (NERVEPACK_AGENT re-entry guard) exactly as the bash
-hooks it replaces.
+hooks it replaces -- for the hook and cron paths. Operator-typed commands are
+the opposite case: an unknown verb or setup step exits 2 with a diagnostic and
+usage on stderr, because silence there reads as success (#277, #289).
 """
 import datetime
 import os
@@ -158,6 +160,37 @@ def _parse_merge_wait_args(argv):
     return kwargs
 
 
+# Every top-level verb main() dispatches, in the order the if-chain tests them.
+# test_cli.py::test_commands_tuple_matches_the_dispatch_chain greps this file and
+# fails if the two drift, so usage output can never go stale against dispatch.
+_COMMANDS = (
+    "resume-write", "cron", "setup", "layout", "onboard", "implement-suggestion",
+    "merge-wait", "suggestion-resolve", "suggestion-unresolve", "toggle", "doctor",
+    "instruction-block", "sync", "open-dashboard", "hook",
+)
+
+
+def _usage():
+    def group(label, names):
+        return "  %-14s %s\n" % (label, " ".join(sorted(names)))
+    return ("usage: cli.py <command> [args]\n\ncommands:\n  "
+            + " ".join(_COMMANDS) + "\n\n"
+            + group("hook", _HOOKS) + group("cron", _CRONS)
+            + group("setup", list(_SETUP) + ["mcp-install"]))
+
+
+def _unknown(what, name):
+    """Operator-facing dispatch failure: diagnose on stderr, exit non-zero.
+
+    Fail-open (invariant 1) is for hooks, where a crash must not block the
+    session. A typed command is the opposite case: silence there is
+    indistinguishable from success, and the caller acts on a no-op (#277, #289).
+    """
+    sys.stderr.write("cli.py: unknown %s: %s\n\n" % (what, name))
+    sys.stderr.write(_usage())
+    return 2
+
+
 def _log_path():
     return os.environ.get("NERVEPACK_CLI_LOG") or np_dirs.cache_path("nervepack-cli.log")
 
@@ -205,6 +238,11 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
 
     if not argv:
+        sys.stderr.write(_usage())
+        return 2
+
+    if argv[0] in ("--help", "-h", "help"):
+        sys.stdout.write(_usage())
         return 0
 
     if argv[0] == "resume-write":
@@ -250,7 +288,7 @@ def main(argv=None):
         fn = _SETUP.get(name)
         if fn is None:
             _bail("setup", "unknown setup step: %s" % name)
-            return 0
+            return _unknown("setup step", name)
         # Unlike hook/cron, a setup step has a real, intentional non-zero exit
         # (wrong-OS refusal) that np-onboard.sh's step_cli() logs and continues
         # past -- not the hook/cron fail-open-to-0 contract.
@@ -405,7 +443,10 @@ def main(argv=None):
             _bail("open-dashboard", "unhandled exception: %r" % exc)
             return 0
 
-    if argv[0] != "hook" or len(argv) < 2:
+    if argv[0] != "hook":
+        return _unknown("command", argv[0])
+
+    if len(argv) < 2:
         return 0
 
     name = argv[1]
