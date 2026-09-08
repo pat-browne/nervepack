@@ -45,6 +45,11 @@ never reused — this is the only mechanism that preserves *why* a rejected path
 was rejected, and with one maintainer that is the only institutional memory
 there is.
 
+`engine/setup/tests/docs/test_change_spec_ids.py` enforces the id rule: every
+spec declares one, every id is four digits, and no two specs share one. It lives
+in the suite rather than in `spec-guard` because a collision is a repo-wide
+property, and that gate only ever reads the files a pull request touched.
+
 ## `[NEEDS CLARIFICATION]`
 
 Mark an underspecified point with this exact string rather than guessing.

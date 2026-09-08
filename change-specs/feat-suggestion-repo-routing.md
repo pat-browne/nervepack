@@ -1,5 +1,5 @@
 ---
-id: 0026
+id: 0032
 status: proposed
 date: 2026-09-04
 tier: normal
@@ -13,7 +13,7 @@ blast_radius:
   - docs/ARCHITECTURE.md
 ---
 
-# 0026: Route a suggestion to the repo its evaluator target names
+# 0032: Route a suggestion to the repo its evaluator target names
 
 ## Context and problem statement
 
