@@ -1,5 +1,5 @@
 ---
-id: 0020
+id: 0031
 status: proposed
 date: 2026-08-26
 tier: high
@@ -16,7 +16,7 @@ blast_radius:
   - engine/setup/tests/nervepack_engine/test_turn_gate.py
 ---
 
-# 0020: durable-text form gate
+# 0031: durable-text form gate
 
 ## Context and problem statement
 
