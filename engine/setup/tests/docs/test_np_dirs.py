@@ -16,8 +16,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:
     sys.path.insert(0, _ENGINE_SETUP)
+sys.path.insert(0, os.path.join(HERE, "..", "_lib"))
 
 import np_dirs  # noqa: E402
+from nptest import git_ignored  # noqa: E402
 
 
 class _Env(object):
@@ -198,6 +200,28 @@ class TestTheResolverCreatesNothing(unittest.TestCase):
 
 
 
+def engine_sources(repo, skip="np_dirs.py"):
+    """Every engine .py outside tests/, minus git-ignored scratch.
+
+    Another session's scratch under engine/ (a .claude/ worktree, say) is
+    ignored, unfixable, and not something a clone elsewhere would run. Reading
+    it makes this guard red on one machine and green in CI (#307).
+
+    Module level, not a method: the tests below need the same list without
+    standing up a TestCase to get at it.
+    """
+    found = []
+    for dirpath, dirnames, files in os.walk(os.path.join(repo, "engine")):
+        if "tests" in dirpath.split(os.sep):
+            continue
+        for name in sorted(files):
+            if name.endswith(".py") and name != skip:
+                found.append(os.path.join(dirpath, name))
+    rels = [os.path.relpath(f, repo).replace(os.sep, "/") for f in found]
+    ignored = git_ignored(repo, rels)
+    return [f for f, r in zip(found, rels) if r not in ignored]
+
+
 class TestEverySiteIsConverted(unittest.TestCase):
     """No module builds either state directory inline any more.
 
@@ -215,12 +239,7 @@ class TestEverySiteIsConverted(unittest.TestCase):
         r'|expanduser\("~/\.(?:config|cache)/nervepack')
 
     def _sources(self):
-        for dirpath, dirnames, files in os.walk(os.path.join(self.REPO, "engine")):
-            if "tests" in dirpath.split(os.sep):
-                continue
-            for name in sorted(files):
-                if name.endswith(".py") and name != "np_dirs.py":
-                    yield os.path.join(dirpath, name)
+        return engine_sources(self.REPO)
 
     def test_no_module_builds_either_dir_inline(self):
         offenders = []
@@ -386,6 +405,40 @@ class TestANewBranchCannotLeaveAStaleMarker(unittest.TestCase):
         after = body[body.index("if not base:"):]
         self.assertNotIn("discard", after)
         self.assertNotIn(".pop(", after)
+
+
+
+class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
+    """#307: this guard walks the filesystem, so it used to read another
+    session's git-ignored scratch under engine/. That is red on one machine and
+    green in CI, for a file nobody can fix, which is the shape that teaches
+    people to ignore a failing guard."""
+
+    def test_an_ignored_source_under_engine_is_not_scanned(self):
+        import subprocess
+        repo = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+        scratch = os.path.join(repo, "engine", ".claude", "np307_scratch.py")
+        if subprocess.run(["git", "-C", repo, "check-ignore", "-q",
+                           os.path.relpath(scratch, repo)]).returncode != 0:
+            self.skipTest("engine/.claude is not git-ignored in this checkout")
+        os.makedirs(os.path.dirname(scratch), exist_ok=True)
+        try:
+            with open(scratch, "w", encoding="utf-8") as fh:
+                fh.write('import os\np = os.path.expanduser("~/.config/nervepack/x")\n')
+            self.assertNotIn(scratch, engine_sources(repo))
+        finally:
+            for remove, path in ((os.remove, scratch),
+                                 (os.rmdir, os.path.dirname(scratch))):
+                try:
+                    remove(path)
+                except OSError:
+                    pass          # one cleanup failing must not skip the next
+
+    def test_real_engine_sources_are_still_scanned(self):
+        """Guard against a filter that swallows everything."""
+        repo = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+        found = engine_sources(repo)
+        self.assertTrue(any(f.endswith("np_sync.py") for f in found), found[:5])
 
 
 if __name__ == "__main__":
