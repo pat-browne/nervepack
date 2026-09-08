@@ -22,6 +22,7 @@ explanation of what was removed.
 """
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -310,13 +311,24 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
         self.assertEqual(sorted(git_ignored(REPO, rels)), [])
 
     def test_the_filter_actually_ignores_something_here(self):
-        """Guard against a filter that silently matches nothing: this checkout
-        does hold ignored markdown, and git must say so."""
-        planted = [r for r in [".superpowers/sdd/progress.md"]
-                   if os.path.isfile(os.path.join(REPO, r))]
-        if not planted:
-            self.skipTest("no ignored markdown present in this checkout")
-        self.assertEqual(sorted(git_ignored(REPO, planted)), sorted(planted))
+        """Guard against a filter that silently matches nothing, which reads
+        exactly like a clean scan.
+
+        This used to skip when the checkout held no ignored markdown, so it
+        never ran in CI -- and the filter was in fact dead on the Windows lane,
+        where a text-mode stdin pipe sent git "path\r". Plant the file instead
+        of skipping, so the assertion always runs."""
+        rel = ".superpowers/np-filter-probe.md"
+        path = os.path.join(REPO, rel)
+        if subprocess.run(["git", "-C", REPO, "check-ignore", "-q", rel]).returncode != 0:
+            self.skipTest(".superpowers/ is not git-ignored in this checkout")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# probe\n")
+            self.assertEqual(sorted(git_ignored(REPO, [rel])), [rel])
+        finally:
+            os.remove(path)
 
     def test_it_fails_open_outside_a_git_repo(self):
         with tempfile.TemporaryDirectory() as tmp:

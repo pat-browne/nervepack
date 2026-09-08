@@ -76,12 +76,18 @@ def git_ignored(repo, rels):
     rels = list(rels)
     if not rels:
         return set()
+    # BYTES, not text=True. A text-mode stdin pipe translates "\n" to os.linesep
+    # on write, so on Windows git reads "path\r" and matches nothing. That fails
+    # open to "nothing is ignored", which reads exactly like a clean scan -- the
+    # filter was silently dead on the Windows lane before this.
     try:
         out = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"],
-                             input="\n".join(rels), capture_output=True, text=True)
+                             input=("\n".join(rels) + "\n").encode("utf-8"),
+                             capture_output=True)
     except OSError:
         return set()
     if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
         return set()
     return {line.strip().replace(os.sep, "/")
-            for line in out.stdout.splitlines() if line.strip()}
+            for line in out.stdout.decode("utf-8", "replace").splitlines()
+            if line.strip()}
