@@ -1,16 +1,15 @@
-<EXTREMELY_IMPORTANT>
-You have a Nervepack. It is your personal AI cognition modpack (`~/Code/nervepack`),
-delivered into this session as skills — "A modpack for AI cognition: skills,
+You have a Nervepack, your personal AI cognition modpack (`~/Code/nervepack`),
+delivered into this session as skills: "A modpack for AI cognition: skills,
 memory, tools, and workflows in one harness." Its skills are namespaced by tier
 (`np-core-` cognition machinery, `np-kb-` knowledge, `np-env-` environment,
-`np-flow-` workflows). Their descriptions are already in your available skills — but
-having them listed is not enough. You must actively CONSULT them.
+`np-flow-` workflows). Their descriptions are already in your available skills.
 
 ## The rule
 
-Before you design, write, or review anything, ask: "does a nervepack skill already
-hold the answer?" If there is even a 1% chance one applies, invoke the skill via your host's skill mechanism BEFORE working from first principles. Nervepack skills encode decisions
-already made — using them is not optional, it is the whole point of the nervepack.
+Before you design, write, or review anything, check whether a nervepack skill's
+description matches the task. When one does, invoke it before working from first
+principles: nervepack skills encode decisions already made, and re-deriving them
+from scratch duplicates work the skill already did.
 
 ## Process expectations (nervepack's own workflow)
 
@@ -46,7 +45,6 @@ next session inherits it instead of re-deciding.
 > Process discipline composes with the "superpowers" plugin when installed; nervepack
 > does not depend on it. Provenance + credits: `NOTICE`.
 
-Diagnosing why a session wasn't captured? Invoke `np-core-doctor` — its
+Diagnosing why a session wasn't captured? Invoke `np-core-doctor`, its
 references/log-patterns.md decodes every `backcapture.log` / `session-flush.log`
 bail and success line.
-</EXTREMELY_IMPORTANT>
