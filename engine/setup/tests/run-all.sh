@@ -91,6 +91,28 @@ _restore_dash(){
   rm -rf "$_dash_snap"
 }
 
+# A test must never write a file this repo has committed. The harness gives every
+# test a hermetic HOME, but nothing stopped one reaching back into the checkout --
+# and one did: a toggle test called flip() on a SHARED family, which writes
+# set_conf_state() straight into engine/setup/toggles.conf, and the flipped default
+# rode into a commit. A green suite said nothing, because the leak is invisible to
+# the test that causes it. Snapshot the tracked-file state and compare after the run.
+#
+# Detect, never restore. A test that mutates the checkout is a bug to fix at the
+# source; silently reverting it would hide the bug and lose whatever the developer
+# had staged. The two dashboard files are excluded because _restore_dash above
+# already owns them and runs on the EXIT trap, after this check.
+_tracked_state(){ git -C "$NP_ROOT" status --porcelain --untracked-files=no 2>/dev/null | sort; }
+# Say so when the guard cannot run. A safety check that disables itself in
+# silence is the same class of bug it exists to catch: the suite would report
+# green while protecting nothing.
+_guard_live=1
+if ! git -C "$NP_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  _guard_live=0
+  echo "  ⚠️  repo-mutation guard OFF: $NP_ROOT is not a git checkout (or git is missing)"
+fi
+_repo_before="$(_tracked_state)"
+
 tsv="$(mktemp)"; trap 'rm -f "$tsv"; np_hermetic_cleanup; _restore_dash' EXIT
 pass=0 fail=0
 start=$SECONDS
@@ -111,6 +133,20 @@ for t in "${TESTS[@]}"; do
   fi
 done
 secs=$((SECONDS - start))
+
+_leaked=""
+if [[ $_guard_live -eq 1 ]]; then
+  _leaked="$(comm -13 <(printf '%s\n' "$_repo_before") <(printf '%s\n' "$(_tracked_state)") \
+             | grep -vE 'dashboard/data/metrics\.(js|jsonl)$' || true)"
+fi
+if [[ -n "$_leaked" ]]; then
+  fail=$((fail+1))
+  echo "  ❌ repo-mutation guard: a test wrote to a committed file"
+  printf '%s\n' "$_leaked" | sed 's/^/      /'
+  echo "      Fix the test that did it. Isolate the path it writes (NP_TOGGLES_CONF,"
+  echo "      NP_TOGGLES_LOCAL, CLAUDE_SETTINGS, HOME) rather than reverting the file."
+  printf '%s\t%s\t%s\tFAIL\n' "test-runner" "failure" "repo-mutation-guard" >> "$tsv"
+fi
 
 echo "----"
 echo "$pass passed / $fail failed in ${secs}s"
