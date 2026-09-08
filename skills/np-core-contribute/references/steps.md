@@ -70,22 +70,20 @@
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
 9. **Push the overlay without asking.** The private overlay has no CI gate, so
    asking turns a finished capture into an extra round trip.
+   The shape, not a script to paste — check every command and handle the
+   failures listed below:
    ```bash
    git -C "$REPO" fetch origin main
-   git -C "$REPO" rebase origin/main || {
-     git -C "$REPO" diff --name-only --diff-filter=U    # capture BEFORE aborting
-     git -C "$REPO" rebase --abort
-     exit 1
-   }
+   git -C "$REPO" rebase origin/main
    git -C "$REPO" push origin HEAD:main
    ```
    The push is a fast-forward when the local branch is `origin/main` plus this
    one commit, which is the normal case for a capture.
 
-   **Both commands can fail, and dropping the confirmation gate is what makes
-   that worth writing down.** The user is still there — what is gone is the
-   prompt that used to make them look. Your reply in chat is now the only signal
-   that the push happened, so it has to carry the outcome.
+   **Every one of those can fail, and dropping the confirmation gate is what
+   makes that worth writing down.** Interactively the user is still there; what
+   is gone is the prompt that used to make them look. Nothing else announces the
+   push, so whatever you report has to carry the outcome.
 
    - **Rebase conflicts:** list the conflicted paths with `git diff --name-only
      --diff-filter=U` **before** `git -C "$REPO" rebase --abort` — the abort
@@ -99,11 +97,17 @@
      so, rather than looping against a branch another session is writing to.
    - **Push fails on auth or the network:** say which, and leave the commit where
      it is. It is not lost; it is one `git push` away on the next run.
-   - **Report the outcome either way, in the reply itself.** Name the remote and
-     the short SHA on success, and the failure and the affected paths otherwise.
-     There is no log to check and no alert to page: a skill runs inside a
-     session, and the reply is the whole reporting surface. Silence reads as
-     success, and a capture nobody pushed is one nobody has.
+   - **A failed `fetch` stops the run.** Rebasing onto a stale `origin/main` and
+     pushing the result is how you overwrite work you never saw.
+   - **Report the outcome, and know who is reading.** Name the remote and the
+     short SHA on success, the failure and the affected paths otherwise.
+     Interactively, your reply is the whole reporting surface — there is no log
+     to check and no alert to page. **Run from a cron or a backgrounded hook
+     there is no reply at all**, so write the same line to the job's log
+     (`np-core-doctor` § log-patterns) and exit non-zero. The scheduled agents
+     in `agents/np-flow-scheduled-refine.md` and `agents/np-flow-weekly-compact.md`
+     take this path. Silence reads as success, and a capture nobody pushed is
+     one nobody has.
 
    **Engine changes never direct-push** — `np-core-*`/`np-flow-*` skills and
    anything under `engine/` or `dashboard/` still go through a PR that merges on
