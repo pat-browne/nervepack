@@ -35,6 +35,17 @@
   sync. Concrete case: the 2026-07 doubled-`engine/engine`-path fix in the scheduler
   installers left macOS/Windows scheduled-maintenance jobs silently dead until a re-onboard
   regenerated the plists/tasks — a plain sync would have left them broken.
+- **The in-process sibling of that gotcha is fixed (#243).** The post-pull steps used
+  to run in-process, and `cli.py` imports `np_link_skills`, `np_hook` and
+  `np_generate_index` at module scope, before the fast-forward. A pulled fix to one of
+  those steps therefore applied only from the *next* sync. Each step now runs as a
+  fresh `cli.py setup` process from the synced tree, so a pulled fix applies on the run
+  that pulls it. The OS-scheduler caveat above still stands: a process boundary makes
+  the *code* fresh, and re-onboarding is still what rewrites an installed artifact.
+- **A relink now follows any layer fast-forward (#284).** Skills live in the content
+  overlay, but only an *engine* fast-forward used to relink. A new overlay skill stayed
+  invisible until the engine happened to move for unrelated reasons, while sync
+  honestly reported "up to date". A content- or team-layer pull now relinks too.
 
 ## Why this is safe across many session starts before cron runs
 

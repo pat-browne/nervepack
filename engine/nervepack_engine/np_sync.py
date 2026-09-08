@@ -11,9 +11,12 @@ Full parity with the retired 40-sync-nervepack.sh:
     NP_SYNC_DRYRUN, and the status-file writes (NP_SYNC_STATUS / ~/.cache/np-core-sync-status);
   * the 5 engine cases (up-to-date clean/dirty, dirty+behind, ahead, fast-forward,
     diverged), plus not-a-git and fetch-failed;
-  * on a successful fast-forward: relink skills (np_link_skills.link, in-process),
-    re-apply hook registration (np_hook.install_hooks, in-process), and re-run the
-    remaining non-hook [56][0-9]-install-*.sh installers from the SYNCED target;
+  * on a successful engine fast-forward: relink skills and re-apply hook
+    registration (each a fresh `cli.py setup` process from the SYNCED target, so a
+    pulled fix to those steps applies on the run that pulls it — #243), and re-run
+    the remaining non-hook [56][0-9]-install-*.sh installers from that same target;
+  * a relink after ANY layer fast-forwards, since skills arrive in the content
+    overlay and only the engine path used to trigger one (#284);
   * the optional team-layer ff (ff-only per configured team dir, one repo at a time),
     armed AFTER the disabled/throttle/dry-run early-outs so a deliberate skip never
     fires the team fetch — mirroring the bash EXIT-trap ordering.
@@ -40,7 +43,6 @@ if _SETUP not in sys.path:
     sys.path.insert(0, _SETUP)
 
 import glob
-import io
 import os
 import subprocess
 import sys
@@ -49,7 +51,6 @@ import time
 import np_bashlib
 import np_content
 import np_layout
-import np_link_skills
 import np_toggle
 import np_dirs
 
@@ -108,10 +109,15 @@ def _ff_only_layer_sync(path, kind):
     (test_content_layer_ahead_is_reported_not_pushed); _team_sync had the
     identical latent gap, untested, and is fixed here too now that both share
     this one function. Non-fatal; stderr notes only. `kind` names the layer in
-    the message ("team layer" / "content layer")."""
+    the message ("team layer" / "content layer").
+
+    Returns True only when this call actually moved HEAD, so the caller can
+    relink once for the layers that gained files (#284). "Already level" is
+    False: nothing arrived, so there is nothing new to link."""
     if _git(path, "status", "--porcelain").stdout.strip() != "":
         sys.stderr.write("np-core-sync: %s %s has local edits — skipping pull\n" % (kind, path))
-        return
+        return False
+    before = _git(path, "rev-parse", "HEAD").stdout.strip()
     ok = _git(path, "fetch", "--quiet", "origin").returncode == 0
     if ok:
         behind_or_equal = _is_ancestor(path, "HEAD", "@{u}")
@@ -119,6 +125,9 @@ def _ff_only_layer_sync(path, kind):
     if not ok:
         sys.stderr.write("np-core-sync: %s %s not fast-forwarded "
                          "(diverged/ahead/no upstream) — left as-is\n" % (kind, path))
+        return False
+    after = _git(path, "rev-parse", "HEAD").stdout.strip()
+    return bool(before) and bool(after) and before != after
 
 
 def _team_sync():
@@ -126,13 +135,15 @@ def _team_sync():
     _ff_only_layer_sync. Mirrors bash _np_team_sync. No-op when the `team`
     toggle is off."""
     if not np_toggle.enabled("team"):
-        return
+        return False
+    moved = False
     for td in np_content.team_dirs():
         if not td:
             continue
         if _git(td, "rev-parse", "--is-inside-work-tree").returncode != 0:
             continue
-        _ff_only_layer_sync(td, "team layer")
+        moved = _ff_only_layer_sync(td, "team layer") or moved
+    return moved
 
 
 def _content_sync():
@@ -143,15 +154,15 @@ def _content_sync():
     engine root itself -- there is no separate repo to sync, and touching it
     would double-process the engine under a second name)."""
     if np_toggle.param("sync.content", "on") != "on":
-        return
+        return False
     if not np_content.content_is_explicit():
-        return
+        return False
     cd = np_content.content_dir()
     if not cd:
-        return
+        return False
     if _git(cd, "rev-parse", "--is-inside-work-tree").returncode != 0:
-        return
-    _ff_only_layer_sync(cd, "content layer")
+        return False
+    return _ff_only_layer_sync(cd, "content layer")
 
 
 def _layout_validity_check():
@@ -173,22 +184,44 @@ def _layout_validity_check():
             sys.stderr.write("np-core-sync: layout manifest invalid in %s: %s\n" % (r, exc))
 
 
-def _post_ff_steps(target):
-    """After a successful fast-forward: relink skills + re-apply hook registration
-    (both in-process) and re-run the remaining non-hook [56][0-9]-install-*.sh
-    installers from the SYNCED target. All best-effort (bash `|| true` semantics)."""
+def _setup_step(target, step):
+    """Run one `cli.py setup <step>` as a FRESH process from the SYNCED target.
+
+    Calling these in-process ran the pre-fix code: cli.py imports np_link_skills,
+    np_hook and np_generate_index at module scope, before the fast-forward, and
+    sys.modules caches them. A pulled fix to a post-pull step therefore applied
+    only from the NEXT sync, and #242 showed that unrecoverable: a stale
+    generate-index deleted the rows the pulled repair existed to carry over.
+    The bash installers below always had freshness by process boundary (#243).
+    """
+    cli = os.path.join(target, "engine", "nervepack_engine", "cli.py")
+    if not os.path.isfile(cli):
+        return
     try:
-        np_link_skills.link(np_dir=target, out=io.StringIO())
-    except Exception:
+        subprocess.run([sys.executable, cli, "setup", step],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+    except OSError:
         pass
+
+
+def _relink_skills(target):
+    """The one post-pull step a CONTENT-layer pull needs. Skills live in the
+    overlay, so an overlay fast-forward is exactly when new ones appear, but
+    only an ENGINE fast-forward used to relink (#284). Idempotent and cheap."""
+    _setup_step(target, "link-skills")
+
+
+def _post_ff_steps(target):
+    """After a successful ENGINE fast-forward: relink skills + re-apply hook
+    registration (each a fresh `cli.py setup` process from the SYNCED target) and
+    re-run the remaining non-hook [56][0-9]-install-*.sh installers from that same
+    target. All best-effort (bash `|| true` semantics)."""
+    _relink_skills(target)
     # Re-apply hook registration so a pulled change to a hook's registered command
     # (or a new hook row) reaches settings.json — git pull alone updates the scripts
-    # on disk but never re-applies them (phase 13: install-hooks, in-process here).
-    try:
-        import np_hook
-        np_hook.install_hooks()
-    except Exception:
-        pass
+    # on disk but never re-applies them.
+    _setup_step(target, "install-hooks")
     # Re-run the remaining non-hook 5x/6x installers (58-install-mcp.sh +
     # 62-install-scheduled-auth-token.sh post-consolidation) from the SYNCED target,
     # so a pulled change to them re-applies too. Same [56][0-9]-install-*.sh glob as
@@ -293,8 +326,13 @@ def sync(mode="backup", verbose=False):
     status_file = os.environ.get("NP_SYNC_STATUS") or os.path.join(
         _home(), ".cache", "np-core-sync-status")
     outcome = _engine_sync(target, status_file)
-    _team_sync()
-    _content_sync()
+    team_moved = _team_sync()
+    content_moved = _content_sync()
+    # An overlay pull is where new skills arrive, and _engine_sync relinks only on
+    # an ENGINE fast-forward. Without this, a new overlay skill stayed unlinked
+    # until the engine happened to move too, which is unrelated timing (#284).
+    if team_moved or content_moved:
+        _relink_skills(target)
     _layout_validity_check()
     return outcome
 

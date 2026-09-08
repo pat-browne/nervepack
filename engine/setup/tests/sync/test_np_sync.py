@@ -130,6 +130,32 @@ class NpSync(unittest.TestCase):
         r = subprocess.run([sys.executable, _PY, *args], capture_output=True, text=True, env=env)
         return r.stdout.strip(), r.stderr
 
+    def _stub_cli(self, target=None):
+        """Plant a cli.py in the target that records each `setup <step>` call.
+
+        The point of #243 is that these steps must run as a fresh process from the
+        SYNCED tree, so the stub has to live in the tree and be reached by path.
+        An in-process call could not see it, which is exactly what the test wants
+        to be able to fail on."""
+        target = target or self.target
+        marker = os.path.join(self.tmp, "setup-calls")
+        d = os.path.join(target, "engine", "nervepack_engine")
+        os.makedirs(d, exist_ok=True)
+        # Local-only ignore: an untracked stub would read as a dirty tree, and a
+        # dirty tree is a case sync deliberately refuses to touch.
+        with open(os.path.join(target, ".git", "info", "exclude"), "a", encoding="utf-8") as fh:
+            fh.write("\nengine/\n")
+        with open(os.path.join(d, "cli.py"), "w", encoding="utf-8") as fh:
+            fh.write("import sys\n"
+                     "open(%r, 'a').write(' '.join(sys.argv[1:]) + '\\n')\n" % marker)
+        return marker
+
+    def _setup_calls(self, marker):
+        if not os.path.isfile(marker):
+            return []
+        with open(marker, encoding="utf-8") as fh:
+            return [ln.strip() for ln in fh if ln.strip()]
+
     def test_up_to_date_clean(self):
         out = self._run("exit")
         self.assertIn("up to date (", out)
@@ -261,6 +287,60 @@ class NpSync(unittest.TestCase):
         # the engine's own sync result must still come through on stdout.
         out = self._run("exit", content_dir=os.path.join(self.tmp, "does-not-exist"))
         self.assertIn("up to date", out)
+
+
+
+    # --- #243 / #284: the post-pull steps ---
+
+    def test_engine_ff_runs_setup_steps_as_a_fresh_process_from_the_synced_target(self):
+        """#243: run these in-process and cli.py's module-scope imports, cached
+        before the fast-forward, execute the PRE-fix code."""
+        marker = self._stub_cli()
+        self._advance_remote()
+        out = self._run("exit")
+        self.assertIn("fast-forwarded", out)
+        self.assertEqual(self._setup_calls(marker),
+                         ["setup link-skills", "setup install-hooks"])
+
+    def test_content_layer_ff_triggers_a_relink(self):
+        """#284: skills live in the overlay, so an overlay fast-forward is when new
+        ones appear. Only an ENGINE fast-forward used to relink, which left a new
+        overlay skill unlinked until the engine happened to move for its own
+        unrelated reasons."""
+        marker = self._stub_cli()
+        self._advance_content_remote()
+        out, _ = self._run_full("exit", content_dir=self.content_dir)
+        self.assertIn("up to date", out)          # the ENGINE did not move
+        self.assertEqual(self._setup_calls(marker), ["setup link-skills"])
+
+    def test_content_layer_already_level_does_not_relink(self):
+        """Nothing arrived, so there is nothing new to link."""
+        marker = self._stub_cli()
+        self._run_full("exit", content_dir=self.content_dir)
+        self.assertEqual(self._setup_calls(marker), [])
+
+    def test_missing_cli_in_target_is_a_silent_noop(self):
+        """_post_ff_steps is best-effort. A target without an engine tree (which is
+        every other test's fixture) must still fast-forward and report normally."""
+        self._advance_remote()
+        out = self._run("exit")
+        self.assertIn("fast-forwarded", out)
+
+
+    def test_the_setup_steps_sync_asks_for_actually_exist(self):
+        """np_sync names these steps as strings, and cli.py owns the table they
+        resolve against. Nothing else couples the two, so a renamed step would
+        turn every post-pull run into a silent no-op -- the exact failure #243
+        was about, reintroduced through the process boundary that fixed it."""
+        import re
+        sys.path[:0] = [os.path.normpath(os.path.join(_SETUP, "..", "nervepack_engine")),
+                        os.path.normpath(os.path.join(_SETUP, "..")), _SETUP]
+        import cli
+        with open(_PY, encoding="utf-8") as fh:
+            src = fh.read()
+        steps = set(re.findall(r'_setup_step\(target, "([a-z-]+)"\)', src))
+        self.assertTrue(steps, "no _setup_step calls found in np_sync.py")
+        self.assertEqual(sorted(st for st in steps if st not in cli._SETUP), [])
 
 
 if __name__ == "__main__":
