@@ -68,11 +68,48 @@
    git -C "$REPO" commit -m "skill(<name>): <what changed>" -- <changed paths>
    ```
    No LLM attribution trailer — see `AGENTS.md` § "Commit conventions".
-9. **Ask before pushing.** Push is the action that affects another machine.
-   Default to `git -C "$REPO" push` only after the user confirms — unless
-   they've said "auto-push" or this run was invoked from a scheduled agent
-   (which has a standing mandate; see `agents/np-flow-scheduled-refine.md` and
-   `agents/np-flow-weekly-compact.md`). **Engine changes never direct-push** —
-   `np-core-*`/`np-flow-*` skills and anything under `engine/` or `dashboard/` go
-   through a PR that merges on green CI, with a company-neutral message. The private
-   overlay has no CI gate and may be pushed directly.
+9. **Push the overlay without asking.** The private overlay has no CI gate, so
+   asking turns a finished capture into an extra round trip.
+   The shape, not a script to paste — check every command and handle the
+   failures listed below:
+   ```bash
+   git -C "$REPO" fetch origin main
+   git -C "$REPO" rebase origin/main
+   git -C "$REPO" push origin HEAD:main
+   ```
+   The push is a fast-forward when the local branch is `origin/main` plus this
+   one commit, which is the normal case for a capture.
+
+   **Every one of those can fail, and dropping the confirmation gate is what
+   makes that worth writing down.** Interactively the user is still there; what
+   is gone is the prompt that used to make them look. Nothing else announces the
+   push, so whatever you report has to carry the outcome.
+
+   - **Rebase conflicts:** list the conflicted paths with `git diff --name-only
+     --diff-filter=U` **before** `git -C "$REPO" rebase --abort` — the abort
+     clears the rebase state, and with it the record of what conflicted. Name
+     those paths in your reply. Never resolve a conflict in someone else's
+     capture to get the push through: the commit is already safe on the local
+     branch, and an unpushed capture costs one round trip while a wrong
+     resolution silently rewrites their content.
+   - **Push rejected** (someone landed between the fetch and the push): fetch and
+     rebase once more, then push again. Stop after the second rejection and say
+     so, rather than looping against a branch another session is writing to.
+   - **Push fails on auth or the network:** say which, and leave the commit where
+     it is. It is not lost; it is one `git push` away on the next run.
+   - **A failed `fetch` stops the run.** Rebasing onto a stale `origin/main` and
+     pushing the result is how you overwrite work you never saw.
+   - **Report the outcome, and know who is reading.** Name the remote and the
+     short SHA on success, the failure and the affected paths otherwise.
+     Interactively, your reply is the whole reporting surface — there is no log
+     to check and no alert to page. **When you run from a cron or a backgrounded
+     hook there is no reply at all**, so write the same line to the job's log
+     (`np-core-doctor` § log-patterns), and exit non-zero on a failure so the
+     job itself is marked failed rather than quietly clean. The scheduled agents
+     in `agents/np-flow-scheduled-refine.md` and `agents/np-flow-weekly-compact.md`
+     take this path. Silence reads as success, and a capture nobody pushed is
+     one nobody has.
+
+   **Engine changes never direct-push** — `np-core-*`/`np-flow-*` skills and
+   anything under `engine/` or `dashboard/` still go through a PR that merges on
+   green CI, with a company-neutral message.
