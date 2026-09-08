@@ -20,6 +20,7 @@ Usage:
 """
 import os
 import subprocess
+import sys
 
 _WIN = os.name == "nt"
 
@@ -87,6 +88,12 @@ def git_ignored(repo, rels):
     except (OSError, subprocess.TimeoutExpired):
         return set()
     if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
+        # Still fail open, but say so. Exit 1 is a legitimate "nothing matched"
+        # and stays quiet; anything above it is git failing, and swallowing that
+        # leaves a scan silently unfiltered with nothing to chase.
+        sys.stderr.write("nptest.git_ignored: git check-ignore failed (exit %d): %s\n"
+                         % (out.returncode,
+                            out.stderr.decode("utf-8", "replace").strip()))
         return set()
     return {line.strip().replace(os.sep, "/")
             for line in out.stdout.decode("utf-8", "replace").splitlines()

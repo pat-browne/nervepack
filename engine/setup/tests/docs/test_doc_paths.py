@@ -310,6 +310,19 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
         rels = _markdown_files()
         self.assertEqual(sorted(git_ignored(REPO, rels)), [])
 
+    def test_a_git_error_fails_open_but_says_so(self):
+        """Exit 1 is a legitimate 'nothing matched' and stays quiet. Above it git
+        itself failed, and a silently unfiltered scan is what §15 is about."""
+        import contextlib
+        import io as _io
+        err = _io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = os.path.join(tmp, "not-a-repo")
+            os.makedirs(bad)
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(git_ignored(bad, ["a.md"]), set())
+        self.assertIn("git check-ignore failed", err.getvalue())
+
     def test_the_filter_actually_ignores_something_here(self):
         """Guard against a filter that silently matches nothing, which reads
         exactly like a clean scan.
