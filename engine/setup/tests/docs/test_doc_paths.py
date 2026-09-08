@@ -321,7 +321,24 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
             os.makedirs(bad)
             with contextlib.redirect_stderr(err):
                 self.assertEqual(git_ignored(bad, ["a.md"]), set())
-        self.assertIn("git check-ignore failed", err.getvalue())
+        message = err.getvalue()
+        self.assertIn("git check-ignore failed", message)
+        self.assertIn("repo=", message)          # names WHICH repo, not just that it failed
+
+    def test_reporting_never_breaks_the_caller(self):
+        """stderr can be closed. Raising there would replace a filtered scan
+        with a crash, which is worse than the failure being reported."""
+        import contextlib
+
+        class Closed:
+            def write(self, _):
+                raise ValueError("I/O operation on closed file")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = os.path.join(tmp, "not-a-repo")
+            os.makedirs(bad)
+            with contextlib.redirect_stderr(Closed()):
+                self.assertEqual(git_ignored(bad, ["a.md"]), set())
 
     def test_the_filter_actually_ignores_something_here(self):
         """Guard against a filter that silently matches nothing, which reads

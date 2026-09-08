@@ -81,19 +81,32 @@ def git_ignored(repo, rels):
     # on write, so on Windows git reads "path\r" and matches nothing. That fails
     # open to "nothing is ignored", which reads exactly like a clean scan -- the
     # filter was silently dead on the Windows lane before this.
+    def warn(detail):
+        """Fail open, but say so, and never let the reporting break the caller.
+
+        Exit 1 is a legitimate "nothing matched" and stays quiet. Every other
+        failure leaves the scan silently unfiltered, which is the thing a filter
+        must never do quietly. stderr can itself be closed, and raising here
+        would replace a filtered scan with a crash.
+        """
+        try:
+            sys.stderr.write("nptest.git_ignored: %s (repo=%s)\n" % (detail, repo))
+        except (OSError, ValueError):
+            pass
+
     try:
         out = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"],
                              input=("\n".join(rels) + "\n").encode("utf-8"),
                              capture_output=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        warn("git check-ignore timed out after 10s")
+        return set()
+    except OSError as exc:
+        warn("could not run git check-ignore: %r" % exc)
         return set()
     if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
-        # Still fail open, but say so. Exit 1 is a legitimate "nothing matched"
-        # and stays quiet; anything above it is git failing, and swallowing that
-        # leaves a scan silently unfiltered with nothing to chase.
-        sys.stderr.write("nptest.git_ignored: git check-ignore failed (exit %d): %s\n"
-                         % (out.returncode,
-                            out.stderr.decode("utf-8", "replace").strip()))
+        warn("git check-ignore failed (exit %d): %s"
+             % (out.returncode, out.stderr.decode("utf-8", "replace").strip()[:200]))
         return set()
     return {line.strip().replace(os.sep, "/")
             for line in out.stdout.decode("utf-8", "replace").splitlines()
