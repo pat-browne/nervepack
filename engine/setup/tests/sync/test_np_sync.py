@@ -209,7 +209,7 @@ class NpSync(unittest.TestCase):
         # therefore stale-but-internally-consistent) origin/main ref -- comparing
         # against the clone's own stale ref would pass even with zero fetch ever
         # happening, which is exactly the false-positive shape this suite exists
-        # to avoid (np-kb-testing-ci §1).
+        # to avoid (np-kb-test-quality §1).
         remote_tip = _git(self.content_seed, "rev-parse", "HEAD").stdout.strip()
         self.assertNotEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), remote_tip,
                             "test setup bug: clone already at remote tip before sync ran")
