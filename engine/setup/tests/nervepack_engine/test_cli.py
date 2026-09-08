@@ -68,12 +68,72 @@ class TestDispatch(unittest.TestCase):
                 rc = cli.main(["hook", "fake"])
         self.assertEqual(rc, 0)
 
-    def test_malformed_argv_fails_open(self):
+    def test_bare_invocation_prints_usage_and_exits_nonzero(self):
         from nervepack_engine import cli
-        rc = cli.main([])
+        err = io.StringIO()
+        with mock.patch.object(sys, "stderr", err):
+            rc = cli.main([])
+        self.assertEqual(rc, 2)
+        self.assertIn("usage: cli.py", err.getvalue())
+
+    def test_unknown_top_level_command_diagnoses_and_exits_nonzero(self):
+        """#277/#289: a typo used to print nothing and exit 0, so a caller could
+        not tell a no-op from success."""
+        from nervepack_engine import cli
+        err = io.StringIO()
+        with mock.patch.object(sys, "stderr", err):
+            rc = cli.main(["not-a-group"])
+        self.assertEqual(rc, 2)
+        self.assertIn("unknown command: not-a-group", err.getvalue())
+
+    def test_unknown_setup_step_diagnoses_and_exits_nonzero(self):
+        from nervepack_engine import cli
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.dict(os.environ, {"NERVEPACK_CLI_LOG": os.path.join(tmp_dir, "cli.log")}), \
+                 mock.patch.object(sys, "stderr", err):
+                rc = cli.main(["setup", "bogussub"])
+        self.assertEqual(rc, 2)
+        self.assertIn("unknown setup step: bogussub", err.getvalue())
+
+    def test_help_prints_usage_to_stdout_and_exits_zero(self):
+        from nervepack_engine import cli
+        out = io.StringIO()
+        with mock.patch.object(sys, "stdout", out):
+            rc = cli.main(["--help"])
         self.assertEqual(rc, 0)
-        rc = cli.main(["not-a-group"])
-        self.assertEqual(rc, 0)
+        self.assertIn("usage: cli.py", out.getvalue())
+        self.assertIn("open-dashboard", out.getvalue())
+
+    def test_commands_tuple_matches_the_dispatch_chain(self):
+        """_COMMANDS feeds usage output; the if-chain feeds dispatch. Nothing
+        else keeps them equal, so read the chain out of the source and compare."""
+        import re
+        from nervepack_engine import cli
+        with open(cli.__file__, encoding="utf-8") as fh:
+            src = fh.read()
+        body = src.split("def main(", 1)[1]
+        chain = set(re.findall(r'argv\[0\] (?:==|!=) "([a-z0-9-]+)"', body))
+        self.assertEqual(chain, set(cli._COMMANDS))
+
+    def test_every_registered_command_resolves(self):
+        """#289 asked for a sweep of every registered command before the
+        dispatcher went strict. This keeps the sweep: a hook, cron or setup name
+        that drifts out of the dispatch tables fails here instead of no-opping."""
+        import re
+        from nervepack_engine import cli
+        manifest = os.path.join(_ENGINE_SETUP, "setup", "hooks.manifest")
+        tables = {"hook": cli._HOOKS, "cron": cli._CRONS,
+                  "setup": dict(cli._SETUP, **{"mcp-install": None})}
+        refs = set()
+        with open(manifest, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("#"):
+                    continue
+                refs.update(re.findall(r"cli\.py\s+(hook|cron|setup)\s+([a-z0-9-]+)", line))
+        self.assertTrue(refs, "manifest parsed to no cli.py references")
+        missing = sorted("%s %s" % (g, n) for g, n in refs if n not in tables[g])
+        self.assertEqual(missing, [])
 
     def test_dispatch_prints_hook_return_value_to_stdout(self):
         from nervepack_engine import cli
