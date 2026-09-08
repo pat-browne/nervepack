@@ -57,3 +57,31 @@ def bash_eval(snippet, **kwargs):
     """Run `bash -c <snippet>`. The caller must u()-convert any paths embedded in
     the snippet (this helper can't know which substrings are paths)."""
     return subprocess.run([_BASH, "-c", snippet], **kwargs)
+
+
+def git_ignored(repo, rels):
+    """The subset of `rels` that git ignores, or an empty set on any git failure.
+
+    Tool scratch lands in the checkout and is git-ignored for exactly the reason
+    it should not be scanned by a doc/source guard: nobody wrote it as part of
+    the repo and nobody can fix it. A guard that reads it is red locally and
+    green in CI, which teaches people to ignore it (#307).
+
+    A filter, never a gate: if git is missing or `repo` is not a repo (several
+    callers repoint their REPO at a temp dir), nothing is filtered and the scan
+    is exactly what it was.
+
+    `rels` are repo-relative and slash-separated. Returns the same form.
+    """
+    rels = list(rels)
+    if not rels:
+        return set()
+    try:
+        out = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"],
+                             input="\n".join(rels), capture_output=True, text=True)
+    except OSError:
+        return set()
+    if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
+        return set()
+    return {line.strip().replace(os.sep, "/")
+            for line in out.stdout.splitlines() if line.strip()}

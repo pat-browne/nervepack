@@ -22,12 +22,14 @@ explanation of what was removed.
 """
 import os
 import re
+import sys
 import tempfile
-import subprocess
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "_lib"))
+from nptest import git_ignored  # noqa: E402
 
 LITERAL = "~/Code/nervepack"
 # A command WORD. Scoped to the enclosing code span, never to the whole line:
@@ -46,33 +48,6 @@ SHELL_FENCES = ("bash", "sh", "shell", "console")
 CREATES_THE_CHECKOUT = re.compile(r"\bgit\s+clone\b")
 
 
-def _git_ignored(rels):
-    """The subset of `rels` git ignores, or an empty set on any git failure.
-
-    Tool scratch lands in the checkout and is git-ignored for exactly the reason
-    it should not be scanned here: nobody wrote it as documentation and nobody
-    can fix it. `.superpowers/` is the case that forced this -- a superpowers
-    run left task reports naming a literal install path, and the check failed on
-    files that are not part of the repo. Asking git beats a hardcoded skip list,
-    because the next tool to write scratch is one nobody has thought of yet.
-
-    A filter, never a gate: if git is missing or REPO is not a repo (the tests
-    below repoint REPO at a temp dir), nothing is filtered and the scan is
-    exactly what it was.
-    """
-    if not rels:
-        return set()
-    try:
-        out = subprocess.run(["git", "-C", REPO, "check-ignore", "--stdin"],
-                             input="\n".join(rels), capture_output=True, text=True)
-    except OSError:
-        return set()
-    if out.returncode not in (0, 1):        # 0 = some ignored, 1 = none; >1 = error
-        return set()
-    return {line.strip().replace(os.sep, "/")
-            for line in out.stdout.splitlines() if line.strip()}
-
-
 def _markdown_files():
     out = []
     for dirpath, dirnames, filenames in os.walk(REPO):
@@ -86,7 +61,7 @@ def _markdown_files():
             if rel.startswith("change-specs/"):
                 continue
             out.append(rel)
-    ignored = _git_ignored(out)
+    ignored = git_ignored(REPO, out)
     return sorted(r for r in out if r not in ignored)
 
 
@@ -332,7 +307,7 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
 
     def test_no_git_ignored_path_is_scanned(self):
         rels = _markdown_files()
-        self.assertEqual(sorted(_git_ignored(rels)), [])
+        self.assertEqual(sorted(git_ignored(REPO, rels)), [])
 
     def test_the_filter_actually_ignores_something_here(self):
         """Guard against a filter that silently matches nothing: this checkout
@@ -341,17 +316,11 @@ class TestGitIgnoredScratchIsNotScanned(unittest.TestCase):
                    if os.path.isfile(os.path.join(REPO, r))]
         if not planted:
             self.skipTest("no ignored markdown present in this checkout")
-        self.assertEqual(sorted(_git_ignored(planted)), sorted(planted))
+        self.assertEqual(sorted(git_ignored(REPO, planted)), sorted(planted))
 
     def test_it_fails_open_outside_a_git_repo(self):
-        global REPO
-        prev = REPO
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                REPO = tmp
-                self.assertEqual(_git_ignored(["a.md"]), set())
-        finally:
-            REPO = prev
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(git_ignored(tmp, ["a.md"]), set())
 
 
 if __name__ == "__main__":
