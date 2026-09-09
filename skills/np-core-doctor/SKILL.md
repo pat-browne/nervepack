@@ -85,6 +85,7 @@ for days before anyone notices.
 Check by hand (resolve the dir first, same as [[np-core-contribute]]):
 ```
 CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"
+git -C "$CONTENT" fetch origin
 git -C "$CONTENT" branch --show-current   # should print main
 git -C "$CONTENT" log --oneline main..HEAD
 git -C "$CONTENT" log --oneline HEAD..origin/main
@@ -93,9 +94,17 @@ git -C "$CONTENT" log --oneline HEAD..origin/main
 Fix, from the stale branch:
 ```
 git -C "$CONTENT" merge main
-# resolve conflicts in generated files (metrics.jsonl, INDEX.md) by
-# rebuilding from the merged source, not picking a side -- see
-# [[np-kb-git-gotchas]] (generated-file conflicts)
+```
+If that conflicts, the conflicts land in generated files: `metrics.jsonl`,
+`dashboard/data/metrics.js`, `INDEX.md`. Don't pick a side.
+
+Rebuild each from the merged source. Full recipe in [[np-kb-git-gotchas]]
+(generated-file conflicts): union and re-prune `metrics.jsonl`, regenerate
+`metrics.js` via `dashboard/build.py`, regenerate `INDEX.md` via
+`engine/setup/np_generate_index.py`. Then commit and finish the merge:
+```
+git -C "$CONTENT" add -A
+git -C "$CONTENT" commit
 git -C "$CONTENT" checkout main
 git -C "$CONTENT" merge --ff-only <the-stale-branch>
 git -C "$CONTENT" push origin main
