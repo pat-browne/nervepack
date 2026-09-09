@@ -107,7 +107,7 @@ Union and re-prune `metrics.jsonl`. Regenerate `metrics.js` via
 `engine/setup/np_generate_index.py`. Then commit and finish the merge:
 ```
 git -C "$CONTENT" add -A
-git -C "$CONTENT" commit
+git -C "$CONTENT" commit -m "merge: reconcile main and the stale branch"
 git -C "$CONTENT" checkout main
 git -C "$CONTENT" merge --ff-only "$STALE_BRANCH"
 git -C "$CONTENT" push origin main
