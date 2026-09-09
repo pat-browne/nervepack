@@ -66,10 +66,32 @@ re-run `cli.py setup link-dashboard-data`.
 **Adapter checks report MISSING** — no `~/.config/nervepack/adapter.json` yet; run the
 onboarding flow ([[np-core-onboard]]) to wire the adapter and generate the file.
 
-**Doctor passes but a session wasn't captured** — the doctor checks wiring, not
+**Doctor passes but a session wasn't captured.** The doctor checks wiring, not
 outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) and
-`session-flush.log`; every bail/success string is decoded in
+`session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
+
+**Doctor is all green but the dashboard shows stale or missing suggestions, or the
+content repo's commit count has diverged from origin/main.** The `content` check
+only verifies `NP_CONTENT_DIR` resolves to a real dir. It never checks that dir is
+on `main`. A prior session can leave the content repo on a feature or capture
+branch.
+
+Every later cron (episodic-maintain, evaluator) then keeps committing to that
+stale branch instead of `main`. A second checkout still on `main` runs its own
+parallel cron stream at the same time. That is a silent split-brain that can run
+for days before anyone notices.
+
+Check by hand: `git -C "$CONTENT" branch --show-current` should print `main`.
+Compare `git -C "$CONTENT" log --oneline main..HEAD` and `HEAD..origin/main` for
+unexpected divergence.
+
+Fix: merge the two branches. See [[np-kb-git-gotchas]] #14 for the generated-file
+conflicts this produces (`metrics.jsonl`, `INDEX.md`). Rebuild those from the
+merged source, don't pick a side.
+
+Fast-forward `main`, check out `main`, delete the stale branch. Not yet a doctor
+check. Roadmap candidate: assert `NP_CONTENT_DIR`'s checked-out branch is `main`.
 
 ## After fixing
 
