@@ -82,16 +82,29 @@ stale branch instead of `main`. A second checkout still on `main` runs its own
 parallel cron stream at the same time. That is a silent split-brain that can run
 for days before anyone notices.
 
-Check by hand: `git -C "$CONTENT" branch --show-current` should print `main`.
-Compare `git -C "$CONTENT" log --oneline main..HEAD` and `HEAD..origin/main` for
-unexpected divergence.
+Check by hand (resolve the dir first, same as [[np-core-contribute]]):
+```
+CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"
+git -C "$CONTENT" branch --show-current   # should print main
+git -C "$CONTENT" log --oneline main..HEAD
+git -C "$CONTENT" log --oneline HEAD..origin/main
+```
 
-Fix: merge the two branches. See [[np-kb-git-gotchas]] #14 for the generated-file
-conflicts this produces (`metrics.jsonl`, `INDEX.md`). Rebuild those from the
-merged source, don't pick a side.
+Fix, from the stale branch:
+```
+git -C "$CONTENT" merge main
+# resolve conflicts in generated files (metrics.jsonl, INDEX.md) by
+# rebuilding from the merged source, not picking a side -- see
+# [[np-kb-git-gotchas]] (generated-file conflicts)
+git -C "$CONTENT" checkout main
+git -C "$CONTENT" merge --ff-only <the-stale-branch>
+git -C "$CONTENT" push origin main
+git -C "$CONTENT" branch -D <the-stale-branch>
+```
 
-Fast-forward `main`, check out `main`, delete the stale branch. Not yet a doctor
-check. Roadmap candidate: assert `NP_CONTENT_DIR`'s checked-out branch is `main`.
+Not yet a doctor check. Tracked as
+[nervepack#329](https://github.com/pat-browne/nervepack/issues/329) (roadmap
+label): assert `NP_CONTENT_DIR`'s checked-out branch is `main`.
 
 ## After fixing
 
