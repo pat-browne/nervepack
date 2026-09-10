@@ -10,7 +10,7 @@ blast_radius:
   - engine/setup/np_tier_policy.py
   - engine/setup/risk-tiers.json
   - .github/CODEOWNERS
-  - engine/setup/tests/docs/**
+  - engine/setup/tests/**
   - .github/workflows/ci.yml
   - change-specs/**
 ---
