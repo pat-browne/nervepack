@@ -99,17 +99,36 @@ git -C "$CONTENT" merge main
 If that conflicts, the conflicts land in generated files: `metrics.jsonl`,
 `dashboard/data/metrics.js`, `INDEX.md`. Don't pick a side.
 
-Rebuild each from the merged source. Full recipe with worked examples in
-[[np-kb-git-gotchas]] (generated-file conflicts).
+Rebuild each from the merged source, per [[np-kb-git-gotchas]] (generated-file
+conflicts). A picked side silently drops the other branch's real session data.
 
-Union and re-prune `metrics.jsonl`. Regenerate `metrics.js` via
-`dashboard/build.py`. Regenerate `INDEX.md` via
-`engine/setup/np_generate_index.py`. Then commit and finish the merge:
+`metrics.jsonl` is one JSON object per line, keyed by `session_id` and `ts`.
+
+"Union and re-prune" means this: take every line from both `git show :2:`
+(ours) and `:3:` (theirs). Keep one copy of each exact duplicate line, sorted
+by `ts`.
+
+Then drop any record older than `evaluator.retain_days` (default 90 days)
+from now. That's the same rule `np_aggregate.py`'s `_prune_metrics()` already
+applies on every normal run.
+
+`metrics.js` and `INDEX.md` are pure derived output, so just regenerate:
+```
+python3 "${NP_DIR:-$HOME/Code/nervepack}/dashboard/build.py" "$CONTENT/dashboard/data/metrics.jsonl" "$CONTENT/dashboard/data/metrics.js"
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_generate_index.py"
+```
+Then commit and finish the merge:
 ```
 git -C "$CONTENT" add -A
 git -C "$CONTENT" commit -m "merge: reconcile main and the stale branch"
 git -C "$CONTENT" checkout main
 git -C "$CONTENT" merge --ff-only "$STALE_BRANCH"
+```
+`merge --ff-only` errors instead of doing anything silent if the branches
+still diverge here. That means the step above wasn't finished on both sides.
+
+Re-run `git -C "$CONTENT" merge main` from the stale branch first.
+```
 git -C "$CONTENT" push origin main
 git -C "$CONTENT" branch -D "$STALE_BRANCH"
 ```
