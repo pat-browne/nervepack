@@ -49,6 +49,10 @@ import json, os, subprocess, datetime, sys
 
 content = os.environ["CONTENT"]
 path = "dashboard/data/metrics.jsonl"
+np_dir = os.environ.get("NP_DIR", os.path.expanduser("~/Code/nervepack"))
+sys.path.insert(0, os.path.join(np_dir, "engine", "nervepack_engine"))
+import np_toggle
+retain_days = int(np_toggle.param("evaluator.retain_days", "90"))
 
 def side(rev):
     try:
@@ -60,7 +64,7 @@ def side(rev):
 
 lines = set(side(":2")) | set(side(":3"))  # :2 ours, :3 theirs
 cutoff = (datetime.datetime.now(datetime.timezone.utc)
-          - datetime.timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+          - datetime.timedelta(days=retain_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 kept = []
 for line in lines:
