@@ -35,7 +35,8 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
-import np_change_spec  # noqa: E402
+import np_change_spec
+import np_dependency_bump  # noqa: E402
 import np_risk_tiers  # noqa: E402
 import np_frontmatter  # noqa: E402
 
@@ -82,6 +83,25 @@ def changed_files(root, base, head):
         )
         return None
     return [p for p in out.stdout.splitlines() if p]
+
+
+def unified_diff(root, base, head):
+    """The full patch text for the three-dot range, or "" on a git error.
+
+    Separate from changed_files() because the bump check needs the CONTENT of
+    every changed line, not just the paths. "" makes the caller decline to
+    exempt, which is the safe direction: a diff we cannot read is never waved
+    through.
+    """
+    out = subprocess.run(
+        ["git", "-C", root, "diff", "--unified=0", "%s...%s" % (base, head)],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        sys.stderr.write("spec-guard: could not read the diff for the "
+                         "dependency-bump check (%s)\n" % out.stderr.strip())
+        return ""
+    return out.stdout
 
 
 def is_exempt(root, files, registry=None):
@@ -140,6 +160,9 @@ def main(argv):
     p.add_argument("--base", default=os.environ.get("GITHUB_BASE_REF") or "")
     p.add_argument("--head", default=os.environ.get("GITHUB_HEAD_REF") or "HEAD")
     p.add_argument("--branch", default="")
+    # github.event.pull_request.user.login -- the pull request's AUTHOR. Never
+    # github.actor, which is the last identity to ACT on it (#306).
+    p.add_argument("--author", default=os.environ.get("PR_AUTHOR") or "")
     args = p.parse_args(argv[1:])
 
     if not args.base:
@@ -167,6 +190,17 @@ def main(argv):
     if is_exempt(args.root, files, registry):
         print("spec-guard: exempt diff (every path is standard tier) - clean")
         return 0
+
+    # A bot cannot write a change spec, so a dependency version bump was
+    # permanently blocked (#306). The exemption is from the SPEC only, and it
+    # turns on the diff's CONTENT as well as the author -- an allowlisted author
+    # alone is the confused deputy #255 warns about.
+    if args.author:
+        bump, why = np_dependency_bump.is_spec_exempt(
+            unified_diff(args.root, args.base, args.head), args.author)
+        if bump:
+            print("spec-guard: dependency-bump exemption - %s" % why)
+            return 0
 
     slug = branch_slug(branch)
     spec_file = spec_path_for(args.root, slug)
