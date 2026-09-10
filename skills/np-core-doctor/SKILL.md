@@ -94,7 +94,7 @@ git -C "$CONTENT" log --oneline HEAD..origin/main
 Fix, from the stale branch. Stop the episodic-maintain/evaluator cron on this
 machine first, so it can't commit mid-merge:
 ```
-git -C "$CONTENT" merge main
+git -C "$CONTENT" merge origin/main
 ```
 If that conflicts, the conflicts land in generated files: `metrics.jsonl`,
 `dashboard/data/metrics.js`, `INDEX.md`. Don't pick a side.
@@ -127,7 +127,7 @@ git -C "$CONTENT" merge --ff-only "$STALE_BRANCH"
 `merge --ff-only` errors instead of doing anything silent if the branches
 still diverge here. That means the step above wasn't finished on both sides.
 
-Re-run `git -C "$CONTENT" merge main` from the stale branch first.
+Re-run `git -C "$CONTENT" merge origin/main` from the stale branch first.
 ```
 git -C "$CONTENT" push origin main
 git -C "$CONTENT" branch -D "$STALE_BRANCH"
