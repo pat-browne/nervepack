@@ -3,15 +3,25 @@
 Triggered from [[np-core-doctor]] when `main..HEAD` and `HEAD..origin/main` both
 show commits on the content repo.
 
+## 0. Set up
+
+Every step below needs `$CONTENT` (the content repo path) and `$STALE_BRANCH`
+(the branch to reconcile). Set them once:
+```
+CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"
+STALE_BRANCH="$(git -C "$CONTENT" branch --show-current)"
+test -d "$CONTENT" && test -w "$CONTENT" || { echo "CONTENT is not a writable dir: $CONTENT"; exit 1; }
+```
+
 ## 1. Stop the crons first
 
 Concurrent writes during the merge corrupt the result. Turn off both writers on
-this machine:
+this machine, checking each command's exit code:
 ```
-python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" toggle memory.maintain off
-python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" toggle evaluator.aggregate off
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" toggle memory.maintain off || { echo "toggle failed, stop here"; exit 1; }
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" toggle evaluator.aggregate off || { echo "toggle failed, stop here"; exit 1; }
 ```
-Re-enable both (`... on`) once the merge below is pushed.
+Re-enable both (`... on`) only after step 6's push has succeeded, not before.
 
 ## 2. Merge, from the stale branch
 
@@ -29,17 +39,23 @@ real session data. See [[np-kb-git-gotchas]] (generated-file conflicts) for why.
 **`metrics.jsonl`** is one JSON object per line, keyed by `session_id` and `ts`.
 Union both sides, dedupe exact lines, sort by `ts`, then prune anything older
 than `evaluator.retain_days` (default 90 days). That's the same rule the daily
-aggregate job applies every normal run:
+aggregate job applies every normal run.
+
+Requires `$CONTENT` from step 0. The script names the offending line on a bad
+`git show` or malformed JSON, instead of a bare traceback:
 ```
 python3 - <<'PY'
-import json, os, subprocess, datetime
+import json, os, subprocess, datetime, sys
 
 content = os.environ["CONTENT"]
 path = "dashboard/data/metrics.jsonl"
 
 def side(rev):
-    out = subprocess.run(["git", "-C", content, "show", f"{rev}:{path}"],
-                          capture_output=True, text=True, check=True).stdout
+    try:
+        out = subprocess.run(["git", "-C", content, "show", f"{rev}:{path}"],
+                              capture_output=True, text=True, check=True).stdout
+    except subprocess.CalledProcessError as e:
+        sys.exit(f"git show {rev}:{path} failed: {e.stderr}")
     return out.splitlines()
 
 lines = set(side(":2")) | set(side(":3"))  # :2 ours, :3 theirs
@@ -50,7 +66,10 @@ kept = []
 for line in lines:
     if not line.strip():
         continue
-    rec = json.loads(line)
+    try:
+        rec = json.loads(line)
+    except json.JSONDecodeError as e:
+        sys.exit(f"malformed line, fix by hand and re-run: {line!r} ({e})")
     if rec.get("ts", "") >= cutoff:
         kept.append((rec["ts"], line))
 kept.sort()
@@ -77,8 +96,12 @@ python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_generate_index.py"
 git -C "$CONTENT" status --porcelain
 ```
 Every path touched above (`metrics.jsonl`, `metrics.js`, `INDEX.md`) should show
-as modified, nothing else. If either regeneration script printed a traceback,
-fix that first. Do not commit a partial rebuild.
+as modified, nothing else. Do not commit a partial rebuild.
+
+If `build.py` failed, check that `$CONTENT/dashboard/data/metrics.jsonl` is
+valid JSON (the step above should have caught that already). If
+`np_generate_index.py` failed, check that `$NP_DIR` (or `~/Code/nervepack`)
+points at a real engine checkout, then re-run it.
 
 ## 5. Commit and finish the merge
 
@@ -97,7 +120,14 @@ current `origin/main`. Re-run from step 2 on `$STALE_BRANCH`, since
 
 ## 6. Publish and clean up
 
+Stop after a failed push. Deleting the branch first would lose the only copy
+of the reconciled history:
 ```
-git -C "$CONTENT" push origin main
-git -C "$CONTENT" branch -D "$STALE_BRANCH"
+git -C "$CONTENT" push origin main || { echo "push failed, do not delete $STALE_BRANCH"; exit 1; }
+git -C "$CONTENT" branch -d "$STALE_BRANCH"
 ```
+`-d`, not `-D`: it refuses to delete a branch git can't confirm is fully merged
+into the current branch (`main`), so a step-5 mistake fails loud here instead
+of silently discarding work.
+
+Now re-enable the two toggles from step 1.
