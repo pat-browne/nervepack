@@ -66,10 +66,37 @@ re-run `cli.py setup link-dashboard-data`.
 **Adapter checks report MISSING** — no `~/.config/nervepack/adapter.json` yet; run the
 onboarding flow ([[np-core-onboard]]) to wire the adapter and generate the file.
 
-**Doctor passes but a session wasn't captured** — the doctor checks wiring, not
+**Doctor passes but a session wasn't captured.** The doctor checks wiring, not
 outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) and
-`session-flush.log`; every bail/success string is decoded in
+`session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
+
+**Doctor is all green but the dashboard shows stale or missing suggestions, or the
+content repo's commit count has diverged from origin/main.** Not yet a doctor
+check, tracked as [nervepack#329](https://github.com/pat-browne/nervepack/issues/329)
+(roadmap label). Until that lands, green does not rule this out.
+
+The `content` check only verifies `NP_CONTENT_DIR` resolves to a real dir. It
+never checks that dir is on `main`.
+
+A prior session can leave the content repo on a feature or capture branch.
+Every later cron (episodic-maintain, evaluator) then commits to that stale
+branch instead.
+
+A second checkout still on `main` runs its own parallel cron stream at the
+same time. That's a silent split-brain that can run for days unnoticed.
+
+Check by hand (resolve the dir first, same as [[np-core-contribute]]):
+```
+CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"
+STALE_BRANCH="$(git -C "$CONTENT" branch --show-current)"   # should be main
+git -C "$CONTENT" fetch origin   # fails if offline or auth is stale; fix that before trusting the two log lines below
+git -C "$CONTENT" log --oneline main..HEAD
+git -C "$CONTENT" log --oneline HEAD..origin/main
+```
+
+If either log shows commits, see references/split-brain-fix.md for the full
+merge, rebuild, and verify procedure.
 
 ## After fixing
 
