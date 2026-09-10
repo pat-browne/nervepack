@@ -52,6 +52,8 @@ engine/setup/np_risk_tiers.py    @pat-browne
 engine/setup/np-spec-guard.py    @pat-browne
 # the blast-radius matcher shared by spec-guard and drift-guard
 engine/setup/np_change_spec.py    @pat-browne
+# SELF: decides which diffs may reach main with NO change spec. If it were standard, the bot allowlist and the manifest allowlist could both be widened in a change needing no spec of its own.
+engine/setup/np_dependency_bump.py    @pat-browne
 # SELF: states what each tier requires. If it were standard, the thresholds could be lowered by a change needing no spec, no rollback plan and no adversarial lens.
 engine/setup/np_tier_policy.py    @pat-browne
 # SELF: the CI gate that applies the rule above

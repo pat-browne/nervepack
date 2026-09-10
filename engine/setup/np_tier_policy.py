@@ -156,7 +156,8 @@ def _lens_problems(verdicts):
     return []
 
 
-def evaluate(tier, spec_text, verdicts, tier_source=None):
+def evaluate(tier, spec_text, verdicts, tier_source=None, spec_exempt=False,
+             spec_exempt_reason=""):
     """The full decision record for one PR.
 
     `spec_text` is the change spec's contents, or None when the branch has no
@@ -164,12 +165,22 @@ def evaluate(tier, spec_text, verdicts, tier_source=None):
     `tier_source` is the [(path, tier)] list from np_risk_tiers.explain, carried
     through so a failure names the file that forced the tier.
 
+    `spec_exempt` suppresses ONLY the two spec-derived requirements, for a
+    dependency version bump a bot opened (#306, change spec 0033). A bot cannot
+    write a change spec, and a version bump has no design to record. Every other
+    requirement is untouched: the required gates still have to pass and the
+    adversarial lens still has to have RUN, which is what keeps the reviewed
+    surface the same size. `spec_exempt_reason` is recorded so an exempt
+    decision is never silent about why.
+
     The returned dict is #255's input and is written verbatim to
     tier-policy.json, so its shape is a contract.
     """
     policy = policy_for(tier)
+    spec_required = policy["spec_required"] and not spec_exempt
+    rollback_required = policy["rollback_required"] and not spec_exempt
     problems = _gate_problems(policy["required_gates"], verdicts)
-    if policy["rollback_required"]:
+    if rollback_required:
         problems.extend(_rollback_problems(spec_text))
     if policy["adversarial_lens_required"]:
         problems.extend(_lens_problems(verdicts))
@@ -179,8 +190,10 @@ def evaluate(tier, spec_text, verdicts, tier_source=None):
         "tier": tier,
         "tier_source": [{"path": p, "tier": t} for p, t in (tier_source or [])],
         "required_gates": policy["required_gates"],
-        "spec_required": policy["spec_required"],
-        "rollback_required": policy["rollback_required"],
+        "spec_required": spec_required,
+        "rollback_required": rollback_required,
+        "spec_exempt": bool(spec_exempt),
+        "spec_exempt_reason": spec_exempt_reason if spec_exempt else "",
         "adversarial_lens_required": policy["adversarial_lens_required"],
         "merge_authority": policy["merge_authority"],
         "gate_verdicts": dict(verdicts),

@@ -38,7 +38,8 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
-import np_change_spec  # noqa: E402
+import np_change_spec
+import np_dependency_bump  # noqa: E402
 import np_risk_tiers  # noqa: E402
 import np_tier_policy  # noqa: E402
 
@@ -115,6 +116,23 @@ def spec_text_for(root, branch):
         raise SpecUnreadable("cannot read %s: %s" % (path, exc))
 
 
+def unified_diff(root, base, head):
+    """The full patch text for the three-dot range, or "" on a git error.
+
+    Mirrors spec-guard's helper. "" makes the caller decline to exempt, so a
+    diff we cannot read is never waved through.
+    """
+    out = subprocess.run(
+        ["git", "-C", root, "diff", "--unified=0", "%s...%s" % (base, head)],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        sys.stderr.write("tier-gate: could not read the diff for the "
+                         "dependency-bump check (%s)\n" % out.stderr.strip())
+        return ""
+    return out.stdout
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", default=".")
@@ -123,6 +141,8 @@ def main(argv):
     p.add_argument("--branch", default="")
     p.add_argument("--verdicts-dir", default="")
     p.add_argument("--out", default="")
+    # github.event.pull_request.user.login, same contract as spec-guard (#306).
+    p.add_argument("--author", default=os.environ.get("PR_AUTHOR") or "")
     args = p.parse_args(argv[1:])
 
     if not args.base:
@@ -163,8 +183,19 @@ def main(argv):
         # requirement its tier has.
         sys.stderr.write("tier-gate: %s\n" % exc)
         return 1
+    # Same exemption as spec-guard, from the same module so the two gates cannot
+    # answer differently for one PR (#306). It suppresses the spec and rollback
+    # requirements only -- required gates and the adversarial lens are untouched.
+    bump, bump_why = (False, "")
+    if args.author:
+        bump, bump_why = np_dependency_bump.is_spec_exempt(
+            unified_diff(args.root, args.base, args.head), args.author)
+        if bump:
+            print("tier-gate: dependency-bump exemption - %s" % bump_why)
+
     decision = np_tier_policy.evaluate(
-        tier, spec_text, read_verdicts(args.verdicts_dir), tier_source=offenders)
+        tier, spec_text, read_verdicts(args.verdicts_dir), tier_source=offenders,
+        spec_exempt=bump, spec_exempt_reason=bump_why)
 
     if args.out:
         try:

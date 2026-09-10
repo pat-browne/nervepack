@@ -349,12 +349,17 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_REF: ${{ github.head_ref }}
+          # The pull request's AUTHOR, GitHub-computed and never
+          # PR-author-controlled. NOT github.actor, which is the last identity
+          # to ACT on the PR. Feeds the dependency-bump exemption (#306).
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           python3 engine/setup/np-spec-guard.py \
             --root "$GITHUB_WORKSPACE" \
             --base "origin/$BASE_REF" \
             --head HEAD \
-            --branch "$HEAD_REF"
+            --branch "$HEAD_REF" \
+            --author "$PR_AUTHOR"
 
       - name: Emit structured gate verdict
         if: always()
@@ -491,12 +496,15 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_REF: ${{ github.head_ref }}
+          # Same contract as spec-guard's step: the AUTHOR, not github.actor.
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           python3 engine/setup/np-tier-gate.py \
             --root "$GITHUB_WORKSPACE" \
             --base "origin/$BASE_REF" \
             --head HEAD \
             --branch "$HEAD_REF" \
+            --author "$PR_AUTHOR" \
             --verdicts-dir verdicts \
             --out tier-policy.json
 
