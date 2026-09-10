@@ -72,70 +72,31 @@ outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) 
 references/log-patterns.md.
 
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
-content repo's commit count has diverged from origin/main.** The `content` check
-only verifies `NP_CONTENT_DIR` resolves to a real dir. It never checks that dir is
-on `main`. A prior session can leave the content repo on a feature or capture
-branch.
+content repo's commit count has diverged from origin/main.** Not yet a doctor
+check, tracked as [nervepack#329](https://github.com/pat-browne/nervepack/issues/329)
+(roadmap label). Until that lands, green does not rule this out.
 
-Every later cron (episodic-maintain, evaluator) then keeps committing to that
-stale branch instead of `main`. A second checkout still on `main` runs its own
-parallel cron stream at the same time. That is a silent split-brain that can run
-for days before anyone notices.
+The `content` check only verifies `NP_CONTENT_DIR` resolves to a real dir. It
+never checks that dir is on `main`.
+
+A prior session can leave the content repo on a feature or capture branch.
+Every later cron (episodic-maintain, evaluator) then commits to that stale
+branch instead.
+
+A second checkout still on `main` runs its own parallel cron stream at the
+same time. That's a silent split-brain that can run for days unnoticed.
 
 Check by hand (resolve the dir first, same as [[np-core-contribute]]):
 ```
 CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)"
 STALE_BRANCH="$(git -C "$CONTENT" branch --show-current)"   # should be main
-git -C "$CONTENT" fetch origin
+git -C "$CONTENT" fetch origin   # fails if offline or auth is stale; fix that before trusting the two log lines below
 git -C "$CONTENT" log --oneline main..HEAD
 git -C "$CONTENT" log --oneline HEAD..origin/main
 ```
 
-Fix, from the stale branch. Stop the episodic-maintain/evaluator cron on this
-machine first, so it can't commit mid-merge:
-```
-git -C "$CONTENT" merge origin/main
-```
-If that conflicts, the conflicts land in generated files: `metrics.jsonl`,
-`dashboard/data/metrics.js`, `INDEX.md`. Don't pick a side.
-
-Rebuild each from the merged source, per [[np-kb-git-gotchas]] (generated-file
-conflicts). A picked side silently drops the other branch's real session data.
-
-`metrics.jsonl` is one JSON object per line, keyed by `session_id` and `ts`.
-
-"Union and re-prune" means this: take every line from both `git show :2:`
-(ours) and `:3:` (theirs). Keep one copy of each exact duplicate line, sorted
-by `ts`.
-
-Then drop any record older than `evaluator.retain_days` (default 90 days)
-from now. That's the same rule `np_aggregate.py`'s `_prune_metrics()` already
-applies on every normal run.
-
-`metrics.js` and `INDEX.md` are pure derived output, so just regenerate:
-```
-python3 "${NP_DIR:-$HOME/Code/nervepack}/dashboard/build.py" "$CONTENT/dashboard/data/metrics.jsonl" "$CONTENT/dashboard/data/metrics.js"
-python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_generate_index.py"
-```
-Then commit and finish the merge:
-```
-git -C "$CONTENT" add -A
-git -C "$CONTENT" commit -m "merge: reconcile main and the stale branch"
-git -C "$CONTENT" checkout main
-git -C "$CONTENT" merge --ff-only "$STALE_BRANCH"
-```
-`merge --ff-only` errors instead of doing anything silent if the branches
-still diverge here. That means the step above wasn't finished on both sides.
-
-Re-run `git -C "$CONTENT" merge origin/main` from the stale branch first.
-```
-git -C "$CONTENT" push origin main
-git -C "$CONTENT" branch -D "$STALE_BRANCH"
-```
-
-Not yet a doctor check. Tracked as
-[nervepack#329](https://github.com/pat-browne/nervepack/issues/329) (roadmap
-label): assert `NP_CONTENT_DIR`'s checked-out branch is `main`.
+If either log shows commits, see references/split-brain-fix.md for the full
+merge, rebuild, and verify procedure.
 
 ## After fixing
 
