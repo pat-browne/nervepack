@@ -77,8 +77,10 @@ untouched.
 change. `git ls-files -s engine/setup/62-install-scheduled-auth-token.sh`
 reports mode `100755`.
 
-`bash engine/setup/62-install-scheduled-auth-token.sh --status` still prints a
-one-word status. Verified as `ok 366` on macOS 13.7.8 on 2026-09-11.
+`bash engine/setup/62-install-scheduled-auth-token.sh --status` still prints its
+status line and exits 0. That line reads `ok <days-remaining>`, so it reports
+token validity, not an exit code. Observed as `ok 366` on macOS 13.7.8 on
+2026-09-11.
 
 ## Rollback
 
