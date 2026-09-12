@@ -5,7 +5,6 @@ date: 2026-09-11
 tier: standard
 blast_radius:
   - engine/onboard/adapters/**
-  - engine/setup/62-install-scheduled-auth-token.sh
   - change-specs/fix-adapter-verify-hook-names.md
 ---
 
@@ -96,6 +95,6 @@ Not required at standard tier.
 
 ## Deviations
 
-2026-09-11: also `chmod +x engine/setup/62-install-scheduled-auth-token.sh`. It
-shipped at mode 644. Its sibling `58-install-mcp.sh` is 755. The onboarding
-walkthrough told the user to run a file that would not execute.
+None. A `chmod +x` on `engine/setup/62-install-scheduled-auth-token.sh` was
+carried here first and then removed. That path forces tier `high`, which this
+doc fix does not warrant. The mode bit needs its own high-tier spec.
