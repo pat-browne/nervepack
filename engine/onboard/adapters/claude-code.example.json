@@ -14,7 +14,7 @@
     },
     "session-start": {
       "status": "wired",
-      "verify": "grep -q nervepack-session-directive ~/.claude/settings.json"
+      "verify": "grep -q 'hook session-directive' ~/.claude/settings.json"
     },
     "session-end-capture": {
       "status": "wired",
@@ -22,7 +22,7 @@
     },
     "session-end-flush": {
       "status": "wired",
-      "verify": "grep -q np-session-flush ~/.claude/settings.json"
+      "verify": "grep -q 'hook session-flush' ~/.claude/settings.json"
     },
     "scheduled-maint": {
       "status": "wired",
