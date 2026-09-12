@@ -83,8 +83,11 @@ class TestGateOverrideResolution(unittest.TestCase):
 
 class TestGateOverrideSchema(unittest.TestCase):
     """The dashboard settings panel renders a control for a key only when
-    toggle-schema.json has an entry for it (np_toggle_schema.load()) - a param
-    with no schema entry renders read-only. These three must be editable."""
+    toggle-schema.json has an entry it can type-check (np_toggle_schema.load()
+    plus validate()) - an entry with no `type` fails validation the same way a
+    missing entry does, so it renders read-only. All four gate keys must be
+    editable, gates.spec_review included: it is the one a human flips most,
+    because it governs whether implementation waits on a read spec or plan."""
 
     @classmethod
     def setUpClass(cls):
@@ -101,6 +104,17 @@ class TestGateOverrideSchema(unittest.TestCase):
             entry = self.schema[key]
             self.assertEqual(entry.get("type"), "bool")
             self.assertTrue(entry.get("description"), "%s has no description" % key)
+
+    def test_spec_review_is_bool_with_a_description(self):
+        """gates.spec_review is declared local scope, so a human flips it by
+        hand or from the dashboard panel. An entry with no `type` cannot be
+        type-checked by np_toggle_schema.validate(), so the panel renders it
+        read-only - useless for the one gate a human turns off most."""
+        entry = self.schema["gates.spec_review"]
+        self.assertEqual(entry.get("type"), "bool")
+        self.assertTrue(
+            entry.get("description"), "gates.spec_review has no description"
+        )
 
 
 if __name__ == "__main__":
