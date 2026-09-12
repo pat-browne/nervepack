@@ -2,7 +2,7 @@
 id: 0034
 status: proposed
 date: 2026-09-11
-tier: standard
+tier: normal
 blast_radius:
   - engine/onboard/adapters/**
   - change-specs/fix-adapter-verify-hook-names.md
@@ -91,7 +91,7 @@ Verified on macOS 13.7.8 on 2026-09-11. Both greps were run against a real
 
 ## Rollback
 
-Not required at standard tier.
+Not required at normal tier.
 
 ## Deviations
 
