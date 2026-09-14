@@ -71,6 +71,38 @@ outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) 
 `session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
 
+**Doctor all-green but real metrics or episodic records stop appearing for
+weeks, with no error anywhere.** Doctor has no check for `memory.backcapture`.
+It verifies hooks are registered. It never checks that the toggles those hooks
+early-return on are actually on.
+
+`backcapture-sweep` (SessionStart) is not a redundant backstop. The SessionEnd
+evaluator hook is documented as unreliable on its own. Claude Code kills slow
+SessionEnd `claude -p` hooks before they finish. `/exit` skips SessionEnd
+entirely. So it bails on most real sessions
+(`np-evaluator.log`: `empty transcript extraction for <no path>`). With
+backcapture off, that bail path has no catch and almost nothing gets scored.
+
+Symptom: `evaluator(metrics)` cron commits keep reporting "0 record(s)"
+correctly, because its inbox really is empty. The bug is upstream, not in the
+aggregator. Check by hand: `python3 engine/nervepack_engine/np_toggle.py
+enabled memory.backcapture`. Also read `~/.config/nervepack/toggles.local`
+directly.
+
+A local override there is invisible to anyone only reading the committed
+`engine/setup/toggles.conf` defaults. `backcapture-sweep.lock` and
+`backcapture.log` both freeze at the moment the toggle went off, since the
+hook returns before touching either. Fix: remove or flip the
+`memory.backcapture=off` line in `toggles.local`.
+
+Two distinct causes look identical from "the dashboard shows old data".
+(1) `metrics.js` just needs a rebuild, since opening the dashboard triggers
+`dashboard/build.py` to regenerate it from the current `metrics.jsonl`.
+(2) `metrics.jsonl` itself has no new records, because the evaluator inbox is
+empty (the pattern above). Rebuilding does nothing for cause (2). Tell them
+apart by checking the newest `ts` in `metrics.jsonl` directly, not in the
+rendered dashboard.
+
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
 content repo's commit count has diverged from origin/main.** Not yet a doctor
 check, tracked as [nervepack#329](https://github.com/pat-browne/nervepack/issues/329)
