@@ -323,6 +323,22 @@ class DoctorTest(unittest.TestCase):
         text, _ = np_doctor.report()
         self.assertIn("concatenate", self._line(text, "team"))
 
+    # --- backcapture-enabled (SHOULD core) ---------------------------------
+    def test_backcapture_enabled_by_default_pass(self):
+        self._write_adapter(self._all_wired())
+        text, _ = np_doctor.report()
+        self.assertRegex(self._line(text, "backcapture-enabled"), r"\bPASS\b")
+
+    def test_backcapture_disabled_warns_with_fix(self):
+        self._write_adapter(self._all_wired())
+        with open(os.environ["NP_TOGGLES_LOCAL"], "w") as f:
+            f.write("memory.backcapture=off\n")
+        text, _ = np_doctor.report()
+        line = self._line(text, "backcapture-enabled")
+        self.assertIn("WARN", line)
+        self.assertIn("memory.backcapture is off", line)
+        self.assertIn("cli.py toggle memory.backcapture on", line)
+
     # --- review-gap regression guards (phase-15 review) --------------------
     def test_team_over_cap_warns(self):
         # >4 team dirs -> np_content.team_dirs() rejects (over-cap) -> [] while

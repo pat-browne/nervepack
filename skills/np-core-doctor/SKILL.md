@@ -42,6 +42,7 @@ runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no
 | Check | Fix |
 |---|---|
 | `team` | Set `NP_TEAM_DIR` or `~/.config/nervepack/team-dir` if you have a team overlay; otherwise safe to ignore |
+| `backcapture-enabled` | `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on` |
 | `dashboard-data` | `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup link-dashboard-data` |
 | `hook-scripts` | Re-run the failing bootstrap (the error names the missing script) |
 | `session-start` | Re-run `cli.py setup install-hooks` (registers every lifecycle hook from `engine/setup/hooks.manifest`) |
@@ -71,46 +72,24 @@ outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) 
 `session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
 
-**Doctor all-green but real metrics or episodic records stop appearing for
-weeks, with no error anywhere.** Doctor has no check for `memory.backcapture`.
-It verifies hooks are registered. It never checks that the toggles those hooks
-early-return on are actually on.
-
-`backcapture-sweep` (SessionStart) is not a redundant backstop. Claude Code
-kills slow SessionEnd `claude -p` hooks before they finish. `/exit` skips
-SessionEnd entirely.
-
-So it bails on most real sessions with an empty-transcript or missing-path
-error. `np-evaluator.log`, on the version this was written against, reads
-`empty transcript extraction for <no path>` (exact string may drift).
-
-With backcapture off, that bail has no catch. `evaluator(metrics)` cron
-commits keep reporting "0 record(s)" correctly, since the inbox really is
-empty. The bug is upstream, not in the aggregator.
-
-Check by hand, from the repo root:
-`python3 engine/nervepack_engine/np_toggle.py enabled memory.backcapture`
-(expected `on` or `off`; `FileNotFoundError` means wrong `NP_DIR`). Also read
-`~/.config/nervepack/toggles.local` directly, since a local override there is
-invisible in the committed `toggles.conf` defaults.
-
-As of this writing, the hook returns before touching its lock file or log.
-So `backcapture-sweep.lock` and `backcapture.log` both freeze at the moment
-the toggle went off (verify this still holds if the early-return path
-changes).
-
-Fix: remove or flip `memory.backcapture=off` in `toggles.local`, then
-re-check with the same command above. Only new sessions pick this up. A
-running session won't see it until its next `SessionStart`.
+**`backcapture-enabled` WARN, or real metrics/episodic records stop appearing
+for weeks with every other check green.** `memory.backcapture` gates the
+SessionStart backstop for the SessionEnd evaluator hook, which is unreliable
+on its own (Claude Code kills slow SessionEnd hooks, and `/exit` skips
+SessionEnd entirely). With the toggle off, sessions the evaluator misses are
+never recovered, and `evaluator(metrics)` cron commits correctly report "0
+record(s)" because the inbox really is empty. The bug is upstream, not in the
+aggregator. Fix: `cli.py toggle memory.backcapture on`, then re-run the
+doctor. Only new sessions pick this up; a session already running waits for
+its next `SessionStart`. Deeper root-cause trace, for the one time this
+shipped without the check yet: `references/backcapture-toggle-incident.md`.
 
 Two distinct causes look identical from "the dashboard shows old data".
 (1) `metrics.js` needs a rebuild (opening the dashboard triggers
 `dashboard/build.py`, which regenerates it from `metrics.jsonl`).
-(2) `metrics.jsonl` has no new records, because the inbox is empty (this
-pattern). Rebuilding does nothing for cause (2).
-
-Tell them apart with `tail -1 metrics.jsonl | jq .ts`. Hours or days old
-means cause (2).
+(2) `metrics.jsonl` has no new records, because the inbox is empty (the
+pattern above). Rebuilding does nothing for cause (2). Tell them apart with
+`tail -1 metrics.jsonl | jq .ts`. Hours or days old means cause (2).
 
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
 content repo's commit count has diverged from origin/main.** Not yet a doctor
