@@ -97,7 +97,7 @@ review-thread state.
 On PR #337, review threads were resolved and reported as green. Meanwhile
 `spec-guard` and `tier-gate` were both failing in CI, unchecked.
 
-The miss: touching `np_doctor.py` or `capabilities.json` forces
+The miss: touching a file with special tier-gate rules forces
 `tier: normal`. That requires a `change-specs/<branch-slug>.md` file.
 Nobody ran `gh pr checks` after pushing, so the failure sat unnoticed.
 
