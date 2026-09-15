@@ -119,10 +119,9 @@ See `change-specs/README.md` for when normal/high tier changes need a spec.
 thread, including one opened after your last check.
 
 After every push, rerun, or thread resolution, re-query both: `gh pr checks
-<N>` for status checks, and `gh api repos/<owner>/<repo>/pulls/<N>/comments`
-(or `gh pr view <N> --json reviews`) for review state. Do this every time,
-not just once at the start. Never assume a persistent `BLOCKED` or pending
-state is platform lag without re-verifying both first.
+<N>` for status checks, and `gh pr view <N> --json reviews` for review state.
+Do this every time, not just once at the start. Never assume a persistent
+`BLOCKED` or pending state is platform lag without re-verifying both first.
 
 ## Concurrency — both repos are one shared working tree
 
