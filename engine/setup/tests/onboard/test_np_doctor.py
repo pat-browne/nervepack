@@ -21,6 +21,7 @@ import tempfile
 import types
 import unittest
 from datetime import date, timedelta
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
@@ -30,6 +31,7 @@ if _ENGINE_SETUP not in sys.path:
 
 import np_doctor  # noqa: E402
 import np_model  # noqa: E402
+import np_toggle  # noqa: E402
 
 _CAPS = os.path.join(_ENGINE_SETUP, "..", "onboard", "capabilities.json")
 
@@ -322,6 +324,36 @@ class DoctorTest(unittest.TestCase):
             f.write("team=on\nteam.merge=concatenate\n")
         text, _ = np_doctor.report()
         self.assertIn("concatenate", self._line(text, "team"))
+
+    # --- backcapture-enabled (SHOULD core) ---------------------------------
+    def test_backcapture_enabled_by_default_pass(self):
+        self._write_adapter(self._all_wired())
+        text, _ = np_doctor.report()
+        self.assertRegex(self._line(text, "backcapture-enabled"), r"\bPASS\b")
+
+    def test_backcapture_disabled_warns_with_fix(self):
+        self._write_adapter(self._all_wired())
+        with open(os.environ["NP_TOGGLES_LOCAL"], "w") as f:
+            f.write("memory.backcapture=off\n")
+        text, _ = np_doctor.report()
+        line = self._line(text, "backcapture-enabled")
+        self.assertIn("WARN", line)
+        self.assertIn("memory.backcapture is off", line)
+        self.assertIn("cli.py toggle memory.backcapture on", line)
+
+    def test_backcapture_unreadable_toggle_warns_not_crashes(self):
+        self._write_adapter(self._all_wired())
+
+        def _boom(feature):
+            if feature == "memory.backcapture":
+                raise OSError("permission denied")
+            return True
+
+        with mock.patch.object(np_toggle, "enabled", side_effect=_boom):
+            text, _ = np_doctor.report()
+        line = self._line(text, "backcapture-enabled")
+        self.assertIn("WARN", line)
+        self.assertIn("permission denied", line)
 
     # --- review-gap regression guards (phase-15 review) --------------------
     def test_team_over_cap_warns(self):

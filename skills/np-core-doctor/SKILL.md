@@ -42,6 +42,7 @@ runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no
 | Check | Fix |
 |---|---|
 | `team` | Set `NP_TEAM_DIR` or `~/.config/nervepack/team-dir` if you have a team overlay; otherwise safe to ignore |
+| `backcapture-enabled` | `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on` |
 | `dashboard-data` | `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup link-dashboard-data` |
 | `hook-scripts` | Re-run the failing bootstrap (the error names the missing script) |
 | `session-start` | Re-run `cli.py setup install-hooks` (registers every lifecycle hook from `engine/setup/hooks.manifest`) |
@@ -70,6 +71,25 @@ onboarding flow ([[np-core-onboard]]) to wire the adapter and generate the file.
 outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) and
 `session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
+
+**`backcapture-enabled` WARN, or real metrics/episodic records stop appearing
+for weeks with every other check green.** `memory.backcapture` gates the
+SessionStart backstop for the SessionEnd evaluator hook, which is unreliable
+on its own (Claude Code kills slow SessionEnd hooks, and `/exit` skips
+SessionEnd entirely). With the toggle off, sessions the evaluator misses are
+never recovered, and `evaluator(metrics)` cron commits correctly report "0
+record(s)" because the inbox really is empty. The bug is upstream, not in the
+aggregator. Fix: `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on`, then re-run the
+doctor. Only new sessions pick this up; a session already running waits for
+its next `SessionStart`. Deeper root-cause trace, for the one time this
+shipped without the check yet: `references/backcapture-toggle-incident.md`.
+
+Two distinct causes look identical from "the dashboard shows old data".
+(1) `metrics.js` needs a rebuild (opening the dashboard triggers
+`dashboard/build.py`, which regenerates it from `metrics.jsonl`).
+(2) `metrics.jsonl` has no new records, because the inbox is empty (the
+pattern above). Rebuilding does nothing for cause (2). Tell them apart with
+`tail -1 metrics.jsonl | jq .ts`. Hours or days old means cause (2).
 
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
 content repo's commit count has diverged from origin/main.** Not yet a doctor
