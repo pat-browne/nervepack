@@ -236,6 +236,17 @@ def _core_check(cap_id, np):
         if unusual:
             return "PASS (%s)" % ", ".join(unusual)
         return "PASS"
+    if cap_id == "backcapture-enabled":
+        try:
+            on = np_toggle.enabled("memory.backcapture")
+        except (OSError, ValueError) as exc:
+            return "WARN (could not read memory.backcapture toggle: %s)" % exc
+        if on:
+            return "PASS"
+        return ("WARN (memory.backcapture is off — the SessionStart backstop for "
+                "unreliable SessionEnd captures is disabled. Metrics and episodic "
+                "capture can silently stop for weeks with every other check green. "
+                "Fix: python3 engine/nervepack_engine/cli.py toggle memory.backcapture on)")
     if cap_id == "content":
         cdir = np_content.content_dir()
         if not cdir or not os.path.isdir(cdir):

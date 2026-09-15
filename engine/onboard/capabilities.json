@@ -54,6 +54,17 @@
       }
     },
     {
+      "id": "backcapture-enabled",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the SessionStart backcapture-sweep backstop is on",
+      "why": "The SessionEnd evaluator hook is unreliable on its own: Claude Code kills slow SessionEnd hooks before they finish, and /exit skips SessionEnd entirely. backcapture-sweep (SessionStart) is the catch for sessions that fall through. With memory.backcapture off, real metrics and episodic capture can silently stop for weeks with every other check green.",
+      "accept": "np_toggle.enabled('memory.backcapture') is true.",
+      "hints": {
+        "generic": "python3 engine/nervepack_engine/cli.py toggle memory.backcapture on"
+      }
+    },
+    {
       "id": "content",
       "tier": "MUST",
       "check": "core",
