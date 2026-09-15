@@ -113,6 +113,16 @@ never blocks merge, it only comments.
 
 See `change-specs/README.md` for when normal/high tier changes need a spec.
 
+### A stuck `BLOCKED` merge means re-check checks and threads, not platform lag
+
+`required_review_thread_resolution` blocks merge on any unresolved review
+thread, including one opened after your last check.
+
+After every push, rerun, or thread resolution, re-query both: `gh pr checks
+<N>` for status checks, and `gh pr view <N> --json reviews` for review state.
+Don't assume a persistent `BLOCKED` or pending state is platform lag without
+re-verifying both first.
+
 ## Concurrency — both repos are one shared working tree
 
 Other sessions and the crons write here too, and two crons commit to `skills/`
