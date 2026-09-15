@@ -8,6 +8,7 @@ blast_radius:
   - engine/onboard/capabilities.json
   - engine/setup/tests/onboard/test_np_doctor.py
   - skills/np-core-doctor/**
+  - INDEX.md
 ---
 
 # 0036: doctor check for the backcapture toggle
@@ -79,4 +80,6 @@ on. It shows a `WARN` with the fix command when the toggle is off.
 
 ## Deviations
 
-None.
+- 2026-09-15 -- also touched INDEX.md. Reason: editing skills/np-core-doctor/SKILL.md
+  triggers the standard relink/regenerate-INDEX step, which is a mechanical
+  side effect of any SKILL.md change, not a scope change. Widened blast_radius.
