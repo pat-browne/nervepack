@@ -113,21 +113,16 @@ never blocks merge, it only comments.
 
 See `change-specs/README.md` for when normal/high tier changes need a spec.
 
-### A stuck `BLOCKED` merge is not platform lag
+### A stuck `BLOCKED` merge means re-check checks and threads, not platform lag
 
-On a past PR, all checks were green but `mergeStateStatus` stayed `BLOCKED`.
-The cause was assumed to be GitHub-side caching or lag.
+`required_review_thread_resolution` blocks merge on any unresolved review
+thread, including one opened after your last check.
 
-`--admin` was nearly used to force past it. The real cause: a new unresolved
-review thread from a later push, never re-checked.
-
-`required_review_thread_resolution` blocks merge on any unresolved thread,
-even one opened after your last check.
-
-After every push, rerun, or thread resolution, re-query `gh pr checks <N>`
-and the review threads again. Do this before concluding a PR is stuck or
-ready, not just once at the start. Never blame the platform for a persistent
-`BLOCKED` or pending state without re-verifying both first.
+After every push, rerun, or thread resolution, re-query both: `gh pr checks
+<N>` for status checks, and `gh api repos/<owner>/<repo>/pulls/<N>/comments`
+(or `gh pr view <N> --json reviews`) for review state. Do this every time,
+not just once at the start. Never assume a persistent `BLOCKED` or pending
+state is platform lag without re-verifying both first.
 
 ## Concurrency — both repos are one shared working tree
 
