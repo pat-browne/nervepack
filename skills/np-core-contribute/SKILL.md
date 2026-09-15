@@ -94,16 +94,20 @@ A push is not done. Resolving review threads is not done either. Run
 `gh pr checks <N>` after every push. Read the actual result, not just the
 review-thread state.
 
-On PR #337, review threads were resolved and reported as green. Meanwhile
+On a past PR, review threads were resolved and reported as green. Meanwhile
 `spec-guard` and `tier-gate` were both failing in CI, unchecked.
 
 The miss: touching a file with special tier-gate rules forces
 `tier: normal`. That requires a `change-specs/<branch-slug>.md` file.
 Nobody ran `gh pr checks` after pushing, so the failure sat unnoticed.
 
-Before reporting a PR ready or green: run the checks command. Read every
-non-passing row and fix the cause. Do not infer PR health from review
-threads, from your own commit succeeding, or from the diff-review bot alone.
+Before reporting a PR ready or green: run the checks command. If `gh` fails
+or is unavailable, fall back to `gh api repos/<owner>/<repo>/commits/<sha>/check-runs`
+or the GitHub web UI. Read every non-passing row and fix the cause.
+
+Do not infer PR health from review threads, from your own commit succeeding,
+or from the automated diff-review workflow's comments alone -- that workflow
+never blocks merge, it only comments.
 
 See `change-specs/README.md` for when normal/high tier changes need a spec.
 
