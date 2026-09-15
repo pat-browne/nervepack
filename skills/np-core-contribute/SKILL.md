@@ -101,9 +101,10 @@ The miss: touching a file with special tier-gate rules forces
 `tier: normal`. That requires a `change-specs/<branch-slug>.md` file.
 Nobody ran `gh pr checks` after pushing, so the failure sat unnoticed.
 
-Before reporting a PR ready or green: run the checks command. If `gh` fails
-or is unavailable, fall back to `gh api repos/<owner>/<repo>/commits/<sha>/check-runs`
-or the GitHub web UI. Read every non-passing row and fix the cause.
+Before reporting a PR ready or green: run the checks command. If `gh` itself
+is broken (not installed, not authenticated), its `gh api` subcommand will
+fail the same way -- use the GitHub web UI's Checks tab instead. Read every
+non-passing row's log output, not just its name, to find the actual cause.
 
 Do not infer PR health from review threads, from your own commit succeeding,
 or from the automated diff-review workflow's comments alone -- that workflow
