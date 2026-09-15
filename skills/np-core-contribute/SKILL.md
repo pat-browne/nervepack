@@ -90,22 +90,22 @@ recipe with commands: references/steps.md
 
 ## After pushing an engine PR, verify CI before calling it done
 
-A push is not done. Resolving review threads is not done either. Run
-`gh pr checks <N>` after every push. Read the actual result, not just the
+A push is not done. Resolving review threads is not done either. Once CI
+finishes, run `gh pr checks <N>`. Read the actual result, not just the
 review-thread state.
 
-On a past PR, review threads were resolved and reported as green. Meanwhile
+On a past PR, review comments were resolved and the threads closed. Meanwhile
 `spec-guard` and `tier-gate` were both failing in CI, unchecked.
 
 The miss: `engine/setup/risk-tiers.json` lists paths that force a higher tier
-when touched. Forcing `tier: normal` requires a matching
+when touched. That higher tier requires a matching
 `change-specs/<branch-slug>.md` file to exist. Nobody ran `gh pr checks`
 after pushing, so the missing file sat unnoticed.
 
-Before reporting a PR ready or green: run the checks command. If `gh` is
-unavailable or not authenticated, use the GitHub web UI's Checks tab instead.
-Read every non-passing row's log output, not just its name -- for `spec-guard`
-and `tier-gate` failures specifically, check `change-specs/README.md` first.
+Before reporting a PR ready or green: run the checks command, or check the
+GitHub web UI's Checks tab if `gh` is unavailable. Read every failed or
+still-pending row's log output, not just its name -- for `spec-guard` and
+`tier-gate` failures specifically, check `change-specs/README.md` first.
 
 Do not infer PR health from review threads, from your own commit succeeding,
 or from the automated diff-review workflow's comments alone -- that workflow
