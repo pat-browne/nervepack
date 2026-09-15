@@ -79,7 +79,7 @@ on its own (Claude Code kills slow SessionEnd hooks, and `/exit` skips
 SessionEnd entirely). With the toggle off, sessions the evaluator misses are
 never recovered, and `evaluator(metrics)` cron commits correctly report "0
 record(s)" because the inbox really is empty. The bug is upstream, not in the
-aggregator. Fix: `cli.py toggle memory.backcapture on`, then re-run the
+aggregator. Fix: `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on`, then re-run the
 doctor. Only new sessions pick this up; a session already running waits for
 its next `SessionStart`. Deeper root-cause trace, for the one time this
 shipped without the check yet: `references/backcapture-toggle-incident.md`.
