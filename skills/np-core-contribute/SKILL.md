@@ -88,6 +88,25 @@ relink + regenerate INDEX → diff → commit (explicit paths, no LLM
 attribution) → push (overlay: no confirmation gate; engine: PR). Full 9-step
 recipe with commands: references/steps.md
 
+## After pushing an engine PR, verify CI before calling it done
+
+A push is not done. Resolving review threads is not done either. Run
+`gh pr checks <N>` after every push. Read the actual result, not just the
+review-thread state.
+
+On PR #337, review threads were resolved and reported as green. Meanwhile
+`spec-guard` and `tier-gate` were both failing in CI, unchecked.
+
+The miss: touching `np_doctor.py` or `capabilities.json` forces
+`tier: normal`. That requires a `change-specs/<branch-slug>.md` file.
+Nobody ran `gh pr checks` after pushing, so the failure sat unnoticed.
+
+Before reporting a PR ready or green: run the checks command. Read every
+non-passing row and fix the cause. Do not infer PR health from review
+threads, from your own commit succeeding, or from the diff-review bot alone.
+
+See `change-specs/README.md` for when normal/high tier changes need a spec.
+
 ## Concurrency — both repos are one shared working tree
 
 Other sessions and the crons write here too, and two crons commit to `skills/`
