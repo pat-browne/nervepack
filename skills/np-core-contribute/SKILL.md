@@ -97,9 +97,10 @@ review-thread state.
 On a past PR, review threads were resolved and reported as green. Meanwhile
 `spec-guard` and `tier-gate` were both failing in CI, unchecked.
 
-The miss: touching a file with special tier-gate rules forces
-`tier: normal`. That requires a `change-specs/<branch-slug>.md` file.
-Nobody ran `gh pr checks` after pushing, so the failure sat unnoticed.
+The miss: `engine/setup/risk-tiers.json` lists paths that force a higher tier
+when touched. Forcing `tier: normal` requires a matching
+`change-specs/<branch-slug>.md` file to exist. Nobody ran `gh pr checks`
+after pushing, so the missing file sat unnoticed.
 
 Before reporting a PR ready or green: run the checks command. If `gh` is
 unavailable or not authenticated, use the GitHub web UI's Checks tab instead.
