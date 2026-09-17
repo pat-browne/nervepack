@@ -12,6 +12,7 @@ optionally offloading them to a cloud routine.
 | Sun 08:00 | `memory-promote` | local cron | `memory-promote.md` | Promote durable entries from your local memory store (`~/.claude/projects/<your-project>/memory/`) into the right skill, archive stale entries. **Local-only — cloud agents can't reach the memory store.** |
 | Sun 09:30 | `nervepack-refine` | local cron (default-on) | `np-flow-scheduled-refine.md` | Lint frontmatter, audit cross-refs, check vendor sha. Toggle off with `maintain.refine=off`. |
 | Wed 10:00 | `nervepack-compact` | local cron (default-on) | `np-flow-weekly-compact.md` | Dedup (auto-merge ≥0.85 Jaccard; propose 0.4–0.85). Splits for >300-line skills go to `compact-proposals/`. Toggle off with `maintain.compact=off`. |
+| every 30 min | `quota-watch` | local cron + Stop hook | (plain script, no LLM) | Detect a claude.ai usage-limit hit and notify 1 min after reset so you can type "continue". See `np-flow-quota-watch`. |
 
 Order: `memory-promote` (writes new content) → `nervepack-refine` (lints what
 just got written) → two days later, `nervepack-compact` (dedups the
@@ -26,8 +27,8 @@ python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup i
 ```
 
 Idempotent. Installs `memory-promote`, `episodic-maintain`, `aggregate-metrics`,
-`skill-maintain`, `nervepack-refine`, and `nervepack-compact` under their marker
-comments. Verify:
+`skill-maintain`, `nervepack-refine`, `nervepack-compact`, and `quota-watch`
+under their marker comments. Verify:
 
 ```bash
 crontab -l | grep nervepack-
