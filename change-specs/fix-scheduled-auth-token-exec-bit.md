@@ -1,5 +1,5 @@
 ---
-id: 0035
+id: 0037
 status: proposed
 date: 2026-09-11
 tier: high
@@ -8,7 +8,7 @@ blast_radius:
   - change-specs/fix-scheduled-auth-token-exec-bit.md
 ---
 
-# 0035: scheduled-auth-token installer is not executable
+# 0037: scheduled-auth-token installer is not executable
 
 ## Context and problem statement
 
