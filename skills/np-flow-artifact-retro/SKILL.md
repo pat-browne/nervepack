@@ -52,7 +52,7 @@ try:
     s=open(sys.argv[1]).read()
 except OSError as e:
     sys.exit(f'word count failed: {e}')
-print(len(re.sub(r'<[^>]+>',' ',re.sub(r'<svg.*?</svg>','',s,flags=re.S)).split()))" page.html
+print(len(re.sub(r'<[^>]+>',' ',re.sub(r'<svg.*?</svg>','',s,flags=re.S)).split()))" <your-file.html>
 ```
 
 When the count runs over, cut whole structures rather than shaving adjectives.
