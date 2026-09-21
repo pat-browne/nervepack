@@ -29,6 +29,7 @@
     "./skills/np-core-suggestions-review",
     "./skills/np-core-sync",
     "./skills/np-core-toggle",
+    "./skills/np-flow-artifact-retro",
     "./skills/np-flow-merge-gate"
   ]
 }
