@@ -93,3 +93,11 @@ PreToolUse|mcp__.*|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gat
 # arrives after the reader saw the text -- this puts the contract in front of
 # the model while it drafts, so the block above stays rare.
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-directive
+# --- 67: session journal. recall is synchronous (must return additionalContext);
+# seed is backgrounded+redirected (no output to inject). checkpoint runs on
+# PreCompact alongside episodic-capture. recall on UserPromptSubmit is the
+# interrupted-SessionStart fallback. Cleanup rides the backcapture sweep (row 56).
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-recall
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-write seed >/dev/null 2>&1 &
+PreCompact||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-write checkpoint
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-recall

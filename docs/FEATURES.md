@@ -225,6 +225,42 @@ finishes typing the "spec written, please review" message — the file pops
 open in your editor/default `.md` handler, already in focus. You read it right
 there instead of trusting a chat summary.
 
+## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
+
+**Purpose.** A session loses working context on a compaction, a resume, or a
+`/clear`. The journal keeps a local record of five things.
+
+- Goal, current hypotheses, notable struggles, notable progress, and skills that
+  worked.
+- It is restored to the model after a compact or resume.
+- It records the skills that succeeded, so a captured session teaches future ones.
+
+**Workflow.**
+
+- `journal_write.py` writes an append log under `session-journal/<sid>.md`.
+- Seed runs on SessionStart from the first typed prompt, with repo metadata.
+- Checkpoint runs on PreCompact via a cheap haiku call over the transcript.
+- `np_scrub` scrubs PII before any block lands.
+- `journal_recall.py` injects on SessionStart when source is compact or resume.
+- A UserPromptSubmit fallback covers an interrupted SessionStart, keyed by
+  `.recall/` receipts, so nothing injects twice.
+- A plain startup and a `/clear` never inject.
+
+**Cleanup.**
+
+- The backcapture sweep deletes a journal after it evaluates that session.
+- A 30-day TTL in the same sweep removes any journal the cleanup missed.
+
+**The /clear case.**
+
+- Claude Code has no pre-`/clear` hook, so `/clear` cannot be blocked.
+- The existing SessionEnd path fires on the `clear` reason.
+- The backcapture sweep re-captures any prior session with no metrics record.
+
+**Assets.** `np_journal.py`, `hooks/journal_write.py`, `hooks/journal_recall.py`,
+cleanup in `backcapture_sweep.py`. Toggle `journal` (`model`, `ttl_days`,
+`recall_sources`). Governing record: `change-specs/worktree-feat+session-journal-and-clear-capture.md`.
+
 ## Spec-review gate — confirm the doc was read before implementation starts
 
 **Purpose.** "Open artifact on write" puts the spec in front of you. Nothing
