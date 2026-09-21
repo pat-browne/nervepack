@@ -1,5 +1,5 @@
 ---
-id: 0037
+id: 0038
 status: accepted
 date: 2026-09-18
 tier: high
@@ -17,7 +17,7 @@ blast_radius:
   - change-specs/worktree-feat+session-journal-and-clear-capture.md
 ---
 
-# 0037: Session journal + capture-around-/clear
+# 0038: Session journal + capture-around-/clear
 
 ## Context and problem statement
 
