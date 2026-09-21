@@ -45,6 +45,7 @@ import time
 import np_capture
 import np_content
 import np_evaluator
+import np_journal
 import np_model
 import np_toggle
 import np_host
@@ -360,6 +361,10 @@ def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evalu
             _clear_attempts(seen_dir, sid)
             processed += 1
             _log("back-captured %s (project %s)" % (sid, os.path.basename(cwd)))
+            try:                       # journal is consumed once the session is evaluated
+                np_journal.cleanup(sid)
+            except Exception:
+                pass
         elif _bump_attempts(seen_dir, sid) >= _MAX_ATTEMPTS:
             _log("gave up on %s after %d capture attempts (still queued->seen)" % (sid, _MAX_ATTEMPTS))
         else:
@@ -425,5 +430,9 @@ def run(payload_text, capture_fn=None, evaluate_fn=None, capture_ok_fn=None):
                         os.path.join(seen_dir, name)):
                     pending += 1
             _log("sweep done: %d session(s) captured, %d still queued" % (processed, pending))
+        try:                           # TTL safety net for journals never reached by cleanup
+            np_journal.ttl_sweep()
+        except Exception:
+            pass
     finally:
         _release_lock(lock_path)
