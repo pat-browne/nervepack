@@ -1,5 +1,5 @@
 ---
-id: 0037
+id: 0039
 status: accepted
 date: 2026-09-18
 tier: normal
@@ -10,7 +10,7 @@ blast_radius:
   - change-specs/flow-artifact-retro.md
 ---
 
-# 0037 — A retro flow for Artifact and long-document sessions
+# 0039 — A retro flow for Artifact and long-document sessions
 
 ## Problem
 
