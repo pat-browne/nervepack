@@ -48,7 +48,10 @@ Measure it mechanically rather than by eye, before publishing:
 ```bash
 python3 -c "
 import re,sys
-s=open(sys.argv[1]).read()
+try:
+    s=open(sys.argv[1]).read()
+except OSError as e:
+    sys.exit(f'word count failed: {e}')
 print(len(re.sub(r'<[^>]+>',' ',re.sub(r'<svg.*?</svg>','',s,flags=re.S)).split()))" page.html
 ```
 
@@ -97,7 +100,7 @@ produces nothing durable.
 
 ## Related
 
-Rendering and publish-gate mechanics live in `np-kb-artifact-authoring`, which
+Rendering and publish-gate mechanics live in [[np-kb-artifact-authoring]], which
 carries the forced-white wrapper trap, the full-bleed specificity failure, and
 the concise-output gate's blank-line block scope. Form rules for the prose
 itself are [[np-flow-concise-output]]. Delivering the diff of an edited markdown
