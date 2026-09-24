@@ -289,7 +289,11 @@ def _render_inline(s, link_map=None, here=""):
     (href sanitized). All emitted text is already escaped."""
     s = html.escape(s)
     s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
-    s = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', s)
+    # Non-greedy: a literal `*` inside the span (COUNT(*), SELECT *) must not
+    # block the match to the real closing `**`. A `[^*]+` class rejected any
+    # inner `*`, so **COUNT(*) vs COUNT(col):** never matched as bold and the
+    # italic pass below then mispaired the leftover asterisks.
+    s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
     s = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', s)
 
     def _wl(m):
@@ -368,17 +372,24 @@ def md_to_html(md, meta=None, link_map=None, here=""):
                 i += 1
             out.append("<blockquote><p>" + " ".join(buf) + "</p></blockquote>")
             continue
+        if re.match(r'^\s*(?:-{3,}|\*{3,}|_{3,})\s*$', ln):
+            out.append("<hr>")
+            i += 1
+            continue
         if re.match(r'\s*[-*]\s+', ln):
             buf = []
             while i < n and re.match(r'\s*[-*]\s+', lines[i]):
-                buf.append("<li>" + _render_inline(re.sub(r'\s*[-*]\s+', '', lines[i]), link_map, here) + "</li>")
+                # Anchored: an unanchored sub here strips ANY "- " or "* " in
+                # the line, not just the leading marker, so it ate the space
+                # after a closing "**" bold marker mid-line ("**word:** rest").
+                buf.append("<li>" + _render_inline(re.sub(r'^\s*[-*]\s+', '', lines[i]), link_map, here) + "</li>")
                 i += 1
             out.append("<ul>" + "".join(buf) + "</ul>")
             continue
         if re.match(r'\s*\d+\.\s+', ln):
             buf = []
             while i < n and re.match(r'\s*\d+\.\s+', lines[i]):
-                buf.append("<li>" + _render_inline(re.sub(r'\s*\d+\.\s+', '', lines[i]), link_map, here) + "</li>")
+                buf.append("<li>" + _render_inline(re.sub(r'^\s*\d+\.\s+', '', lines[i]), link_map, here) + "</li>")
                 i += 1
             out.append("<ol>" + "".join(buf) + "</ol>")
             continue
@@ -412,8 +423,11 @@ def md_to_html(md, meta=None, link_map=None, here=""):
             continue
         buf = [lines[i]]   # always consume the current line (avoids stalling on a stray '|')
         i += 1
-        # stop before a line that opens a table (has '|') so the table branch can catch it
-        while i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```")) and "|" not in lines[i]:
+        # stop before a line that opens a table (has '|') or a thematic break,
+        # so those branches catch it instead of it fusing into this paragraph
+        while (i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```"))
+               and "|" not in lines[i]
+               and not re.match(r'^\s*(?:-{3,}|\*{3,}|_{3,})\s*$', lines[i])):
             buf.append(lines[i])
             i += 1
         out.append("<p>" + _render_inline(" ".join(buf), link_map, here) + "</p>")
