@@ -98,6 +98,27 @@ class TestRenderer(unittest.TestCase):
         self.assertIn("<td><code>code</code></td>", out)
         self.assertIn("<strong>bold</strong>", out)
 
+    def test_bullet_bold_followed_by_space_survives(self):
+        # the marker strip must remove only the leading "- ", not the "* " that
+        # ends a closing "**" mid-line
+        out = build.md_to_html("- **VSCode:** `ms-python.python` + more")
+        self.assertIn("<li><strong>VSCode:</strong> <code>ms-python.python</code> + more</li>", out)
+
+    def test_ordered_marker_strip_is_anchored(self):
+        out = build.md_to_html("1. step one then 2. step two")
+        self.assertIn("<li>step one then 2. step two</li>", out)
+
+    def test_bold_span_containing_literal_asterisk(self):
+        out = build.md_to_html("5. **COUNT(*) vs COUNT(col):** intentional?")
+        self.assertIn("<strong>COUNT(*) vs COUNT(col):</strong> intentional?", out)
+        self.assertNotIn("<em>", out)
+
+    def test_thematic_break_renders_hr(self):
+        out = build.md_to_html("para one\n---\n\n***\n\npara two")
+        self.assertEqual(out.count("<hr>"), 2)
+        self.assertNotIn("<p>---</p>", out)
+        self.assertIn("<p>para one</p>", out)
+
     def test_stray_pipe_in_prose_does_not_stall(self):
         # a lone '|' with no delimiter row must not be treated as a table or loop forever
         out = build.md_to_html("use a | b pipe here\n\nnext para")
