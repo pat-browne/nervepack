@@ -61,6 +61,7 @@ _MAP = {
     "open-artifact": "focus",
     "refine": "maintain",
     "compact": "maintain",
+    "kb-promote-scan": "maintain",
     # legacy *.sh aliases (the old map had these; keep for .sh-form tests + crons)
     "nervepack-session-directive.sh": "directive",
     "40-sync-nervepack.sh": "sync",

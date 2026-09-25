@@ -12,6 +12,7 @@ optionally offloading them to a cloud routine.
 | Sun 08:00 | `memory-promote` | local cron | `memory-promote.md` | Promote durable entries from your local memory store (`~/.claude/projects/<your-project>/memory/`) into the right skill, archive stale entries. **Local-only — cloud agents can't reach the memory store.** |
 | Sun 09:30 | `nervepack-refine` | local cron (default-on) | `np-flow-scheduled-refine.md` | Lint frontmatter, audit cross-refs, check vendor sha. Toggle off with `maintain.refine=off`. |
 | Wed 10:00 | `nervepack-compact` | local cron (default-on) | `np-flow-weekly-compact.md` | Dedup (auto-merge ≥0.85 Jaccard; propose 0.4–0.85). Splits for >300-line skills go to `compact-proposals/`. Toggle off with `maintain.compact=off`. |
+| Mon 08:45 | `nervepack-kb-promote-scan` | local cron (default-on) | `np-flow-kb-promote-scan.md` | Run data-base `harness-promote-scan`, open a data-base PR if it queued items. Never merges. Toggle off with `maintain.kb_promote_scan=off`. |
 
 Order: `memory-promote` (writes new content) → `nervepack-refine` (lints what
 just got written) → two days later, `nervepack-compact` (dedups the

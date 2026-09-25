@@ -43,6 +43,7 @@ JOBS = (
     ("skill-maintain",    "skill-maintain.log",    1, "skills"),
     ("refine",            "refine.log",            7, "maintain.refine"),
     ("compact",           "compact.log",           7, "maintain.compact"),
+    ("kb-promote-scan",   "kb-promote-scan.log",   7, "maintain.kb_promote_scan"),
 )
 
 _DEFAULT_GRACE_DAYS = "2"
