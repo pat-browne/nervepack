@@ -342,7 +342,8 @@ _KB_PROMOTE_SCAN = CronConfig(
     prompt_rel_path=os.path.join("agents", "np-flow-kb-promote-scan.md"),
     log_env="KB_PROMOTE_SCAN_LOG",
     log_basename="kb-promote-scan.log",
-    # cwd only. The agent commits in its own data-base worktree, never here.
+    # cwd only. The agent commits in its own data-base worktree, never here,
+    # so _run() finds no engine changes and skips its commit step.
     commit_target="engine",
     content_gated=False,
     extra_roots=False,

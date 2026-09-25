@@ -40,10 +40,11 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
 `PHASE cleanup: kept <path> (has commits)`, or `PHASE cleanup: FAILED <reason>`.
 
 1. **setup.**
-   - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. Stop if `$DB` is not a git repo.
+   - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. If `$DB` is not a git repo, print `PHASE setup: FAILED $DB is not a git repo` and stop.
    - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
    - List `$DB/../data-base-promote-scan-*` worktrees. "Older" means the date suffix is before `$DATE`.
      Remove each older one unless it has unpushed commits, and print `PHASE setup: removed <path>`.
+     If a removal fails, print `PHASE setup: could not remove <path>: <error>` and continue.
      A kept older worktree never blocks this run, because each run uses its own dated path.
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
    - If today's worktree path already exists, a same-day run is in progress or crashed.
@@ -83,6 +84,7 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
 7. **checks.** Confirm `git log -1 --format=%B` ends with the commit marker and
    `gh pr view --json body` ends with the PR marker. Fix them with an amend or
    `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks "$PR_NUMBER" --watch`. The 15-minute cap keeps a
-   stuck check from holding the cron. On timeout, print
+   stuck check from holding the cron. The alarm kills only `gh`, and the shell sees
+   exit code 142. On exit code 142, print
    `PHASE checks: timeout <url>` with the current check state. Otherwise print
    the PR URL and the final check state. Never merge, approve, or enable auto-merge.
