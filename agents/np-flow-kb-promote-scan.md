@@ -28,7 +28,8 @@ worktree first if it has no commits.
 
 1. **setup.**
    - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. Stop if `$DB` is not a git repo.
-   - Run `git -C "$DB" fetch origin`.
+   - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
+   - Remove any older `data-base-promote-scan-*` worktree a crashed run left behind, unless it has unpushed commits.
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
    - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
    - Never touch the main `$DB` checkout. Run every later step inside the worktree.

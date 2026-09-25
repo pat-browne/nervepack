@@ -55,5 +55,9 @@ Emit `Weekday` in launchd plists for every weekly job.
 1. Turn the job off with `maintain.kb_promote_scan=off`. The next run skips.
 2. Remove the plist: `launchctl bootout gui/$(id -u)/com.nervepack.kb-promote-scan`,
    then delete `~/Library/LaunchAgents/com.nervepack.kb-promote-scan.plist`.
-3. Revert this PR and rerun `cli.py setup install-memory-launchd` to restore the
+   On Linux, drop the `nervepack-kb-promote-scan` crontab line. On Windows, run
+   `schtasks /delete /tn "nervepack\kb-promote-scan" /f`.
+3. Remove leftover worktrees: `git -C ~/Code/data-base worktree list`, then
+   `git worktree remove` each `data-base-promote-scan-*` entry.
+4. Revert this PR and rerun `cli.py setup install-memory-launchd` to restore the
    old plists.
