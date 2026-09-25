@@ -42,9 +42,12 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
 1. **setup.**
    - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. Stop if `$DB` is not a git repo.
    - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
-   - Remove any older `data-base-promote-scan-*` worktree a crashed run left behind, unless it has unpushed commits.
+   - List `$DB/../data-base-promote-scan-*` worktrees. "Older" means the date suffix is before `$DATE`.
+     Remove each older one unless it has unpushed commits, and print `PHASE setup: removed <path>`.
+     A kept older worktree never blocks this run, because each run uses its own dated path.
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
-   - If today's worktree path already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop.
+   - If today's worktree path already exists, a same-day run is in progress or crashed.
+     Print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop. Next week's run is unaffected.
    - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
    - Confirm `.claude/skills/harness-promote-scan/SKILL.md`,
      `.claude/skills/pr-review/SKILL.md` and `docs/reviews/queue.md` exist in the
@@ -72,13 +75,14 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
 
 6. **pr.**
    - Push the branch with `git push -u origin kb/promote-scan-$DATE`.
-   - Open a PR with `gh pr create --base trunk`, titled after the commit.
+   - Open a PR with `PR_URL=$(gh pr create --base trunk ...)`, titled after the commit.
+     Set `PR_NUMBER=${PR_URL##*/}`.
    - The body lists queued and dropped items, one line each.
    - The body must end with exactly this line: `AI-assisted PR`
 
 7. **checks.** Confirm `git log -1 --format=%B` ends with the commit marker and
    `gh pr view --json body` ends with the PR marker. Fix them with an amend or
-   `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks <number> --watch`. The 15-minute cap keeps a
+   `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks "$PR_NUMBER" --watch`. The 15-minute cap keeps a
    stuck check from holding the cron. On timeout, print
    `PHASE checks: timeout <url>` with the current check state. Otherwise print
    the PR URL and the final check state. Never merge, approve, or enable auto-merge.
