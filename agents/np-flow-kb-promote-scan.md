@@ -46,7 +46,9 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
    - If today's worktree path already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop.
    - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
-   - Confirm the three prerequisite files exist in the worktree. Fail if not.
+   - Confirm `.claude/skills/harness-promote-scan/SKILL.md`,
+     `.claude/skills/pr-review/SKILL.md` and `docs/reviews/queue.md` exist in the
+     worktree. If any is missing, print `PHASE setup: FAILED missing <paths>` and stop.
    - Never touch the main `$DB` checkout. Run every later step inside the worktree.
 
 2. **scan.** Read `.claude/skills/harness-promote-scan/SKILL.md` in the worktree
@@ -76,5 +78,7 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
 
 7. **checks.** Confirm `git log -1 --format=%B` ends with the commit marker and
    `gh pr view --json body` ends with the PR marker. Fix them with an amend or
-   `gh pr edit` if not. Run `gh pr checks <number> --watch`. Print the PR URL and
-   the final check state. Never merge, approve, or enable auto-merge.
+   `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks <number> --watch`. The 15-minute cap keeps a
+   stuck check from holding the cron. On timeout, print
+   `PHASE checks: timeout <url>` with the current check state. Otherwise print
+   the PR URL and the final check state. Never merge, approve, or enable auto-merge.
