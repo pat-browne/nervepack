@@ -225,6 +225,9 @@
   "maintain.compact": {
     "description": "Weekly skill dedup + split-proposal pass."
   },
+  "maintain.kb_promote_scan": {
+    "description": "Weekly (Mon) data-base harness-promote-scan run; opens a data-base PR when it queues items."
+  },
   "pii_filter": {
     "description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."
   },

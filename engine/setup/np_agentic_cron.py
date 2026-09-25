@@ -332,6 +332,30 @@ def compact():
     return _run(_COMPACT)
 
 
+# --- kb-promote-scan ----------------------------------------------------------
+# Weekly (Mon 08:45): run data-base's harness-promote-scan skill in a fresh
+# data-base worktree and open a PR if it queued anything. The prompt owns the
+# worktree, branch, and PR steps, so the cwd is only a launch point.
+_KB_PROMOTE_SCAN = CronConfig(
+    name="kb-promote-scan",
+    toggle="maintain.kb_promote_scan",
+    prompt_rel_path=os.path.join("agents", "np-flow-kb-promote-scan.md"),
+    log_env="KB_PROMOTE_SCAN_LOG",
+    log_basename="kb-promote-scan.log",
+    # cwd only. The agent commits in its own data-base worktree, never here,
+    # so _run() finds no engine changes and skips its commit step.
+    commit_target="engine",
+    content_gated=False,
+    extra_roots=False,
+)
+
+
+def kb_promote_scan():
+    """Cron entrypoint (dispatched by cli.py as `cron kb-promote-scan`).
+    Returns a short status string; never raises."""
+    return _run(_KB_PROMOTE_SCAN)
+
+
 # Standalone-script entrypoint -- lets a caller that can only exec a bare .py file
 # (session_flush.py's substep runner, mirroring how it already runs np_aggregate.py
 # via `[sys.executable, path]`) invoke one of this module's named crons without a
@@ -342,6 +366,7 @@ _STANDALONE_ENTRYPOINTS = {
     "episodic-maintain": episodic_maintain,
     "refine": refine,
     "compact": compact,
+    "kb-promote-scan": kb_promote_scan,
 }
 
 if __name__ == "__main__":
