@@ -45,6 +45,7 @@ _JOBS = [
     ("skill-maintain",     9, 15, None),
     ("refine",             9, 30, ("0", "SUN")),
     ("compact",           10,  0, ("3", "WED")),
+    ("kb-promote-scan",    8, 45, ("1", "MON")),
 ]
 
 
@@ -56,9 +57,10 @@ def _cron_rows():
 
 
 def _launchd_rows():
-    """(suffix, hour, minute, cron_name) per job."""
-    for name, hh, mm, _weekly in _JOBS:
-        yield (name, hh, mm, name)
+    """(suffix, hour, minute, cron_name, weekday) per job. weekday is the cron
+    day-of-week string (launchd uses the same 0=Sunday numbering), or None daily."""
+    for name, hh, mm, weekly in _JOBS:
+        yield (name, hh, mm, name, weekly[0] if weekly else None)
 
 
 def _schtasks_rows():
@@ -82,7 +84,7 @@ _PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
-    <key>Hour</key><integer>%d</integer>
+%s    <key>Hour</key><integer>%d</integer>
     <key>Minute</key><integer>%d</integer>
   </dict>
   <key>StandardOutPath</key><string>%s</string>
@@ -209,12 +211,14 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
     launchctl_fn = launchctl_fn or _default_launchctl
     cli = _cli_path(os.path.dirname(os.path.dirname(setup_dir)))  # setup_dir -> engine -> repo root (_cli_path re-adds engine/)
 
-    for suffix, hour, minute, cron_name in _launchd_rows():
+    for suffix, hour, minute, cron_name, weekday in _launchd_rows():
         label = "com.nervepack.%s" % suffix
         plist_path = os.path.join(la_dir, "%s.plist" % label)
         log_path = os.path.join(log_dir, "%s.log" % suffix)
         exec_cmd = "%sexec python3 %s cron %s" % (token_prefix_fn(), cli, cron_name)
-        content = _PLIST_TEMPLATE % (label, _xml_escape(exec_cmd), hour, minute, log_path, log_path)
+        weekday_line = ("    <key>Weekday</key><integer>%s</integer>\n" % weekday) if weekday else ""
+        content = _PLIST_TEMPLATE % (label, _xml_escape(exec_cmd), weekday_line, hour, minute,
+                                     log_path, log_path)
         with open(plist_path, "w", encoding="utf-8") as fh:
             fh.write(content)
         launchctl_fn(plist_path)

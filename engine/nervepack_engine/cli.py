@@ -109,6 +109,7 @@ _CRONS = {
     "episodic-maintain": np_agentic_cron.episodic_maintain,
     "refine": np_agentic_cron.refine,
     "compact": np_agentic_cron.compact,
+    "kb-promote-scan": np_agentic_cron.kb_promote_scan,
 }
 
 _SETUP = {
