@@ -15,6 +15,18 @@ so a cloud routine cannot run it.
 **Standing mandate:** create a data-base worktree, commit, push, and open a PR.
 Never merge.
 
+**Attribution markers:** the commit and PR land in data-base, not nervepack.
+Campminder's managed Claude Code settings require `Committed by Claude Code` and
+`AI-assisted PR` there. AGENTS.md's no-attribution rule covers nervepack commits only.
+
+**Prerequisites in data-base trunk:** `.claude/skills/harness-promote-scan/SKILL.md`,
+`.claude/skills/pr-review/SKILL.md`, and `docs/reviews/queue.md`. Phase setup
+checks them and fails loudly if one is missing.
+
+**Manual recovery:** a run that committed but failed before push leaves
+`data-base-promote-scan-<date>` in place. Push it by hand, or remove it with
+`git -C ~/Code/data-base worktree remove --force <path>` and delete the branch.
+
 ---
 
 ## Prompt
@@ -24,14 +36,17 @@ line `PHASE <name>: <result>` at the end of each phase below. Do the phases in
 order, then stop.
 
 On any failure, print `PHASE <name>: FAILED <reason>` and stop. Remove the
-worktree first if it has no commits.
+worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
+`PHASE cleanup: kept <path> (has commits)`, or `PHASE cleanup: FAILED <reason>`.
 
 1. **setup.**
    - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. Stop if `$DB` is not a git repo.
    - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
    - Remove any older `data-base-promote-scan-*` worktree a crashed run left behind, unless it has unpushed commits.
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
+   - If today's worktree path already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop.
    - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
+   - Confirm the three prerequisite files exist in the worktree. Fail if not.
    - Never touch the main `$DB` checkout. Run every later step inside the worktree.
 
 2. **scan.** Read `.claude/skills/harness-promote-scan/SKILL.md` in the worktree
@@ -59,5 +74,7 @@ worktree first if it has no commits.
    - The body lists queued and dropped items, one line each.
    - The body must end with exactly this line: `AI-assisted PR`
 
-7. **checks.** Run `gh pr checks <number> --watch`. Print the PR URL and the
-   final check state. Never merge, approve, or enable auto-merge.
+7. **checks.** Confirm `git log -1 --format=%B` ends with the commit marker and
+   `gh pr view --json body` ends with the PR marker. Fix them with an amend or
+   `gh pr edit` if not. Run `gh pr checks <number> --watch`. Print the PR URL and
+   the final check state. Never merge, approve, or enable auto-merge.
