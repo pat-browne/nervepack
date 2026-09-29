@@ -94,7 +94,10 @@ class TestServer(unittest.TestCase):
             "NP_IMPLEMENT": impl, "NP_IMPLEMENT_STATUS_DIR": cls.status_dir,
             "NP_TOGGLES_LOCAL": cls.toggles_local, "NP_TOGGLES_CONF": cls.toggles_conf,
             "NP_TOGGLE_SCHEMA": cls.schema, "NP_TOGGLE_NO_COMMIT": "1",
+            "NP_MODEL_PROBE_CACHE": os.path.join(d, "model-probe.json"),
+            "NP_OWN_SESSIONS_DIR": os.path.join(d, "own-sessions"),
         })
+        cls.queue_dir = os.path.join(d, "implement-queue")
         cls.proc = subprocess.Popen(["python3", SERVER], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # wait for health
@@ -433,6 +436,123 @@ class TestServer(unittest.TestCase):
         from urllib.parse import quote
         _, body = self._get("/api/implement-status?text=" + quote("never ran this one"))
         self.assertEqual(json.loads(body)["state"], "none")
+
+
+    # --- implement queue -------------------------------------------------
+    def _seed_queue(self, *texts):
+        import hashlib as _h
+        os.makedirs(self.queue_dir, exist_ok=True)
+        for i, t in enumerate(texts):
+            key = _h.sha256(t.encode()).hexdigest()[:16]
+            with open(os.path.join(self.queue_dir, "%020d-%s.json" % (i + 1, key)), "w") as fh:
+                json.dump({"key": key, "text": t, "edited": "", "target": "",
+                           "enqueued_at": "2026-09-29T00:00:00Z"}, fh)
+            with open(os.path.join(self.status_dir, key + ".json"), "w") as fh:
+                json.dump({"state": "queued", "position": 99}, fh)
+
+    def _clear_queue(self):
+        import shutil
+        shutil.rmtree(self.queue_dir, ignore_errors=True)
+
+    def test_implement_queue_lists_entries_fifo(self):
+        self._seed_queue("Q one", "Q two")
+        try:
+            status, body = self._get("/api/implement-queue")
+            self.assertEqual(status, 200)
+            data = json.loads(body)
+            self.assertEqual([q["text"] for q in data["queued"]], ["Q one", "Q two"])
+            self.assertEqual(data["count"], 2)
+            self.assertIsNone(data["running"])
+        finally:
+            self._clear_queue()
+
+    def test_implement_status_reports_live_queue_position(self):
+        from urllib.parse import quote
+        self._seed_queue("P one", "P two")
+        try:
+            _, body = self._get("/api/implement-status?text=" + quote("P two"))
+            data = json.loads(body)
+            self.assertEqual((data["state"], data["position"]), ("queued", 2))
+        finally:
+            self._clear_queue()
+
+    def test_implement_click_on_queued_row_is_deduped(self):
+        self._seed_queue("Dup me")
+        try:
+            if os.path.exists(self.impl_sentinel):
+                os.remove(self.impl_sentinel)
+            status, body = self._post("/api/implement", {"text": "Dup me"})
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(body)["deduped"])
+            time.sleep(0.3)
+            self.assertFalse(os.path.exists(self.impl_sentinel), "a queued row spawned a job")
+        finally:
+            self._clear_queue()
+
+    # --- models ------------------------------------------------------------
+    def test_models_lists_inventory_features_and_effective(self):
+        status, body = self._get("/api/models")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        ids = {m["id"] for m in data["inventory"]}
+        self.assertIn("claude-sonnet-5-5", ids)
+        rows = {r["feature"]: r for r in data["features"]}
+        for f in ("implement", "episodic-maintain", "memory-promote", "skill-maintain",
+                  "evaluator", "capture", "cheap", "agent"):
+            self.assertIn(f, rows)
+        self.assertTrue(rows["implement"]["effective"])
+        self.assertIn("probe", data)
+        self.assertIn("model_errors", data)
+
+    def test_models_select_writes_local_param_and_changes_effective(self):
+        status, body = self._post("/api/models/select",
+                                  {"feature": "implement", "model": "claude-opus-5-5"})
+        self.assertEqual(status, 200, body)
+        with open(self.toggles_local) as fh:
+            self.assertIn("models.implement=claude-opus-5-5", fh.read())
+        rows = {r["feature"]: r for r in json.loads(body)["models"]["features"]}
+        self.assertEqual(rows["implement"]["effective"], "claude-opus-5-5")
+        self.assertEqual(rows["implement"]["selected"], "claude-opus-5-5")
+
+    def test_models_select_empty_clears_to_tier(self):
+        self._post("/api/models/select", {"feature": "implement", "model": "claude-opus-5-5"})
+        status, body = self._post("/api/models/select", {"feature": "implement", "model": ""})
+        self.assertEqual(status, 200)
+        rows = {r["feature"]: r for r in json.loads(body)["models"]["features"]}
+        self.assertEqual(rows["implement"]["effective"], rows["agent"]["effective"])
+
+    def test_models_select_rejects_unknown_feature_and_model(self):
+        s1, _ = self._post("/api/models/select", {"feature": "nope", "model": "claude-sonnet-5-5"})
+        s2, _ = self._post("/api/models/select", {"feature": "implement", "model": "gpt-x"})
+        self.assertEqual((s1, s2), (400, 400))
+
+    def test_models_select_without_csrf_is_forbidden(self):
+        status, _ = self._post("/api/models/select", {"feature": "implement", "model": ""},
+                               headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 403)
+
+    def test_models_probe_one_model(self):
+        status, body = self._post("/api/models/probe", {"model": "claude-haiku-4-5-20251001"})
+        self.assertEqual(status, 200, body)
+        data = json.loads(body)
+        self.assertEqual(data["results"]["claude-haiku-4-5-20251001"]["status"], "available")
+        self.assertEqual(data["models"]["probe"]["claude-haiku-4-5-20251001"]["status"], "available")
+
+    def test_models_probe_rejects_unknown_model(self):
+        status, _ = self._post("/api/models/probe", {"model": "not-a-model"})
+        self.assertEqual(status, 400)
+
+    def test_models_banner_data_includes_recent_model_error(self):
+        path = os.path.join(self.status_dir, "feedfacefeedface.json")
+        with open(path, "w") as fh:
+            json.dump({"state": "failed", "ref": "rejected", "model_error": True,
+                       "model": "claude-bad-1", "ts": "2026-09-29T00:00:00Z"}, fh)
+        try:
+            _, body = self._get("/api/models")
+            errs = json.loads(body)["model_errors"]
+            self.assertIn("claude-bad-1", [e["model"] for e in errs])
+        finally:
+            os.remove(path)
 
 
 if __name__ == "__main__":
