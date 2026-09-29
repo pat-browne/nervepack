@@ -4,6 +4,8 @@ status: accepted
 date: 2026-09-29
 tier: high
 blast_radius:
+  - AGENTS.md
+  - agents/np-flow-skill-maintain.md
   - dashboard/index.html
   - docs/ARCHITECTURE.md
   - docs/FEATURES.md
