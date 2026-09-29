@@ -234,7 +234,10 @@ def record_probe(model, status, reason=""):
             json.dump(data, fh, indent=1, sort_keys=True)
         os.replace(tmp, path)
     except OSError:
-        pass
+        try:
+            os.remove(tmp)   # no orphan .tmp when the replace fails
+        except OSError:
+            pass
 
 
 def classify_probe(returncode, out, err):

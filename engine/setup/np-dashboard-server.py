@@ -128,6 +128,8 @@ def implement_status(text):
         pos = np_implement_suggestion.queue_position(IMPLEMENT_QUEUE_DIR, key)
         if pos:
             st["position"] = pos
+        else:
+            st.pop("position", None)   # left the queue, drop the stale slot
     return st
 
 
