@@ -70,32 +70,21 @@ use uniquely-named ledger/brief files, never mass-write the shared ones. See
 ## Isolate with a worktree when the tree is shared
 
 Dispatch repo-editing agents with **`isolation: "worktree"`** whenever an auto-committing
-cron or another session may be active in that tree (nervepack's own metrics/maintain crons
-are). A concurrent committer can otherwise **sweep the agent's staged work** into its own
-commit (and push it) — a worktree off the committed base is immune — and two agents editing
-the **same files** in parallel land on separate branches instead of colliding (resolve the
-overlap by **combining** both, not picking a side). After it reports, verify on its branch
-(tree clean, tests green, nothing on `main`), then you merge — FF or cherry-pick — keeping
-the agent off `main`. See [[using-git-worktrees]].
+cron or another session may be active in that tree. A worktree off the committed base
+prevents staged-work sweeps; parallel edits land on separate branches (combine both, don't
+pick a side). After it reports, verify on its branch, then merge — keeping the agent off
+`main`. See [[using-git-worktrees]].
 
-**Trust git ground truth, not the agent's report — it can edit the wrong checkout.** Even
-when told to work in a given worktree, a dispatched agent may edit the *main* checkout or
-commit to `main`/an off-branch orphan while reporting "DONE, committed" with a plausible
-SHA. After each agent, confirm where the change actually landed (`git log --oneline`,
-`git show <sha> --stat`, `git merge-base --is-ancestor <sha> HEAD`) — never accept the
-self-reported location. Wrong place? Reconcile, don't re-run — tag-backup / cherry-pick /
-verify-identity / reset recipe: references/recovery.md. Pin the worktree path in the
-dispatch and have the agent echo `git rev-parse --show-toplevel` before its first edit.
+**Trust git ground truth, not the agent's report — it can edit the wrong checkout.**
+After each agent, confirm where the change actually landed (`git log --oneline`, `git show
+<sha> --stat`). Wrong place? Tag-backup / cherry-pick / reset: references/recovery.md.
+Pin the worktree path in the dispatch; have the agent echo `git rev-parse --show-toplevel`
+before its first edit.
 
-**When separate worktrees are impractical, share one safely with disjoint file lists.**
-Give each agent an explicit, non-overlapping set of files. Forbid `git add` inside each
-agent's task — the supervisor commits by exact pathspec after each task reports back.
-Put every cross-task contract (JSON shapes, type names, function signatures) in the plan
-up front so agents can build to the interface without seeing each other's in-progress
-edits. Never let an agent stage tool-generated noise (`analysis_options.yaml`, `*.xcconfig`,
-pbxproj, workspace files) — these appear in any dirty tree and will pollute an unguarded
-commit. Verified on 2026-09-28: four agents built the Spinjam ride modeler in one worktree
-simultaneously with no collisions using these rules.
+**When worktrees are impractical:** share one safely with disjoint file lists — give each
+agent an explicit, non-overlapping set of files, forbid `git add` inside tasks, and put
+every cross-task contract in the plan up front. Full recipe + sweep mechanics:
+references/worktree-isolation.md
 
 ## Verify the whole plan, not just each task
 
