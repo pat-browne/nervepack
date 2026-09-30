@@ -87,6 +87,16 @@ self-reported location. Wrong place? Reconcile, don't re-run — tag-backup / ch
 verify-identity / reset recipe: references/recovery.md. Pin the worktree path in the
 dispatch and have the agent echo `git rev-parse --show-toplevel` before its first edit.
 
+**When separate worktrees are impractical, share one safely with disjoint file lists.**
+Give each agent an explicit, non-overlapping set of files. Forbid `git add` inside each
+agent's task — the supervisor commits by exact pathspec after each task reports back.
+Put every cross-task contract (JSON shapes, type names, function signatures) in the plan
+up front so agents can build to the interface without seeing each other's in-progress
+edits. Never let an agent stage tool-generated noise (`analysis_options.yaml`, `*.xcconfig`,
+pbxproj, workspace files) — these appear in any dirty tree and will pollute an unguarded
+commit. Verified on 2026-09-28: four agents built the Spinjam ride modeler in one worktree
+simultaneously with no collisions using these rules.
+
 ## Verify the whole plan, not just each task
 
 Green per-task reviews don't mean the plan is done. A task can be silently **skipped**
