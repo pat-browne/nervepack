@@ -22,6 +22,7 @@ jobs:
   syntax:
     name: Syntax sweep (stdlib-only)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -62,6 +63,7 @@ jobs:
   regression:
     name: Regression suite (zero-dep)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -126,6 +128,7 @@ jobs:
   dashboard-e2e:
     name: Dashboard e2e (Playwright, informational)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     continue-on-error: true        # informational — never blocks merge
     steps:
       - uses: actions/checkout@v7
@@ -166,6 +169,7 @@ jobs:
   windows:
     name: Windows suite (Git-bash)
     runs-on: windows-latest        # required gate — the suite is green end-to-end under Git-bash
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash                # the Git-for-Windows bash on the runner
@@ -247,6 +251,7 @@ jobs:
   windows-bashfree:
     name: Bash-free MCP suite (no Git-bash)
     runs-on: windows-latest
+    timeout-minutes: 15
     # Required gate (git-for-windows-free MCP milestone, #38, complete). Proves the
     # ported MCP surface — protocol + resources + prompts, gating, content resolution,
     # recall, doctor(core), toggle(status+local), sync, capture, evaluate — works with
@@ -294,6 +299,7 @@ jobs:
   pii-guard:
     name: Secret/PII guard (terminal gate)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [syntax, regression]    # terminal gate — runs only after the blocking jobs pass
     steps:
       - uses: actions/checkout@v7
@@ -323,6 +329,7 @@ jobs:
   spec-guard:
     name: Spec guard (change-specs)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # A normal job-level `if:` on event type — NOT the workflow-level `paths:`
     # filter that silently strands required checks (see np-spec-guard.py's own
     # "no base ref" exit-0 path for the same reasoning, belt and suspenders).
@@ -375,6 +382,7 @@ jobs:
   diff-review:
     name: Diff review (multi-lens, advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     if: github.event_name == 'pull_request'
     # Advisory (#252/F6): posts PR comments, never approves, never requests
     # changes, never blocks - see np-diff-review.py's own docstring for the
@@ -459,6 +467,7 @@ jobs:
   tier-gate:
     name: Tier gate (differential gating)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # always(): this must run even when an upstream gate FAILED. Reading "which
     # required verdicts are missing" is the whole job - needs' default gating
     # would skip it exactly when it has the most to say.
@@ -538,6 +547,7 @@ jobs:
   doc-coupling:
     name: Doc coupling (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
@@ -578,6 +588,7 @@ jobs:
   doc-coupling-issue:
     name: Doc coupling (record the debt)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Merge time only. Opening an issue from a pull-request job would file one
     # on every push to the branch, and would hand `issues: write` to a job
     # running on pull-request-derived input. By the time a commit is on main it
@@ -621,6 +632,7 @@ jobs:
   auto-merge:
     name: Auto-merge decision (standard tier)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # always(): a decision is recorded on EVERY pull request, including one
     # where tier-gate failed. A record that exists only when the mechanism fires
     # cannot be audited for the case that matters - the one where it fired and
@@ -718,6 +730,7 @@ jobs:
   gate-verdicts-summary:
     name: Gate verdicts summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # always(): this must still post when an upstream gate failed - that's
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
