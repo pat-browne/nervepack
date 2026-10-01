@@ -3,7 +3,8 @@
 Agent prompt for the daily skill-split pass (`engine/setup/np_skill_maintain.py`,
 dispatched via `cli.py cron skill-maintain`). The
 cron appends the TARGET SKILL lines below and pipes the whole thing to
-`claude -p --model claude-sonnet-4-6` via stdin.
+`claude -p` via stdin, with the model from the `models.skill-maintain` param
+(default `models.agent`).
 
 ## Prompt
 

@@ -161,9 +161,13 @@ def parse_findings(raw_text):
     return findings if isinstance(findings, list) else []
 
 
-def run_lens(lens, diff_text, spec_text, conventions_text, complete=np_model.complete):
+def _complete(prompt):
+    return np_model.complete(prompt, feature="diff_review")
+
+
+def run_lens(lens, diff_text, spec_text, conventions_text, complete=None):
     prompt = lens_prompt(lens, diff_text, spec_text, conventions_text)
-    raw = complete(prompt)
+    raw = (complete or _complete)(prompt)
     findings = parse_findings(raw)
     for f in findings:
         f["lens"] = lens
@@ -303,7 +307,7 @@ def post_review(repo, pr, token, body, comments, fetch=np_github_api.default_fet
     return fetch(url, token, method="POST", data=data)
 
 
-def main(argv, fetch=np_github_api.default_fetch, complete=np_model.complete):
+def main(argv, fetch=np_github_api.default_fetch, complete=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", required=True)
     p.add_argument("--pr", required=True)

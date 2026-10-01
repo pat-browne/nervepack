@@ -260,6 +260,19 @@
   .togin { font:inherit; font-size:12px; width:90px; padding:2px 6px;
     border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); }
   .togin:disabled { opacity:.6; }
+  /* Models panel and missing-model banner, served mode only */
+  .banner { background:var(--status-neg-bg); color:var(--status-neg); border:1px solid #dcb3aa;
+    border-radius:var(--radius-sm); padding:8px 12px; margin:0 0 16px; font-size:12px; font-weight:600; }
+  .banner a { color:inherit; }
+
+  .modtable { width:100%; border-collapse:collapse; font-size:12px; }
+  .modtable th, .modtable td { text-align:left; padding:5px 6px; border-top:1px solid var(--border); }
+  .modtable th { color:var(--text-tertiary); font-weight:600; font-size:11px; }
+
+  .modtable tr:target td { background:var(--status-warn-bg); }
+  .modtable select { font:inherit; font-size:12px; max-width:220px; }
+  .modtablewrap { overflow-x:auto; }
+  .modtable .pill { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -283,7 +296,9 @@
 
       <section class="panel full" id="panel-trend"></section>
       <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
+      <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-models" style="margin-top:16px" hidden></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
       <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
@@ -468,6 +483,105 @@
     if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
     return data;
   }
+
+  // ---- Implement queue count, served mode only ----
+  let queueTimer = null;
+
+  async function refreshQueue() {
+    const el = document.getElementById("queue-count");
+    if (!el) return;
+    let q;
+    try { q = await (await fetch("/api/implement-queue")).json(); } catch { return; }
+    const n = (q.count || 0) + (q.running ? 1 : 0);
+    el.hidden = !n;
+    el.textContent = q.running ? `1 running, ${q.count || 0} queued` : `${q.count || 0} queued`;
+    clearTimeout(queueTimer);
+    if (n) queueTimer = setTimeout(refreshQueue, 5000);
+  }
+
+  // ---- Models panel and missing-model banner, served mode only ----
+  // Selecting a model writes a per-machine models.<feature> param.
+  // The banner links each missing model to its feature row.
+  const elModels = document.getElementById("panel-models");
+  const elBanner = document.getElementById("model-banner");
+
+  function paintBanner(m) {
+    const probe = m.probe || {};
+    const hits = [];
+    (m.features || []).forEach(r => {
+      if ((probe[r.effective] || {}).status === "missing") hits.push({ model: r.effective, key: r.key, feature: r.feature });
+    });
+    (m.model_errors || []).forEach(e => hits.push({ model: e.model, key: "implement", feature: e.feature || "implement" }));
+    const seen = new Set();
+    const uniq = hits.filter(h => !seen.has(h.model + h.key) && seen.add(h.model + h.key));
+    if (!uniq.length) { elBanner.hidden = true; elBanner.innerHTML = ""; return; }
+    elBanner.innerHTML = "Model unavailable: " + uniq.map(h =>
+      `<a href="#model-row-${esc(h.key)}">${esc(h.model)} (${esc(h.feature)})</a>`).join(", ")
+      + ". Pick another model in the Models panel.";
+    elBanner.hidden = false;
+  }
+
+  function probeCell(p) {
+    if (!p) return `<span class="pill">not probed</span>`;
+    const cls = p.status === "available" ? "pos" : p.status === "missing" ? "neg" : "warn";
+    const tip = esc((p.reason || "") + (p.ts ? " at " + p.ts : ""));
+    return `<span class="pill ${cls}" title="${tip}">${esc(p.status)}</span>`;
+  }
+
+  function modelOptions(inv, sel, isTier) {
+    const inherit = isTier ? "" : `<option value=""${sel ? "" : " selected"}>inherit tier</option>`;
+    return inherit + inv.map(x => `<option value="${esc(x.id)}"${x.id === sel ? " selected" : ""}>`
+      + `${esc(x.label || x.id)}${x.legacy ? " (legacy)" : ""}${x.tier === "premium" ? ", premium" : ""}</option>`).join("");
+  }
+
+  function modelRow(r, inv, probe) {
+    const tag = r.is_tier ? "tier" : r.tier;
+    return `<tr id="model-row-${esc(r.key)}">
+        <td>${esc(r.feature)} <span class="togscope">${esc(tag)}</span></td>
+        <td><select data-model-feature="${esc(r.key)}" aria-label="Model for ${esc(r.feature)}">${modelOptions(inv, r.selected, r.is_tier)}</select></td>
+        <td><code>${esc(r.effective)}</code>${r.env_override ? ' <span class="togro">env override</span>' : ""}</td>
+        <td>${probeCell(probe[r.effective])}</td>
+        <td><button class="btn sm" data-probe="${esc(r.effective)}">Probe</button></td>
+      </tr>`;
+  }
+
+  function renderModels(m) {
+    paintBanner(m);
+    if (!m.enabled) { elModels.hidden = true; return; }
+    const inv = m.inventory || [], probe = m.probe || {};
+    const rows = (m.features || []).map(r => modelRow(r, inv, probe)).join("");
+    elModels.innerHTML = `<div class="panelhead"><span class="lbl">Models</span>
+        <div class="btnrow"><button class="btn" id="btn-probe-all">Probe all</button></div></div>
+      <div class="modtablewrap"><table class="modtable">
+        <thead><tr><th>Feature</th><th>Selected</th><th>Effective</th><th>Probe</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <div class="note">Selections are per machine (toggles.local). NP_LLM_MODEL_CHEAP and NP_LLM_MODEL_AGENT win when set.</div>`;
+    elModels.hidden = false;
+    wireModels();
+  }
+
+  function wireModels() {
+    elModels.querySelectorAll("[data-model-feature]").forEach(sel =>
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try { renderModels((await api("/api/models/select", { feature: sel.dataset.modelFeature, model: sel.value })).models); }
+        catch (e) { sel.disabled = false; alert("Model select failed: " + e.message); }
+      }));
+    const probeBtn = async (btn, model) => {
+      btn.disabled = true; btn.textContent = "Probing…";
+      try { renderModels((await api("/api/models/probe", model ? { model } : {})).models); }
+      catch (e) { btn.disabled = false; btn.textContent = "Probe"; alert("Probe failed: " + e.message); }
+    };
+    elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));
+    const all = document.getElementById("btn-probe-all");
+    if (all) all.addEventListener("click", () => probeBtn(all, ""));
+    if (location.hash.startsWith("#model-row-")) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }
+
+  async function refreshModels() {
+    try { renderModels(await (await fetch("/api/models")).json()); } catch { /* older server without the route */ }
+  }
+  if (SERVED) refreshModels();
 
   // ---- render ----
   const M = (window.METRICS || []).slice();
@@ -808,6 +922,7 @@
       const actions = SERVED
         ? `<div class="btnrow">
              <button class="btn" id="btn-mode" title="How Implement applies a change — PR: branch + pull request for review; direct: commit to main and push (no review gate)">Mode: …</button>
+             <span class="pill warn" id="queue-count" hidden></span>
              <button class="btn" id="btn-review">Review</button>
              <button class="btn primary" id="btn-clear">Clear</button>
            </div>`
@@ -907,9 +1022,11 @@
         acts.appendChild(pill);
         const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
         const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
-        setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+        setPill("warn", "⋯ Starting…");
+        // A busy server queues the job, so rapid clicks on several rows are fine.
         try { await api("/api/implement", { text, edited: edited || "", target: tgtOf(row) }) }
         catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
+        refreshQueue();
         let tries = 0;
         const poll = () => setTimeout(async () => {
           let s;
@@ -930,10 +1047,25 @@
           } else if (s.state === "not_implementable") {
             setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "failed") {
-            setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
-          } else if (s.state === "busy") {
-            setPill("warn", "⋯ Another job running — try again"); buttons.forEach(x => x.style.display = "");
-          } else if (++tries < 220) { poll(); }       // running / not-yet — keep polling (~11 min cap)
+            if (s.model_error) {
+              pill.className = "pill neg"; pill.textContent = "✕ Model " + (s.model || "") + " unavailable: ";
+              const a = document.createElement("a");
+              a.href = "#model-row-implement"; a.textContent = "pick another";
+              pill.append(a);
+              refreshModels();
+            } else {
+              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : ""));
+            }
+            buttons.forEach(x => x.style.display = "");
+
+          } else if (s.state === "queued") {
+            // Queue time does not count toward the polling cap.
+            setPill("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")); poll();
+
+          } else if (++tries < 220) {                // running, not-yet, or legacy busy: keep polling (~11 min cap)
+            if (s.state === "running") setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+            poll();
+          }
           else { setPill("warn", "… still running — check back later"); }
         }, 3000);
         poll();
@@ -960,6 +1092,7 @@
     }
 
     renderSug(sugs);
+    if (SERVED) refreshQueue();
 
     // B2 · Wins & learnings (positive mirror of struggles): strategies-learned
     // count + chips, then the 6 most-recent helped[] items (✓ + --status-pos).

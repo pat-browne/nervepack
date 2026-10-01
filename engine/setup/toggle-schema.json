@@ -308,5 +308,64 @@
       "session"
     ],
     "description": "`turn` injects every prompt (the default, and what makes prevention hold late in a long session). `session` injects once."
+  },
+  "models": {
+    "description": "Per-feature model selection. Off hides the dashboard Models panel and disables the probe. Model resolution always runs."
+  },
+  "models.cheap": {
+    "type": "string",
+    "description": "Model id for single-shot passes when no feature override is set."
+  },
+  "models.agent": {
+    "type": "string",
+    "description": "Model id for agentic passes when no feature override is set."
+  },
+  "models.implement": {
+    "type": "string",
+    "description": "Model id override for implement. Empty uses models.agent."
+  },
+  "models.episodic_maintain": {
+    "type": "string",
+    "description": "Model id override for episodic-maintain. Empty uses models.agent."
+  },
+  "models.memory_promote": {
+    "type": "string",
+    "description": "Model id override for memory-promote. Empty uses models.agent."
+  },
+  "models.skill_maintain": {
+    "type": "string",
+    "description": "Model id override for skill-maintain. Empty uses models.agent."
+  },
+  "models.refine": {
+    "type": "string",
+    "description": "Model id override for refine. Empty uses models.agent."
+  },
+  "models.compact": {
+    "type": "string",
+    "description": "Model id override for compact. Empty uses models.agent."
+  },
+  "models.kb_promote_scan": {
+    "type": "string",
+    "description": "Model id override for kb-promote-scan. Empty uses models.agent."
+  },
+  "models.evaluator": {
+    "type": "string",
+    "description": "Model id override for evaluator. Empty uses models.cheap."
+  },
+  "models.capture": {
+    "type": "string",
+    "description": "Model id override for capture. Empty uses models.cheap."
+  },
+  "models.review": {
+    "type": "string",
+    "description": "Model id override for review. Empty uses models.cheap."
+  },
+  "models.diff_review": {
+    "type": "string",
+    "description": "Model id override for diff-review. Empty uses models.cheap."
+  },
+  "models.doctor": {
+    "type": "string",
+    "description": "Model id override for doctor. Empty uses models.cheap."
   }
 }

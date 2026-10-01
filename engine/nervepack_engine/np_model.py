@@ -130,12 +130,157 @@ def _claude_bin():
         os.path.expanduser("~"), ".local", "bin", "claude")
 
 
-def _model_cheap():
-    return os.environ.get("NP_LLM_MODEL_CHEAP") or "claude-haiku-4-5-20251001"
+# Built-in tier defaults, used only when no env var or toggle param names a model.
+# Opus is selectable in the dashboard but no default uses it (AGENTS.md policy).
+DEFAULT_CHEAP = "claude-haiku-4-5-20251001"
+DEFAULT_AGENT = "claude-sonnet-5-5"
+_TIER_ENV = {"cheap": "NP_LLM_MODEL_CHEAP", "agent": "NP_LLM_MODEL_AGENT"}
+_TIER_DEFAULT = {"cheap": DEFAULT_CHEAP, "agent": DEFAULT_AGENT}
 
 
-def _model_agent():
-    return os.environ.get("NP_LLM_MODEL_AGENT") or "claude-sonnet-4-6"
+def _param(key):
+    """models.<key> from the toggle manifest, or "". Fail-open: a broken
+    resolver must never stop a model call."""
+    try:
+        import np_toggle
+        return (np_toggle.param("models." + key, "") or "").strip()
+    except Exception:
+        return ""
+
+
+def feature_key(feature):
+    """Param key for a feature name: `episodic-maintain` -> `episodic_maintain`."""
+    return (feature or "").strip().replace("-", "_")
+
+
+def resolve_model(tier, feature=None):
+    """Precedence: tier env var > models.<feature> > models.<tier> > default.
+    The env vars win so existing overrides keep working unchanged."""
+    env = os.environ.get(_TIER_ENV[tier])
+    if env:
+        return env
+    if feature:
+        v = _param(feature_key(feature))
+        if v:
+            return v
+    return _param(tier) or _TIER_DEFAULT[tier]
+
+
+def _model_cheap(feature=None):
+    return resolve_model("cheap", feature)
+
+
+def _model_agent(feature=None):
+    return resolve_model("agent", feature)
+
+
+# --- model inventory + availability probe ----------------------------------
+# The CLI prints this when the account cannot use --model. Exit status and
+# stream vary by version, so the text is the signal.
+_MODEL_ERROR_RE = None
+
+
+def model_error_line(text):
+    """The CLI's "issue with the selected model" line in `text`, else ""."""
+    global _MODEL_ERROR_RE
+    if _MODEL_ERROR_RE is None:
+        import re
+        _MODEL_ERROR_RE = re.compile(r"[^\n]*issue with the selected model[^\n]*", re.I)
+    m = _MODEL_ERROR_RE.search(text or "")
+    return m.group(0).strip()[:300] if m else ""
+
+
+def inventory_path():
+    return os.environ.get("NP_MODEL_INVENTORY") or os.path.join(np_paths.SETUP_DIR, "model-inventory.json")
+
+
+def inventory():
+    """Curated known model ids: list of {id, tier, label, legacy}. [] on error."""
+    import json
+    try:
+        with open(inventory_path(), encoding="utf-8") as fh:
+            return list(json.load(fh).get("models") or [])
+    except (OSError, ValueError):
+        return []
+
+
+def probe_cache_path():
+    return os.environ.get("NP_MODEL_PROBE_CACHE") or np_dirs.cache_path("model-probe.json")
+
+
+def load_probe_cache():
+    import json
+    try:
+        with open(probe_cache_path(), encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def record_probe(model, status, reason=""):
+    """Store one probe result {status, reason, ts}. Fail-open."""
+    import json
+    if not model:
+        return
+    data = load_probe_cache()
+    data[model] = {"status": status, "reason": reason[:300],
+                   "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    path = probe_cache_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, sort_keys=True)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)   # no orphan .tmp when the replace fails
+        except OSError:
+            pass
+
+
+def classify_probe(returncode, out, err):
+    """(status, reason) for one probe run: available | missing | error."""
+    text = (out or "") + "\n" + (err or "")
+    line = model_error_line(text)
+    if line:
+        return "missing", line
+    try:
+        check_auth(out)
+    except AuthError as exc:
+        return "error", "auth: %s" % exc
+    if returncode != 0:
+        tail = (err or out or "").strip().splitlines()
+        return "error", ("exit %s: %s" % (returncode, tail[-1] if tail else ""))[:300]
+    return "available", ""
+
+
+def probe(model, timeout=60):
+    """Run a 1-token prompt against `model` via the claude CLI and cache the
+    verdict. Returns {status, reason}. Only the claude backend is probed."""
+    backend = os.environ.get("NP_LLM_BACKEND") or "claude"
+    if backend != "claude":
+        status, reason = "error", "probe needs the claude backend (have %s)" % backend
+    else:
+        argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
+                "--model", model, "--allowedTools", ""]
+        try:
+            r = np_bashlib.run_killtree(np_bashlib.argv(argv), input="Reply with: ok",
+                                        env=_base_env(backend), timeout=timeout)
+            status, reason = classify_probe(r.returncode, r.stdout, r.stderr)
+        except Exception as exc:               # timeout, missing binary
+            status, reason = "error", "%s: %s" % (type(exc).__name__, exc)
+    record_probe(model, status, reason)
+    return {"status": status, "reason": reason}
+
+
+def _note_model_error(model, *texts):
+    """Mark `model` missing in the probe cache when the CLI rejected it."""
+    line = model_error_line("\n".join(t or "" for t in texts))
+    if line:
+        record_probe(model, "missing", line)
+    return line
 
 
 def _claude_token():
@@ -173,17 +318,19 @@ def _base_env(backend="claude"):
     return env
 
 
-def complete(prompt, system=None, timeout=None):
+def complete(prompt, system=None, timeout=None, feature=None):
     """Run a single-shot completion; return the backend's stdout (unstripped, as
     the retired np-llm.sh did). Covers `complete` for both backends. `timeout`
     (seconds, None = no limit) lets a long-lived caller
     (e.g. the dashboard server) bound the call; raises subprocess.TimeoutExpired
-    like any subprocess.run timeout would."""
+    like any subprocess.run timeout would. `feature` picks a per-feature model
+    param (models.<feature>) before the cheap tier."""
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
     env = _base_env(backend)
+    model = _model_cheap(feature)
     if backend == "claude":
         argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
-                "--model", _model_cheap(), "--allowedTools", ""]
+                "--model", model, "--allowedTools", ""]
         if system:
             argv += ["--append-system-prompt", system]
     elif backend == "local":
@@ -199,10 +346,12 @@ def complete(prompt, system=None, timeout=None):
     # subprocess.run source, not a guess).
     r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, env=env, timeout=timeout)
     check_auth(r.stdout)
+    if backend == "claude":
+        _note_model_error(model, r.stdout, r.stderr)
     return r.stdout
 
 
-def agent(prompt, tools, cwd=None, timeout=None):
+def agent(prompt, tools, cwd=None, timeout=None, feature=None):
     """Run an agentic task (file edits, commits): tools-enabled, permissions
     bypassed, agent-tier model. Covers `agent` for both backends.
     Returns (returncode, stdout, stderr) -- callers need the exit code
@@ -212,13 +361,14 @@ def agent(prompt, tools, cwd=None, timeout=None):
     subprocess.run timeout would -- callers decide how to fail open."""
     backend = os.environ.get("NP_LLM_BACKEND") or "claude"
     env = _base_env(backend)
+    model = _model_agent(feature)
     if backend == "claude":
         # --allowedTools is variadic (consumes space-separated tokens until the
         # next flag) -- tools.split() mirrors bash's unquoted `$tools` word-split.
         argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
                 "--settings", '{"hooks":{},"includeCoAuthoredBy":false}',
                 "--permission-mode", "bypassPermissions",
-                "--model", _model_agent(), "--allowedTools"] + tools.split()
+                "--model", model, "--allowedTools"] + tools.split()
     elif backend == "local":
         agent_cmd = os.environ.get("NP_LLM_AGENT_CMD")
         if not agent_cmd:
@@ -233,6 +383,8 @@ def agent(prompt, tools, cwd=None, timeout=None):
     # itself spawn arbitrary child processes (git, a local agentic host).
     r = np_bashlib.run_killtree(np_bashlib.argv(argv), input=prompt, cwd=cwd, env=env, timeout=timeout)
     check_auth(r.stdout)
+    if backend == "claude":
+        _note_model_error(model, r.stdout, r.stderr)
     return r.returncode, r.stdout, r.stderr
 
 

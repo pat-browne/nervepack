@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "comment": "Curated model ids the dashboard Models panel offers. Selection writes models.<feature> in toggles.local. Add an id here when a new model ships. No default uses a premium model.",
+  "models": [
+    {"id": "claude-haiku-4-5-20251001", "tier": "cheap", "label": "Haiku 4.5", "legacy": false},
+    {"id": "claude-sonnet-5-5", "tier": "agent", "label": "Sonnet 5.5", "legacy": false},
+    {"id": "claude-opus-5-5", "tier": "premium", "label": "Opus 5.5", "legacy": false},
+    {"id": "claude-fable-5-1", "tier": "premium", "label": "Fable 5.1", "legacy": false},
+    {"id": "claude-sonnet-4-6", "tier": "agent", "label": "Sonnet 4.6", "legacy": true}
+  ]
+}

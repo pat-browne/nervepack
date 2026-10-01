@@ -220,7 +220,7 @@ def _split_one(skill, roots, base_prompt, split_kb):
                   "Hard body budget: %sKB. Move overflow into skills/%s/references/."
                   % (base_prompt, skill, skill, split_kb, skill))
         np_llm_agent.run_agent(prompt, "Read Write Edit", cwd=repo_root,
-                               log_path=_log_path())
+                               log_path=_log_path(), feature="skill-maintain")
         ok, reason = np_skill_validate.validate(skill_dir, orig)
         if ok:
             _git(repo_root, "add", "skills/%s" % skill)

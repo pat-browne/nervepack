@@ -501,9 +501,38 @@ dispatched as `cli.py implement-suggestion`) in an isolated git worktree off the
 committed base, in `pr` or `direct` mode; **Reject** resolves it.
 `np-core-suggestions-review` drives the same flow from any host.
 
+**Queue.** A click while a job runs joins a FIFO queue
+(`~/.cache/nervepack/implement-queue/`). The lock holder drains it before exiting.
+A second click on a queued or running row does nothing. Rows show queued (with
+position), running, then done or failed.
+
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
 `np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
+
+## Model selection + availability probe
+
+**Purpose.** Pick the model each feature uses and find out early when an account
+cannot use one.
+
+**Workflow.** `resolve_model(tier, feature)` in `np_model.py` checks the tier env
+var (`NP_LLM_MODEL_CHEAP` or `NP_LLM_MODEL_AGENT`), then `models.<feature>`, then
+`models.<tier>`, then the built-in default. Callers pass `feature=` to `complete()`
+and `agent()`. The dashboard Models panel offers the ids in
+`engine/setup/model-inventory.json` and writes the choice to `toggles.local`.
+
+**Probe** sends a one-token prompt per model and caches available, missing, or
+error in `~/.cache/nervepack/model-probe.json`. A job the CLI rejects for its model
+fails with `model_error` and marks the model missing. A banner then links to that
+feature's row.
+
+**Assets.** `np_model.py`, `engine/setup/model-inventory.json`,
+`np-dashboard-server.py` (`/api/models`, `/api/models/probe`, `/api/models/select`),
+`dashboard/index.html`. Toggle: `models` (off hides the panel and the probe).
+
+**Situational example.** Implement jobs start failing with "issue with the selected
+model". The banner names the model and links to the implement row. You pick another
+model, probe it, and click Implement again.
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.
 You run `/np-suggestions`, it ranks them, you pick three worth building, hit Implement,

@@ -238,7 +238,8 @@ def _run(cfg):
         return "skipped: commit target unresolved"
     try:
         ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
-                                    timeout=_agent_timeout(), log_path=_log_path(cfg))
+                                    timeout=_agent_timeout(), log_path=_log_path(cfg),
+                                    feature=cfg.name)
     except np_model.AuthError as exc:
         # Distinct from "exited non-zero": no cron run can succeed until a human
         # re-authenticates, so name the remedy instead of logging a generic error.
