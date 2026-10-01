@@ -74,6 +74,8 @@ cron or another session may be active in that tree. A worktree off the committed
 prevents staged-work sweeps; parallel edits land on separate branches (combine both, don't
 pick a side). After it reports, verify on its branch, then merge — keeping the agent off
 `main`. See [[using-git-worktrees]].
+Tasks that are independent by file list can share ONE worktree: rules in
+references/parallel-one-worktree.md.
 
 **Trust git ground truth, not the agent's report — it can edit the wrong checkout.**
 After each agent, confirm where the change actually landed (`git log --oneline`, `git show
