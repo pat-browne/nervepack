@@ -140,7 +140,7 @@ def evaluate(payload):
     if not convo.strip():
         return bail("empty transcript extraction for %s" % (transcript or "<no path>"))
 
-    raw = np_model.complete(_PROMPT_HEAD + convo + _prompt_tail(signals), _SYS)
+    raw = np_model.complete(_PROMPT_HEAD + convo + _prompt_tail(signals), _SYS, feature="evaluator")
     if not raw.strip():
         return bail("judge invocation failed")
     jx = subprocess.run([sys.executable, os.path.join(np_paths.SETUP_DIR, "np-json-extract.py")],

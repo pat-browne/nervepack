@@ -24,7 +24,7 @@ class TestRunAgent(unittest.TestCase):
     def test_1_success_returns_true_and_forwards_args(self):
         calls = []
 
-        def fake_agent(prompt, tools, cwd=None, timeout=None):
+        def fake_agent(prompt, tools, cwd=None, timeout=None, feature=None):
             calls.append((prompt, tools, cwd))
             return (0, "", "")
 
@@ -47,7 +47,7 @@ class TestRunAgent(unittest.TestCase):
     def test_4_cwd_none_forwarded_as_none(self):
         calls = []
 
-        def fake_agent(prompt, tools, cwd=None, timeout=None):
+        def fake_agent(prompt, tools, cwd=None, timeout=None, feature=None):
             calls.append(cwd)
             return (0, "", "")
 
@@ -67,7 +67,7 @@ class TestRunAgent(unittest.TestCase):
         # headless stream can't wedge the cron. Forward the timeout to np_model.agent.
         got = {}
 
-        def fake_agent(prompt, tools, cwd=None, timeout=None):
+        def fake_agent(prompt, tools, cwd=None, timeout=None, feature=None):
             got["timeout"] = timeout
             return (0, "", "")
 
