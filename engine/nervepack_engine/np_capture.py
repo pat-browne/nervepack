@@ -152,7 +152,7 @@ def capture(payload, mode="session-end"):
     except OSError:
         return bail("transcript extractor failed")
 
-    raw = np_model.complete(_PROMPT_HEAD + convo + _PROMPT_TAIL, _SYS)
+    raw = np_model.complete(_PROMPT_HEAD + convo + _PROMPT_TAIL, _SYS, feature="capture")
     if not raw.strip():
         return bail("summarizer invocation failed")
     jx = subprocess.run([sys.executable, os.path.join(np_paths.SETUP_DIR, "np-json-extract.py")],

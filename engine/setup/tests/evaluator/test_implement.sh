@@ -110,7 +110,7 @@ git -C "$repo" status --porcelain | grep -q 'dirt.txt' || { echo "FAIL: user's u
 resolved "implement despite dirty tree" || { echo "FAIL: dirty-tree suggestion not resolved"; exit 1; }
 rm -f "$repo/dirt.txt"; git -C "$repo" branch -qD "np-suggest/implement-despite-dirty-tree" 2>/dev/null || true
 
-# 5. lock held by a LIVE owner: refuse (busy)
+# 5. lock held by a LIVE owner: queue behind it
 # Use a REAL python3 process's own self-reported os.getpid() as the lock
 # owner -- NOT bash job control ($$ or $!). Production only ever writes
 # str(os.getpid()) from a live Python process into this file, so that's the
@@ -147,8 +147,9 @@ echo "$live_pid" > "$tmp/lock/pid"
 MODE_OVERRIDE="" LLM="$tmp/llm-ok" run "locked out"
 kill "$live_bg_pid" 2>/dev/null || true; wait "$live_bg_pid" 2>/dev/null || true
 resolved "locked out" && { echo "FAIL: ran while a live lock was held"; exit 1; }
-[[ "$(status_of "locked out")" == "busy" ]] || { echo "FAIL: lock-held status not 'busy'"; exit 1; }
-rm -rf "$tmp/lock"
+[[ "$(status_of "locked out")" == "queued" ]] || { echo "FAIL: lock-held status not 'queued'"; exit 1; }
+ls "$tmp/implement-queue/"*.json >/dev/null 2>&1 || { echo "FAIL: lock-held job not queued"; exit 1; }
+rm -rf "$tmp/lock" "$tmp/implement-queue"
 
 # 5b. STALE lock (owner pid dead): reclaim it and run
 # Same reasoning as 5: the "dead" pid must be a real python3 process's own
