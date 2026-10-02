@@ -31,6 +31,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -62,6 +63,7 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # overlay, so its canonical path is outside DASH. Allow that one extra subtree as a
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
+_PROBE_CLAIM_LOCK = threading.Lock()
 PROBE_SCRIPT = os.path.join(_ENGINE_PKG, "np_model.py")
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 # NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
@@ -445,14 +447,17 @@ class Handler(BaseHTTPRequestHandler):
                 targets = [model] if model else ids
                 # Probing runs up to 45s per model, so it runs DETACHED, same
                 # pattern as /api/implement. A request while one runs is a no-op.
-                if not np_model.claim_probe(targets, timeout=45):
+                with _PROBE_CLAIM_LOCK:   # serialize the stale-check-then-claim in this server
+                    claimed = np_model.claim_probe(targets, timeout=45)
+                if not claimed:
                     return self._json({"ok": True, "started": False, "running": True})
                 try:
                     subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
                                      cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      preexec_fn=implement_job_preexec if os.name != "nt" else None)
-                except OSError:
+                except OSError as exc:
+                    log("probe spawn failed: %s" % exc)
                     np_model.release_probe()   # a failed spawn must not hold the marker
                     raise
                 log("probe started: %s" % ", ".join(targets))
