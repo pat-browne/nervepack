@@ -107,3 +107,11 @@ private content overlay has no CI gate and may be pushed directly.
 Related: [[np-flow-merge-gate]] for waiting on concurrent work before merging, and
 [[np-kb-git-gotchas]] for the recovery paths when a shared tree has already bitten
 you.
+
+## Three rules that apply either way
+
+Commit with a **pathspec on `commit` as well as
+`add`** (a bare `commit` takes the whole index), **check `INDEX.md` before staging it**
+(it regenerates from every skill, so it absorbs another writer's uncommitted text),
+and **re-read a `SKILL.md` from disk** before relying on it — a start-of-session
+snapshot goes stale when another writer corrects the file.
