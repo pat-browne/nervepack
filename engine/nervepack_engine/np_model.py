@@ -275,6 +275,63 @@ def probe(model, timeout=60):
     return {"status": status, "reason": reason}
 
 
+def probe_marker_path():
+    return probe_cache_path() + ".running"
+
+
+def _marker_limit(models, timeout):
+    return timeout * max(1, len(models)) + 60
+
+
+def claim_probe(models, timeout=45):
+    """Create the in-progress marker exclusively. False when a live run holds it.
+    A marker older than its own run budget is stale and gets replaced."""
+    import json
+    path = probe_marker_path()
+    for _ in range(2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if probe_running():
+                return False
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            continue
+        except OSError:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"models": list(models), "timeout": timeout, "started": time.time()}, fh)
+        return True
+    return False
+
+
+def probe_running():
+    """True while an unexpired in-progress marker exists."""
+    import json
+    try:
+        with open(probe_marker_path(), encoding="utf-8") as fh:
+            m = json.load(fh)
+        limit = _marker_limit(m.get("models") or [], float(m.get("timeout") or 45))
+        return time.time() - float(m.get("started") or 0) < limit
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def probe_all(models, timeout=45):
+    """Probe each model in turn, then clear the in-progress marker."""
+    try:
+        for m in models:
+            probe(m, timeout=timeout)
+    finally:
+        try:
+            os.remove(probe_marker_path())
+        except OSError:
+            pass
+
+
 def _note_model_error(model, *texts):
     """Mark `model` missing in the probe cache when the CLI rejected it."""
     line = model_error_line("\n".join(t or "" for t in texts))
@@ -411,6 +468,9 @@ if __name__ == "__main__":
         sys.stdout.write(out)
         sys.stderr.write(err)
         sys.exit(rc)
+    elif argv and argv[0] == "probe":
+        # Background job spawned by the dashboard's /api/models/probe.
+        probe_all(argv[1:])
     else:
         sys.stderr.write("usage: np_model.py complete [--system S] | agent --tools \"T...\"  (prompt on stdin)\n")
         sys.exit(2)
