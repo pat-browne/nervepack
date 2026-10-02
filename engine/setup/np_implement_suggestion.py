@@ -724,7 +724,7 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
         if n:
             _log(log_path, "pruned %d stale implement cache file(s)" % n)
     except Exception as exc:
-        _log(log_path, "prune skipped: %s" % exc)
+        _log(log_path, "prune failed: %s" % exc)
 
     first = {"text": text, "edited": edited or "", "target": target or ""}
     if not _acquire_lock(lock_path):
