@@ -11,6 +11,8 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
+  GET  /api/models            -> model inventory, probe cache, probe_running
+  POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
 
 This is a deliberate, documented exception to nervepack's "no service, no daemon"
 invariant: it is OFF by default, binds to 127.0.0.1 ONLY, serves a fixed directory,
@@ -60,6 +62,7 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # overlay, so its canonical path is outside DASH. Allow that one extra subtree as a
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
+PROBE_SCRIPT = os.path.join(_ENGINE_PKG, "np_model.py")
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 # NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
 # this); the real default is np_implement_suggestion.py (phase 10) dispatched via
@@ -200,6 +203,7 @@ def models_view():
     rows += [_model_row(f, np_model.feature_key(f), t, False) for f, t in MODEL_FEATURES]
     return {"enabled": np_toggle.enabled("models"), "inventory": np_model.inventory(),
             "features": rows, "probe": np_model.load_probe_cache(),
+            "probe_running": np_model.probe_running(),
             "model_errors": _recent_model_errors()}
 
 
@@ -438,8 +442,21 @@ class Handler(BaseHTTPRequestHandler):
                 ids = [m.get("id") for m in np_model.inventory() if m.get("id")]
                 if model and model not in ids:
                     return self._json({"error": "model not in inventory"}, 400)
-                results = {m: np_model.probe(m, timeout=45) for m in ([model] if model else ids)}
-                return self._json({"ok": True, "results": results, "models": models_view()})
+                targets = [model] if model else ids
+                # Probing runs up to 45s per model, so it runs DETACHED, same
+                # pattern as /api/implement. A request while one runs is a no-op.
+                if not np_model.claim_probe(targets, timeout=45):
+                    return self._json({"ok": True, "started": False, "running": True})
+                try:
+                    subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
+                                     cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                except OSError:
+                    np_model.release_probe()   # a failed spawn must not hold the marker
+                    raise
+                log("probe started: %s" % ", ".join(targets))
+                return self._json({"ok": True, "started": True})
             if route == "/api/implement-mode":
                 mode = (self._body().get("mode") or "").strip()
                 if mode not in ("pr", "direct"):

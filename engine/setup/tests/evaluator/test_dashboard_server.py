@@ -534,9 +534,27 @@ class TestServer(unittest.TestCase):
     def test_models_probe_one_model(self):
         status, body = self._post("/api/models/probe", {"model": "claude-haiku-4-5-20251001"})
         self.assertEqual(status, 200, body)
-        data = json.loads(body)
-        self.assertEqual(data["results"]["claude-haiku-4-5-20251001"]["status"], "available")
-        self.assertEqual(data["models"]["probe"]["claude-haiku-4-5-20251001"]["status"], "available")
+        self.assertEqual(json.loads(body), {"ok": True, "started": True})
+        # The probe runs detached. Poll until the marker clears.
+        for _ in range(100):
+            data = json.loads(self._get("/api/models")[1])
+            if not data["probe_running"]:
+                break
+            time.sleep(0.1)
+        self.assertFalse(data["probe_running"])
+        self.assertEqual(data["probe"]["claude-haiku-4-5-20251001"]["status"], "available")
+
+    def test_models_probe_while_running_is_noop(self):
+        marker = os.path.join(self.tmp.name, "model-probe.json.running")
+        with open(marker, "w") as fh:
+            json.dump({"models": ["x"], "timeout": 45, "started": time.time()}, fh)
+        try:
+            self.assertTrue(json.loads(self._get("/api/models")[1])["probe_running"])
+            status, body = self._post("/api/models/probe", {})
+            self.assertEqual(status, 200, body)
+            self.assertEqual(json.loads(body), {"ok": True, "started": False, "running": True})
+        finally:
+            os.remove(marker)
 
     def test_models_probe_rejects_unknown_model(self):
         status, _ = self._post("/api/models/probe", {"model": "not-a-model"})

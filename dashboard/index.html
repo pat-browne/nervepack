@@ -558,7 +558,13 @@
       <div class="note">Selections are per machine (toggles.local). NP_LLM_MODEL_CHEAP and NP_LLM_MODEL_AGENT win when set.</div>`;
     elModels.hidden = false;
     wireModels();
+    if (m.probe_running) {
+      elModels.querySelectorAll("[data-probe], #btn-probe-all").forEach(b => { b.disabled = true; b.textContent = "Probing…"; });
+      clearTimeout(probePoll);
+      probePoll = setTimeout(refreshModels, 3000);
+    }
   }
+  let probePoll = null;
 
   function wireModels() {
     elModels.querySelectorAll("[data-model-feature]").forEach(sel =>
@@ -569,7 +575,7 @@
       }));
     const probeBtn = async (btn, model) => {
       btn.disabled = true; btn.textContent = "Probing…";
-      try { renderModels((await api("/api/models/probe", model ? { model } : {})).models); }
+      try { await api("/api/models/probe", model ? { model } : {}); await refreshModels(); }
       catch (e) { btn.disabled = false; btn.textContent = "Probe"; alert("Probe failed: " + e.message); }
     };
     elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));

@@ -175,5 +175,29 @@ class TestImplementModelError(Base):
         self.assertEqual(st["model"], "claude-bad-1")
 
 
+
+class ProbeMarkerTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p = mock.patch.dict(os.environ, {"NP_MODEL_PROBE_CACHE": os.path.join(self.tmp.name, "p.json")})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_claim_is_exclusive_until_probe_all_clears_it(self):
+        self.assertTrue(np_model.claim_probe(["m"]))
+        self.assertTrue(np_model.probe_running())
+        self.assertFalse(np_model.claim_probe(["m"]))
+        with mock.patch.object(np_model, "probe") as pr:
+            np_model.probe_all(["m"])
+        pr.assert_called_once_with("m", timeout=45)
+        self.assertFalse(np_model.probe_running())
+
+    def test_stale_marker_is_replaced(self):
+        with open(np_model.probe_marker_path(), "w") as fh:
+            json.dump({"models": ["m"], "timeout": 1, "started": 0}, fh)
+        self.assertFalse(np_model.probe_running())
+        self.assertTrue(np_model.claim_probe(["m"]))
+
 if __name__ == "__main__":
     unittest.main()
