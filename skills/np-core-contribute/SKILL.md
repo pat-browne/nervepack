@@ -90,38 +90,10 @@ recipe with commands: references/steps.md
 
 ## After pushing an engine PR, verify CI before calling it done
 
-A push is not done. Resolving review threads is not done either. Once CI
-finishes, run `gh pr checks <N>`. Read the actual result, not just the
-review-thread state.
-
-On a past PR, review comments were resolved and the threads closed. Meanwhile
-`spec-guard` and `tier-gate` were both failing in CI, unchecked.
-
-The miss: `engine/setup/risk-tiers.json` lists paths that force a higher tier
-when touched. That higher tier requires a matching
-`change-specs/<branch-slug>.md` file to exist. Nobody ran `gh pr checks`
-after pushing, so the missing file sat unnoticed.
-
-Before reporting a PR ready or green: run the checks command, or check the
-GitHub web UI's Checks tab if `gh` is unavailable. Read every failed or
-still-pending row's log output, not just its name -- for `spec-guard` and
-`tier-gate` failures specifically, check `change-specs/README.md` first.
-
-Do not infer PR health from review threads, from your own commit succeeding,
-or from the automated diff-review workflow's comments alone -- that workflow
-never blocks merge, it only comments.
-
-See `change-specs/README.md` for when normal/high tier changes need a spec.
-
-### A stuck `BLOCKED` merge means re-check checks and threads, not platform lag
-
-`required_review_thread_resolution` blocks merge on any unresolved review
-thread, including one opened after your last check.
-
-After every push, rerun, or thread resolution, re-query both: `gh pr checks
-<N>` for status checks, and `gh pr view <N> --json reviews` for review state.
-Don't assume a persistent `BLOCKED` or pending state is platform lag without
-re-verifying both first.
+A push is not done, and resolved review threads are not done either: once CI finishes,
+run `gh pr checks <N>` and read the actual result. A stuck `BLOCKED` merge means
+re-check both checks and review threads, not platform lag. Full rules, the
+`spec-guard`/`tier-gate` example, and the re-query procedure: references/ci-verification.md
 
 ## Concurrency — both repos are one shared working tree
 
@@ -135,14 +107,10 @@ files and commits exactly where they are. The branch is what stops a diverged `m
 or a cron's auto-split of the very skill being edited, from colliding with the write.
 This overrides the older work-in-place-when-clean guidance in references/isolation.md.
 
-Three rules that apply either way: commit with a **pathspec on `commit` as well as
-`add`** (a bare `commit` takes the whole index), **check `INDEX.md` before staging it**
-(it regenerates from every skill, so it absorbs another writer's uncommitted text),
-and **re-read a `SKILL.md` from disk** before relying on it — a start-of-session
-snapshot goes stale when another writer corrects the file.
-
-Decision table, the `EnterWorktree` contract, and why relinking is hazardous from an
-engine worktree but harmless from an overlay one: references/isolation.md
+Three rules apply either way: **pathspec on `commit` as well as `add`**, **check `INDEX.md`
+before staging it**, and **re-read a `SKILL.md` from disk** before relying on it. Details, the
+decision table, the `EnterWorktree` contract, and why relinking is hazardous from an engine
+worktree but harmless from an overlay one: references/isolation.md
 
 ## Ingest protocol (when target is `sources/`)
 
@@ -151,11 +119,8 @@ write the file. Full steps: references/ingest-protocol.md
 
 ## Conflict policy
 
-If the push is rejected as non-fast-forward:
-1. `git -C "$REPO" pull --rebase --autostash`
-2. If conflicts: surface them to the user; do not auto-resolve content
-   conflicts in `SKILL.md` files (those are user intent).
-3. Retry push.
+Push rejected as non-fast-forward: pull --rebase --autostash, surface conflicts, retry.
+Steps: references/conflict-policy.md
 
 ## Size budget — keep skills lean
 
