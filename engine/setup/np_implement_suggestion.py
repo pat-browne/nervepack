@@ -627,6 +627,67 @@ def _pop(qdir):
     return None
 
 
+def _ttl_days():
+    try:
+        return float(np_toggle.param("evaluator.implement_status_ttl_days", "30"))
+    except (TypeError, ValueError):
+        return 30.0
+
+
+def prune(status_dir, qdir, ttl_days=None, now=None):
+    """Delete status files and queue entries older than the TTL (by mtime).
+    Keeps status files in state queued or running, and running.json while its
+    pid is alive. ttl_days <= 0 disables. Returns the number of files removed."""
+    ttl = _ttl_days() if ttl_days is None else ttl_days
+    if ttl <= 0:
+        return 0
+    cutoff = (time.time() if now is None else now) - ttl * 86400
+    removed = 0
+
+    def old(path):
+        try:
+            return os.path.getmtime(path) < cutoff
+        except OSError:
+            return False
+
+    def rm(path):
+        try:
+            os.remove(path)
+            return 1
+        except OSError:
+            return 0
+
+    try:
+        names = os.listdir(status_dir)
+    except OSError:
+        names = []
+    for n in names:
+        path = os.path.join(status_dir, n)
+        if not n.endswith(".json") or not old(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                state = (json.load(fh) or {}).get("state")
+        except (OSError, ValueError, AttributeError):
+            state = None
+        if state in ("queued", "running"):
+            continue
+        removed += rm(path)
+
+    try:
+        names = os.listdir(qdir)
+    except OSError:
+        names = []
+    for n in names:
+        path = os.path.join(qdir, n)
+        if n == _RUNNING:
+            if old(path) and running_job(qdir) is None:
+                removed += rm(path)
+        elif _ENTRY_RE.match(n) and old(path):
+            removed += rm(path)
+    return removed
+
+
 def implement(text, edited=None, target=None, repo=None, log_path=None, lock_path=None,
               status_dir=None, prompt_file=None, resolve_fn=None, agent_fn=None,
               gh_pr_create_fn=None):
@@ -657,6 +718,13 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
     if not text:
         _log(log_path, "no suggestion text given")
         return 0
+
+    try:
+        n = prune(ctx["status_dir"], qdir)
+        if n:
+            _log(log_path, "pruned %d stale implement cache file(s)" % n)
+    except Exception as exc:
+        _log(log_path, "prune failed: %s" % exc)
 
     first = {"text": text, "edited": edited or "", "target": target or ""}
     if not _acquire_lock(lock_path):
