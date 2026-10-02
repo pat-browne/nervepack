@@ -1,5 +1,5 @@
 ---
-id: 0044
+id: 0045
 status: accepted
 date: 2026-10-02
 tier: normal
@@ -13,7 +13,7 @@ blast_radius:
   - change-specs/feat-async-model-probe.md
 ---
 
-# 0044: Run the model probe as a detached job
+# 0045: Run the model probe as a detached job
 
 ## Context and problem statement
 
