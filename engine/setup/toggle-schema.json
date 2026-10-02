@@ -88,6 +88,11 @@
     "min": 1,
     "description": "Prompts required before mid-session escalation fires."
   },
+  "evaluator.implement_status_ttl_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Days to keep implement status and queue files; 0 = keep forever."
+  },
   "evaluator.retain_days": {
     "type": "number",
     "min": 0,
