@@ -447,10 +447,15 @@ class Handler(BaseHTTPRequestHandler):
                 # pattern as /api/implement. A request while one runs is a no-op.
                 if not np_model.claim_probe(targets, timeout=45):
                     return self._json({"ok": True, "started": False, "running": True})
-                subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
-                                 cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                 preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                try:
+                    subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
+                                     cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                except OSError:
+                    np_model.release_probe()   # a failed spawn must not hold the marker
+                    raise
+                log("probe started: %s" % ", ".join(targets))
                 return self._json({"ok": True, "started": True})
             if route == "/api/implement-mode":
                 mode = (self._body().get("mode") or "").strip()

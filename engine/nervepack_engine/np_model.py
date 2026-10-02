@@ -302,8 +302,12 @@ def claim_probe(models, timeout=45):
         except OSError:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             continue
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump({"models": list(models), "timeout": timeout, "started": time.time()}, fh)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump({"models": list(models), "timeout": timeout, "started": time.time()}, fh)
+        except Exception:
+            release_probe()
+            raise
         return True
     return False
 
@@ -326,10 +330,15 @@ def probe_all(models, timeout=45):
         for m in models:
             probe(m, timeout=timeout)
     finally:
-        try:
-            os.remove(probe_marker_path())
-        except OSError:
-            pass
+        release_probe()
+
+
+def release_probe():
+    """Remove the in-progress marker. Fail-open."""
+    try:
+        os.remove(probe_marker_path())
+    except OSError:
+        pass
 
 
 def _note_model_error(model, *texts):
