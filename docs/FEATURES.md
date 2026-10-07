@@ -430,6 +430,8 @@ here so a dashboard panel reading zero isn't mistaken for a wiring gap:
 | Field | Source | Zero-bias note |
 |---|---|---|
 | `skills_invoked[]` | regex over the transcript JSONL for Skill-tool calls | Legitimately empty if no skills were invoked — not a pipeline gap |
+| `skill_tool_calls` | count of `Skill` tool_use lines in the transcript | 0 means no skill invoked. Read with `skills_available` to tell "none needed" from "available, not discovered" |
+| `skills_available` | count of `SKILL.md` dirs in the engine and `$NP_CONTENT_DIR` `skills/` | Reflects the scoring machine, not the session host. 0 if neither dir is readable |
 | `playbook_fires` | `lesson-guard` markers in the session-signals log | Genuinely sparse today — only lessons carrying an enforcing `tool_match` fire it; rises naturally as the enforcing-lesson catalog grows |
 | `playbook_heeded` | gated-command fingerprints minus fingerprints that were executed anyway | Inherits `playbook_fires` sparseness; also 0 if a gated command ran despite the guard |
 | `recall_injections` | `lesson-recall`/`episodic-recall` markers in the session-signals log | **Structural zero for back-captured sessions** — the ephemeral signal log for the original session is gone by the time the back-capture sweep re-scores it, even when recall fired live |
