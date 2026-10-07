@@ -71,6 +71,10 @@ def _prompt_tail(signals):
 
 SIGNALS (deterministic): """ + signals + """
 """ + caveat + """
+Skill discovery: skills_available is how many skills existed; skill_tool_calls is
+how many the session invoked. If skill_tool_calls is 0, judge from the log whether
+the task needed a skill. Task needed none: do not penalize. A matching skill
+existed but was never invoked: add that to shortfalls.
 
 You are an outside observer scoring how much a personal AI context pack
 ('Nervepack') helped the coding session logged above. Output STRICT JSON only
