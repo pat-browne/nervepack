@@ -372,5 +372,84 @@
   "models.doctor": {
     "type": "string",
     "description": "Model id override for doctor. Empty uses models.cheap."
+  },
+  "memory.flush_interval": {
+    "type": "number",
+    "min": 0,
+    "description": "Minimum seconds between SessionEnd memory flushes. The daily and weekly crons stay the backstop, so a skipped flush only delays promotion."
+  },
+  "skills.trigger_recall": {
+    "type": "bool",
+    "description": "Inject a once-per-session reminder to follow a skill-authoring process when a prompt matches a skill-writing pattern."
+  },
+  "skills.security_recall": {
+    "type": "bool",
+    "description": "Inject a once-per-session reminder to run a security review when a prompt mentions security or vulnerability keywords."
+  },
+  "journal": {
+    "description": "Session journal: a local append-only record of each session's goal, hypotheses, struggles and progress, seeded at SessionStart and checkpointed before compaction."
+  },
+  "journal.model": {
+    "type": "string",
+    "description": "Declared model for journal checkpoints. Not read at runtime today: the checkpoint uses the cheap tier from the models family."
+  },
+  "journal.ttl_days": {
+    "type": "number",
+    "min": 1,
+    "description": "Delete journals and stale recall receipts older than this many days."
+  },
+  "journal.recall_sources": {
+    "type": "string",
+    "description": "Which session starts re-inject the journal, joined with + (for example compact+resume)."
+  },
+  "focus": {
+    "description": "Open a spec or plan doc in the OS default app when a session writes one under docs/superpowers/specs or plans."
+  },
+  "turn_gate": {
+    "description": "Stop-hook turn gate: blocks a turn once when it edited UI files without showing the result, or when the closing message fails the form check."
+  },
+  "form_gate": {
+    "description": "PreToolUse form gate: checks durable text (files, artifacts, pages, posts, commit messages) against the concise-output categorical and rate rules."
+  },
+  "form_gate.categorical": {
+    "type": "enum",
+    "options": [
+      "ask",
+      "warn",
+      "off",
+      "block"
+    ],
+    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and escalates to ask after two retries."
+  },
+  "form_gate.rate": {
+    "type": "enum",
+    "options": [
+      "warn",
+      "off"
+    ],
+    "description": "Rate findings (passive voice, sentence length). warn adds context only, it never blocks."
+  },
+  "form_gate.rate_threshold": {
+    "type": "number",
+    "min": 0,
+    "description": "Linter score above which rate findings are reported."
+  },
+  "form_gate.timeout_s": {
+    "type": "number",
+    "min": 1,
+    "description": "Timeout (seconds) for the linter subprocess. On timeout the gate allows the write."
+  },
+  "form_gate.exempt_globs": {
+    "type": "string",
+    "description": "Path globs the gate skips, colon-joined. Empty exempts nothing."
+  },
+  "form_gate.comment_ext": {
+    "type": "string",
+    "description": "Colon-joined source extensions whose comments get linted (for example .py:.ts). Empty turns comment linting off."
+  },
+  "form_gate.comment_block_max": {
+    "type": "number",
+    "min": 1,
+    "description": "Maximum lines in one comment block before the gate flags it."
   }
 }

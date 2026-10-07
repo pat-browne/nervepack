@@ -121,7 +121,7 @@
                    padding:60px 20px; z-index:50; }
   .modal-overlay[hidden] { display:none; }
   .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
-           box-shadow:var(--shadow); width:100%; max-width:560px;
+           box-shadow:var(--shadow); width:100%; max-width:760px;
            max-height:calc(100vh - 120px); overflow-y:auto; padding:16px; }
   .modalhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
   .grid { display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr 1fr; }
@@ -240,14 +240,13 @@
     border:1px solid var(--border); background:var(--surface-alt);
     color:var(--text-tertiary); font-size:9px; font-weight:700; line-height:1;
     cursor:help; flex:0 0 auto; }
-  .tighelp::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px);
-    left:50%; transform:translateX(-50%); width:max-content; max-width:240px;
+  /* One fixed-position bubble, placed by JS (placeTip) and clamped to the
+     viewport. A CSS ::after bubble clipped at the scrolling modal's edge. */
+  #tiptip { position:fixed; left:0; top:0; max-width:min(280px, calc(100vw - 16px));
     background:var(--text); color:var(--surface); font-size:11px; font-weight:400;
-    line-height:1.4; white-space:normal; text-align:left; padding:6px 9px;
+    line-height:1.4; white-space:normal; overflow-wrap:anywhere; text-align:left; padding:6px 9px;
     border-radius:var(--radius-sm); box-shadow:var(--shadow);
-    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease;
-    z-index:20; }
-  .tighelp:hover::after, .tighelp:focus-visible::after { opacity:1; visibility:visible; }
+    pointer-events:none; z-index:100; }
   .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
   .swtoggle input { opacity:0; width:0; height:0; }
   .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
@@ -291,14 +290,13 @@
           <div class="sub" id="subtitle">loading…</div>
         </div>
         <button class="btn-icon" id="btn-settings" type="button"
-                aria-haspopup="dialog" aria-label="Settings" title="Feature toggles">⚙</button>
+                aria-haspopup="dialog" aria-label="Settings" title="Settings: models and feature toggles">⚙</button>
       </header>
 
       <section class="panel full" id="panel-trend"></section>
       <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
       <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
-      <section class="panel full" id="panel-models" style="margin-top:16px" hidden></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
       <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
@@ -313,13 +311,18 @@
   <div class="modal-overlay" id="settings-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modalhead">
-        <span class="lbl" id="settings-title">Feature toggles</span>
+        <span class="lbl" id="settings-title">Settings</span>
         <button class="btn sm" id="btn-settings-close" type="button">Close</button>
       </div>
-      <div id="panel-toggles"></div>
+      <section class="settings-section" id="panel-models" hidden></section>
+      <section class="settings-section" id="settings-toggles" style="margin-top:16px">
+        <div class="panelhead"><span class="lbl">Feature toggles</span></div>
+        <div id="panel-toggles"></div>
+      </section>
     </div>
   </div>
 
+<div id="tiptip" role="tooltip" hidden></div>
 <script src="data/metrics.js"></script>
 <script>
   // ---- pure helpers ----
@@ -500,8 +503,8 @@
   }
 
   // ---- Models panel and missing-model banner, served mode only ----
-  // Selecting a model writes a per-machine models.<feature> param.
-  // The banner links each missing model to its feature row.
+  // The Models section lives in the settings modal. Selecting a model writes a
+  // per-machine models.<feature> param. Banner links open the modal at the row.
   const elModels = document.getElementById("panel-models");
   const elBanner = document.getElementById("model-banner");
 
@@ -517,7 +520,7 @@
     if (!uniq.length) { elBanner.hidden = true; elBanner.innerHTML = ""; return; }
     elBanner.innerHTML = "Model unavailable: " + uniq.map(h =>
       `<a href="#model-row-${esc(h.key)}">${esc(h.model)} (${esc(h.feature)})</a>`).join(", ")
-      + ". Pick another model in the Models panel.";
+      + ". Pick another model in Settings.";
     elBanner.hidden = false;
   }
 
@@ -581,7 +584,6 @@
     elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));
     const all = document.getElementById("btn-probe-all");
     if (all) all.addEventListener("click", () => probeBtn(all, ""));
-    if (location.hash.startsWith("#model-row-")) document.getElementById(location.hash.slice(1))?.scrollIntoView();
   }
 
   async function refreshModels() {
@@ -616,7 +618,24 @@
   const settingsOverlay = document.getElementById("settings-overlay");
   const btnSettings = document.getElementById("btn-settings");
   const btnSettingsClose = document.getElementById("btn-settings-close");
-  function openSettings() { settingsOverlay.hidden = false; renderToggles(); }
+  function openSettings() {
+    settingsOverlay.hidden = false; renderToggles();
+    return SERVED ? refreshModels() : Promise.resolve();
+  }
+  // Open the modal and scroll to one feature's model row (#model-row-<key>).
+  async function openModelRow(hash) {
+    await openSettings();
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "center" });
+  }
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[href^="#model-row-"]');
+    if (!a) return;
+    e.preventDefault();
+    history.replaceState(null, "", a.getAttribute("href"));
+    openModelRow(a.getAttribute("href"));
+  });
+  window.addEventListener("hashchange", () => { if (location.hash.startsWith("#model-row-")) openModelRow(location.hash); });
+  if (location.hash.startsWith("#model-row-")) openModelRow(location.hash);
   function closeSettings() { settingsOverlay.hidden = true; }
   btnSettings?.addEventListener("click", openSettings);
   btnSettingsClose?.addEventListener("click", closeSettings);
@@ -624,6 +643,29 @@
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && settingsOverlay && !settingsOverlay.hidden) closeSettings();
   });
+
+  // Help bubble: shown above the badge (below when no room), clamped 8px
+  // inside the viewport on both axes so it never clips at the modal edge.
+  const tipEl = document.getElementById("tiptip");
+  function placeTip(badge) {
+    tipEl.textContent = badge.dataset.tip;
+    tipEl.hidden = false;
+    const b = badge.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), m = 8;
+    const left = Math.min(Math.max(b.left + b.width / 2 - t.width / 2, m), window.innerWidth - t.width - m);
+    let top = b.top - t.height - 6;
+    if (top < m) top = b.bottom + 6;
+    tipEl.style.left = Math.max(left, m) + "px";
+    tipEl.style.top = Math.min(top, window.innerHeight - t.height - m) + "px";
+  }
+  const hideTip = () => { tipEl.hidden = true; };
+  ["mouseover", "focusin"].forEach(ev => document.addEventListener(ev, e => {
+    const badge = e.target.closest && e.target.closest(".tighelp");
+    if (badge) placeTip(badge);
+  }));
+  ["mouseout", "focusout"].forEach(ev => document.addEventListener(ev, e => {
+    if (e.target.closest && e.target.closest(".tighelp")) hideTip();
+  }));
+  document.addEventListener("scroll", hideTip, true);
 
   function helpIcon(desc) {
     return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
@@ -706,7 +748,9 @@
           <span class="togfamname">${esc(fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
           ${familyControl(fam)}
         </div>
-        ${fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
+        ${fam.feature === "models"
+          ? `<div class="note">Pick models in the Models section above.</div>`
+          : fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
       </div>`).join("") : empty("No toggles declared.")) +
       `<div class="note">Shared-scope switches commit + push toggles.conf; params always stay local to this machine.</div>`;
     wireToggleInputs();
