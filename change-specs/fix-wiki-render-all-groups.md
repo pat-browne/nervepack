@@ -2,7 +2,7 @@
 id: 0050
 status: accepted
 date: 2026-10-07
-tier: standard
+tier: normal
 blast_radius:
   - dashboard/build.py
   - engine/setup/tests/evaluator/test_dashboard_build.py
@@ -52,6 +52,6 @@ A real-content build had 0 missing pages of 198 links.
 
 ## Rollback
 
-Not required for standard tier.
+Revert this PR. The renderer falls back to the old topics/concepts walk.
 
 ## Deviations

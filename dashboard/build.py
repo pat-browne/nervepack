@@ -795,8 +795,11 @@ def render_pages(index, out_dir):
     pages = []   # (name, html, kind, topic|None, last_updated, version, src, layer)
     # Walk every nav group, not just topics/concepts: a layer's declared routes
     # (e.g. data-model) add groups whose pages would otherwise never render.
-    groups = index.get("groups") or [{"key": "topic", "entries": index.get("topics", [])},
-                                     {"key": "concept", "entries": index.get("concepts", [])}]
+    if "groups" in index:
+        groups = index["groups"]
+    else:                                   # index built before #234
+        groups = [{"key": "topic", "entries": index.get("topics", [])},
+                  {"key": "concept", "entries": index.get("concepts", [])}]
     for g in groups:
         for e in g.get("entries", []):
             topic = e.get("topic")

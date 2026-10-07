@@ -1289,6 +1289,21 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
             html = next(e["synthesis"]["html"] for g in wiki["groups"] for e in g["entries"])
             self.assertTrue(os.path.isfile(os.path.join(out_dir, html[len("data/"):])), html)
 
+    def test_render_pages_falls_back_to_topics_without_groups(self):
+        # An index built before groups existed carries only topics/concepts.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("np_build_fallback", BUILD)
+        b = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(b)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "rust.md")
+            with open(src, "w") as fh:
+                fh.write("# Rust\n")
+            html = "data/wiki/personal/topics/rust/rust.html"
+            b.render_pages({"topics": [{"topic": "rust", "sources": [], "synthesis":
+                            {"name": "rust", "html": html, "src": src}}]}, tmp)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, html[len("data/"):])))
+
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
