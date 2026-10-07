@@ -20,6 +20,7 @@ class TestTogglePanelFlow(unittest.TestCase):
         browser = pw.chromium.launch()
         page = browser.new_page()
         page.goto(base_url, wait_until="networkidle")
+        page.click("#btn-settings")  # toggles and models live in the settings modal
         return page, browser, pw, stop_fn
 
     def _cleanup(self, browser, pw, stop_fn):
@@ -64,21 +65,52 @@ class TestTogglePanelFlow(unittest.TestCase):
             self._cleanup(browser, pw, stop_fn)
 
     def test_family_help_badge_shows_tooltip_on_hover(self):
-        """The '?' badge next to a family name uses a CSS-only tooltip (::after,
-        driven by data-tip), NOT the native `title` attribute — title is delayed
-        ~1s and unreliable across browsers (notably Safari/macOS), which is why a
-        user reported "no text pops up on hover" against the title-based version.
-        This asserts the tooltip is actually hidden by default and visible on hover."""
+        """The '?' badge shows the data-tip text in the #tiptip bubble on hover,
+        not via the native `title` attribute (delayed and unreliable on Safari)."""
         page, browser, pw, stop_fn = self._open_page()
         try:
             badge = page.locator('.togfam:has(input[data-key="memory"]) .togfamhead .tighelp')
             badge.wait_for(timeout=5000)
             tip_text = badge.get_attribute("data-tip")
             self.assertTrue(tip_text)
-            self.assertEqual(badge.evaluate("el => getComputedStyle(el, '::after').opacity"), "0")
+            tip = page.locator("#tiptip")
+            self.assertTrue(tip.is_hidden())
             badge.hover()
-            page.wait_for_timeout(200)
-            self.assertEqual(badge.evaluate("el => getComputedStyle(el, '::after').opacity"), "1")
+            tip.wait_for(state="visible", timeout=2000)
+            self.assertEqual(tip.text_content(), tip_text)
+        finally:
+            self._cleanup(browser, pw, stop_fn)
+
+    def test_tooltip_near_left_edge_stays_in_viewport(self):
+        """A narrow viewport puts the badges near the left edge. The bubble must
+        clamp inside the viewport instead of clipping."""
+        page, browser, pw, stop_fn = self._open_page()
+        try:
+            page.set_viewport_size({"width": 360, "height": 700})
+            badges = page.locator(".togfamhead .tighelp")
+            badges.first.wait_for(timeout=5000)
+            vw = 360
+            for i in range(min(badges.count(), 6)):
+                badges.nth(i).scroll_into_view_if_needed()
+                badges.nth(i).hover()
+                box = page.locator("#tiptip").bounding_box()
+                self.assertIsNotNone(box)
+                self.assertGreaterEqual(box["x"], 0)
+                self.assertLessEqual(box["x"] + box["width"], vw)
+                self.assertGreaterEqual(box["y"], 0)
+        finally:
+            self._cleanup(browser, pw, stop_fn)
+
+    def test_model_row_hash_opens_settings_modal(self):
+        """A #model-row-<key> link (the missing-model banner) opens the modal."""
+        base_url, stop_fn = harness_mod.start(stub_state="done", toggles_conf=FIXTURE_CONF)
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.goto(base_url + "#model-row-cheap", wait_until="networkidle")
+            page.locator("#settings-overlay").wait_for(state="visible", timeout=5000)
+            self.assertEqual(page.locator("#settings-overlay #panel-models").count(), 1)
         finally:
             self._cleanup(browser, pw, stop_fn)
 
