@@ -1274,6 +1274,36 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         self.assertEqual(by_key.get("convention"), ["team"], wiki)
         self.assertEqual(sorted(by_key.get("data-model", [])), ["camper", "session"], wiki)
 
+    def test_nonstandard_route_pages_are_rendered(self):
+        # Pages from a declared route outside topics/concepts showed in the nav but
+        # never rendered, so every click 404'd (data-base data-model: 64 pages).
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "data-model", "path": "refs/data-model/{name}.md"}]}}},
+                {"refs/data-model/camper.md": "---\ntitle: camper\n---\n\nCamper table.\n"})
+            out_dir, js = TestRenderPages._run(self, cd, NP_ENGINE_DIR=os.path.join(tmp, "e"),
+                                               NP_TEAM_DIR=os.path.join(tmp, "t"))
+            wiki = _parse_wiki(js)
+            html = next(e["synthesis"]["html"] for g in wiki["groups"] for e in g["entries"])
+            self.assertTrue(os.path.isfile(os.path.join(out_dir, html[len("data/"):])), html)
+
+    def test_render_pages_falls_back_to_topics_without_groups(self):
+        # An index built before groups existed carries only topics/concepts.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("np_build_fallback", BUILD)
+        b = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(b)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "rust.md")
+            with open(src, "w") as fh:
+                fh.write("# Rust\n")
+            html = "data/wiki/personal/topics/rust/rust.html"
+            b.render_pages({"topics": [{"topic": "rust", "sources": [], "synthesis":
+                            {"name": "rust", "html": html, "src": src}}]}, tmp)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, html[len("data/"):])))
+
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
