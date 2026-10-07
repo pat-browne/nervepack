@@ -1274,6 +1274,21 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         self.assertEqual(by_key.get("convention"), ["team"], wiki)
         self.assertEqual(sorted(by_key.get("data-model", [])), ["camper", "session"], wiki)
 
+    def test_nonstandard_route_pages_are_rendered(self):
+        # Pages from a declared route outside topics/concepts showed in the nav but
+        # never rendered, so every click 404'd (data-base data-model: 64 pages).
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "data-model", "path": "refs/data-model/{name}.md"}]}}},
+                {"refs/data-model/camper.md": "---\ntitle: camper\n---\n\nCamper table.\n"})
+            out_dir, js = TestRenderPages._run(self, cd, NP_ENGINE_DIR=os.path.join(tmp, "e"),
+                                               NP_TEAM_DIR=os.path.join(tmp, "t"))
+            wiki = _parse_wiki(js)
+            html = next(e["synthesis"]["html"] for g in wiki["groups"] for e in g["entries"])
+            self.assertTrue(os.path.isfile(os.path.join(out_dir, html[len("data/"):])), html)
+
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(

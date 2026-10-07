@@ -793,22 +793,22 @@ def render_pages(index, out_dir):
 
     link_map = {}
     pages = []   # (name, html, kind, topic|None, last_updated, version, src, layer)
-    for t in index.get("topics", []):
-        s = t.get("synthesis")
-        if s:
-            link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
-        for it in t.get("sources", []):
-            link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("src"), it.get("layer", "")))
-    for c in index.get("concepts", []):
-        s = c.get("synthesis")
-        if s:
-            link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
-        for it in c.get("sources", []):
-            link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("src"), it.get("layer", "")))
+    # Walk every nav group, not just topics/concepts: a layer's declared routes
+    # (e.g. data-model) add groups whose pages would otherwise never render.
+    groups = index.get("groups") or [{"key": "topic", "entries": index.get("topics", [])},
+                                     {"key": "concept", "entries": index.get("concepts", [])}]
+    for g in groups:
+        for e in g.get("entries", []):
+            topic = e.get("topic")
+            s = e.get("synthesis")
+            if s:
+                link_map[s["name"]] = s["html"][len("data/"):]
+                pages.append((s["name"], s["html"], s.get("kind") or g.get("key"), topic,
+                              s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
+            for it in e.get("sources", []):
+                link_map[it["name"]] = it["html"][len("data/"):]
+                pages.append((it["name"], it["html"], "reference", topic, "",
+                              it.get("version", ""), it.get("src"), it.get("layer", "")))
 
     for name, html, kind, topic, last_updated, version, src_md, layer in pages:
         rel_html = html[len("data/"):]        # e.g. wiki/personal/topics/aws/sub/aws.html
