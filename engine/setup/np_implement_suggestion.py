@@ -93,7 +93,7 @@ def _log(log_path, msg):
 
 
 def _write_status(status_dir, key, state, ref="", **extra):
-    """`extra` carries optional fields: position, model_error, model."""
+    """`extra` carries optional fields: position, model_error, model, log."""
     rec = {"state": state, "ref": ref, "ts": _now()}
     rec.update(extra)
     try:
@@ -804,7 +804,7 @@ def _run_guarded(job, qdir, ctx):
         _run_one(text, job.get("edited") or None, job.get("target") or None, ctx, **kind)
     except Exception as exc:
         reason = ("job raised: %s: %s" % (type(exc).__name__, exc))[:300]
-        _write_status(ctx["status_dir"], key, "failed", reason)
+        _write_status(ctx["status_dir"], key, "failed", reason, log=ctx["log_path"])
         _log(ctx["log_path"], "implement failed, left unresolved: %r (%s)" % (text, reason))
 
 
@@ -864,13 +864,13 @@ def _run_one(text, edited, target, ctx, kind=None):
     except np_model.AuthError as exc:
         reason = ("backend auth failed (%s) -- re-login with `claude setup-token`, "
                   "or refresh the scheduled-auth token, then retry" % exc)[:300]
-        _write_status(status_dir, key, "failed", reason)
+        _write_status(status_dir, key, "failed", reason, log=log_path)
         _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
         return
     except ModelRejected as exc:
         reason = ("model %s rejected by the CLI: %s -- pick another in the dashboard "
                   "Models panel" % (exc.model, exc.line))[:300]
-        _write_status(status_dir, key, "failed", reason, model_error=True, model=exc.model)
+        _write_status(status_dir, key, "failed", reason, model_error=True, model=exc.model, log=log_path)
         _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
         return
 
@@ -883,10 +883,10 @@ def _run_one(text, edited, target, ctx, kind=None):
         all_not_implementable = bool(tried) and all(
             a.state == "not_implementable" for _, a in tried)
         if all_not_implementable:
-            _write_status(status_dir, key, "not_implementable", reason)
+            _write_status(status_dir, key, "not_implementable", reason, log=log_path)
             _log(log_path, "not a code change, left unresolved: %r (%s)" % (text, reason))
         else:
-            _write_status(status_dir, key, "failed", reason)
+            _write_status(status_dir, key, "failed", reason, log=log_path)
             _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
         return
 
@@ -899,7 +899,7 @@ def _run_one(text, edited, target, ctx, kind=None):
     except Exception as exc:
         _log(log_path, "resolve step failed for %r: %r" % (text, exc))
 
-    _write_status(status_dir, key, "done", ref)
+    _write_status(status_dir, key, "done", ref, log=log_path)
     _log(log_path, "implemented %r%s -> %s (%s repo)"
          % (text, (" as %r" % task) if task != text else "", ref, land_label))
 
