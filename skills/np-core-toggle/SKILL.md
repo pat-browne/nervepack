@@ -27,6 +27,12 @@ Sub-toggles like `memory.recall` inherit their family unless explicitly set.
 next sync; `allowlist` (local) and any sub-override write to
 `~/.config/nervepack/toggles.local`.
 
+**Resolution order:** `~/.config/nervepack/toggles.local`, then
+`<content_dir>/config/toggles.conf`, then `engine/setup/toggles.conf`. The
+content file reaches every machine that syncs the content repo, so it holds
+personal preferences without touching the engine. A content row names only the
+params it changes. Shared-scope writes follow the layer once the file exists.
+
 **Sync:** primary sync runs on session exit (`SessionEnd`); the throttled
 `SessionStart` sync (default 1 day) is a backup. Change with
 `cli.py toggle param sync.interval <seconds>`.
