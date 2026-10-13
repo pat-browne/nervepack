@@ -199,6 +199,36 @@ def _write_topic_synthesis(content_dir, topic, name):
         fh.write("---\nname: %s\nkind: topic\nlast_updated: 2026-06-01\nsources: []\n---\n\nSynthesis body.\n" % name)
 
 
+class TestWordExportMarkup(unittest.TestCase):
+    """Word/Pandoc exports carry <a id> bookmarks and backslash escapes."""
+
+    def test_bookmark_anchor_kept_as_link_target(self):
+        out = build.md_to_html('## <a id="_lt4oz"></a>Introduction')
+        self.assertIn('<h2><a id="_lt4oz"></a>Introduction</h2>', out)
+        self.assertNotIn("&lt;a id", out)
+
+    def test_backslash_escapes_render_literal(self):
+        out = build.md_to_html(r"Tbl\_v2\_lists \(AFR\) data\. select \* from")
+        self.assertIn("Tbl_v2_lists (AFR) data. select * from", out)
+
+    def test_underscore_bold(self):
+        out = build.md_to_html(r"__Tbl\_v2__")
+        self.assertIn("<strong>Tbl_v2</strong>", out)
+
+    def test_other_html_stays_escaped(self):
+        out = build.md_to_html('<a id="x" onclick="y"></a><script>z</script>')
+        self.assertNotIn("<script>", out)
+        self.assertNotIn("onclick=\"", out)
+
+    def test_excerpt_drops_bookmarks_and_escapes(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "afr.md")
+            with open(p, "w") as f:
+                f.write('---\nname: afr\n---\n<a id="_w6"></a>\n\n'
+                        '<a id="_x1"></a>Solutions \\(AFR\\) Training\n')
+            self.assertEqual(build._parse_wiki_page(p)["excerpt"], "Solutions (AFR) Training")
+
+
 class TestRenderPagesVersionStamp(unittest.TestCase):
     """render_pages() must carry the version field into meta so md_to_html renders
     the version stamp on source pages (kind:reference with a version but no last_updated)."""
