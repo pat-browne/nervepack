@@ -5,6 +5,7 @@ date: 2026-10-13
 tier: high
 blast_radius:
   - .github/workflows/claude-pr-respond.yml
+  - .github/workflows/claude-pr-review.yml
   - change-specs/ci-pr-bot-respond-fix.md
 ---
 
@@ -20,7 +21,8 @@ human comment had 3 denied tool calls that the hidden output can't explain.
 ## Decision
 
 Set `allowed_bots` to the two bots the job filter trusts. Upload the execution
-file as a 3-day artifact.
+file as a 3-day artifact. Both transcript uploads use `continue-on-error`, so
+an artifact outage never fails a review or response.
 
 ## Non-goals
 

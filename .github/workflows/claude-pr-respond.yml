@@ -117,6 +117,7 @@ jobs:
             --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Edit(.github/**),Write(.github/**)"
             --append-system-prompt "${{ env.STANDARDS }}"
       - name: Upload respond transcript
+        continue-on-error: true
         if: always() && steps.respond.outputs.execution_file != ''
         uses: actions/upload-artifact@v4
         with:
