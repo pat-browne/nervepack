@@ -1254,6 +1254,43 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         widgets = next(e for e in entries if e["name"] == "widgets")
         self.assertEqual(widgets["sources"], [])
 
+    def test_reference_and_roadmap_routes_get_nav_groups(self):
+        # Only the knowledge route fed the nav, so solutions/runbooks/proposals
+        # (reference + roadmap routes) never showed.
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "notes/{name}.md"},
+                    "reference": {"variants": [
+                        {"name": "solution", "path": "docs/solutions/{name}.md"}]},
+                    "roadmap": {"path": "docs/proposals/{name}.md"},
+                    "skill": {"path": "skills/{name}/SKILL.md"}}},
+                {"docs/solutions/fix-a.md": "---\ntitle: a\n---\n\nFix A.\n",
+                 "docs/proposals/idea-b.md": "---\ntitle: b\n---\n\nIdea B.\n",
+                 "skills/s/SKILL.md": "---\nname: s\n---\n\nSkill.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki["groups"]}
+        self.assertEqual(by_key.get("solution"), ["fix-a"], wiki)
+        self.assertEqual(by_key.get("roadmap"), ["idea-b"], wiki)
+        self.assertNotIn("skill", by_key, wiki)
+
+    def test_colocated_reference_route_forms_no_duplicate_group(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "wiki/topics/{topic}/{topic}.md",
+                                  "frontmatter": {"kind": "topic"}},
+                    "reference": {"path": "wiki/topics/{topic}/{name}.md",
+                                  "frontmatter": {"kind": "reference"}}}},
+                {"wiki/topics/rust/rust.md": "---\nname: rust\nkind: topic\n---\n\nRust.\n",
+                 "wiki/topics/rust/book.md": "---\nname: book\nkind: reference\n---\n\nBook.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        self.assertEqual([g["key"] for g in wiki["groups"]], ["topic"], wiki)
+        names = [s["name"] for g in wiki["groups"] for e in g["entries"] for s in e["sources"]]
+        self.assertEqual(names, ["book"], wiki)
+
     def test_flat_route_does_not_swallow_a_nested_route(self):
         # A layer may nest one declared route inside another's container:
         # `.claude/references/{name}.md` (convention) contains

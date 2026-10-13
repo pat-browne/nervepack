@@ -18,7 +18,7 @@ for _p in (_HERE, _SETUP):
 import np_content  # noqa: E402
 import np_layout  # noqa: E402
 
-_VERBS = ("show", "infer", "questions", "record", "route")
+_VERBS = ("show", "infer", "questions", "record", "route", "drift")
 
 
 def _root(layer):
@@ -84,6 +84,13 @@ def run(argv):
         elif verb == "questions":
             layout, _source = np_layout.resolve(root)
             _dump(np_layout.open_questions(root, layout))
+        elif verb == "drift":
+            if "--apply" in argv:
+                changes, questions = np_layout.apply_drift(root)
+                _dump({"changes": changes, "questions": questions})
+            else:
+                layout, _source = np_layout.resolve(root)
+                _dump(np_layout.drift(root, layout))
         elif verb == "record":
             _dump_path = np_layout.record(root, json.load(sys.stdin))
             sys.stdout.write(_dump_path + "\n")

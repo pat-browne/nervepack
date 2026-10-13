@@ -33,6 +33,8 @@ this skill is the entry point.
    anything, invoke [[np-core-layout]] to run the discovery interview and record
    `.nervepack/layout.json`. Contribution resolves paths from that manifest, so a
    layer that has not declared one refuses writes for kinds it never routed.
+   Then run `cli.py layout drift --layer <personal|team> --apply` so every
+   directory of typed pages gets a route, and the interview covers the rest.
 7. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor` (exits non-zero on a MUST
    shortfall). Fix → re-run. That generate→verify→fix loop is what makes self-wiring safe.
    The `layer-layout` SHOULD row reports the result of step 6.
