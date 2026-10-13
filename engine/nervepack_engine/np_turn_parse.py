@@ -68,7 +68,7 @@ def _blocks(rec):
     return []
 
 
-def _is_typed_user(rec):
+def _is_human_prompt(rec):
     if rec.get("type") != "user":
         return False
     source = rec.get("promptSource")
@@ -130,7 +130,7 @@ def parse(path):
 
     start = 0
     for i in range(len(records) - 1, -1, -1):
-        if _is_typed_user(records[i]):
+        if _is_human_prompt(records[i]):
             start = i
             break
 
