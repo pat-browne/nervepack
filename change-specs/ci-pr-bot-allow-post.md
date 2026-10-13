@@ -17,7 +17,9 @@ denies that call, since no rule allows it. The transcript records the denial.
 
 ## Decision
 
-Allow only `gh pr view`, `gh pr diff`, `gh pr review` and `gh pr comment`.
+Allow only `gh pr view`, `gh pr diff` and `gh pr comment`. Deny `gh pr review`,
+`gh pr merge`, `gh api`, Edit and Write. Check out without persisted git
+credentials so a `--body-file` comment has no token file to leak.
 
 ## Non-goals
 
@@ -25,8 +27,9 @@ No file edits, pushes, or general `gh api` access for the review job.
 
 ## Cross-cutting concerns
 
-- Security: the job can read the PR and post a review or comment. It already
-  holds `pull-requests: write`. `contents` stays read-only.
+- Security: the job can read the PR and post a comment. It cannot approve,
+  merge, or call the raw API, so an injected PR can't approve itself.
+  `contents` stays read-only.
 
 ## Rollback
 
