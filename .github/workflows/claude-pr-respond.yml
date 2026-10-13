@@ -80,10 +80,12 @@ jobs:
             echo "$delim"
           } >> "$GITHUB_ENV"
       - name: Respond
+        id: respond
         if: steps.pr.outputs.skip != '1'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "claude[bot],github-actions[bot]"
           prompt: |
             You answer review comments on ${{ github.repository }} PR #${{ steps.pr.outputs.num }},
             branch ${{ steps.pr.outputs.ref }} (already checked out).
@@ -114,3 +116,10 @@ jobs:
             --allowedTools "Read,Edit,Write,Grep,Glob,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin HEAD:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*)"
             --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Edit(.github/**),Write(.github/**)"
             --append-system-prompt "${{ env.STANDARDS }}"
+      - name: Upload respond transcript
+        if: always() && steps.respond.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-respond-transcript
+          path: ${{ steps.respond.outputs.execution_file }}
+          retention-days: 3
