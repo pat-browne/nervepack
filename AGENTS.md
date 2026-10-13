@@ -197,8 +197,10 @@ The engine repo is public, so substantive human/agent-authored engine changes �
 code under `dashboard/`, `engine/`, and the generic `np-core-*`/`np-flow-*`
 skills shipped here — go through a **pull request that merges only on green CI**,
 never direct-to-main. Flow: branch off latest `origin/main` → push → `gh pr create`
-→ wait for the required checks (Syntax sweep, Regression suite, Secret/PII guard;
-Dashboard e2e is informational) → if the branch is behind, `gh pr update-branch`
+→ wait for every check to pass (not only the required Syntax sweep, Regression suite,
+Secret/PII guard; Dashboard e2e is informational). A failing Spec guard or Tier gate
+means `change-specs/<branch-slug>.md` is missing or misses a touched path: fix it
+per `change-specs/TEMPLATE.md` unprompted, never merge past it → if the branch is behind, `gh pr update-branch`
 and re-wait → `gh pr merge --squash --delete-branch` once green. Keep engine commit
 messages and PR bodies **company-neutral** (feature + tech only).
 
