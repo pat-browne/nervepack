@@ -298,7 +298,7 @@ def _render_inline(s, link_map=None, here=""):
     def _park(m):
         anchors.append(m.group(1))
         return "\x00A%d\x00" % (len(anchors) - 1)
-    s = _MD_ANCHOR.sub(_park, s)
+    s = _MD_ANCHOR.sub(_park, s.replace("\x00", ""))   # NUL is reserved for sentinels
     s = _MD_ESCAPE.sub(lambda m: "\x00E%d\x00" % ord(m.group(1)), s)
     s = html.escape(s)
     s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)

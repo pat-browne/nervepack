@@ -220,6 +220,10 @@ class TestWordExportMarkup(unittest.TestCase):
         self.assertNotIn("<script>", out)
         self.assertNotIn("onclick=\"", out)
 
+    def test_nul_in_content_cannot_forge_sentinel(self):
+        out = build.md_to_html("x \x00A9\x00 y \x00E60\x00")
+        self.assertIn("xA9 yE60", out.replace(" ", ""))
+
     def test_excerpt_drops_bookmarks_and_escapes(self):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "afr.md")
