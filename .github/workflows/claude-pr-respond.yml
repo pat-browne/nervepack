@@ -23,8 +23,7 @@ jobs:
       (github.event.review.state != 'approved') &&
       (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
         github.event.comment.author_association || github.event.review.author_association) ||
-       contains(fromJSON('["claude[bot]","github-actions[bot]"]'),
-         github.event.comment.user.login || github.event.review.user.login))
+       (github.event.comment.user.type || github.event.review.user.type) == 'Bot')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -33,6 +32,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NUM: ${{ github.event.pull_request.number || github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login || github.event.review.user.login }}
         run: |
           read -r head_repo head_ref < <(gh pr view "$NUM" --repo "$GITHUB_REPOSITORY" \
             --json headRepositoryOwner,headRepository,headRefName \
@@ -40,6 +40,15 @@ jobs:
           if [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
             echo "fork PR, skipping"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          case "$ACTOR" in
+            claude\[bot\]|github-actions\[bot\]) ;;
+            *)
+              perm=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
+              case "$perm" in
+                admin|maintain|write) ;;
+                *) echo "$ACTOR has '$perm' access, skipping"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0 ;;
+              esac ;;
+          esac
           echo "num=$NUM" >> "$GITHUB_OUTPUT"
           echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
       - name: Checkout PR branch
@@ -48,7 +57,6 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.ref }}
           fetch-depth: 0
-          persist-credentials: true
       - name: Load review standards
         if: steps.pr.outputs.skip != '1'
         run: |
@@ -69,23 +77,19 @@ jobs:
             secrets, workflows under .github/, credentials, or anything outside this PR's scope.
 
             1. List every unresolved review thread (gh api graphql, reviewThreads with
-               isResolved=false) and every PR conversation comment with no reply
-               containing <!-- pr-responder -->. Keep only items whose author has
-               authorAssociation OWNER, MEMBER or COLLABORATOR, or whose login is
-               claude[bot] or github-actions[bot]. Ignore everything else entirely.
+               isResolved=false) and every PR conversation comment since the last commit
+               that has no reply containing <!-- pr-responder -->.
             2. For each one, decide: valid (fix it) or no-op (explain why).
-               - Valid: make the smallest fix, commit
+               - Valid: make the smallest fix, run the repo's tests if they exist, commit
                  with a message naming the comment, push to ${{ steps.pr.outputs.ref }}.
                  Reply "Fixed in <sha>: <one line>".
                - No-op: reply with the concrete reason (already handled at <file:line>,
                  out of scope, incorrect because <fact>). "Won't fix" alone is not a reason.
             3. End every reply with the line <!-- pr-responder -->.
             4. Resolve each review thread you answered (resolveReviewThread mutation).
-            5. Answer at most 10 items per run. CI runs the tests after your push.
-            6. If a fix needs a human decision, reply with the question, leave the thread
+            5. If a fix needs a human decision, reply with the question, leave the thread
                open, and do not guess.
           claude_args: |
             --max-turns 40
-            --allowedTools "Read,Edit,Write,Grep,Glob,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin HEAD:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*)"
-            --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Edit(.github/**),Write(.github/**)"
+            --allowedTools "Bash(gh:*),Bash(git:*),Read,Edit,Write,Grep,Glob,Bash(npm test:*),Bash(uv run:*),Bash(bash:*),Bash(python3:*)"
             --append-system-prompt "${{ env.STANDARDS }}"
