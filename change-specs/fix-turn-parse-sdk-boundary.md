@@ -1,5 +1,5 @@
 ---
-id: 0065
+id: 0068
 status: accepted
 date: 2026-10-13
 tier: normal
@@ -9,7 +9,7 @@ blast_radius:
   - change-specs/fix-turn-parse-sdk-boundary.md
 ---
 
-# 0065: Turn boundary for desktop-app prompts
+# 0068: Turn boundary for desktop-app prompts
 
 ## Context and problem statement
 
