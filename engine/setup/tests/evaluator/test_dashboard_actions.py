@@ -78,6 +78,18 @@ class TestProposals(unittest.TestCase):
         self.assertFalse(A.reject_proposal(self.d, "../2026-09-30.md", "np-kb-a vs np-kb-b"))
         self.assertFalse(A.reject_proposal(self.d, "REJECTED.md", "x"))
 
+    def test_reject_leaves_no_tmp_and_skips_note_on_vanished_entry(self):
+        orig = A.find_proposal
+        A.find_proposal = lambda *a: {"title": "gone"}  # entry vanished after the check
+        try:
+            self.assertFalse(A.reject_proposal(self.d, "2026-09-30.md", "gone"))
+        finally:
+            A.find_proposal = orig
+        with open(os.path.join(self.d, "REJECTED.md")) as fh:
+            self.assertEqual(fh.read(), "# Rejected\n")
+        A.reject_proposal(self.d, "2026-09-30.md", "np-kb-a vs np-kb-b")
+        self.assertFalse(os.path.exists(os.path.join(self.d, "2026-09-30.md.tmp")))
+
     def test_missing_dir_is_empty(self):
         self.assertEqual(A.load_proposals(os.path.join(self.d, "absent")), [])
 

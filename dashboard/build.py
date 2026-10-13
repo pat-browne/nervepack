@@ -1115,10 +1115,18 @@ def main(argv):
     grad_path = os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())
     dismissed_path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
         os.path.dirname(os.path.abspath(grad_path)), "graduation-dismissed.json")
-    graduation = json.dumps(np_dashboard_actions.filter_candidates(
-        load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)))
-    proposals = json.dumps(np_dashboard_actions.load_proposals(
-        os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")))
+    try:
+        graduation = json.dumps(np_dashboard_actions.filter_candidates(
+            load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)))
+    except Exception as exc:  # fail-open, like render_pages
+        sys.stderr.write("build.py graduation: %s\n" % exc)
+        graduation = json.dumps({"candidates": []})
+    try:
+        proposals = json.dumps(np_dashboard_actions.load_proposals(
+            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")))
+    except Exception as exc:
+        sys.stderr.write("build.py proposals: %s\n" % exc)
+        proposals = "[]"
     backlog = json.dumps(backlog_metrics())
     # F5/#251: the change-keyed ledger, distinct from the session-keyed METRICS
     # above. load_records() already does exactly what's needed here (parse

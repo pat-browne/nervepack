@@ -446,7 +446,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "no such proposal"}, 404)
                 if route == "/api/compact/apply":
                     return self._json(spawn_job("%s :: %s" % (fname, title), "compact"))
-                np_dashboard_actions.reject_proposal(COMPACT_DIR, fname, title)
+                if not np_dashboard_actions.reject_proposal(COMPACT_DIR, fname, title):
+                    return self._json({"error": "no such proposal"}, 404)
+                log("compact reject: %s :: %s" % (fname, title))
                 return self._json({"ok": True})
             if route in ("/api/graduation/dismiss", "/api/graduation/graduate"):
                 body = self._body()
@@ -457,6 +459,7 @@ class Handler(BaseHTTPRequestHandler):
                 if route == "/api/graduation/graduate":
                     return self._json(spawn_job("%s:%s" % (kind, name), "graduate"))
                 np_dashboard_actions.dismiss(GRAD_DISMISSED, kind, name)
+                log("graduation dismiss: %s:%s" % (kind, name))
                 return self._json({"ok": True})
             if route == "/api/models/select":
                 body = self._body()
@@ -572,6 +575,7 @@ def spawn_job(text, kind):
     Same detached spawn as /api/implement. A pending duplicate is a no-op."""
     if already_pending(text):
         return {"ok": True, "deduped": True, "text": text, "status": implement_status(text)}
+    log("%s job queued: %s" % (kind, text))
     subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text, "--kind=" + kind]), cwd=NP,
                      start_new_session=True, stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

@@ -104,21 +104,26 @@ def reject_proposal(pdir, fname, title, today=None):
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
 
-    sec = next(s for s in _sections(lines) if s[0] == title)
+    sec = next((s for s in _sections(lines) if s[0] == title), None)
+    if sec is None:  # entry vanished since find_proposal()
+        return False
     rest = lines[:sec[1]] + lines[sec[2]:]
     rec = _recommendation(lines[sec[1] + 1:sec[2]])
 
     day = today or time.strftime("%Y-%m-%d")
     note = "- %s | %s | %s | rejected from dashboard%s\n" % (
         day, fname, title, (" (" + rec + ")") if rec else "")
-    with open(os.path.join(pdir, "REJECTED.md"), "a", encoding="utf-8") as fh:
-        fh.write(note)
-
+    # Drop the entry first (atomic replace), then record it, so a failure
+    # never leaves a recorded rejection whose entry still shows.
     if _sections(rest):
-        with open(path, "w", encoding="utf-8") as fh:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
             fh.write("\n".join(rest).rstrip("\n") + "\n")
+        os.replace(tmp, path)
     else:
         os.remove(path)
+    with open(os.path.join(pdir, "REJECTED.md"), "a", encoding="utf-8") as fh:
+        fh.write(note)
     return True
 
 

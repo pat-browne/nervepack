@@ -479,8 +479,14 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
         if commit_msg:
             # No shell for the agent, so the harness commits. The worktree is
             # isolated, so staging everything in it touches only this job.
-            _git(wt, "add", "-A")
-            _git(wt, "commit", "-q", "-m", commit_msg)
+            for args in (("add", "-A"), ("commit", "-q", "-m", commit_msg)):
+                r = _git(wt, *args)
+                # "nothing to commit" is the no-change case _agent_commit reports.
+                if r.returncode != 0 and "nothing" not in (r.stdout or "") + (r.stderr or ""):
+                    a.state = "no_commit"
+                    a.detail = "%s repo: git %s failed: %s" % (
+                        label, args[0], ((r.stderr or r.stdout or "").strip())[:160])
+                    return a
         end_sha = _agent_commit(repo, wt, base_sha)
         if not end_sha:
             a.state = "no_commit"

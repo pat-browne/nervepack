@@ -926,6 +926,7 @@
     let r;
     try { r = await api(route, body); }
     catch (e) { set("neg", "✕ " + e.message); setTimeout(() => { pill.remove(); restore(); }, 4000); return; }
+    if (r.deduped) set("warn", "⋯ Already queued");
     refreshQueue();
     let tries = 0;
     const poll = () => setTimeout(async () => {
@@ -938,7 +939,7 @@
       else if (st.state === "failed") { set("neg", "✕ Failed" + ref); restore(); }
       else if (st.state === "queued") { set("warn", "⋯ Queued" + (st.position ? " #" + st.position : "")); poll(); }
       else if (++tries < 220) { if (st.state === "running") set("warn", "⋯ Running…"); poll(); }
-      else set("warn", "… still running, check back later");
+      else set("warn", "… still running, refresh the page later");
     }, 3000);
     poll();
   }
