@@ -18,12 +18,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Load review standards
         id: standards
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           delim="STANDARDS_$(openssl rand -hex 16)"
+          git fetch --depth=1 origin "$BASE"
           {
             echo "STANDARDS<<$delim"
-            cat .github/claude-review-standards.md 2>/dev/null || echo "::warning::review standards file missing" >&2
+            # Read from the base branch so a PR cannot rewrite its own review rules.
+            git show "FETCH_HEAD:.github/claude-review-standards.md" 2>/dev/null \
+              || echo "::warning::review standards missing on $BASE" >&2
             echo "$delim"
           } >> "$GITHUB_ENV"
       - name: Review
