@@ -13,6 +13,10 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
   GET  /api/models            -> model inventory, probe cache, probe_running
   POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
+  POST /api/compact/reject {file,title}  -> note in REJECTED.md, drop the entry
+  POST /api/compact/apply  {file,title}  -> queue a `compact` agent job, {ok, started, text}
+  POST /api/graduation/dismiss  {kind,name} -> persist a dismissal
+  POST /api/graduation/graduate {kind,name} -> queue a `graduate` agent job, {ok, started, text}
 
 This is a deliberate, documented exception to nervepack's "no service, no daemon"
 invariant: it is OFF by default, binds to 127.0.0.1 ONLY, serves a fixed directory,
@@ -49,6 +53,8 @@ _ENGINE_PKG = os.path.normpath(os.path.join(HERE, "..", "nervepack_engine"))
 if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 import np_bashlib  # noqa: E402
+import np_content  # noqa: E402
+import np_dashboard_actions  # noqa: E402
 import np_dirs
 import np_implement_suggestion  # noqa: E402
 import np_model  # noqa: E402
@@ -81,6 +87,13 @@ IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cach
 IMPLEMENT_QUEUE_DIR = (os.environ.get("NP_IMPLEMENT_QUEUE_DIR")
                        or np_implement_suggestion.queue_dir(IMPLEMENT_STATUS_DIR))
 LOG = np_dirs.cache_path("dashboard-server.log")
+# Compact proposals and graduation candidates live in the content overlay.
+COMPACT_DIR = (os.environ.get("NP_COMPACT_PROPOSALS_DIR")
+               or os.path.join(np_content.content_dir(), "compact-proposals"))
+GRADUATION = (os.environ.get("NP_GRADUATION_CANDIDATES")
+              or os.path.join(np_content.content_dir(), "dashboard", "data", "graduation-candidates.json"))
+GRAD_DISMISSED = (os.environ.get("NP_GRADUATION_DISMISSED")
+                  or os.path.join(os.path.dirname(GRADUATION), "graduation-dismissed.json"))
 
 PORT = int(os.environ.get("NP_DASH_PORT", "8787") or "8787")
 TOP = int(os.environ.get("NP_SUGGESTIONS_TOP", "10") or "10")
@@ -423,6 +436,26 @@ class Handler(BaseHTTPRequestHandler):
                                  stderr=subprocess.DEVNULL,
                                  preexec_fn=implement_job_preexec if os.name != "nt" else None)
                 return self._json({"ok": True, "started": True})
+            if route in ("/api/compact/reject", "/api/compact/apply"):
+                body = self._body()
+                fname = (body.get("file") or "").strip()
+                title = (body.get("title") or "").strip()
+                if not np_dashboard_actions.find_proposal(COMPACT_DIR, fname, title):
+                    return self._json({"error": "no such proposal"}, 404)
+                if route == "/api/compact/apply":
+                    return self._json(spawn_job("%s :: %s" % (fname, title), "compact"))
+                np_dashboard_actions.reject_proposal(COMPACT_DIR, fname, title)
+                return self._json({"ok": True})
+            if route in ("/api/graduation/dismiss", "/api/graduation/graduate"):
+                body = self._body()
+                kind = (body.get("kind") or "").strip()
+                name = (body.get("name") or "").strip()
+                if not np_dashboard_actions.find_candidate(GRADUATION, kind, name):
+                    return self._json({"error": "no such candidate"}, 404)
+                if route == "/api/graduation/graduate":
+                    return self._json(spawn_job("%s:%s" % (kind, name), "graduate"))
+                np_dashboard_actions.dismiss(GRAD_DISMISSED, kind, name)
+                return self._json({"ok": True})
             if route == "/api/models/select":
                 body = self._body()
                 key = np_model.feature_key(body.get("feature") or "")
@@ -527,6 +560,18 @@ def _autoreap_children():
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     except (ImportError, OSError, ValueError, AttributeError):
         pass
+
+
+def spawn_job(text, kind):
+    """Queue a compact/graduate agent job through the implement machinery.
+    Same detached spawn as /api/implement. A pending duplicate is a no-op."""
+    if already_pending(text):
+        return {"ok": True, "deduped": True, "text": text, "status": implement_status(text)}
+    subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text, "--kind=" + kind]), cwd=NP,
+                     start_new_session=True, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+    return {"ok": True, "started": True, "text": text}
 
 
 def implement_job_preexec():

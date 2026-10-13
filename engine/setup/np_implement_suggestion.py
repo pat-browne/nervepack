@@ -284,6 +284,19 @@ _TARGET_ORDER = {
 }
 _DEFAULT_ORDER = ("engine", "content")
 
+# Non-suggestion jobs the dashboard queues through this same machinery.
+# Each kind has its own agent prompt, starts in the content overlay, and
+# skips the suggestion ledger (nothing to resolve there).
+_KIND_PROMPTS = {
+    "compact": "np-flow-apply-compact-proposal.md",
+    "graduate": "np-flow-graduate-candidate.md",
+}
+
+
+def _normalize_kind(kind):
+    k = (kind or "").strip().lower()
+    return k if k in _KIND_PROMPTS else ""
+
 
 def _normalize_target(target):
     """The evaluator's target if we know it, else "" (never the raw value)."""
@@ -584,7 +597,7 @@ def _clear_running(qdir):
         pass
 
 
-def enqueue(qdir, status_dir, text, edited=None, target=None):
+def enqueue(qdir, status_dir, text, edited=None, target=None, kind=None):
     """Add a job unless the same suggestion is queued or running. True if added."""
     key = _status_key(text)
     if queue_position(qdir, key):
@@ -593,7 +606,7 @@ def enqueue(qdir, status_dir, text, edited=None, target=None):
     if running and running.get("key") == key:
         return False
     entry = {"key": key, "text": text, "edited": edited or "", "target": target or "",
-             "enqueued_at": _now()}
+             "kind": _normalize_kind(kind), "enqueued_at": _now()}
     try:
         os.makedirs(qdir, exist_ok=True)
         name = "%020d-%s.json" % (time.time_ns(), key)
@@ -690,7 +703,7 @@ def prune(status_dir, qdir, ttl_days=None, now=None):
 
 def implement(text, edited=None, target=None, repo=None, log_path=None, lock_path=None,
               status_dir=None, prompt_file=None, resolve_fn=None, agent_fn=None,
-              gh_pr_create_fn=None):
+              gh_pr_create_fn=None, kind=None):
     """Implement ONE suggestion, or queue it behind the running job. Returns 0.
     State travels via the status file and the log (fail-open).
 
@@ -726,9 +739,10 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
     except Exception as exc:
         _log(log_path, "prune failed: %s" % exc)
 
-    first = {"text": text, "edited": edited or "", "target": target or ""}
+    first = {"text": text, "edited": edited or "", "target": target or "",
+             "kind": _normalize_kind(kind)}
     if not _acquire_lock(lock_path):
-        if enqueue(qdir, ctx["status_dir"], text, edited, target):
+        if enqueue(qdir, ctx["status_dir"], text, edited, target, kind):
             _log(log_path, "queued behind the running job: %r" % text)
         else:
             _log(log_path, "already queued or running; ignoring %r" % text)
@@ -768,21 +782,28 @@ def _run_guarded(job, qdir, ctx):
     _drop_queued(qdir, key)
     _set_running(qdir, key, text)
     try:
-        _run_one(text, job.get("edited") or None, job.get("target") or None, ctx)
+        kind = {"kind": job["kind"]} if job.get("kind") else {}
+        _run_one(text, job.get("edited") or None, job.get("target") or None, ctx, **kind)
     except Exception as exc:
         reason = ("job raised: %s: %s" % (type(exc).__name__, exc))[:300]
         _write_status(ctx["status_dir"], key, "failed", reason)
         _log(ctx["log_path"], "implement failed, left unresolved: %r (%s)" % (text, reason))
 
 
-def _run_one(text, edited, target, ctx):
+def _run_one(text, edited, target, ctx, kind=None):
     repo, log_path, status_dir = ctx["repo"], ctx["log_path"], ctx["status_dir"]
     key = _status_key(text)
     task = (edited or "").strip() or text
+    kind = _normalize_kind(kind)
+    if kind:
+        # A compact/graduate job: its own prompt, overlay first, no ledger.
+        ctx = dict(ctx, prompt_file=os.path.join(_NP, "agents", _KIND_PROMPTS[kind]),
+                   resolve_fn=lambda t, note="": None)
+        target = "skills"
 
     # Machines share one content overlay, so the ledger shows each other's work.
     # A suggestion resolved on the last sync needs no second agent pass.
-    if np_suggestion_resolve.is_resolved(text):
+    if not kind and np_suggestion_resolve.is_resolved(text):
         _write_status(status_dir, key, "already_resolved", "resolved elsewhere; nothing to do")
         _log(log_path, "already resolved (another machine or an earlier run); skipping %r" % text)
         return
