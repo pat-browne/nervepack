@@ -35,9 +35,14 @@ jobs:
           NUM: ${{ github.event.pull_request.number || github.event.issue.number }}
           ACTOR: ${{ github.event.comment.user.login || github.event.review.user.login }}
         run: |
-          read -r head_repo head_ref < <(gh pr view "$NUM" --repo "$GITHUB_REPOSITORY" \
+          set -euo pipefail
+          info=$(gh pr view "$NUM" --repo "$GITHUB_REPOSITORY" \
             --json headRepositoryOwner,headRepository,headRefName \
             --jq '"\(.headRepositoryOwner.login)/\(.headRepository.name) \(.headRefName)"')
+          read -r head_repo head_ref <<< "$info"
+          if [ -z "$head_repo" ] || [ -z "$head_ref" ]; then
+            echo "::error::could not resolve PR #$NUM head"; exit 1
+          fi
           if [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
             echo "fork PR, skipping"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
@@ -61,11 +66,17 @@ jobs:
           persist-credentials: true
       - name: Load review standards
         if: steps.pr.outputs.skip != '1'
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
+          set -euo pipefail
+          delim="STANDARDS_$(openssl rand -hex 16)"
           {
-            echo 'STANDARDS<<STANDARDS_EOF'
-            cat .github/claude-review-standards.md 2>/dev/null || true
-            echo 'STANDARDS_EOF'
+            echo "STANDARDS<<$delim"
+            # Read from the base branch so a PR cannot rewrite its own review rules.
+            git show "origin/$BASE:.github/claude-review-standards.md" 2>/dev/null \
+              || echo "::warning::review standards missing on $BASE" >&2
+            echo "$delim"
           } >> "$GITHUB_ENV"
       - name: Respond
         if: steps.pr.outputs.skip != '1'
