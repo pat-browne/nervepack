@@ -23,7 +23,7 @@ class JournalBase(unittest.TestCase):
         self.jdir = os.path.join(self.tmp, "journal")
         self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
         with open(self.toggles_conf, "w") as fh:
-            fh.write("journal|shared|runtime|on|model=haiku,ttl_days=30,recall_sources=compact+resume\n")
+            fh.write("journal|shared|runtime|on|ttl_days=30,recall_sources=compact+resume\n")
         self.transcript = os.path.join(self.tmp, "t.jsonl")
         self._env = mock.patch.dict(os.environ, {
             "NP_SESSION_JOURNAL_DIR": self.jdir,
