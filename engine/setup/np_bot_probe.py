@@ -17,13 +17,13 @@ def load_scores(path):
 
 def mean_score(path):
     scores = load_scores(path)
-    return sum(scores) / len(scores)
+    return sum(scores) / len(scores) if scores else 0.0
 
 
 def top_sessions(path, n=5):
     with open(path) as fh:
         recs = [json.loads(l) for l in fh]
-    recs.sort(key=lambda r: r["score"])
+    recs.sort(key=lambda r: r["score"], reverse=True)
     return recs[:n]
 
 
