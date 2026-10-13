@@ -336,13 +336,16 @@ def main(argv=None):
         # --target=<t> is the evaluator's layer classification, which picks the
         # repo to try first. It is a flag, not a 3rd positional, so the optional
         # Modify rewrite never has to be padded with an empty slot.
-        rest = [a for a in argv[1:] if not a.startswith("--target=")]
+        # --kind=compact|graduate runs a dashboard compact-apply or graduate job
+        # through the same queue. The job allowlists it.
+        rest = [a for a in argv[1:] if not a.startswith(("--target=", "--kind="))]
         target = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--target=")), None)
+        kind = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--kind=")), None)
         text = rest[0] if rest else ""
         try:
             # rest[1], when present, is the dashboard Modify box's rewrite of the text.
             return np_implement_suggestion.implement(
-                text, rest[1] if len(rest) > 1 else None, target=target)
+                text, rest[1] if len(rest) > 1 else None, target=target, kind=kind)
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0

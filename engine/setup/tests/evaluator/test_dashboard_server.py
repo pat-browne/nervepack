@@ -97,6 +97,12 @@ class TestServer(unittest.TestCase):
             "NP_MODEL_PROBE_CACHE": os.path.join(d, "model-probe.json"),
             "NP_OWN_SESSIONS_DIR": os.path.join(d, "own-sessions"),
         })
+        cls.compact_dir = os.path.join(d, "compact-proposals"); os.makedirs(cls.compact_dir)
+        cls.grad = os.path.join(d, "graduation-candidates.json")
+        cls.dismissed = os.path.join(d, "graduation-dismissed.json")
+        env.update({"NP_COMPACT_PROPOSALS_DIR": cls.compact_dir,
+                    "NP_GRADUATION_CANDIDATES": cls.grad,
+                    "NP_GRADUATION_DISMISSED": cls.dismissed})
         cls.queue_dir = os.path.join(d, "implement-queue")
         cls.proc = subprocess.Popen(["python3", SERVER], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -287,6 +293,96 @@ class TestServer(unittest.TestCase):
                 return
             time.sleep(0.05)
         self.fail("implement job was not spawned")
+
+    # ---- compact proposals + graduation candidates ----
+    PROPOSAL = ("# P\n\n### np-kb-a vs np-kb-b\n\n**Recommendation: keep separate.**\n\n"
+                "### np-kb-c vs np-kb-d\n\nRecommendation: merge.\n")
+
+    def _write_proposal(self):
+        path = os.path.join(self.compact_dir, "2026-09-30.md")
+        with open(path, "w") as fh:
+            fh.write(self.PROPOSAL)
+        return path
+
+    def _wait_sentinel(self, needle):
+        for _ in range(50):
+            if os.path.exists(self.impl_sentinel) and needle in open(self.impl_sentinel).read():
+                return open(self.impl_sentinel).read()
+            time.sleep(0.1)
+        return open(self.impl_sentinel).read() if os.path.exists(self.impl_sentinel) else ""
+
+    def test_compact_reject_removes_entry_and_notes_it(self):
+        path = self._write_proposal()
+        status, body = self._post("/api/compact/reject",
+                                  {"file": "2026-09-30.md", "title": "np-kb-a vs np-kb-b"})
+        self.assertEqual(status, 200, body)
+        self.assertNotIn("np-kb-a vs np-kb-b", open(path).read())
+        rej = open(os.path.join(self.compact_dir, "REJECTED.md")).read()
+        self.assertIn("np-kb-a vs np-kb-b", rej)
+        self._post("/api/compact/reject", {"file": "2026-09-30.md", "title": "np-kb-c vs np-kb-d"})
+        self.assertFalse(os.path.exists(path), "an emptied proposal file is deleted")
+
+    def test_compact_reject_unknown_or_traversal_is_404(self):
+        self._write_proposal()
+        for body in ({"file": "2026-09-30.md", "title": "nope"},
+                     {"file": "../2026-09-30.md", "title": "np-kb-a vs np-kb-b"},
+                     {"file": "REJECTED.md", "title": "x"}):
+            status, _ = self._post("/api/compact/reject", body)
+            self.assertEqual(status, 404, body)
+
+    def test_compact_routes_need_csrf_header(self):
+        self._write_proposal()
+        status, _ = self._post("/api/compact/reject",
+                               {"file": "2026-09-30.md", "title": "np-kb-a vs np-kb-b"},
+                               headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 403)
+
+    def test_compact_apply_spawns_a_compact_job(self):
+        self._write_proposal()
+        try: os.remove(self.impl_sentinel)
+        except FileNotFoundError: pass
+        status, body = self._post("/api/compact/apply",
+                                  {"file": "2026-09-30.md", "title": "np-kb-c vs np-kb-d"})
+        self.assertEqual(status, 200, body)
+        out = json.loads(body)
+        self.assertTrue(out["started"])
+        self.assertEqual(out["text"], "2026-09-30.md :: np-kb-c vs np-kb-d")
+        seen = self._wait_sentinel("--kind=compact")
+        self.assertIn("2026-09-30.md :: np-kb-c vs np-kb-d", seen)
+        self.assertIn("--kind=compact", seen)
+
+    def test_compact_apply_unknown_is_404(self):
+        status, _ = self._post("/api/compact/apply", {"file": "2026-01-01.md", "title": "x"})
+        self.assertEqual(status, 404)
+
+    def _write_grad(self):
+        with open(self.grad, "w") as fh:
+            json.dump({"candidates": [{"kind": "strategy", "name": "s1"}], "thresholds": {}}, fh)
+        try: os.remove(self.dismissed)
+        except FileNotFoundError: pass
+
+    def test_graduation_dismiss_persists(self):
+        self._write_grad()
+        status, body = self._post("/api/graduation/dismiss", {"kind": "strategy", "name": "s1"})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.load(open(self.dismissed)), ["strategy:s1"])
+
+    def test_graduation_unknown_candidate_is_404(self):
+        self._write_grad()
+        for route in ("/api/graduation/dismiss", "/api/graduation/graduate"):
+            status, _ = self._post(route, {"kind": "strategy", "name": "nope"})
+            self.assertEqual(status, 404, route)
+
+    def test_graduation_graduate_spawns_a_graduate_job(self):
+        self._write_grad()
+        try: os.remove(self.impl_sentinel)
+        except FileNotFoundError: pass
+        status, body = self._post("/api/graduation/graduate", {"kind": "strategy", "name": "s1"})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body)["text"], "strategy:s1")
+        seen = self._wait_sentinel("--kind=graduate")
+        self.assertIn("strategy:s1", seen)
+        self.assertIn("--kind=graduate", seen)
 
     def test_implement_missing_text_is_400(self):
         status, _ = self._post("/api/implement", {})

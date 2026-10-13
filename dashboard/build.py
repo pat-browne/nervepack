@@ -29,6 +29,7 @@ DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "nervepack_engine"))
 import np_toggle  # noqa: E402
+import np_dashboard_actions  # noqa: E402
 
 
 def default_resolved():
@@ -1111,8 +1112,21 @@ def main(argv):
         render_pages(wiki_obj, os.path.dirname(os.path.abspath(out)))
     except Exception as exc:  # fail-open: never break the build over a render error
         sys.stderr.write("build.py render_pages: %s\n" % exc)
-    graduation = json.dumps(load_graduation(
-        os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())))
+    grad_path = os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())
+    dismissed_path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
+        os.path.dirname(os.path.abspath(grad_path)), "graduation-dismissed.json")
+    try:
+        graduation = json.dumps(np_dashboard_actions.filter_candidates(
+            load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)))
+    except Exception as exc:  # fail-open, like render_pages
+        sys.stderr.write("build.py graduation: %s\n" % exc)
+        graduation = json.dumps({"candidates": []})
+    try:
+        proposals = json.dumps(np_dashboard_actions.load_proposals(
+            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")))
+    except Exception as exc:
+        sys.stderr.write("build.py proposals: %s\n" % exc)
+        proposals = "[]"
     backlog = json.dumps(backlog_metrics())
     # F5/#251: the change-keyed ledger, distinct from the session-keyed METRICS
     # above. load_records() already does exactly what's needed here (parse
@@ -1128,6 +1142,7 @@ def main(argv):
         fh.write(f"window.LEDGER = {ledger};\n")
         fh.write(f"window.WIKI = {wiki};\n")
         fh.write(f"window.GRADUATION = {graduation};\n")
+        fh.write(f"window.PROPOSALS = {proposals};\n")
         fh.write(f"window.BACKLOG = {backlog};\n")
     return 0
 
