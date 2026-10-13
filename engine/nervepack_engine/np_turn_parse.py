@@ -4,7 +4,8 @@ Pure by design: one file read, no toggles, no hook JSON, no subprocess. This is
 the single place that knows Claude Code's transcript shape, so a format change
 has exactly one file to fix (turn_gate.py stays untouched).
 
-Turn boundary: the last record with type=="user" AND promptSource=="typed".
+Turn boundary: the last record with type=="user" AND promptSource=="typed",
+or promptSource=="sdk" with origin.kind=="human" (desktop app and SDK hosts).
 Tool results ALSO arrive as type:"user" records, so the type alone is not
 enough -- the same allowlist np-transcript-extract.py:last_user_text documents.
 """
@@ -68,7 +69,13 @@ def _blocks(rec):
 
 
 def _is_typed_user(rec):
-    return rec.get("type") == "user" and rec.get("promptSource") == "typed"
+    if rec.get("type") != "user":
+        return False
+    source = rec.get("promptSource")
+    if source == "typed":
+        return True
+    origin = rec.get("origin")
+    return source == "sdk" and isinstance(origin, dict) and origin.get("kind") == "human"
 
 
 def _scan(rec, turn):
