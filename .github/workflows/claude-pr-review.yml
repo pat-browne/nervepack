@@ -1,0 +1,35 @@
+name: Claude PR Review
+on:
+  pull_request:
+    types: [opened]
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Load review standards
+        id: standards
+        run: |
+          {
+            echo 'STANDARDS<<STANDARDS_EOF'
+            cat .github/claude-review-standards.md
+            echo 'STANDARDS_EOF'
+          } >> "$GITHUB_ENV"
+      - name: Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          claude_args: |
+            --max-turns 15
+            --append-system-prompt "${{ env.STANDARDS }}"
