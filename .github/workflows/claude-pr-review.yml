@@ -33,6 +33,7 @@ jobs:
             echo "$delim"
           } >> "$GITHUB_ENV"
       - name: Review
+        id: review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -42,3 +43,10 @@ jobs:
           claude_args: |
             --max-turns 15
             --append-system-prompt "${{ env.STANDARDS }}"
+      - name: Upload review transcript
+        if: always() && steps.review.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-transcript
+          path: ${{ steps.review.outputs.execution_file }}
+          retention-days: 3
