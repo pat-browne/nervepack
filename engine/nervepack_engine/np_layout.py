@@ -21,6 +21,7 @@ import json
 import os
 import posixpath
 import sys
+import tempfile
 
 # engine/setup holds np_dirs (the XDG-aware state-directory resolver) alongside
 # np_paths and the config files. Add it so this module resolves them whether it
@@ -107,7 +108,10 @@ def load(root):
             data = json.load(fh)
     except (OSError, ValueError) as exc:
         raise LayoutError("cannot read %s: %s" % (p, exc))
-    return validate(data)
+    layout = validate(data)
+    for item in _drift_items(root):
+        add_route(layout, item)
+    return validate(layout)
 
 
 def variants(layout, kind):
@@ -607,22 +611,27 @@ def add_route(layout, item):
     return variant
 
 
-def apply_drift(root):
+def apply_drift(root, cache_only=False):
     """Run drift on one layer and record clear cases through record().
 
     Only a layer with a manifest is changed: an inferred layout has no interview
     yet, so writing one here would skip it. Returns (changes, questions) as
-    human-readable lines. Never commits or pushes."""
+    human-readable lines. Never commits or pushes. `cache_only` records new
+    routes in the per-machine drift file (drift_path), never the layer repo."""
     layout, source = resolve(root)
     report = drift(root, layout)
     changes = []
     if source == "manifest" and report["clear"]:
+        added = []
         for item in report["clear"]:
             if add_route(layout, item):
+                added.append({k: item[k] for k in _ITEM_KEYS})
                 changes.append("%s: routed %s/ as %s (%s: %s)"
                                % (root, item["dir"], item["kind"], item["field"],
                                   item["value"]))
-        if changes:
+        if added and cache_only:
+            _write_atomic(drift_path(root), _drift_items(root) + added)
+        elif added:
             record(root, layout)
     elif report["clear"]:
         for item in report["clear"]:
@@ -650,19 +659,69 @@ def cache_path(root):
 
 
 def _write_atomic(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp-nplayout"
-    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(data, fh, indent=2, sort_keys=True)
-        fh.write("\n")
-    os.replace(tmp, path)
+    d = os.path.dirname(path)
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-nplayout-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return path
+
+
+def _check_manifest_target(root):
+    """Refuse a manifest write a layer's own files could redirect. A team layer
+    syncs from a remote, so a committed `.nervepack` symlink is attacker input."""
+    d = os.path.join(root, ".nervepack")
+    p = manifest_path(root)
+    if os.path.islink(d) or os.path.islink(p):
+        raise LayoutError("refusing to write layout: %s is a symlink" % (
+            d if os.path.islink(d) else p))
+    if not _contained(root, ".nervepack"):
+        raise LayoutError("refusing to write layout: .nervepack escapes %s" % root)
+
+
+def drift_path(root):
+    """Per-machine record of drift routes added for a layer sync must not write
+    to (a team layer). load() replays them on top of the layer's own manifest, so
+    the committed manifest stays authoritative and is never touched."""
+    real = os.path.realpath(root)
+    slug = hashlib.sha256(real.encode("utf-8")).hexdigest()[:16]
+    base = os.path.basename(real) or "layer"
+    return np_dirs.config_path("layouts", "%s-%s.drift.json" % (base, slug))
+
+
+_ITEM_KEYS = ("dir", "field", "value", "kind")
+
+
+def _drift_items(root):
+    """Valid drift items recorded for `root`, or []. Corrupt entries are dropped."""
+    try:
+        with open(drift_path(root), "r", encoding="utf-8") as fh:
+            items = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for it in items if isinstance(items, list) else []:
+        if (isinstance(it, dict) and all(isinstance(it.get(k), str) for k in _ITEM_KEYS)
+                and it["kind"] in KINDS and all(_seg_ok(x) for x in it["dir"].split("/"))):
+            out.append({k: it[k] for k in _ITEM_KEYS})
+    return out
 
 
 def record(root, layout):
     """Validate + write the manifest. Falls back to the per-machine cache when the
-    layer is not writable. Returns the path written."""
+    layer is not writable. Raises LayoutError when the manifest path is a symlink
+    or escapes the layer. Returns the path written."""
     data = {k: v for k, v in validate(layout).items() if not k.startswith("_")}
+    _check_manifest_target(root)
     try:
         return _write_atomic(manifest_path(root), data)
     except OSError:

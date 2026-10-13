@@ -163,6 +163,46 @@ class TestDrift(unittest.TestCase):
         self.assertIn("not recorded", changes[0])
         self.assertFalse(os.path.exists(np_layout.manifest_path(self.root)))
 
+    def test_record_refuses_symlinked_nervepack_dir(self):
+        outside = tempfile.mkdtemp(prefix="npout-")
+        self.addCleanup(shutil.rmtree, outside, True)
+        os.symlink(outside, os.path.join(self.root, ".nervepack"))
+        with self.assertRaises(np_layout.LayoutError):
+            np_layout.record(self.root, self.layout())
+        self.assertEqual(os.listdir(outside), [])
+
+    def test_record_refuses_symlinked_manifest(self):
+        outside = tempfile.mkdtemp(prefix="npout-")
+        self.addCleanup(shutil.rmtree, outside, True)
+        target = os.path.join(outside, "victim.json")
+        os.makedirs(os.path.join(self.root, ".nervepack"))
+        os.symlink(target, np_layout.manifest_path(self.root))
+        with self.assertRaises(np_layout.LayoutError):
+            np_layout.record(self.root, self.layout())
+        self.assertFalse(os.path.exists(target))
+
+    def test_apply_drift_cache_only_leaves_layer_repo_alone(self):
+        write(np_layout.manifest_path(self.root), json.dumps(self.layout()))
+        with open(np_layout.manifest_path(self.root)) as fh:
+            before = fh.read()
+        self.w("docs/plans/a.md", page("plan"))
+        changes, _q = np_layout.apply_drift(self.root, cache_only=True)
+        self.assertEqual(len(changes), 1)
+        with open(np_layout.manifest_path(self.root)) as fh:
+            self.assertEqual(fh.read(), before)
+        self.assertTrue(os.path.isfile(np_layout.drift_path(self.root)))
+        lay = np_layout.load(self.root)
+        paths = [v["path"] for v in lay["routes"]["knowledge"]["variants"]]
+        self.assertIn("docs/plans/{name}.md", paths)
+        self.assertEqual(np_layout.apply_drift(self.root, cache_only=True)[0], [])
+
+    def test_corrupt_drift_entries_are_dropped(self):
+        write(np_layout.manifest_path(self.root), json.dumps(self.layout()))
+        write(np_layout.drift_path(self.root), json.dumps([
+            {"dir": "../etc", "field": "type", "value": "x", "kind": "knowledge"},
+            {"dir": "ok", "field": "type", "value": "y", "kind": "bogus"}]))
+        self.assertNotIn("variants", np_layout.load(self.root)["routes"]["knowledge"])
+
     def test_open_questions_surface_ambiguous_subdirs(self):
         self.w("docs/systems/a.md", page("system"))
         self.w("docs/reviews/a.md", page())

@@ -599,8 +599,9 @@ never auto-rebase or autostash. `np-core-sync` does it on demand.
 **Assets.** `np_sync.py` (`cli.py sync`), `np-core-sync`. Toggle: `sync`.
 
 After the pulls, sync checks each layer for layout drift: directories of pages no
-route covers. A directory whose pages share one `type:` gets a route recorded in
-the layer manifest (or the per-machine cache for a read-only layer). A mixed one
+route covers. A directory whose pages share one `type:` gets a route recorded. The
+personal overlay's manifest takes it. A team layer's additions go to a per-machine
+drift file that `np_layout.load()` replays, so sync never writes into a team repo. A mixed one
 prints a layout question. Sync never commits the manifest. Param
 `sync.layout_drift` (default on) turns it off. The dashboard wiki nav now shows
 reference and roadmap routes as their own groups too.

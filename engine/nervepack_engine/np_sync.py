@@ -187,9 +187,8 @@ def _layout_validity_check():
 def _layout_drift_pass():
     """Route content added since a layer's interview (np_layout.apply_drift).
 
-    Clear directories get a route recorded through np_layout.record(), which
-    writes the layer's manifest or, when that repo is read-only, the per-machine
-    cache. Never commits or pushes. Ambiguous directories print as open questions.
+    Clear directories get a route recorded through np_layout.record(): the
+    personal overlay's manifest, or the per-machine cache for every other layer. Never commits or pushes. Ambiguous directories print as open questions.
     stderr only, fail-open, gated on the sync.layout_drift param."""
     if np_toggle.param("sync.layout_drift", "on") != "on":
         return
@@ -197,9 +196,16 @@ def _layout_drift_pass():
         roots = np_content.content_layers()
     except Exception:
         return
+    try:
+        personal = os.path.realpath(np_content.content_dir() or "")
+    except Exception:
+        personal = ""
     for r in roots:
+        # Only the personal overlay gets its repo manifest edited. A team layer
+        # syncs from a remote others write to, so its additions go to the cache.
+        own = bool(personal) and os.path.realpath(r) == personal
         try:
-            changes, questions = np_layout.apply_drift(r)
+            changes, questions = np_layout.apply_drift(r, cache_only=not own)
         except Exception as exc:
             sys.stderr.write("np-core-sync: layout drift skipped for %s: %s\n" % (r, exc))
             continue

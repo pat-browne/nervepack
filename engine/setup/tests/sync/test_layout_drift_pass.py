@@ -57,8 +57,16 @@ class LayoutDriftPass(unittest.TestCase):
         self.assertIn("docs/plans/", res.stderr)
         self.assertIn("layout question:", res.stderr)
         self.assertIn("docs/mixed/", res.stderr)
-        paths = [v["path"] for v in self._layout()["routes"]["knowledge"]["variants"]]
-        self.assertIn("docs/plans/{name}.md", paths)
+        # A team layer is remote-writable: drift lands in the per-machine drift
+        # file, never the layer repo's manifest.
+        self.assertNotIn("variants", self._layout()["routes"]["knowledge"])
+        layouts = os.path.join(self.home, ".config", "nervepack", "layouts")
+        cached = [f for f in os.listdir(layouts) if f.endswith(".drift.json")]
+        self.assertEqual(len(cached), 1, os.listdir(layouts))
+        with open(os.path.join(layouts, cached[0])) as fh:
+            self.assertEqual([i["dir"] for i in json.load(fh)], ["docs/plans"])
+        # The next sync sees the route and reports no change.
+        self.assertNotIn("layout drift:", self._run().stderr)
 
     def test_param_off_skips_the_pass(self):
         with open(self.local, "a") as fh:

@@ -55,15 +55,19 @@ Recording drift for a layer with no manifest. That layer still needs the intervi
 ## Cross-cutting concerns
 
 - Security: new routes come from on-disk directory names and pass `validate()`.
+  `record()` refuses a symlinked `.nervepack` or manifest and checks containment.
+  Temp files come from `mkstemp` in the manifest dir. Replayed drift entries are
+  revalidated segment by segment.
 - Privacy: reads only the first 2 KB of each page.
 - Observability: one stderr line per change and per question.
 
 ## Consequences
 
 - Good, because new typed directories become contribution targets on the next sync.
-- Bad, because sync can edit a team layer's manifest in the working tree. The edit
-  stays uncommitted for a human to review.
-- Neutral, because `record()` keeps its read-only fallback to the per-machine cache.
+- Bad, because sync edits the personal overlay's manifest in the working tree. The
+  edit stays uncommitted for a human to review.
+- Neutral, because a team layer's additions live in a per-machine drift file that
+  `load()` replays. The team repo is never written.
 
 ## Confirmation
 
