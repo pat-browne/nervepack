@@ -282,11 +282,24 @@ def _safe_href(url):
     return url if _SAFE_HREF.match(url) else ""
 
 
+_MD_ANCHOR = re.compile(r'<a\s+(?:id|name)="([A-Za-z0-9_.:-]+)"\s*>\s*</a>', re.I)
+_MD_ESCAPE = re.compile(r'\\([\\`*_{}\[\]()#+\-.!|<>~"&])')
+
+
 def _render_inline(s, link_map=None, here=""):
     """Inline Markdown -> HTML on a single text run. Escapes first (so any literal
     HTML in content is inert), then applies code/bold/italic, [[wikilinks]] (resolved
     against link_map relative to `here`, dangling -> plain text), and [text](url)
     (href sanitized). All emitted text is already escaped."""
+    # Word/Pandoc exports carry empty <a id> bookmarks and backslash escapes.
+    # Park both behind sentinels so escaping and emphasis passes leave them alone.
+    anchors = []
+
+    def _park(m):
+        anchors.append(m.group(1))
+        return "\x00A%d\x00" % (len(anchors) - 1)
+    s = _MD_ANCHOR.sub(_park, s.replace("\x00", ""))   # NUL is reserved for sentinels
+    s = _MD_ESCAPE.sub(lambda m: "\x00E%d\x00" % ord(m.group(1)), s)
     s = html.escape(s)
     s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
     # Non-greedy: a literal `*` inside the span (COUNT(*), SELECT *) must not
@@ -294,6 +307,7 @@ def _render_inline(s, link_map=None, here=""):
     # inner `*`, so **COUNT(*) vs COUNT(col):** never matched as bold and the
     # italic pass below then mispaired the leftover asterisks.
     s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+    s = re.sub(r'__(.+?)__', r'<strong>\1</strong>', s)
     s = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', s)
 
     def _wl(m):
@@ -309,7 +323,13 @@ def _render_inline(s, link_map=None, here=""):
         text, url = m.group(1), _safe_href(m.group(2))
         return '<a href="%s">%s</a>' % (html.escape(url), text) if url else text
     s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _lk, s)
-    return s
+    s = re.sub(r'\x00E(\d+)\x00', lambda m: html.escape(chr(int(m.group(1)))), s)
+    return re.sub(r'\x00A(\d+)\x00', lambda m: '<a id="%s"></a>' % anchors[int(m.group(1))], s)
+
+
+def _md_plain(s):
+    """Excerpt text: drop bookmarks and undo backslash escapes."""
+    return _MD_ESCAPE.sub(r"\1", _MD_ANCHOR.sub("", s))
 
 
 _PAGE_CSS = (
@@ -502,8 +522,9 @@ def _parse_wiki_page(path):
         para = para.strip()
         if not para or para.startswith("#"):
             continue
-        excerpt = " ".join(para.split())
-        break
+        excerpt = " ".join(_md_plain(para).split())
+        if excerpt:
+            break
     name = fm.get("name") or os.path.basename(path)[:-3]
     return {"name": name, "kind": fm.get("kind", ""),
             "last_updated": fm.get("last_updated", ""),
@@ -520,6 +541,10 @@ def _group_label(key):
     return label if label.endswith("s") else label + "s"
 
 
+# Route kinds that hold readable pages. skill and prompt are not wiki content.
+_NAV_KINDS = ("knowledge", "reference", "roadmap")
+
+
 def _variant_plan(cd):
     """[(kind, container_subdir, group_key, folder_owning)] from the layer's declared
     knowledge/reference routes (nervepack#234).
@@ -534,25 +559,45 @@ def _variant_plan(cd):
         layout, _src = np_layout.resolve(cd)
     except Exception:
         return []
-    spec = (layout.get("routes") or {}).get("knowledge")
-    if not isinstance(spec, dict):
-        return []
-    entries = spec.get("variants") if "variants" in spec else [spec]
+    routes = layout.get("routes") or {}
     plan = []
-    for e in entries or []:
-        path = (e or {}).get("path") or ""
-        if "{" not in path:
+    owning = []                 # folder-owning knowledge containers
+    for route_kind in _NAV_KINDS:
+        if route_kind != "knowledge" and not plan:
+            # No knowledge route: keep the conventional split _scan_plan falls
+            # back to, so a reference-only layer does not lose its topics.
+            plan = [("topic", "wiki/topics", "topic", True),
+                    ("concept", "wiki/concepts", "concept", True)]
+            owning = ["wiki/topics", "wiki/concepts"]
+        spec = routes.get(route_kind)
+        if not isinstance(spec, dict):
             continue
-        head = path.split("{", 1)[0].rstrip("/")
-        if not head:
-            continue
-        kind = ((e.get("frontmatter") or {}).get("kind")
-                or e.get("name") or "").strip()
-        if not kind:
-            continue
-        folder_owning = "{topic}/{topic}" in path
-        key = e.get("name") or kind
-        plan.append((kind, head, key, folder_owning))
+        entries = spec.get("variants") if "variants" in spec else [spec]
+        for e in entries or []:
+            path = (e or {}).get("path") or ""
+            if "{" not in path:
+                continue
+            head = path.split("{", 1)[0].rstrip("/")
+            if not head:
+                continue
+            fm = e.get("frontmatter") or {}
+            kind = (fm.get("kind") or e.get("name") or "").strip()
+            if not kind and route_kind != "knowledge":
+                kind = route_kind
+            if not kind:
+                continue
+            # Co-located sources (`wiki/topics/{topic}/{name}.md`) already render
+            # as sources under the owning knowledge group. A second group would
+            # list every one of them twice.
+            if route_kind != "knowledge" and any(
+                    head == o or head.startswith(o + "/") for o in owning):
+                continue
+            if any(head == p[1] for p in plan):
+                continue
+            folder_owning = "{topic}/{topic}" in path
+            if folder_owning:
+                owning.append(head)
+            plan.append((kind, head, e.get("name") or kind, folder_owning))
     return plan
 
 

@@ -52,6 +52,16 @@ concept.
    ```
 8. Ask before committing. The manifest is a repo file, and a team layer needs a PR.
 
+## Drift
+
+Content added after the interview lands in directories no route names.
+`python3 "$NP" layout drift --layer personal` lists them from page frontmatter.
+A directory whose pages all declare one `type:` or `kind:` is clear. Add `--apply`
+to record a variant for it (`reference` when the value is reference or source,
+else `knowledge`). A mixed or untyped directory becomes an `unmapped-dir:<path>`
+open question for this interview. Every sync runs the same pass (param
+`sync.layout_drift`) and never commits the manifest.
+
 Step 5 is the rule that matters. Asking a question a prior answer already resolved
 is the failure this protocol exists to prevent.
 
