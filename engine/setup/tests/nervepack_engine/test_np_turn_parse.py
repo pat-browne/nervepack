@@ -96,6 +96,25 @@ class TestTurnParse(unittest.TestCase):
                          _tool_use("Edit", {"file_path": "/app/new.tsx"})])
         self.assertEqual(np_turn_parse.parse(p).edits, ["/app/new.tsx"])
 
+    def test_sdk_human_prompt_is_a_turn_boundary(self):
+        # Desktop-app and SDK hosts record a typed prompt as promptSource "sdk"
+        # with origin.kind "human", never "typed".
+        def sdk(text):
+            return {"type": "user", "promptSource": "sdk", "origin": {"kind": "human"},
+                    "message": {"content": text}}
+        p = self._write([sdk("first"),
+                         _tool_use("Edit", {"file_path": "/docs/old.md"}),
+                         sdk("second"),
+                         _tool_use("Edit", {"file_path": "/docs/new.md"})])
+        self.assertEqual(np_turn_parse.parse(p).edits, ["/docs/new.md"])
+
+    def test_sdk_record_without_human_origin_is_not_a_turn_boundary(self):
+        p = self._write([_user("go"),
+                         _tool_use("Edit", {"file_path": "/a.md"}),
+                         {"type": "user", "promptSource": "sdk",
+                          "message": {"content": "<task-notification>done"}}])
+        self.assertEqual(np_turn_parse.parse(p).edits, ["/a.md"])
+
     def test_tool_result_user_record_is_not_a_turn_boundary(self):
         # A tool_result arrives as type:"user" with no promptSource. If it were
         # treated as the boundary, the edit before it would be invisible.
