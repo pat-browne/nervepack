@@ -59,7 +59,7 @@ jobs:
           # The ref is interpolated into --allowedTools, so reject anything
           # that could end a rule or add one (",", ")", spaces, "$").
           if ! printf '%s' "$head_ref" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
-            echo "Unsafe branch name, skipping"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
+            printf 'Unsafe branch name %q, skipping\n' "$head_ref"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "num=$NUM" >> "$GITHUB_OUTPUT"
           echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
