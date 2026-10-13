@@ -68,6 +68,17 @@ def extract(path):
     return _scrub_blobs("\n".join(out))
 
 
+def _is_human_prompt(obj):
+    """typed (CLI), or sdk with origin.kind == "human" (desktop app / SDK hosts)."""
+    if obj.get("type") != "user":
+        return False
+    src = obj.get("promptSource")
+    if src == "typed":
+        return True
+    origin = obj.get("origin")
+    return src == "sdk" and isinstance(origin, dict) and origin.get("kind") == "human"
+
+
 def last_user_text(path):
     """Return the LAST genuine (human-typed) user text message in a transcript.
 
@@ -79,8 +90,10 @@ def last_user_text(path):
 
     Discrimination is an ALLOWLIST on the field Claude Code stamps on genuine
     keyboard input: a line qualifies only if `obj["type"] == "user"` AND
-    `obj["promptSource"] == "typed"`. Every synthetic category above lacks that
-    (the field is absent, or `system`/`queued`/`sdk`/`suggestion_accepted`), so
+    `obj["promptSource"] == "typed"`, or `"sdk"` with `origin.kind == "human"`
+    (the desktop app and SDK hosts). Every synthetic category above lacks that
+    (the field is absent, or `system`/`queued`/`suggestion_accepted`, or `sdk`
+    without a human origin such as a task notification), so
     the allowlist fails SAFE — if a message isn't clearly typed we skip it, and
     an empty last-instruction is fine (the pointer still carries branch + SDD
     ledger) versus returning a task-notification as if it were user intent.
@@ -100,7 +113,7 @@ def last_user_text(path):
                 obj = json.loads(line)
             except ValueError:
                 continue  # tolerate a stray non-JSON line
-            if obj.get("type") != "user" or obj.get("promptSource") != "typed":
+            if not _is_human_prompt(obj):
                 continue
             content = (obj.get("message") or {}).get("content")
             if isinstance(content, str):

@@ -65,4 +65,14 @@ grep -q 'LAST_MARKER' <<<"$capped" || { echo "FAIL: cap dropped the tail instead
 lu="$(python3 "$EX" --last-user "$tmp/last_user.jsonl")"
 [[ "$lu" == "deploy to staging" ]] || { echo "FAIL: --last-user returned '$lu', want 'deploy to staging' (got a synthetic turn?)"; exit 1; }
 
+# Desktop/SDK hosts stamp a real prompt promptSource:"sdk" + origin.kind:"human".
+# A task notification is also "sdk" but carries a different origin: reject it.
+{
+  jq -nc '{type:"user", promptSource:"sdk", origin:{kind:"human"}, message:{role:"user",content:"desktop prompt"}}'
+  jq -nc '{type:"user", promptSource:"sdk", origin:{kind:"task-notification"}, message:{role:"user",content:"<task-notification>done</task-notification>"}}'
+  jq -nc '{type:"user", promptSource:"sdk", message:{role:"user",content:"sdk no origin"}}'
+} > "$tmp/last_user_sdk.jsonl"
+lu="$(python3 "$EX" --last-user "$tmp/last_user_sdk.jsonl")"
+[[ "$lu" == "desktop prompt" ]] || { echo "FAIL: --last-user (sdk) returned '$lu', want 'desktop prompt'"; exit 1; }
+
 echo "PASS test_transcript_extract"

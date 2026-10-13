@@ -121,6 +121,17 @@ def _repo_meta(cwd):
     return ["**Repo:** %s" % meta]
 
 
+def _is_human_prompt(obj):
+    """True for a real user prompt: typed (CLI), or sdk with a human origin (desktop)."""
+    if obj.get("type") != "user":
+        return False
+    src = obj.get("promptSource")
+    if src == "typed":
+        return True
+    origin = obj.get("origin")
+    return src == "sdk" and isinstance(origin, dict) and origin.get("kind") == "human"
+
+
 def _first_user_text(transcript):
     """First typed user prompt in the transcript, or empty string."""
     try:
@@ -133,7 +144,7 @@ def _first_user_text(transcript):
                 obj = json.loads(line)
             except ValueError:
                 continue
-            if obj.get("type") != "user" or obj.get("promptSource") != "typed":
+            if not _is_human_prompt(obj):
                 continue
             content = (obj.get("message") or {}).get("content")
             if isinstance(content, str):
