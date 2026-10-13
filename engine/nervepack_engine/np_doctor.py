@@ -115,7 +115,7 @@ def _core_check(cap_id, np):
         # returns non-empty text (command-substitution strips trailing newlines,
         # so mirror that before the -n test); any backend error -> FAIL.
         try:
-            out = np_model.complete("ping")
+            out = np_model.complete("ping", feature="doctor")
         except np_model.AuthError as exc:
             return "FAIL (auth: %s -- re-login with `claude setup-token`)" % exc
         except Exception:

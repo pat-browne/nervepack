@@ -179,8 +179,7 @@ class ReportTest(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_all_fresh_reports_pass(self):
-        for base in ("memory-promote.log", "episodic-maintain.log", "skill-maintain.log",
-                     "refine.log", "compact.log"):
+        for base in [job[1] for job in mf.JOBS]:
             _write(os.path.join(self.tmp, ".cache", "nervepack", base),
                    "%s === run ===\n" % _stamp(0))
         with mock.patch.object(mf.np_toggle, "enabled", return_value=True):

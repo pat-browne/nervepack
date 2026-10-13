@@ -140,6 +140,25 @@ def directive_tokens():
         return 0
 
 
+def skills_available():
+    """Count of SKILL.md files discoverable here (engine + content overlay).
+    With skill_tool_calls it separates "no skill needed" from "skills existed
+    but were never discovered". Reflects the scoring machine. Fail-open 0."""
+    roots = [os.path.normpath(os.path.join(HERE, "..", "..", "skills"))]
+    content = os.environ.get("NP_CONTENT_DIR")
+    if content:
+        roots.append(os.path.join(content, "skills"))
+    seen = set()
+    for root in roots:
+        try:
+            for name in os.listdir(root):
+                if os.path.isfile(os.path.join(root, name, "SKILL.md")):
+                    seen.add(name)
+        except OSError:
+            pass
+    return len(seen)
+
+
 def _tokens(acc):
     """Finalize the token accumulator into the emitted shape (+ total)."""
     t = {k: acc[k] for k in ("input", "output", "cache_read", "cache_creation")}
@@ -157,12 +176,13 @@ def parse_transcript(path):
     millions). Dedup by id is the deterministic fix. Messages without a usage block
     or id are skipped (undercount-safe beats double-count)."""
     tool_calls = 0
+    skill_calls = 0
     skills = set()
     seen = set()
     exec_fps = set()
     acc = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
     if not path or not os.path.isfile(path):
-        return 0, [], _tokens(acc), exec_fps
+        return 0, [], _tokens(acc), exec_fps, 0
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -170,6 +190,8 @@ def parse_transcript(path):
                 obj = None
                 if '"tool_use"' in line:
                     tool_calls += 1
+                    if '"name":"Skill"' in line:
+                        skill_calls += 1
                     if '"Bash"' in line:
                         try:
                             obj = json.loads(line)
@@ -200,8 +222,8 @@ def parse_transcript(path):
                 acc["cache_read"] += usage.get("cache_read_input_tokens") or 0
                 acc["cache_creation"] += usage.get("cache_creation_input_tokens") or 0
     except OSError:
-        return 0, [], _tokens(acc), exec_fps
-    return tool_calls, sorted(skills), _tokens(acc), exec_fps
+        return 0, [], _tokens(acc), exec_fps, 0
+    return tool_calls, sorted(skills), _tokens(acc), exec_fps, skill_calls
 
 
 def directive_present():
@@ -219,12 +241,14 @@ def main():
 
     log_path = signal_log_path(sid)
     pg, lr, er, signals_present = count_markers(log_path)
-    tool_calls, skills, tokens, exec_fps = parse_transcript(transcript)
+    tool_calls, skills, tokens, exec_fps, skill_calls = parse_transcript(transcript)
     # heeded = guarded commands the session did NOT then run (intervention worked).
     heeded = len(gated_fingerprints(log_path) - exec_fps)
 
     record = {
         "skills_invoked": skills,
+        "skill_tool_calls": skill_calls,
+        "skills_available": skills_available(),
         "playbook_fires": pg,
         "playbook_heeded": heeded,
         "recall_injections": lr + er,

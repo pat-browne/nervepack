@@ -93,8 +93,7 @@ pattern above). Rebuilding does nothing for cause (2). Tell them apart with
 
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
 content repo's commit count has diverged from origin/main.** Not yet a doctor
-check, tracked as [nervepack#329](https://github.com/pat-browne/nervepack/issues/329)
-(roadmap label). Until that lands, green does not rule this out.
+check (roadmap label). Until that lands, green does not rule this out.
 
 The `content` check only verifies `NP_CONTENT_DIR` resolves to a real dir. It
 never checks that dir is on `main`.

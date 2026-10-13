@@ -121,7 +121,7 @@
                    padding:60px 20px; z-index:50; }
   .modal-overlay[hidden] { display:none; }
   .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
-           box-shadow:var(--shadow); width:100%; max-width:560px;
+           box-shadow:var(--shadow); width:100%; max-width:760px;
            max-height:calc(100vh - 120px); overflow-y:auto; padding:16px; }
   .modalhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
   .grid { display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr 1fr; }
@@ -240,14 +240,13 @@
     border:1px solid var(--border); background:var(--surface-alt);
     color:var(--text-tertiary); font-size:9px; font-weight:700; line-height:1;
     cursor:help; flex:0 0 auto; }
-  .tighelp::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px);
-    left:50%; transform:translateX(-50%); width:max-content; max-width:240px;
+  /* One fixed-position bubble, placed by JS (placeTip) and clamped to the
+     viewport. A CSS ::after bubble clipped at the scrolling modal's edge. */
+  #tiptip { position:fixed; left:0; top:0; max-width:min(280px, calc(100vw - 16px));
     background:var(--text); color:var(--surface); font-size:11px; font-weight:400;
-    line-height:1.4; white-space:normal; text-align:left; padding:6px 9px;
+    line-height:1.4; white-space:normal; overflow-wrap:anywhere; text-align:left; padding:6px 9px;
     border-radius:var(--radius-sm); box-shadow:var(--shadow);
-    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease;
-    z-index:20; }
-  .tighelp:hover::after, .tighelp:focus-visible::after { opacity:1; visibility:visible; }
+    pointer-events:none; z-index:100; }
   .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
   .swtoggle input { opacity:0; width:0; height:0; }
   .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
@@ -260,6 +259,19 @@
   .togin { font:inherit; font-size:12px; width:90px; padding:2px 6px;
     border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); }
   .togin:disabled { opacity:.6; }
+  /* Models panel and missing-model banner, served mode only */
+  .banner { background:var(--status-neg-bg); color:var(--status-neg); border:1px solid #dcb3aa;
+    border-radius:var(--radius-sm); padding:8px 12px; margin:0 0 16px; font-size:12px; font-weight:600; }
+  .banner a { color:inherit; }
+
+  .modtable { width:100%; border-collapse:collapse; font-size:12px; }
+  .modtable th, .modtable td { text-align:left; padding:5px 6px; border-top:1px solid var(--border); }
+  .modtable th { color:var(--text-tertiary); font-weight:600; font-size:11px; }
+
+  .modtable tr:target td { background:var(--status-warn-bg); }
+  .modtable select { font:inherit; font-size:12px; max-width:220px; }
+  .modtablewrap { overflow-x:auto; }
+  .modtable .pill { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -278,11 +290,12 @@
           <div class="sub" id="subtitle">loading…</div>
         </div>
         <button class="btn-icon" id="btn-settings" type="button"
-                aria-haspopup="dialog" aria-label="Settings" title="Feature toggles">⚙</button>
+                aria-haspopup="dialog" aria-label="Settings" title="Settings: models and feature toggles">⚙</button>
       </header>
 
       <section class="panel full" id="panel-trend"></section>
       <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
+      <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
@@ -298,13 +311,18 @@
   <div class="modal-overlay" id="settings-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modalhead">
-        <span class="lbl" id="settings-title">Feature toggles</span>
+        <span class="lbl" id="settings-title">Settings</span>
         <button class="btn sm" id="btn-settings-close" type="button">Close</button>
       </div>
-      <div id="panel-toggles"></div>
+      <section class="settings-section" id="panel-models" hidden></section>
+      <section class="settings-section" id="settings-toggles" style="margin-top:16px">
+        <div class="panelhead"><span class="lbl">Feature toggles</span></div>
+        <div id="panel-toggles"></div>
+      </section>
     </div>
   </div>
 
+<div id="tiptip" role="tooltip" hidden></div>
 <script src="data/metrics.js"></script>
 <script>
   // ---- pure helpers ----
@@ -469,6 +487,110 @@
     return data;
   }
 
+  // ---- Implement queue count, served mode only ----
+  let queueTimer = null;
+
+  async function refreshQueue() {
+    const el = document.getElementById("queue-count");
+    if (!el) return;
+    let q;
+    try { q = await (await fetch("/api/implement-queue")).json(); } catch { return; }
+    const n = (q.count || 0) + (q.running ? 1 : 0);
+    el.hidden = !n;
+    el.textContent = q.running ? `1 running, ${q.count || 0} queued` : `${q.count || 0} queued`;
+    clearTimeout(queueTimer);
+    if (n) queueTimer = setTimeout(refreshQueue, 5000);
+  }
+
+  // ---- Models panel and missing-model banner, served mode only ----
+  // The Models section lives in the settings modal. Selecting a model writes a
+  // per-machine models.<feature> param. Banner links open the modal at the row.
+  const elModels = document.getElementById("panel-models");
+  const elBanner = document.getElementById("model-banner");
+
+  function paintBanner(m) {
+    const probe = m.probe || {};
+    const hits = [];
+    (m.features || []).forEach(r => {
+      if ((probe[r.effective] || {}).status === "missing") hits.push({ model: r.effective, key: r.key, feature: r.feature });
+    });
+    (m.model_errors || []).forEach(e => hits.push({ model: e.model, key: "implement", feature: e.feature || "implement" }));
+    const seen = new Set();
+    const uniq = hits.filter(h => !seen.has(h.model + h.key) && seen.add(h.model + h.key));
+    if (!uniq.length) { elBanner.hidden = true; elBanner.innerHTML = ""; return; }
+    elBanner.innerHTML = "Model unavailable: " + uniq.map(h =>
+      `<a href="#model-row-${esc(h.key)}">${esc(h.model)} (${esc(h.feature)})</a>`).join(", ")
+      + ". Pick another model in Settings.";
+    elBanner.hidden = false;
+  }
+
+  function probeCell(p) {
+    if (!p) return `<span class="pill">not probed</span>`;
+    const cls = p.status === "available" ? "pos" : p.status === "missing" ? "neg" : "warn";
+    const tip = esc((p.reason || "") + (p.ts ? " at " + p.ts : ""));
+    return `<span class="pill ${cls}" title="${tip}">${esc(p.status)}</span>`;
+  }
+
+  function modelOptions(inv, sel, isTier) {
+    const inherit = isTier ? "" : `<option value=""${sel ? "" : " selected"}>inherit tier</option>`;
+    return inherit + inv.map(x => `<option value="${esc(x.id)}"${x.id === sel ? " selected" : ""}>`
+      + `${esc(x.label || x.id)}${x.legacy ? " (legacy)" : ""}${x.tier === "premium" ? ", premium" : ""}</option>`).join("");
+  }
+
+  function modelRow(r, inv, probe) {
+    const tag = r.is_tier ? "tier" : r.tier;
+    return `<tr id="model-row-${esc(r.key)}">
+        <td>${esc(r.feature)} <span class="togscope">${esc(tag)}</span></td>
+        <td><select data-model-feature="${esc(r.key)}" aria-label="Model for ${esc(r.feature)}">${modelOptions(inv, r.selected, r.is_tier)}</select></td>
+        <td><code>${esc(r.effective)}</code>${r.env_override ? ' <span class="togro">env override</span>' : ""}</td>
+        <td>${probeCell(probe[r.effective])}</td>
+        <td><button class="btn sm" data-probe="${esc(r.effective)}">Probe</button></td>
+      </tr>`;
+  }
+
+  function renderModels(m) {
+    paintBanner(m);
+    if (!m.enabled) { elModels.hidden = true; return; }
+    const inv = m.inventory || [], probe = m.probe || {};
+    const rows = (m.features || []).map(r => modelRow(r, inv, probe)).join("");
+    elModels.innerHTML = `<div class="panelhead"><span class="lbl">Models</span>
+        <div class="btnrow"><button class="btn" id="btn-probe-all">Probe all</button></div></div>
+      <div class="modtablewrap"><table class="modtable">
+        <thead><tr><th>Feature</th><th>Selected</th><th>Effective</th><th>Probe</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <div class="note">Selections are per machine (toggles.local). NP_LLM_MODEL_CHEAP and NP_LLM_MODEL_AGENT win when set.</div>`;
+    elModels.hidden = false;
+    wireModels();
+    if (m.probe_running) {
+      elModels.querySelectorAll("[data-probe], #btn-probe-all").forEach(b => { b.disabled = true; b.textContent = "Probing…"; });
+      clearTimeout(probePoll);
+      probePoll = setTimeout(refreshModels, 3000);
+    }
+  }
+  let probePoll = null;
+
+  function wireModels() {
+    elModels.querySelectorAll("[data-model-feature]").forEach(sel =>
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try { renderModels((await api("/api/models/select", { feature: sel.dataset.modelFeature, model: sel.value })).models); }
+        catch (e) { sel.disabled = false; alert("Model select failed: " + e.message); }
+      }));
+    const probeBtn = async (btn, model) => {
+      btn.disabled = true; btn.textContent = "Probing…";
+      try { await api("/api/models/probe", model ? { model } : {}); await refreshModels(); }
+      catch (e) { btn.disabled = false; btn.textContent = "Probe"; alert("Probe failed: " + e.message); }
+    };
+    elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));
+    const all = document.getElementById("btn-probe-all");
+    if (all) all.addEventListener("click", () => probeBtn(all, ""));
+  }
+
+  async function refreshModels() {
+    try { renderModels(await (await fetch("/api/models")).json()); } catch { /* older server without the route */ }
+  }
+  if (SERVED) refreshModels();
+
   // ---- render ----
   const M = (window.METRICS || []).slice();
   const S = window.TOKENS_SAVED || { total: 0, per_session: 0 };
@@ -496,7 +618,24 @@
   const settingsOverlay = document.getElementById("settings-overlay");
   const btnSettings = document.getElementById("btn-settings");
   const btnSettingsClose = document.getElementById("btn-settings-close");
-  function openSettings() { settingsOverlay.hidden = false; renderToggles(); }
+  function openSettings() {
+    settingsOverlay.hidden = false; renderToggles();
+    return SERVED ? refreshModels() : Promise.resolve();
+  }
+  // Open the modal and scroll to one feature's model row (#model-row-<key>).
+  async function openModelRow(hash) {
+    await openSettings();
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "center" });
+  }
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[href^="#model-row-"]');
+    if (!a) return;
+    e.preventDefault();
+    history.replaceState(null, "", a.getAttribute("href"));
+    openModelRow(a.getAttribute("href"));
+  });
+  window.addEventListener("hashchange", () => { if (location.hash.startsWith("#model-row-")) openModelRow(location.hash); });
+  if (location.hash.startsWith("#model-row-")) openModelRow(location.hash);
   function closeSettings() { settingsOverlay.hidden = true; }
   btnSettings?.addEventListener("click", openSettings);
   btnSettingsClose?.addEventListener("click", closeSettings);
@@ -504,6 +643,29 @@
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && settingsOverlay && !settingsOverlay.hidden) closeSettings();
   });
+
+  // Help bubble: shown above the badge (below when no room), clamped 8px
+  // inside the viewport on both axes so it never clips at the modal edge.
+  const tipEl = document.getElementById("tiptip");
+  function placeTip(badge) {
+    tipEl.textContent = badge.dataset.tip;
+    tipEl.hidden = false;
+    const b = badge.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), m = 8;
+    const left = Math.min(Math.max(b.left + b.width / 2 - t.width / 2, m), window.innerWidth - t.width - m);
+    let top = b.top - t.height - 6;
+    if (top < m) top = b.bottom + 6;
+    tipEl.style.left = Math.max(left, m) + "px";
+    tipEl.style.top = Math.min(top, window.innerHeight - t.height - m) + "px";
+  }
+  const hideTip = () => { tipEl.hidden = true; };
+  ["mouseover", "focusin"].forEach(ev => document.addEventListener(ev, e => {
+    const badge = e.target.closest && e.target.closest(".tighelp");
+    if (badge) placeTip(badge);
+  }));
+  ["mouseout", "focusout"].forEach(ev => document.addEventListener(ev, e => {
+    if (e.target.closest && e.target.closest(".tighelp")) hideTip();
+  }));
+  document.addEventListener("scroll", hideTip, true);
 
   function helpIcon(desc) {
     return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
@@ -586,7 +748,9 @@
           <span class="togfamname">${esc(fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
           ${familyControl(fam)}
         </div>
-        ${fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
+        ${fam.feature === "models"
+          ? `<div class="note">Pick models in the Models section above.</div>`
+          : fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
       </div>`).join("") : empty("No toggles declared.")) +
       `<div class="note">Shared-scope switches commit + push toggles.conf; params always stay local to this machine.</div>`;
     wireToggleInputs();
@@ -808,6 +972,7 @@
       const actions = SERVED
         ? `<div class="btnrow">
              <button class="btn" id="btn-mode" title="How Implement applies a change — PR: branch + pull request for review; direct: commit to main and push (no review gate)">Mode: …</button>
+             <span class="pill warn" id="queue-count" hidden></span>
              <button class="btn" id="btn-review">Review</button>
              <button class="btn primary" id="btn-clear">Clear</button>
            </div>`
@@ -907,9 +1072,11 @@
         acts.appendChild(pill);
         const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
         const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
-        setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+        setPill("warn", "⋯ Starting…");
+        // A busy server queues the job, so rapid clicks on several rows are fine.
         try { await api("/api/implement", { text, edited: edited || "", target: tgtOf(row) }) }
         catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
+        refreshQueue();
         let tries = 0;
         const poll = () => setTimeout(async () => {
           let s;
@@ -930,10 +1097,25 @@
           } else if (s.state === "not_implementable") {
             setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "failed") {
-            setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
-          } else if (s.state === "busy") {
-            setPill("warn", "⋯ Another job running — try again"); buttons.forEach(x => x.style.display = "");
-          } else if (++tries < 220) { poll(); }       // running / not-yet — keep polling (~11 min cap)
+            if (s.model_error) {
+              pill.className = "pill neg"; pill.textContent = "✕ Model " + (s.model || "") + " unavailable: ";
+              const a = document.createElement("a");
+              a.href = "#model-row-implement"; a.textContent = "pick another";
+              pill.append(a);
+              refreshModels();
+            } else {
+              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : ""));
+            }
+            buttons.forEach(x => x.style.display = "");
+
+          } else if (s.state === "queued") {
+            // Queue time does not count toward the polling cap.
+            setPill("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")); poll();
+
+          } else if (++tries < 220) {                // running, not-yet, or legacy busy: keep polling (~11 min cap)
+            if (s.state === "running") setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+            poll();
+          }
           else { setPill("warn", "… still running — check back later"); }
         }, 3000);
         poll();
@@ -960,6 +1142,7 @@
     }
 
     renderSug(sugs);
+    if (SERVED) refreshQueue();
 
     // B2 · Wins & learnings (positive mirror of struggles): strategies-learned
     // count + chips, then the 6 most-recent helped[] items (✓ + --status-pos).

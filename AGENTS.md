@@ -163,7 +163,7 @@ The split mirrors the language policy:
   (`episodic-capture`, `np-evaluator`) use it. Keep raw input small (cap +
   extract — see [[np-kb-claude-headless-scripting]] §6) rather than reaching for a
   bigger model to chew through more tokens.
-- **Sonnet** (`claude-sonnet-4-6`) — only for **agentic** passes that read/edit
+- **Sonnet** (`claude-sonnet-5-5`, set per feature via `models.*` params) — only for **agentic** passes that read/edit
   files over multiple steps and need real judgment: the episodic-maintain
   distillation and memory-promote crons (dispatched via `cli.py cron`, backed by
   `np_agentic_cron.py`). They run daily but no-op (no model call) on an empty

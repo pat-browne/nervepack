@@ -98,6 +98,27 @@ class TestRenderer(unittest.TestCase):
         self.assertIn("<td><code>code</code></td>", out)
         self.assertIn("<strong>bold</strong>", out)
 
+    def test_bullet_bold_followed_by_space_survives(self):
+        # the marker strip must remove only the leading "- ", not the "* " that
+        # ends a closing "**" mid-line
+        out = build.md_to_html("- **VSCode:** `ms-python.python` + more")
+        self.assertIn("<li><strong>VSCode:</strong> <code>ms-python.python</code> + more</li>", out)
+
+    def test_ordered_marker_strip_is_anchored(self):
+        out = build.md_to_html("1. step one then 2. step two")
+        self.assertIn("<li>step one then 2. step two</li>", out)
+
+    def test_bold_span_containing_literal_asterisk(self):
+        out = build.md_to_html("5. **COUNT(*) vs COUNT(col):** intentional?")
+        self.assertIn("<strong>COUNT(*) vs COUNT(col):</strong> intentional?", out)
+        self.assertNotIn("<em>", out)
+
+    def test_thematic_break_renders_hr(self):
+        out = build.md_to_html("para one\n---\n\n***\n\npara two")
+        self.assertEqual(out.count("<hr>"), 2)
+        self.assertNotIn("<p>---</p>", out)
+        self.assertIn("<p>para one</p>", out)
+
     def test_stray_pipe_in_prose_does_not_stall(self):
         # a lone '|' with no delimiter row must not be treated as a table or loop forever
         out = build.md_to_html("use a | b pipe here\n\nnext para")
@@ -176,6 +197,40 @@ def _write_topic_synthesis(content_dir, topic, name):
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, name + ".md"), "w", encoding="utf-8") as fh:
         fh.write("---\nname: %s\nkind: topic\nlast_updated: 2026-06-01\nsources: []\n---\n\nSynthesis body.\n" % name)
+
+
+class TestWordExportMarkup(unittest.TestCase):
+    """Word/Pandoc exports carry <a id> bookmarks and backslash escapes."""
+
+    def test_bookmark_anchor_kept_as_link_target(self):
+        out = build.md_to_html('## <a id="_lt4oz"></a>Introduction')
+        self.assertIn('<h2><a id="_lt4oz"></a>Introduction</h2>', out)
+        self.assertNotIn("&lt;a id", out)
+
+    def test_backslash_escapes_render_literal(self):
+        out = build.md_to_html(r"Tbl\_v2\_lists \(AFR\) data\. select \* from")
+        self.assertIn("Tbl_v2_lists (AFR) data. select * from", out)
+
+    def test_underscore_bold(self):
+        out = build.md_to_html(r"__Tbl\_v2__")
+        self.assertIn("<strong>Tbl_v2</strong>", out)
+
+    def test_other_html_stays_escaped(self):
+        out = build.md_to_html('<a id="x" onclick="y"></a><script>z</script>')
+        self.assertNotIn("<script>", out)
+        self.assertNotIn("onclick=\"", out)
+
+    def test_nul_in_content_cannot_forge_sentinel(self):
+        out = build.md_to_html("x \x00A9\x00 y \x00E60\x00")
+        self.assertIn("<p>xA9yE60</p>", out.replace(" ", ""))
+
+    def test_excerpt_drops_bookmarks_and_escapes(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "afr.md")
+            with open(p, "w") as f:
+                f.write('---\nname: afr\n---\n<a id="_w6"></a>\n\n'
+                        '<a id="_x1"></a>Solutions \\(AFR\\) Training\n')
+            self.assertEqual(build._parse_wiki_page(p)["excerpt"], "Solutions (AFR) Training")
 
 
 class TestRenderPagesVersionStamp(unittest.TestCase):

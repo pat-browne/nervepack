@@ -430,6 +430,8 @@ here so a dashboard panel reading zero isn't mistaken for a wiring gap:
 | Field | Source | Zero-bias note |
 |---|---|---|
 | `skills_invoked[]` | regex over the transcript JSONL for Skill-tool calls | Legitimately empty if no skills were invoked — not a pipeline gap |
+| `skill_tool_calls` | count of `Skill` tool_use lines in the transcript | 0 means no skill invoked. Read with `skills_available` to tell "none needed" from "available, not discovered" |
+| `skills_available` | count of `SKILL.md` dirs in the engine and `$NP_CONTENT_DIR` `skills/` | Reflects the scoring machine, not the session host. 0 if neither dir is readable |
 | `playbook_fires` | `lesson-guard` markers in the session-signals log | Genuinely sparse today — only lessons carrying an enforcing `tool_match` fire it; rises naturally as the enforcing-lesson catalog grows |
 | `playbook_heeded` | gated-command fingerprints minus fingerprints that were executed anyway | Inherits `playbook_fires` sparseness; also 0 if a gated command ran despite the guard |
 | `recall_injections` | `lesson-recall`/`episodic-recall` markers in the session-signals log | **Structural zero for back-captured sessions** — the ephemeral signal log for the original session is gone by the time the back-capture sweep re-scores it, even when recall fired live |
@@ -501,9 +503,38 @@ dispatched as `cli.py implement-suggestion`) in an isolated git worktree off the
 committed base, in `pr` or `direct` mode; **Reject** resolves it.
 `np-core-suggestions-review` drives the same flow from any host.
 
+**Queue.** A click while a job runs joins a FIFO queue
+(`~/.cache/nervepack/implement-queue/`). The lock holder drains it before exiting.
+A second click on a queued or running row does nothing. Rows show queued (with
+position), running, then done or failed.
+
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
 `np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
+
+## Model selection + availability probe
+
+**Purpose.** Pick the model each feature uses and find out early when an account
+cannot use one.
+
+**Workflow.** `resolve_model(tier, feature)` in `np_model.py` checks the tier env
+var (`NP_LLM_MODEL_CHEAP` or `NP_LLM_MODEL_AGENT`), then `models.<feature>`, then
+`models.<tier>`, then the built-in default. Callers pass `feature=` to `complete()`
+and `agent()`. The dashboard Models panel offers the ids in
+`engine/setup/model-inventory.json` and writes the choice to `toggles.local`.
+
+**Probe** sends a one-token prompt per model and caches available, missing, or
+error in `~/.cache/nervepack/model-probe.json`. A job the CLI rejects for its model
+fails with `model_error` and marks the model missing. A banner then links to that
+feature's row.
+
+**Assets.** `np_model.py`, `engine/setup/model-inventory.json`,
+`np-dashboard-server.py` (`/api/models`, `/api/models/probe`, `/api/models/select`),
+`dashboard/index.html`. Toggle: `models` (off hides the panel and the probe).
+
+**Situational example.** Implement jobs start failing with "issue with the selected
+model". The banner names the model and links to the implement row. You pick another
+model, probe it, and click Implement again.
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.
 You run `/np-suggestions`, it ranks them, you pick three worth building, hit Implement,
@@ -566,6 +597,14 @@ throttled backup (`sync.interval`, default 1 day). Strict-safe: fast-forward onl
 never auto-rebase or autostash. `np-core-sync` does it on demand.
 
 **Assets.** `np_sync.py` (`cli.py sync`), `np-core-sync`. Toggle: `sync`.
+
+After the pulls, sync checks each layer for layout drift: directories of pages no
+route covers. A directory whose pages share one `type:` gets a route recorded. The
+personal overlay's manifest takes it. A team layer's additions go to a per-machine
+drift file that `np_layout.load()` replays, so sync never writes into a team repo. A mixed one
+prints a layout question. Sync never commits the manifest. Param
+`sync.layout_drift` (default on) turns it off. The dashboard wiki nav now shows
+reference and roadmap routes as their own groups too.
 
 **Situational example.** A cron pushed a new skill from your laptop overnight. You sit
 down at the desktop, start a session, and the SessionStart backup sync fast-forwards

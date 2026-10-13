@@ -11,6 +11,8 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
+  GET  /api/models            -> model inventory, probe cache, probe_running
+  POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
 
 This is a deliberate, documented exception to nervepack's "no service, no daemon"
 invariant: it is OFF by default, binds to 127.0.0.1 ONLY, serves a fixed directory,
@@ -29,6 +31,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -48,6 +51,7 @@ if _ENGINE_PKG not in sys.path:
     sys.path.insert(0, _ENGINE_PKG)
 import np_bashlib  # noqa: E402
 import np_dirs
+import np_implement_suggestion  # noqa: E402
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
@@ -59,6 +63,8 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # overlay, so its canonical path is outside DASH. Allow that one extra subtree as a
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
+_PROBE_CLAIM_LOCK = threading.Lock()
+PROBE_SCRIPT = os.path.join(_ENGINE_PKG, "np_model.py")
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 # NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
 # this); the real default is np_implement_suggestion.py (phase 10) dispatched via
@@ -74,6 +80,8 @@ TOGGLES_LOCAL = os.environ.get("NP_TOGGLES_LOCAL") or np_dirs.config_path("toggl
 SELF_LOCKOUT_FEATURES = {"evaluator"}
 SELF_LOCKOUT_PARAMS = {"evaluator.dashboard_open", "evaluator.dashboard_serve", "evaluator.toggle_ui"}
 IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status")
+IMPLEMENT_QUEUE_DIR = (os.environ.get("NP_IMPLEMENT_QUEUE_DIR")
+                       or np_implement_suggestion.queue_dir(IMPLEMENT_STATUS_DIR))
 LOG = np_dirs.cache_path("dashboard-server.log")
 
 PORT = int(os.environ.get("NP_DASH_PORT", "8787") or "8787")
@@ -117,9 +125,92 @@ def implement_status(text):
     key = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     try:
         with open(os.path.join(IMPLEMENT_STATUS_DIR, key + ".json")) as fh:
-            return json.load(fh)
+            st = json.load(fh)
     except (OSError, ValueError):
         return {"state": "none"}
+    if st.get("state") == "queued":
+        # The position shifts as the queue drains, so read it live.
+        pos = np_implement_suggestion.queue_position(IMPLEMENT_QUEUE_DIR, key)
+        if pos:
+            st["position"] = pos
+        else:
+            st.pop("position", None)   # left the queue, drop the stale slot
+    return st
+
+
+def implement_queue():
+    """The running job (or None) plus queued entries in FIFO order."""
+    running = np_implement_suggestion.running_job(IMPLEMENT_QUEUE_DIR)
+    queued = [{"text": e.get("text", ""), "position": i, "enqueued_at": e.get("enqueued_at", ""),
+               "target": e.get("target", "")}
+              for i, (_, e) in enumerate(np_implement_suggestion.queue_entries(IMPLEMENT_QUEUE_DIR), 1)]
+    run = ({"text": running.get("text", ""), "started_at": running.get("started_at", "")}
+           if running else None)
+    return {"running": run, "queued": queued, "count": len(queued)}
+
+
+def already_pending(text):
+    """True when `text` is queued or is the live running job (click dedupe)."""
+    key = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    if np_implement_suggestion.queue_position(IMPLEMENT_QUEUE_DIR, key):
+        return True
+    running = np_implement_suggestion.running_job(IMPLEMENT_QUEUE_DIR)
+    return bool(running and running.get("key") == key)
+
+
+# --- models ------------------------------------------------------------------
+# (feature name, tier). Each maps to the models.<feature_key> toggle param.
+MODEL_FEATURES = (
+    ("implement", "agent"), ("episodic-maintain", "agent"), ("memory-promote", "agent"),
+    ("skill-maintain", "agent"), ("refine", "agent"), ("compact", "agent"),
+    ("kb-promote-scan", "agent"), ("evaluator", "cheap"), ("capture", "cheap"),
+    ("review", "cheap"), ("diff-review", "cheap"), ("doctor", "cheap"),
+)
+_TIER_ENV = {"cheap": "NP_LLM_MODEL_CHEAP", "agent": "NP_LLM_MODEL_AGENT"}
+
+
+def _recent_model_errors(max_age=86400):
+    """Status files flagged model_error in the last `max_age` seconds."""
+    out = []
+    cutoff = time.time() - max_age
+    try:
+        names = os.listdir(IMPLEMENT_STATUS_DIR)
+    except OSError:
+        return out
+    for n in names:
+        path = os.path.join(IMPLEMENT_STATUS_DIR, n)
+        try:
+            if not n.endswith(".json") or os.stat(path).st_mtime < cutoff:
+                continue
+            with open(path) as fh:
+                st = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if st.get("model_error"):
+            out.append({"model": st.get("model", ""), "ts": st.get("ts", ""),
+                        "feature": "implement", "reason": st.get("ref", "")})
+    return out
+
+
+def _model_row(feature, key, tier, is_tier):
+    return {"feature": feature, "key": key, "tier": tier, "is_tier": is_tier,
+            "selected": np_toggle.param("models." + key, ""),
+            "effective": np_model.resolve_model(tier, None if is_tier else feature),
+            "env_override": bool(os.environ.get(_TIER_ENV[tier]))}
+
+
+def models_view():
+    """Inventory, per-feature selection + effective model, and probe results."""
+    rows = [_model_row(t, t, t, True) for t in ("cheap", "agent")]
+    rows += [_model_row(f, np_model.feature_key(f), t, False) for f, t in MODEL_FEATURES]
+    return {"enabled": np_toggle.enabled("models"), "inventory": np_model.inventory(),
+            "features": rows, "probe": np_model.load_probe_cache(),
+            "probe_running": np_model.probe_running(),
+            "model_errors": _recent_model_errors()}
+
+
+def _model_keys():
+    return {"cheap", "agent"} | {np_model.feature_key(f) for f, _ in MODEL_FEATURES}
 
 
 def current_mode():
@@ -184,7 +275,7 @@ def review_rows():
         "of objects {\"i\": <index>, \"decision\": \"implement\"|\"skip\", "
         "\"reason\": \"<=12 words\"}. No prose, no code fence.\n\n" + listing)
     try:
-        out = np_model.complete(prompt, timeout=120)
+        out = np_model.complete(prompt, timeout=120, feature="review")
         verdicts = json.loads(_strip_fence(out))
         by_i = {int(v["i"]): v for v in verdicts if "i" in v}
         for i, r in enumerate(rows):
@@ -239,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.split("?")[0] == "/api/implement-status":
                 text = (parse_qs(urlparse(self.path).query).get("text") or [""])[0]
                 return self._json(implement_status(text))
+            if self.path.split("?")[0] == "/api/implement-queue":
+                return self._json(implement_queue())
+            if self.path.split("?")[0] == "/api/models":
+                return self._json(models_view())
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
                     return self._json({"error": "not found"}, 404)
@@ -314,6 +409,10 @@ class Handler(BaseHTTPRequestHandler):
                 target = (body.get("target") or "").strip()[:32]
                 if target:
                     extra = extra + ["--target=" + target]
+                # A second click on a queued or running row is a no-op.
+                if already_pending(text):
+                    return self._json({"ok": True, "deduped": True,
+                                       "status": implement_status(text)})
                 # Spawn the agentic job DETACHED — it takes minutes; never block the
                 # request. The job owns the lock, clean-tree check, branch/mode, agent
                 # call, push, and resolve. argv list (no shell) per the §10 lockdown.
@@ -325,6 +424,43 @@ class Handler(BaseHTTPRequestHandler):
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL,
                                  preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                return self._json({"ok": True, "started": True})
+            if route == "/api/models/select":
+                body = self._body()
+                key = np_model.feature_key(body.get("feature") or "")
+                model = (body.get("model") or "").strip()
+                if key not in _model_keys():
+                    return self._json({"error": "unknown feature"}, 400)
+                ids = {m.get("id") for m in np_model.inventory()}
+                if model and model not in ids:
+                    return self._json({"error": "model not in inventory"}, 400)
+                # Empty clears the override, so the feature inherits its tier.
+                np_toggle.set_local("models." + key, model)
+                return self._json({"ok": True, "models": models_view()})
+            if route == "/api/models/probe":
+                if not np_toggle.enabled("models"):
+                    return self._json({"error": "models toggle is off"}, 400)
+                model = (self._body().get("model") or "").strip()
+                ids = [m.get("id") for m in np_model.inventory() if m.get("id")]
+                if model and model not in ids:
+                    return self._json({"error": "model not in inventory"}, 400)
+                targets = [model] if model else ids
+                # Probing runs up to 45s per model, so it runs DETACHED, same
+                # pattern as /api/implement. A request while one runs is a no-op.
+                with _PROBE_CLAIM_LOCK:   # serialize the stale-check-then-claim in this server
+                    claimed = np_model.claim_probe(targets, timeout=45)
+                if not claimed:
+                    return self._json({"ok": True, "started": False, "running": True})
+                try:
+                    subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
+                                     cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                except OSError as exc:
+                    np_model.release_probe()   # a failed spawn must not hold the marker
+                    log("probe spawn failed: %s" % exc)
+                    raise
+                log("probe started: %s" % ", ".join(targets))
                 return self._json({"ok": True, "started": True})
             if route == "/api/implement-mode":
                 mode = (self._body().get("mode") or "").strip()

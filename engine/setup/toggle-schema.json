@@ -23,6 +23,10 @@
     "min": 60,
     "description": "Throttle (seconds) between SessionStart backup syncs."
   },
+  "sync.layout_drift": {
+    "type": "bool",
+    "description": "On each sync, route new content directories whose pages share one frontmatter type, and report mixed ones as layout questions."
+  },
   "sync.content": {
     "type": "bool",
     "description": "Fast-forward-pull the personal content overlay too (same strict-safe ff-only treatment as team layers). No-op on a single-repo legacy layout."
@@ -87,6 +91,11 @@
     "type": "number",
     "min": 1,
     "description": "Prompts required before mid-session escalation fires."
+  },
+  "evaluator.implement_status_ttl_days": {
+    "type": "number",
+    "min": 0,
+    "description": "Days to keep implement status and queue files; 0 = keep forever."
   },
   "evaluator.retain_days": {
     "type": "number",
@@ -225,6 +234,9 @@
   "maintain.compact": {
     "description": "Weekly skill dedup + split-proposal pass."
   },
+  "maintain.kb_promote_scan": {
+    "description": "Weekly (Mon) data-base harness-promote-scan run; opens a data-base PR when it queues items."
+  },
   "pii_filter": {
     "description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."
   },
@@ -305,5 +317,139 @@
       "session"
     ],
     "description": "`turn` injects every prompt (the default, and what makes prevention hold late in a long session). `session` injects once."
+  },
+  "models": {
+    "description": "Per-feature model selection. Off hides the dashboard Models panel and disables the probe. Model resolution always runs."
+  },
+  "models.cheap": {
+    "type": "string",
+    "description": "Model id for single-shot passes when no feature override is set."
+  },
+  "models.agent": {
+    "type": "string",
+    "description": "Model id for agentic passes when no feature override is set."
+  },
+  "models.implement": {
+    "type": "string",
+    "description": "Model id override for implement. Empty uses models.agent."
+  },
+  "models.episodic_maintain": {
+    "type": "string",
+    "description": "Model id override for episodic-maintain. Empty uses models.agent."
+  },
+  "models.memory_promote": {
+    "type": "string",
+    "description": "Model id override for memory-promote. Empty uses models.agent."
+  },
+  "models.skill_maintain": {
+    "type": "string",
+    "description": "Model id override for skill-maintain. Empty uses models.agent."
+  },
+  "models.refine": {
+    "type": "string",
+    "description": "Model id override for refine. Empty uses models.agent."
+  },
+  "models.compact": {
+    "type": "string",
+    "description": "Model id override for compact. Empty uses models.agent."
+  },
+  "models.kb_promote_scan": {
+    "type": "string",
+    "description": "Model id override for kb-promote-scan. Empty uses models.agent."
+  },
+  "models.evaluator": {
+    "type": "string",
+    "description": "Model id override for evaluator. Empty uses models.cheap."
+  },
+  "models.capture": {
+    "type": "string",
+    "description": "Model id override for capture. Empty uses models.cheap."
+  },
+  "models.review": {
+    "type": "string",
+    "description": "Model id override for review. Empty uses models.cheap."
+  },
+  "models.diff_review": {
+    "type": "string",
+    "description": "Model id override for diff-review. Empty uses models.cheap."
+  },
+  "models.doctor": {
+    "type": "string",
+    "description": "Model id override for doctor. Empty uses models.cheap."
+  },
+  "memory.flush_interval": {
+    "type": "number",
+    "min": 0,
+    "description": "Minimum seconds between SessionEnd memory flushes. The daily and weekly crons stay the backstop, so a skipped flush only delays promotion."
+  },
+  "skills.trigger_recall": {
+    "type": "bool",
+    "description": "Inject a once-per-session reminder to follow a skill-authoring process when a prompt matches a skill-writing pattern."
+  },
+  "skills.security_recall": {
+    "type": "bool",
+    "description": "Inject a once-per-session reminder to run a security review when a prompt mentions security or vulnerability keywords."
+  },
+  "journal": {
+    "description": "Session journal: a local append-only record of each session's goal, hypotheses, struggles and progress, seeded at SessionStart and checkpointed before compaction."
+  },
+  "journal.ttl_days": {
+    "type": "number",
+    "min": 1,
+    "description": "Delete journals and stale recall receipts older than this many days."
+  },
+  "journal.recall_sources": {
+    "type": "string",
+    "description": "Which session starts re-inject the journal, joined with + (for example compact+resume)."
+  },
+  "focus": {
+    "description": "Open a spec or plan doc in the OS default app when a session writes one under docs/superpowers/specs or plans."
+  },
+  "turn_gate": {
+    "description": "Stop-hook turn gate: blocks a turn once when it edited UI files without showing the result, or when the closing message fails the form check."
+  },
+  "form_gate": {
+    "description": "PreToolUse form gate: checks durable text (files, artifacts, pages, posts, commit messages) against the concise-output categorical and rate rules."
+  },
+  "form_gate.categorical": {
+    "type": "enum",
+    "options": [
+      "ask",
+      "warn",
+      "off",
+      "block"
+    ],
+    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and escalates to ask after two retries."
+  },
+  "form_gate.rate": {
+    "type": "enum",
+    "options": [
+      "warn",
+      "off"
+    ],
+    "description": "Rate findings (passive voice, sentence length). warn adds context only, it never blocks."
+  },
+  "form_gate.rate_threshold": {
+    "type": "number",
+    "min": 0,
+    "description": "Linter score above which rate findings are reported."
+  },
+  "form_gate.timeout_s": {
+    "type": "number",
+    "min": 1,
+    "description": "Timeout (seconds) for the linter subprocess. On timeout the gate allows the write."
+  },
+  "form_gate.exempt_globs": {
+    "type": "string",
+    "description": "Path globs the gate skips, colon-joined. Empty exempts nothing."
+  },
+  "form_gate.comment_ext": {
+    "type": "string",
+    "description": "Colon-joined source extensions whose comments get linted (for example .py:.ts). Empty turns comment linting off."
+  },
+  "form_gate.comment_block_max": {
+    "type": "number",
+    "min": 1,
+    "description": "Maximum lines in one comment block before the gate flags it."
   }
 }

@@ -1254,6 +1254,43 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         widgets = next(e for e in entries if e["name"] == "widgets")
         self.assertEqual(widgets["sources"], [])
 
+    def test_reference_and_roadmap_routes_get_nav_groups(self):
+        # Only the knowledge route fed the nav, so solutions/runbooks/proposals
+        # (reference + roadmap routes) never showed.
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "notes/{name}.md"},
+                    "reference": {"variants": [
+                        {"name": "solution", "path": "docs/solutions/{name}.md"}]},
+                    "roadmap": {"path": "docs/proposals/{name}.md"},
+                    "skill": {"path": "skills/{name}/SKILL.md"}}},
+                {"docs/solutions/fix-a.md": "---\ntitle: a\n---\n\nFix A.\n",
+                 "docs/proposals/idea-b.md": "---\ntitle: b\n---\n\nIdea B.\n",
+                 "skills/s/SKILL.md": "---\nname: s\n---\n\nSkill.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki["groups"]}
+        self.assertEqual(by_key.get("solution"), ["fix-a"], wiki)
+        self.assertEqual(by_key.get("roadmap"), ["idea-b"], wiki)
+        self.assertNotIn("skill", by_key, wiki)
+
+    def test_colocated_reference_route_forms_no_duplicate_group(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "wiki/topics/{topic}/{topic}.md",
+                                  "frontmatter": {"kind": "topic"}},
+                    "reference": {"path": "wiki/topics/{topic}/{name}.md",
+                                  "frontmatter": {"kind": "reference"}}}},
+                {"wiki/topics/rust/rust.md": "---\nname: rust\nkind: topic\n---\n\nRust.\n",
+                 "wiki/topics/rust/book.md": "---\nname: book\nkind: reference\n---\n\nBook.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        self.assertEqual([g["key"] for g in wiki["groups"]], ["topic"], wiki)
+        names = [s["name"] for g in wiki["groups"] for e in g["entries"] for s in e["sources"]]
+        self.assertEqual(names, ["book"], wiki)
+
     def test_flat_route_does_not_swallow_a_nested_route(self):
         # A layer may nest one declared route inside another's container:
         # `.claude/references/{name}.md` (convention) contains
@@ -1273,6 +1310,36 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki.get("groups", [])}
         self.assertEqual(by_key.get("convention"), ["team"], wiki)
         self.assertEqual(sorted(by_key.get("data-model", [])), ["camper", "session"], wiki)
+
+    def test_nonstandard_route_pages_are_rendered(self):
+        # Pages from a declared route outside topics/concepts showed in the nav but
+        # never rendered, so every click 404'd (data-base data-model: 64 pages).
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "data-model", "path": "refs/data-model/{name}.md"}]}}},
+                {"refs/data-model/camper.md": "---\ntitle: camper\n---\n\nCamper table.\n"})
+            out_dir, js = TestRenderPages._run(self, cd, NP_ENGINE_DIR=os.path.join(tmp, "e"),
+                                               NP_TEAM_DIR=os.path.join(tmp, "t"))
+            wiki = _parse_wiki(js)
+            html = next(e["synthesis"]["html"] for g in wiki["groups"] for e in g["entries"])
+            self.assertTrue(os.path.isfile(os.path.join(out_dir, html[len("data/"):])), html)
+
+    def test_render_pages_falls_back_to_topics_without_groups(self):
+        # An index built before groups existed carries only topics/concepts.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("np_build_fallback", BUILD)
+        b = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(b)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "rust.md")
+            with open(src, "w") as fh:
+                fh.write("# Rust\n")
+            html = "data/wiki/personal/topics/rust/rust.html"
+            b.render_pages({"topics": [{"topic": "rust", "sources": [], "synthesis":
+                            {"name": "rust", "html": html, "src": src}}]}, tmp)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, html[len("data/"):])))
 
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:

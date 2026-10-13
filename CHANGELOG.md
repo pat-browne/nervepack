@@ -9,6 +9,16 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Added
+- **Per-feature model selection.** A `models` toggle row holds tier defaults and
+  one param per feature. The dashboard Models panel sets them and probes each
+  model. A retired model shows a banner linking to its feature row (spec 0042).
+- **Implement queue.** A click during a running job now queues FIFO. The lock
+  holder drains the queue, and a failed job does not stop the drain.
+
+### Changed
+- The agentic default model is now `claude-sonnet-5-5`.
+
 ### Fixed
 - **The scheduled writers publish loudly or not at all.** `np_aggregate`,
   `np_skill_maintain` and `np_toggle` each pushed `HEAD:main` without checking that

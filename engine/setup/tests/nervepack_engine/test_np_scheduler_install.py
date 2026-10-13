@@ -32,7 +32,7 @@ import np_scheduler_install  # noqa: E402
 import np_token_lib  # noqa: E402
 
 _JOB_NAMES = ["memory-promote", "episodic-maintain", "aggregate-metrics",
-              "skill-maintain", "refine", "compact"]
+              "skill-maintain", "refine", "compact", "kb-promote-scan"]
 
 
 @unittest.skipIf(os.name == "nt",
@@ -126,7 +126,7 @@ class TestInstallCron(unittest.TestCase):
         kwargs.setdefault("nervepack_root", "/opt/nervepack")
         return np_scheduler_install.install_cron(**kwargs)
 
-    def test_1_installs_all_six_authoritative_jobs(self):
+    def test_1_installs_all_authoritative_jobs(self):
         rc = self._run()
         self.assertEqual(rc, 0)
         for marker in ("nervepack-memory-promote", "nervepack-episodic-maintain",
@@ -150,6 +150,7 @@ class TestInstallCron(unittest.TestCase):
         self.assertIn("15 9 * * *", text)  # skill-maintain
         self.assertIn("30 9 * * 0", text)  # refine (weekly Sun)
         self.assertIn("0 10 * * 3", text)  # compact (weekly Wed)
+        self.assertIn("45 8 * * 1", text)  # kb-promote-scan (weekly Mon)
 
     def test_4_idempotent_replaces_not_duplicates(self):
         self._run()
@@ -241,7 +242,7 @@ class TestInstallLaunchd(unittest.TestCase):
         kwargs.setdefault("launchctl_fn", lambda p: self.calls.append(p))
         return np_scheduler_install.install_launchd(**kwargs)
 
-    def test_1_writes_six_plists(self):
+    def test_1_writes_all_plists(self):
         rc = self._run()
         self.assertEqual(rc, 0)
         for j in _JOB_NAMES:
@@ -263,14 +264,28 @@ class TestInstallLaunchd(unittest.TestCase):
         with open(os.path.join(self.la_dir, "com.nervepack.memory-promote.plist")) as fh:
             self.assertIn("<key>Hour</key><integer>8</integer>", fh.read())
 
+    def test_3b_weekly_jobs_carry_weekday_daily_jobs_do_not(self):
+        self._run()
+        def read(j):
+            with open(os.path.join(self.la_dir, "com.nervepack.%s.plist" % j)) as fh:
+                return fh.read()
+        kb = read("kb-promote-scan")
+        self.assertIn("<key>Weekday</key><integer>1</integer>", kb)
+        self.assertIn("<key>Hour</key><integer>8</integer>", kb)
+        self.assertIn("<key>Minute</key><integer>45</integer>", kb)
+        self.assertIn("cron kb-promote-scan", kb)
+        self.assertIn("<key>Weekday</key><integer>0</integer>", read("refine"))
+        self.assertIn("<key>Weekday</key><integer>3</integer>", read("compact"))
+        self.assertNotIn("Weekday", read("memory-promote"))
+
     def test_4_launchctl_invoked_once_per_agent(self):
         self._run()
-        self.assertEqual(len(self.calls), 6)
+        self.assertEqual(len(self.calls), len(_JOB_NAMES))
 
-    def test_5_idempotent_second_run_still_six_plists(self):
+    def test_5_idempotent_second_run_same_plist_count(self):
         self._run()
         self._run()
-        self.assertEqual(len(os.listdir(self.la_dir)), 6)
+        self.assertEqual(len(os.listdir(self.la_dir)), len(_JOB_NAMES))
 
     def test_6_refuses_on_non_darwin_without_force(self):
         out_dir = os.path.join(self.tmp, "LA2")
@@ -314,10 +329,10 @@ class TestInstallSchtasks(unittest.TestCase):
         kwargs.setdefault("cygpath_fn", lambda p: "C:\\Program Files\\Git\\usr\\bin\\bash.exe")
         return np_scheduler_install.install_schtasks(**kwargs)
 
-    def test_1_creates_six_tasks(self):
+    def test_1_creates_all_tasks(self):
         rc = self._run()
         self.assertEqual(rc, 0)
-        self.assertEqual(len(self.calls), 6)
+        self.assertEqual(len(self.calls), len(_JOB_NAMES))
 
     def test_2_task_names_namespaced(self):
         self._run()
@@ -417,6 +432,7 @@ class TestCanonicalScheduleSingleSource(unittest.TestCase):
                 np_scheduler_install._schtasks_rows()):
             self.assertEqual(cron[1], "%d %d * * %s" % (mm, hh, weekly[0] if weekly else "*"))
             self.assertEqual((la[1], la[2]), (hh, mm))
+            self.assertEqual(la[4], weekly[0] if weekly else None)
             self.assertEqual(st[3], "%02d:%02d" % (hh, mm))
             self.assertEqual((st[1], st[2]), ("WEEKLY", weekly[1]) if weekly else ("DAILY", None))
 
