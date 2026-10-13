@@ -457,8 +457,8 @@ class Handler(BaseHTTPRequestHandler):
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      preexec_fn=implement_job_preexec if os.name != "nt" else None)
                 except OSError as exc:
-                    log("probe spawn failed: %s" % exc)
                     np_model.release_probe()   # a failed spawn must not hold the marker
+                    log("probe spawn failed: %s" % exc)
                     raise
                 log("probe started: %s" % ", ".join(targets))
                 return self._json({"ok": True, "started": True})
