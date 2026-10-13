@@ -19,8 +19,9 @@ matched bots as `github-actions[bot]`, but GraphQL returns `github-actions`.
 ## Decision
 
 Tell the responder to list conversation comments with `gh pr view --json
-comments`, to always treat the triggering comment as in scope, and to match bot
-logins with or without the `[bot]` suffix.
+comments`, to always treat the triggering comment as in scope, and to accept a bot
+only when GraphQL reports `__typename: Bot` with login `claude` or
+`github-actions`. The triggering comment's id and author are passed in.
 
 ## Non-goals
 
@@ -28,8 +29,8 @@ No change to the tool allowlist, trust filter, or permission check.
 
 ## Cross-cutting concerns
 
-- Security: the trusted author set is unchanged. Only the login spelling the
-  prompt accepts now matches what GraphQL returns.
+- Security: the trusted author set is unchanged. A human account named
+  `claude` fails the `__typename: Bot` check, so it gains nothing.
 
 ## Rollback
 
