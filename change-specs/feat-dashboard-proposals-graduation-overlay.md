@@ -1,5 +1,5 @@
 ---
-id: 0064
+id: 0065
 status: accepted
 date: 2026-10-13
 tier: high
@@ -20,7 +20,7 @@ blast_radius:
   - change-specs/feat-dashboard-proposals-graduation-overlay.md
 ---
 
-# 0064: Dashboard proposal, graduation, and viewer actions
+# 0065: Dashboard proposal, graduation, and viewer actions
 
 ## Context and problem statement
 
