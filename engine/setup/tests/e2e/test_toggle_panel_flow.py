@@ -19,8 +19,9 @@ class TestTogglePanelFlow(unittest.TestCase):
         pw = sync_playwright().start()
         browser = pw.chromium.launch()
         page = browser.new_page()
-        page.goto(base_url, wait_until="networkidle")
-        page.click("#btn-settings")  # toggles and models live in the settings modal
+        # Served, the cog opens settings as a page in the overlay viewer.
+        # Drive that page directly, as the viewer's iframe loads it.
+        page.goto(base_url + "?view=settings", wait_until="networkidle")
         return page, browser, pw, stop_fn
 
     def _cleanup(self, browser, pw, stop_fn):
@@ -109,8 +110,12 @@ class TestTogglePanelFlow(unittest.TestCase):
         try:
             page = browser.new_page()
             page.goto(base_url + "#model-row-cheap", wait_until="networkidle")
-            page.locator("#settings-overlay").wait_for(state="visible", timeout=5000)
-            self.assertEqual(page.locator("#settings-overlay #panel-models").count(), 1)
+            page.locator("#viewer-overlay").wait_for(state="visible", timeout=5000)
+            frame = page.frame_locator("#viewer-frame")
+            frame.locator("#settings-overlay").wait_for(state="visible", timeout=5000)
+            self.assertEqual(frame.locator("#settings-overlay #panel-models").count(), 1)
+            page.keyboard.press("Escape")
+            page.locator("#viewer-overlay").wait_for(state="hidden", timeout=5000)
         finally:
             self._cleanup(browser, pw, stop_fn)
 

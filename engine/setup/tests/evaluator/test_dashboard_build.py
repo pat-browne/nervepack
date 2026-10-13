@@ -371,6 +371,40 @@ class TestBuild(unittest.TestCase):
         grad_out = json.loads(m.group(1))
         self.assertEqual(grad_out["candidates"], [])
 
+    def test_graduation_dismissed_candidates_are_filtered(self):
+        """A dismissal stored next to graduation-candidates.json hides that candidate."""
+        with tempfile.TemporaryDirectory() as d:
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "strategy", "name": "s1"},
+                                          {"kind": "playbook", "name": "p1"}],
+                           "thresholds": {}}, fh)
+            with open(os.path.join(d, "graduation-dismissed.json"), "w") as fh:
+                json.dump(["strategy:s1"], fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});", js, re.S)
+        names = [c["name"] for c in json.loads(m.group(1))["candidates"]]
+        self.assertEqual(names, ["p1"])
+
+    def test_proposals_emitted(self):
+        """build.py emits window.PROPOSALS, one entry per `### a vs b` heading."""
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "2026-09-30.md"), "w") as fh:
+                fh.write("# P\n\n### a vs b\n\n**Recommendation: keep separate.**\n")
+            with open(os.path.join(d, "REJECTED.md"), "w") as fh:
+                fh.write("- old\n")
+            js = run_build("", NP_COMPACT_PROPOSALS_DIR=d)
+        m = re.search(r"window\.PROPOSALS = (\[.*?\]);\n", js, re.S)
+        self.assertTrue(m, "window.PROPOSALS missing")
+        out = json.loads(m.group(1))
+        self.assertEqual(out[0]["file"], "2026-09-30.md")
+        self.assertEqual(out[0]["proposals"][0]["title"], "a vs b")
+        self.assertTrue(out[0]["proposals"][0]["keep_separate"])
+
+    def test_proposals_missing_dir_is_empty(self):
+        js = run_build("", NP_COMPACT_PROPOSALS_DIR="/nonexistent/compact")
+        self.assertIn("window.PROPOSALS = [];", js)
+
     def test_ledger_emitted_from_fixture(self):
         """build.py emits window.LEDGER from a committed ledger.jsonl (written by
         np-ledger-append.py, F5/#251) - the change-keyed record, distinct from the
