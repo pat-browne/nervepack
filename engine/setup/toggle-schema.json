@@ -389,10 +389,6 @@
   "journal": {
     "description": "Session journal: a local append-only record of each session's goal, hypotheses, struggles and progress, seeded at SessionStart and checkpointed before compaction."
   },
-  "journal.model": {
-    "type": "string",
-    "description": "Declared model for journal checkpoints. Not read at runtime today: the checkpoint uses the cheap tier from the models family."
-  },
   "journal.ttl_days": {
     "type": "number",
     "min": 1,
