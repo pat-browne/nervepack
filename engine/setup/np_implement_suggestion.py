@@ -525,7 +525,10 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
                                     input=prompt, cwd=cwd, timeout=timeout)
         np_model.check_auth(r.stdout)   # override bypasses agent(), so guard here too
         return r.returncode, r.stdout, r.stderr
-    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout, feature="implement")
+    # A tool list without Bash marks a kind job. Run it restricted: no shell, no bypass.
+    restricted = "Bash" not in tools.split()
+    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout, feature="implement",
+                          restricted=restricted)
 
 
 class ModelRejected(Exception):

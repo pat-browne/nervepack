@@ -127,5 +127,38 @@ class TestKinds(unittest.TestCase):
         self.assertIn("Bash", seen[0].split())
 
 
+class TestRestrictedArgv(unittest.TestCase):
+    def test_kind_job_argv_has_no_bash_and_no_bypass(self):
+        import np_model
+        captured = {}
+
+        def fake_run(argv, **kw):
+            captured["argv"] = argv
+            return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+        orig = imp.np_bashlib.run_killtree
+        np_model.np_bashlib.run_killtree = fake_run
+        self.addCleanup(setattr, np_model.np_bashlib, "run_killtree", orig)
+        os.environ.pop("IMPLEMENT_LLM", None)
+        os.environ["NP_LLM_BACKEND"] = "claude"
+        self.addCleanup(os.environ.pop, "NP_LLM_BACKEND", None)
+        imp._default_agent_fn("p", imp._KIND_TOOLS, None, 5)
+        argv = captured["argv"]
+        joined = " ".join(argv)
+        self.assertNotIn("bypassPermissions", joined)
+        self.assertIn("acceptEdits", argv)
+        tools = argv[argv.index("--tools") + 1]
+        self.assertNotIn("Bash", tools)
+        self.assertEqual(argv[argv.index("--disallowedTools") + 1], "Bash")
+        allowed = argv[argv.index("--allowedTools") + 1]
+        self.assertNotIn("Bash", allowed)
+
+    def test_suggestion_argv_unchanged(self):
+        import np_model
+        argv = np_model.agent_argv("m", imp._AGENT_TOOLS)
+        self.assertIn("bypassPermissions", argv)
+        self.assertIn("Bash", argv)
+
+
 if __name__ == "__main__":
     unittest.main()
