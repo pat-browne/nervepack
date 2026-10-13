@@ -9,9 +9,14 @@ import sys
 def load_scores(path):
     scores = []
     with open(path) as fh:
-        for line in fh:
-            rec = json.loads(line)
-            scores.append(rec["score"])
+        for lineno, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+                scores.append(rec["score"])
+            except (json.JSONDecodeError, KeyError) as exc:
+                raise ValueError(f"{path}:{lineno}: bad record ({exc!r})") from exc
     return scores
 
 
@@ -28,6 +33,8 @@ def top_sessions(path, n=5):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.exit("usage: np_bot_probe.py <metrics.jsonl>")
     print(f"mean={mean_score(sys.argv[1]):.2f}")
     for r in top_sessions(sys.argv[1]):
         print(r["session_id"], r["score"])
