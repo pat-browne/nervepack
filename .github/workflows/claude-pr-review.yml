@@ -42,6 +42,7 @@ jobs:
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: |
             --max-turns 15
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr review:*),Bash(gh pr comment:*)"
             --append-system-prompt "${{ env.STANDARDS }}"
       - name: Upload review transcript
         if: always() && steps.review.outputs.execution_file != ''
