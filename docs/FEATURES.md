@@ -364,6 +364,8 @@ source's `status: graduated`.
 a committed, content-routed `graduation-candidates.json`; `build.py` `load_graduation()`
 emits `window.GRADUATION` and `index.html` renders a Graduation-candidates panel
 (fail-open empty state). Keeps the engine PII-clean. The data lives in the overlay.
+Served, each row has **Graduate** (an agent job, see "Suggestions review") and
+**Dismiss**.
 
 **Situational example.** `security-review` reaches `seen: 30` and 8 KB. The daily
 routine flags it in the marker file **and the dashboard's Graduation panel**. You run
@@ -466,8 +468,9 @@ the reconnect loop).
 into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
 and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
 `index.html` renders it as a grouped/collapsible left sidebar (entities / concepts /
-sources-by-topic) with a client-side search filter; clicking an entry opens the
-build-rendered HTML page in a new tab; Markdown stays the source (invariant 14).
+sources-by-topic) with a client-side search filter. Clicking an entry opens the
+build-rendered HTML page in the sandboxed overlay viewer. A modified click still
+opens a new tab. Markdown stays the source (invariant 14).
 `build.py` `md_to_html`/`render_pages` writes `data/wiki/{topics,concepts}/*.html` into the
 content overlay at build time (content-resident & gitignored). Param-gated by
 `evaluator.wiki_nav` (default on); off OR no `wiki/` dir → empty index, the sidebar
@@ -508,8 +511,36 @@ committed base, in `pr` or `direct` mode; **Reject** resolves it.
 A second click on a queued or running row does nothing. Rows show queued (with
 position), running, then done or failed.
 
+**Paging.** The Suggestions panel shows 10 rows per page with Prev / Next and a
+page count. Review and Clear re-render from page 1.
+
+**Other agent jobs on the same queue.** The job takes `--kind=compact|graduate`.
+A kind picks its own prompt and starts in the content overlay. It skips the
+suggestion ledger.
+
+- **Compact proposals panel.** `build.py` parses `compact-proposals/<date>.md`
+  into `window.PROPOSALS`, one row per `### a vs b` entry.
+- **Apply** queues a `compact` job (`agents/np-flow-apply-compact-proposal.md`).
+- **Reject** appends a one-line note to `REJECTED.md` and drops the entry. An
+  empty file is deleted. A "keep separate" row makes Reject the primary button.
+- **Graduate** queues a `graduate` job (`agents/np-flow-graduate-candidate.md`)
+  that runs the np-core-graduate flow.
+- **Dismiss** writes `graduation-dismissed.json` next to
+  `graduation-candidates.json`. `build.py` filters dismissed rows out.
+
+**Overlay viewer.** Wiki and skill pages open in a modal iframe with
+"Open in new tab" and "Close". Esc or a backdrop click closes it, so the list
+keeps its place. Served, the settings cog opens `index.html?view=settings` in the
+same viewer.
+
+Wiki pages get `sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"`
+with no origin. Dashboard views keep the origin to call the API. Every frame sets
+`referrerpolicy="no-referrer"`.
+
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
 `np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
+`np_dashboard_actions.py`, `agents/np-flow-apply-compact-proposal.md`,
+`agents/np-flow-graduate-candidate.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
 
 ## Model selection + availability probe

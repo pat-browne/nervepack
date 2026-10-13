@@ -61,6 +61,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))  # engine/setup -> engine -> repo root
 
 _AGENT_TOOLS = "Read Edit Write Bash Grep Glob"
+# Kind jobs (compact/graduate) read untrusted proposal and lesson text, so they
+# get no shell. The harness makes their commit and always lands them as a PR.
+_KIND_TOOLS = "Read Edit Write Grep Glob"
 
 
 def _agent_timeout():
@@ -284,6 +287,19 @@ _TARGET_ORDER = {
 }
 _DEFAULT_ORDER = ("engine", "content")
 
+# Non-suggestion jobs the dashboard queues through this same machinery.
+# Each kind has its own agent prompt, starts in the content overlay, and
+# skips the suggestion ledger (nothing to resolve there).
+_KIND_PROMPTS = {
+    "compact": "np-flow-apply-compact-proposal.md",
+    "graduate": "np-flow-graduate-candidate.md",
+}
+
+
+def _normalize_kind(kind):
+    k = (kind or "").strip().lower()
+    return k if k in _KIND_PROMPTS else ""
+
 
 def _normalize_target(target):
     """The evaluator's target if we know it, else "" (never the raw value)."""
@@ -351,7 +367,7 @@ class _Attempt:
         self.agent_sha = ""
 
 
-def _agent_call(prompt, cwd, agent_fn, log_path):
+def _agent_call(prompt, cwd, agent_fn, log_path, tools=_AGENT_TOOLS):
     """Run the agentic pass; fail-open on a timeout (mirrors bash's `timeout 600`
     + `|| true`: a hung agent must not wedge the job). Returns (output, failure)
     -- `failure` is a short reason string when the pass did not complete, which
@@ -359,7 +375,7 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
     than a bare "no commit"."""
     timeout = _agent_timeout()
     try:
-        returncode, out, err = agent_fn(prompt, _AGENT_TOOLS, cwd, timeout)
+        returncode, out, err = agent_fn(prompt, tools, cwd, timeout)
     except subprocess.TimeoutExpired:
         reason = "agent pass timed out after %ss" % timeout
         _log(log_path, reason)
@@ -410,7 +426,8 @@ def _agent_commit(repo, wt, base_sha):
     return end_sha
 
 
-def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
+def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
+                  tools=_AGENT_TOOLS, commit_msg=None):
     """Isolate the agent in a throwaway git WORKTREE off the committed base tip
     of `repo`. The agent never sees (and can never commit) the caller's
     uncommitted work; the worktree lives OUTSIDE the repo (a temp dir, always
@@ -451,7 +468,7 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
         return a
 
     try:
-        out, failure = _agent_call(prompt, wt, agent_fn, log_path)
+        out, failure = _agent_call(prompt, wt, agent_fn, log_path, tools)
 
         if "NOT_IMPLEMENTABLE" in out:
             a.state = "not_implementable"
@@ -459,6 +476,17 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
             a.detail = (m.group(0)[:160] if m else "") or ("%s repo: not a code change" % label)
             return a
 
+        if commit_msg:
+            # No shell for the agent, so the harness commits. The worktree is
+            # isolated, so staging everything in it touches only this job.
+            for args in (("add", "-A"), ("commit", "-q", "-m", commit_msg)):
+                r = _git(wt, *args)
+                # "nothing to commit" is the no-change case _agent_commit reports.
+                if r.returncode != 0 and "nothing" not in (r.stdout or "") + (r.stderr or ""):
+                    a.state = "no_commit"
+                    a.detail = "%s repo: git %s failed: %s" % (
+                        label, args[0], ((r.stderr or r.stdout or "").strip())[:160])
+                    return a
         end_sha = _agent_commit(repo, wt, base_sha)
         if not end_sha:
             a.state = "no_commit"
@@ -503,7 +531,10 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
                                     input=prompt, cwd=cwd, timeout=timeout)
         np_model.check_auth(r.stdout)   # override bypasses agent(), so guard here too
         return r.returncode, r.stdout, r.stderr
-    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout, feature="implement")
+    # A tool list without Bash marks a kind job. Run it restricted: no shell, no bypass.
+    restricted = "Bash" not in tools.split()
+    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout, feature="implement",
+                          restricted=restricted)
 
 
 class ModelRejected(Exception):
@@ -584,7 +615,7 @@ def _clear_running(qdir):
         pass
 
 
-def enqueue(qdir, status_dir, text, edited=None, target=None):
+def enqueue(qdir, status_dir, text, edited=None, target=None, kind=None):
     """Add a job unless the same suggestion is queued or running. True if added."""
     key = _status_key(text)
     if queue_position(qdir, key):
@@ -593,7 +624,7 @@ def enqueue(qdir, status_dir, text, edited=None, target=None):
     if running and running.get("key") == key:
         return False
     entry = {"key": key, "text": text, "edited": edited or "", "target": target or "",
-             "enqueued_at": _now()}
+             "kind": _normalize_kind(kind), "enqueued_at": _now()}
     try:
         os.makedirs(qdir, exist_ok=True)
         name = "%020d-%s.json" % (time.time_ns(), key)
@@ -690,7 +721,7 @@ def prune(status_dir, qdir, ttl_days=None, now=None):
 
 def implement(text, edited=None, target=None, repo=None, log_path=None, lock_path=None,
               status_dir=None, prompt_file=None, resolve_fn=None, agent_fn=None,
-              gh_pr_create_fn=None):
+              gh_pr_create_fn=None, kind=None):
     """Implement ONE suggestion, or queue it behind the running job. Returns 0.
     State travels via the status file and the log (fail-open).
 
@@ -726,9 +757,10 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
     except Exception as exc:
         _log(log_path, "prune failed: %s" % exc)
 
-    first = {"text": text, "edited": edited or "", "target": target or ""}
+    first = {"text": text, "edited": edited or "", "target": target or "",
+             "kind": _normalize_kind(kind)}
     if not _acquire_lock(lock_path):
-        if enqueue(qdir, ctx["status_dir"], text, edited, target):
+        if enqueue(qdir, ctx["status_dir"], text, edited, target, kind):
             _log(log_path, "queued behind the running job: %r" % text)
         else:
             _log(log_path, "already queued or running; ignoring %r" % text)
@@ -768,21 +800,28 @@ def _run_guarded(job, qdir, ctx):
     _drop_queued(qdir, key)
     _set_running(qdir, key, text)
     try:
-        _run_one(text, job.get("edited") or None, job.get("target") or None, ctx)
+        kind = {"kind": job["kind"]} if job.get("kind") else {}
+        _run_one(text, job.get("edited") or None, job.get("target") or None, ctx, **kind)
     except Exception as exc:
         reason = ("job raised: %s: %s" % (type(exc).__name__, exc))[:300]
         _write_status(ctx["status_dir"], key, "failed", reason)
         _log(ctx["log_path"], "implement failed, left unresolved: %r (%s)" % (text, reason))
 
 
-def _run_one(text, edited, target, ctx):
+def _run_one(text, edited, target, ctx, kind=None):
     repo, log_path, status_dir = ctx["repo"], ctx["log_path"], ctx["status_dir"]
     key = _status_key(text)
     task = (edited or "").strip() or text
+    kind = _normalize_kind(kind)
+    if kind:
+        # A compact/graduate job: its own prompt, overlay first, no ledger.
+        ctx = dict(ctx, prompt_file=os.path.join(_NP, "agents", _KIND_PROMPTS[kind]),
+                   resolve_fn=lambda t, note="": None)
+        target = "skills"
 
     # Machines share one content overlay, so the ledger shows each other's work.
     # A suggestion resolved on the last sync needs no second agent pass.
-    if np_suggestion_resolve.is_resolved(text):
+    if not kind and np_suggestion_resolve.is_resolved(text):
         _write_status(status_dir, key, "already_resolved", "resolved elsewhere; nothing to do")
         _log(log_path, "already resolved (another machine or an earlier run); skipping %r" % text)
         return
@@ -794,6 +833,11 @@ def _run_one(text, edited, target, ctx):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
+    # Kind jobs never land direct, whatever implement_mode says.
+    if kind:
+        mode = "pr"
+    tools = _KIND_TOOLS if kind else _AGENT_TOOLS
+    commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
     content_repo = _resolve_content_repo(repo)
     slug = _slug(task)
     branch = "np-suggest/%s" % slug
@@ -801,19 +845,20 @@ def _run_one(text, edited, target, ctx):
     # Best repo first, per the evaluator's target. Absent repos drop out.
     repos = {"engine": repo, "content": content_repo}
     labels = {"engine": "engine", "content": "content overlay"}
-    planned = [kind for kind in _attempt_order(target) if repos.get(kind)]
+    planned = [r for r in _attempt_order(target) if repos.get(r)]
 
     land_repo = land_label = base = base_sha = agent_sha = ""
     tried = []
 
     # An auth or model failure fails every repo identically, so stop at the first (#211).
     try:
-        for index, kind in enumerate(planned, 1):
-            prompt = _build_prompt(ctx["prompt_file"], task, labels[kind], index, len(planned), target)
-            attempt = _attempt_repo(repos[kind], labels[kind], branch, prompt, ctx["agent_fn"], log_path)
-            tried.append((labels[kind], attempt))
+        for index, r in enumerate(planned, 1):
+            prompt = _build_prompt(ctx["prompt_file"], task, labels[r], index, len(planned), target)
+            attempt = _attempt_repo(repos[r], labels[r], branch, prompt, ctx["agent_fn"], log_path,
+                                    tools=tools, commit_msg=commit_msg)
+            tried.append((labels[r], attempt))
             if attempt.state == "implemented":
-                land_repo, land_label = repos[kind], kind
+                land_repo, land_label = repos[r], r
                 base, base_sha, agent_sha = attempt.base, attempt.base_sha, attempt.agent_sha
                 break
     except np_model.AuthError as exc:
@@ -845,7 +890,8 @@ def _run_one(text, edited, target, ctx):
             _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
         return
 
-    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"])
+    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"],
+                force_pr=bool(kind))
 
     note = ("implemented as: %s" % task) if task != text else ""
     try:
@@ -858,7 +904,8 @@ def _run_one(text, edited, target, ctx):
          % (text, (" as %r" % task) if task != text else "", ref, land_label))
 
 
-def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn):
+def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn,
+          force_pr=False):
     """Land the agent's commit per mode/repo. Returns the ref (a branch name,
     a base branch name, or a PR URL) recorded in the status file."""
     gh_pr_create_fn = gh_pr_create_fn or _default_gh_pr_create
@@ -871,7 +918,8 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
         _log(log_path, "refusing to land %r: not a verified commit sha (%s repo)" % (agent_sha, land_label))
         return branch
 
-    if land_label == "engine" and mode == "pr":
+    # force_pr: a kind job lands as a branch plus PR in either repo, never direct.
+    if force_pr or (land_label == "engine" and mode == "pr"):
         ref = branch
         if _git(land_repo, "remote", "get-url", "origin").returncode == 0:
             push = _git(land_repo, "push", "-q", "-u", "origin", branch)

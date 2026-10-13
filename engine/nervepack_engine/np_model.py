@@ -417,7 +417,27 @@ def complete(prompt, system=None, timeout=None, feature=None):
     return r.stdout
 
 
-def agent(prompt, tools, cwd=None, timeout=None, feature=None):
+def agent_argv(model, tools, restricted=False):
+    """The claude argv for an agentic pass.
+
+    restricted: the run reads untrusted text. --tools limits which tools exist.
+    Bash is disallowed outright. Permissions are not bypassed.
+    """
+    base = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
+            "--settings", '{"hooks":{},"includeCoAuthoredBy":false}']
+    names = tools.split()
+    if restricted:
+        names = [t for t in names if t != "Bash"]
+        # One comma-joined value per list flag, so none swallows the next flag.
+        return base + ["--permission-mode", "acceptEdits", "--model", model,
+                       "--tools", ",".join(names), "--allowedTools", ",".join(names),
+                       "--disallowedTools", "Bash"]
+    # --allowedTools is variadic. names mirrors bash's unquoted word-split.
+    return base + ["--permission-mode", "bypassPermissions",
+                   "--model", model, "--allowedTools"] + names
+
+
+def agent(prompt, tools, cwd=None, timeout=None, feature=None, restricted=False):
     """Run an agentic task (file edits, commits): tools-enabled, permissions
     bypassed, agent-tier model. Covers `agent` for both backends.
     Returns (returncode, stdout, stderr) -- callers need the exit code
@@ -431,10 +451,7 @@ def agent(prompt, tools, cwd=None, timeout=None, feature=None):
     if backend == "claude":
         # --allowedTools is variadic (consumes space-separated tokens until the
         # next flag) -- tools.split() mirrors bash's unquoted `$tools` word-split.
-        argv = [_claude_bin(), "-p", "--session-id", _mint_session_id(),
-                "--settings", '{"hooks":{},"includeCoAuthoredBy":false}',
-                "--permission-mode", "bypassPermissions",
-                "--model", model, "--allowedTools"] + tools.split()
+        argv = agent_argv(model, tools, restricted)
     elif backend == "local":
         agent_cmd = os.environ.get("NP_LLM_AGENT_CMD")
         if not agent_cmd:
@@ -442,6 +459,8 @@ def agent(prompt, tools, cwd=None, timeout=None, feature=None):
                             "(an agentic host, e.g. goose); see onboard\n")
         argv = ["bash", "-c", agent_cmd]
         env["NP_LLM_TOOLS"] = tools
+        if restricted:
+            env["NP_LLM_RESTRICTED"] = "1"
     else:
         raise ValueError("np_model: backend %r not implemented (only claude/local)" % backend)
     # run_killtree, not subprocess.run -- see complete()'s comment above; the

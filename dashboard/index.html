@@ -124,6 +124,21 @@
            box-shadow:var(--shadow); width:100%; max-width:760px;
            max-height:calc(100vh - 120px); overflow-y:auto; padding:16px; }
   .modalhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  /* Overlay viewer: one sandboxed iframe for wiki pages and large panels. */
+  .viewer-overlay { padding:24px; align-items:stretch; }
+  .viewer { max-width:1100px; max-height:none; height:calc(100vh - 48px);
+            display:flex; flex-direction:column; overflow:hidden; }
+  .viewer iframe { flex:1 1 auto; width:100%; border:1px solid var(--border);
+                   border-radius:var(--radius-sm); background:var(--surface); }
+  a.btn { text-decoration:none; color:inherit; display:inline-flex; align-items:center; }
+  .pager { display:flex; align-items:center; justify-content:flex-end; gap:8px;
+           margin-top:8px; font-size:11px; color:var(--text-tertiary); }
+  /* ?view=settings: the settings panel alone, as a page inside the viewer. */
+  body.view-settings .shell { display:none; }
+  body.view-settings #settings-overlay { position:static; background:none; padding:0; }
+  body.view-settings #settings-overlay .modal { max-width:none; max-height:none;
+                                                box-shadow:none; border:none; }
+  body.view-settings #btn-settings-close { display:none; }
   .grid { display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr 1fr; }
   /* Must come AFTER the base .grid rule — same specificity, so source order decides.
      Declared up in the top @media block it silently lost and the grid never stacked. */
@@ -298,6 +313,7 @@
       <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-proposals" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
       <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
       <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
@@ -319,6 +335,21 @@
         <div class="panelhead"><span class="lbl">Feature toggles</span></div>
         <div id="panel-toggles"></div>
       </section>
+    </div>
+  </div>
+
+  <div class="modal-overlay viewer-overlay" id="viewer-overlay" hidden>
+    <div class="modal viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
+      <div class="modalhead">
+        <span class="lbl" id="viewer-title">Viewer</span>
+        <div class="btnrow">
+          <a class="btn sm" id="viewer-newtab" href="about:blank" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+          <button class="btn sm" id="viewer-close" type="button">Close</button>
+        </div>
+      </div>
+      <iframe id="viewer-frame" title="Viewer" src="about:blank"
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              referrerpolicy="no-referrer"></iframe>
     </div>
   </div>
 
@@ -614,7 +645,74 @@
   // server's own refusal to write them — see np-dashboard-server.py SELF_LOCKOUT_*.
   const elToggles = document.getElementById("panel-toggles");
 
+  // ---- Overlay viewer: one sandboxed iframe modal for wiki/skill pages and for
+  // large panels (settings). Esc or a backdrop click closes it. The page behind
+  // never navigates, so lists keep their scroll, and focus returns to the opener.
+  const VIEW = new URLSearchParams(location.search).get("view") || "";
+  const SANDBOX = {
+    // Rendered wiki pages run mermaid but need no origin, storage or parent access.
+    PAGE: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
+    // Dashboard views (?view=...) call the same-origin API, so they keep the origin.
+    APP: "allow-scripts allow-same-origin allow-forms allow-modals",
+  };
+  const viewerOverlay = document.getElementById("viewer-overlay");
+  let viewerFrame = document.getElementById("viewer-frame");
+  const viewerNewTab = document.getElementById("viewer-newtab");
+  let viewerOpener = null, viewerOnClose = null;
+  function openViewer(url, opts = {}) {
+    viewerOpener = document.activeElement;
+    viewerOnClose = opts.onClose || null;
+    // A fresh frame per open, so its sandbox is fixed at creation. Flipping the
+    // attribute on a live frame is unreliable across browsers.
+    const f = viewerFrame.cloneNode(false);
+    f.setAttribute("sandbox", opts.sandbox || SANDBOX.PAGE);
+    f.setAttribute("referrerpolicy", "no-referrer");
+    f.src = url;
+    f.addEventListener("load", wireFrameEsc);
+    viewerFrame.replaceWith(f);
+    viewerFrame = f;
+    viewerNewTab.href = url;
+    document.getElementById("viewer-title").textContent = opts.title || "Viewer";
+    viewerOverlay.hidden = false;
+    document.getElementById("viewer-close").focus();
+  }
+  function closeViewer() {
+    if (viewerOverlay.hidden) return;
+    viewerOverlay.hidden = true;
+    viewerFrame.src = "about:blank";
+    viewerOpener?.focus?.({ preventScroll: true });
+    const after = viewerOnClose; viewerOnClose = null;
+    if (after) after();
+  }
+  document.getElementById("viewer-close").addEventListener("click", closeViewer);
+  viewerOverlay.addEventListener("click", e => { if (e.target === viewerOverlay) closeViewer(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !viewerOverlay.hidden) closeViewer();
+  });
+  // Esc inside a same-origin view closes too. A sandboxed page is cross-origin,
+  // so the access throws and only the parent handler applies.
+  function wireFrameEsc() {
+    try {
+      viewerFrame.contentDocument.addEventListener("keydown", e => {
+        if (e.key === "Escape") closeViewer();
+      });
+    } catch (e) { /* opaque-origin page */ }
+  }
+  // Any link marked data-viewer opens in the overlay instead of a new tab.
+  // A modified click (cmd/ctrl/shift/middle) keeps the browser's own behavior.
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest("a[data-viewer]");
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    openViewer(a.getAttribute("href"), { title: a.getAttribute("data-viewer") || "Viewer" });
+  });
+  function openSettingsView(hash) {
+    openViewer("index.html?view=settings" + (hash || ""),
+               { sandbox: SANDBOX.APP, title: "Settings", onClose: () => refreshModels() });
+  }
+
   // Settings modal (feature toggles live behind the header cog rather than inline).
+  // Served, the cog opens it as a page in the viewer (?view=settings) for more room.
   const settingsOverlay = document.getElementById("settings-overlay");
   const btnSettings = document.getElementById("btn-settings");
   const btnSettingsClose = document.getElementById("btn-settings-close");
@@ -624,6 +722,7 @@
   }
   // Open the modal and scroll to one feature's model row (#model-row-<key>).
   async function openModelRow(hash) {
+    if (SERVED && VIEW !== "settings") return openSettingsView(hash);
     await openSettings();
     document.getElementById(hash.slice(1))?.scrollIntoView({ block: "center" });
   }
@@ -636,8 +735,13 @@
   });
   window.addEventListener("hashchange", () => { if (location.hash.startsWith("#model-row-")) openModelRow(location.hash); });
   if (location.hash.startsWith("#model-row-")) openModelRow(location.hash);
-  function closeSettings() { settingsOverlay.hidden = true; }
-  btnSettings?.addEventListener("click", openSettings);
+  function closeSettings() { if (VIEW !== "settings") settingsOverlay.hidden = true; }
+  btnSettings?.addEventListener("click", () =>
+    SERVED && VIEW !== "settings" ? openSettingsView() : openSettings());
+  if (VIEW === "settings") {
+    document.body.classList.add("view-settings");
+    if (!location.hash.startsWith("#model-row-")) openSettings();
+  }
   btnSettingsClose?.addEventListener("click", closeSettings);
   settingsOverlay?.addEventListener("click", e => { if (e.target === settingsOverlay) closeSettings(); });
   document.addEventListener("keydown", e => {
@@ -779,17 +883,101 @@
     const cands = Array.isArray(G.candidates) ? G.candidates : [];
     const th = G.thresholds || {};
     const thNote = (th.graduate_seen != null && th.graduate_kb != null)
-      ? `<div class="note">overdue when seen ≥ ${th.graduate_seen} or body &gt; ${th.graduate_kb} KB · run <code>np-core-contribute</code> to graduate</div>`
+      ? `<div class="note">overdue when seen ≥ ${th.graduate_seen} or body &gt; ${th.graduate_kb} KB · Graduate runs the <code>np-core-graduate</code> flow as an agent job</div>`
       : "";
     elGrad.innerHTML = `<span class="lbl">Graduation candidates</span>` + (cands.length
-      ? cands.map(c => `<div class="sug">
+      ? cands.map(c => `<div class="sug" data-kind="${esc(c.kind || "")}" data-name="${esc(c.name || "")}">
           <div class="txt">
             <span class="tag">${esc(c.kind || "")}</span> <b>${esc(c.name || "")}</b>
             <div class="meta">seen ${c.seen || 0} · ${((c.bytes || 0) / 1024).toFixed(1)} KB · ${
               (Array.isArray(c.reasons) ? c.reasons : []).map(r => esc(r)).join(" + ") || "—"}</div>
-          </div>
+          </div>${SERVED ? `<span class="rowacts">
+            <button class="btn sm primary" data-graduate>Graduate</button>
+            <button class="btn sm" data-dismiss title="Hide this candidate. Stored next to graduation-candidates.json.">Dismiss</button>
+          </span>` : ""}
         </div>`).join("") + thNote
       : empty("No strategies or playbooks are overdue to graduate."));
+    if (!SERVED) return;
+    const body = row => ({ kind: row.dataset.kind, name: row.dataset.name });
+    elGrad.querySelectorAll("[data-dismiss]").forEach(b => b.addEventListener("click", async () => {
+      const row = b.closest(".sug");
+      b.disabled = true;
+      try { await api("/api/graduation/dismiss", body(row)); row.remove(); }
+      catch (e) { b.disabled = false; alert("Dismiss failed: " + e.message); }
+    }));
+    elGrad.querySelectorAll("[data-graduate]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/graduation/graduate", body(row), () => setTimeout(() => row.remove(), 4000));
+    }));
+  }
+
+  // Shared runner for agent jobs queued through the implement machinery
+  // (compact Apply, graduation Graduate). Starts the job, then polls
+  // /api/implement-status with the job text the server returns.
+  async function runJob(b, route, body, onDone) {
+    const acts = b.closest(".rowacts");
+    const buttons = [...acts.querySelectorAll("button")];
+    buttons.forEach(x => x.style.display = "none");
+    const pill = document.createElement("span");
+    acts.appendChild(pill);
+    const set = (cls, t) => { pill.className = "pill " + cls; pill.textContent = t; };
+    const restore = () => buttons.forEach(x => x.style.display = "");
+    set("warn", "⋯ Starting…");
+    let r;
+    try { r = await api(route, body); }
+    catch (e) { set("neg", "✕ " + e.message); setTimeout(() => { pill.remove(); restore(); }, 4000); return; }
+    if (r.deduped) set("warn", "⋯ Already queued");
+    refreshQueue();
+    let tries = 0;
+    const poll = () => setTimeout(async () => {
+      let st;
+      try { st = await (await fetch("/api/implement-status?text=" + encodeURIComponent(r.text))).json(); }
+      catch { return (++tries < 220) && poll(); }
+      const ref = st.ref ? ": " + st.ref : "";
+      if (st.state === "done") { set("pos", "✓ Done" + ref); if (onDone) onDone(); }
+      else if (st.state === "not_implementable") { set("warn", "▲ Left open" + ref); restore(); }
+      else if (st.state === "failed") { set("neg", "✕ Failed" + ref); restore(); }
+      else if (st.state === "queued") { set("warn", "⋯ Queued" + (st.position ? " #" + st.position : "")); poll(); }
+      else if (++tries < 220) { if (st.state === "running") set("warn", "⋯ Running…"); poll(); }
+      else set("warn", "… still running, refresh the page later");
+    }, 3000);
+    poll();
+  }
+
+  // Compact proposals from the weekly-compact agent (compact-proposals/<date>.md),
+  // one row per `### a vs b` entry. Reject notes it in REJECTED.md and drops the
+  // entry. Apply queues an agent job that applies it per AGENTS.md. A "keep
+  // separate" recommendation makes Reject the primary, one-click action.
+  const elProp = document.getElementById("panel-proposals");
+  function renderProposals() {
+    const P = Array.isArray(window.PROPOSALS) ? window.PROPOSALS : [];
+    const rows = [];
+    P.forEach(f => (f.proposals || []).forEach(p => rows.push(Object.assign({ file: f.file, date: f.date }, p))));
+    const paint = () => {
+      if (!elProp.querySelector(".sug")) elProp.innerHTML = `<span class="lbl">Compact proposals</span>` + empty("No compact proposals awaiting review.");
+    };
+    elProp.innerHTML = `<span class="lbl">Compact proposals</span>` + rows.map(p => `<div class="sug" data-file="${esc(p.file)}" data-title="${esc(p.title)}">
+        <div class="txt"><b>${esc(p.title)}</b>
+          <div class="meta">${esc(p.date || "")} · ${p.recommendation ? esc(p.recommendation) : "no recommendation"}</div>
+        </div>${SERVED ? `<span class="rowacts">
+          <button class="btn sm${p.keep_separate ? "" : " primary"}" data-apply>Apply</button>
+          <button class="btn sm${p.keep_separate ? " primary" : ""}" data-reject-prop>Reject</button>
+        </span>` : ""}
+      </div>`).join("")
+      + (rows.length && !SERVED ? `<div class="note">Open the served dashboard for the Apply / Reject buttons.</div>` : "");
+    paint();
+    if (!SERVED) return;
+    const body = row => ({ file: row.dataset.file, title: row.dataset.title });
+    elProp.querySelectorAll("[data-reject-prop]").forEach(b => b.addEventListener("click", async () => {
+      const row = b.closest(".sug");
+      b.disabled = true;
+      try { await api("/api/compact/reject", body(row)); row.remove(); paint(); }
+      catch (e) { b.disabled = false; alert("Reject failed: " + e.message); }
+    }));
+    elProp.querySelectorAll("[data-apply]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/compact/apply", body(row), () => setTimeout(() => { row.remove(); paint(); }, 4000));
+    }));
   }
 
   // B4 · Back-capture backlog: how many prior sessions are still waiting on
@@ -852,6 +1040,7 @@
     elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + empty("No asset usage yet.");
     elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>` + empty("No wins recorded yet.");
     renderGraduation();
+    renderProposals();
     renderToggles();
     renderBacklog();
     renderLedger();
@@ -967,8 +1156,21 @@
       </div>`;
     }
 
-    function renderSug(list, note) {
+    // 10 per page. Review / Clear re-render from page 1. Paging keeps the filters.
+    const SUG_PAGE = 10;
+    let sugPage = 0;
+    function renderSug(list, note, keepPage) {
       list = (list || []).filter(s => !resolvedTexts.has(normSug(s.text)));   // never show resolved
+      const pages = Math.max(1, Math.ceil(list.length / SUG_PAGE));
+      sugPage = keepPage ? Math.min(sugPage, pages - 1) : 0;
+      const shown = list.slice(sugPage * SUG_PAGE, (sugPage + 1) * SUG_PAGE);
+      const pager = pages > 1
+        ? `<div class="pager">
+             <button class="btn sm" id="sug-prev" type="button"${sugPage === 0 ? " disabled" : ""}>‹ Prev</button>
+             <span>Page ${sugPage + 1} of ${pages} · ${list.length} total</span>
+             <button class="btn sm" id="sug-next" type="button"${sugPage >= pages - 1 ? " disabled" : ""}>Next ›</button>
+           </div>`
+        : "";
       const actions = SERVED
         ? `<div class="btnrow">
              <button class="btn" id="btn-mode" title="How Implement applies a change — PR: branch + pull request for review; direct: commit to main and push (no review gate)">Mode: …</button>
@@ -978,9 +1180,12 @@
            </div>`
         : "";
       elSug.innerHTML = `<div class="panelhead"><span class="lbl">Suggestions</span>${actions}</div>`
-        + (list.length ? list.map(sugRow).join("") : empty("Nothing to act on yet."))
+        + (list.length ? shown.map(sugRow).join("") + pager : empty("Nothing to act on yet."))
         + (note ? `<div class="note">${note}</div>` : "")
         + (SERVED ? "" : `<div class="note">Open the served dashboard (evaluator.dashboard_serve on) for the Review / Clear and per-row Implement / Reject buttons.</div>`);
+      const turn = d => () => { sugPage += d; renderSug(list, note, true); elSug.scrollIntoView({ block: "start" }); };
+      document.getElementById("sug-prev")?.addEventListener("click", turn(-1));
+      document.getElementById("sug-next")?.addEventListener("click", turn(1));
       if (SERVED) wireSugActions(list);
     }
 
@@ -1161,6 +1366,7 @@
 
     // B3 · Graduation candidates (overdue strategies/playbooks → skills)
     renderGraduation();
+    renderProposals();
     renderToggles();
 
     // B4 · Back-capture backlog (pending / oldest-age-vs-ceiling / drain rate)
@@ -1334,6 +1540,14 @@
     }
 
     if (elSearch) elSearch.addEventListener("input", filter);
+    // Open a page in the overlay viewer. The nav never navigates, so its scroll
+    // and open groups stay put. A modified click still opens a new tab.
+    elList.addEventListener("click", e => {
+      const a = e.target.closest("a.wikiitem");
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      e.preventDefault();
+      openViewer(a.getAttribute("href"), { title: a.getAttribute("title") || "Wiki" });
+    });
     // default: Topics group open, individual topics collapsed; Concepts collapsed
     draw(leaves, false);
   })();
