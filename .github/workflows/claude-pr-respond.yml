@@ -56,6 +56,11 @@ jobs:
                 *) echo "$ACTOR has '$perm' access, skipping"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0 ;;
               esac ;;
           esac
+          # The ref is interpolated into --allowedTools, so reject anything
+          # that could end a rule or add one (",", ")", spaces, "$").
+          if ! printf '%s' "$head_ref" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            printf 'Unsafe branch name %q, skipping\n' "$head_ref"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           echo "num=$NUM" >> "$GITHUB_OUTPUT"
           echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
       - name: Checkout PR branch
@@ -109,7 +114,9 @@ jobs:
                WRITE, MAINTAIN or ADMIN.
             2. For each one, decide: valid (fix it) or no-op (explain why).
                - Valid: make the smallest fix, commit
-                 with a message naming the comment, push to ${{ steps.pr.outputs.ref }}.
+                 with a message naming the comment, then push with exactly
+                 `git push origin HEAD:${{ steps.pr.outputs.ref }}` (no cd prefix, no flags).
+                 Commit messages carry no Co-Authored-By or other AI attribution trailer.
                  Reply "Fixed in <sha>: <one line>". Reply to a conversation comment
                  with gh pr comment, and to a review thread with the addPullRequestReviewThreadReply mutation.
                  If a reply call fails, note the error in your final output.
@@ -122,7 +129,7 @@ jobs:
                open, and do not guess.
           claude_args: |
             --max-turns 40
-            --allowedTools "Read,Edit,Write,Grep,Glob,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin HEAD:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*)"
+            --allowedTools "Read,Edit,Write,Grep,Glob,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin HEAD:${{ steps.pr.outputs.ref }}),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*)"
             --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Edit(.github/**),Write(.github/**)"
             --append-system-prompt "${{ env.STANDARDS }}"
       - name: Upload respond transcript
