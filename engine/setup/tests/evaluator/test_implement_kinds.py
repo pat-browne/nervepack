@@ -87,6 +87,45 @@ class TestKinds(unittest.TestCase):
         self.assertTrue(imp.enqueue(qdir, self.status, "x", kind="compact"))
         self.assertEqual(imp.queue_entries(qdir)[0][1]["kind"], "compact")
 
+    def test_kind_job_never_gets_bash_and_never_lands_direct(self):
+        tools_seen = []
+        orig = imp.np_toggle.param
+        imp.np_toggle.param = lambda name, default=None: "direct" if name == "evaluator.implement_mode" else orig(name, default)
+        self.addCleanup(setattr, imp.np_toggle, "param", orig)
+        base_before = _git(self.content, "rev-parse", "main").stdout.strip()
+
+        def agent(prompt, tools, cwd, timeout):
+            tools_seen.append(tools)
+            with open(os.path.join(cwd, "merged.md"), "w") as fh:
+                fh.write("merged\n")
+            return (0, "done", "")
+
+        for kind, text in (("compact", "2026-09-30.md :: a vs b"), ("graduate", "strategy:s1")):
+            imp.implement(
+                text, None, repo=self.engine, kind=kind,
+                log_path=os.path.join(self._tmp.name, "log"),
+                lock_path=os.path.join(self._tmp.name, "lock"),
+                status_dir=self.status, prompt_file=self.prompt,
+                resolve_fn=lambda t, note="": None, agent_fn=agent,
+                gh_pr_create_fn=lambda *a: "")
+        self.assertEqual(len(tools_seen), 2)
+        for t in tools_seen:
+            self.assertNotIn("Bash", t.split())
+        # The harness committed on a job branch. The overlay base never moved.
+        self.assertEqual(_git(self.content, "rev-parse", "main").stdout.strip(), base_before)
+        branches = _git(self.content, "branch", "--list", "np-suggest/*").stdout
+        self.assertTrue(branches.strip())
+
+    def test_suggestion_job_keeps_bash(self):
+        seen = []
+        imp.implement("Do a thing", None, repo=self.engine,
+                      log_path=os.path.join(self._tmp.name, "log"),
+                      lock_path=os.path.join(self._tmp.name, "lock"),
+                      status_dir=self.status, prompt_file=self.prompt,
+                      resolve_fn=lambda t, note="": None,
+                      agent_fn=lambda p, tools, c, t: (seen.append(tools), (0, "NOT_IMPLEMENTABLE: x", ""))[1])
+        self.assertIn("Bash", seen[0].split())
+
 
 if __name__ == "__main__":
     unittest.main()
