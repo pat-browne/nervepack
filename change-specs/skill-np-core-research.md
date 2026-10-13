@@ -2,7 +2,7 @@
 id: 0064
 status: accepted
 date: 2026-10-13
-tier: standard
+tier: normal
 blast_radius:
   - skills/np-core-research/**
   - .claude-plugin/plugin.json
