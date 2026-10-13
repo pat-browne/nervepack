@@ -29,8 +29,17 @@ def field(text, name, default=None):
         return default
     for line in text[3:end].splitlines():
         if line.startswith(name + ":"):
-            return line[len(name) + 1:].strip()
+            return unquote(line[len(name) + 1:].strip())
     return default
+
+
+def unquote(value):
+    """Strip one layer of YAML single or double quotes from a scalar."""
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1].replace('\\"', '"')
+    return value
 
 
 def list_field(text, name):

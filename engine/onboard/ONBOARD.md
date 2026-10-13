@@ -18,7 +18,7 @@ onboards through these same docs.
 2. **Satisfy each capability** in `engine/onboard/capabilities.json` (the contract). Tiers:
    - **MUST**: `knowledge`, `llm-cli`, `git-sync`, `toggles`, `content`. Onboarding fails without these.
    - **SHOULD**: `session-start`, `session-end-capture`, `session-end-flush`,
-     `scheduled-maint`, `scheduled-auth-token`, `layer-layout`. Wire what your host
+     `scheduled-maint`, `scheduled-auth-token`, `layer-layout`, `skill-listing`. Wire what your host
      supports; mark the rest `unsupported` (and prefer the wrapper fallbacks the
      hints describe). `layer-layout` needs no host wiring: record where each content
      layer keeps its content (`cli.py layout questions`, then the `np-core-layout`
