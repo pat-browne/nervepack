@@ -1,5 +1,5 @@
 ---
-id: 0064
+id: 0067
 status: accepted
 date: 2026-10-13
 tier: normal
@@ -11,7 +11,7 @@ blast_radius:
   - change-specs/skill-np-core-research.md
 ---
 
-# 0064: A research skill for multi-source technical questions
+# 0067: A research skill for multi-source technical questions
 
 ## Context and problem statement
 
