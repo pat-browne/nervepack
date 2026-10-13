@@ -3,6 +3,7 @@ on:
   pull_request:
     types: [opened]
 permissions:
+  id-token: write
   contents: read
   pull-requests: write
   issues: read
