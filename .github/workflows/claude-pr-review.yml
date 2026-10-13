@@ -1,0 +1,43 @@
+name: Claude PR Review
+on:
+  pull_request:
+    types: [opened]
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Load review standards
+        id: standards
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          delim="STANDARDS_$(openssl rand -hex 16)"
+          git fetch --depth=1 origin "$BASE"
+          {
+            echo "STANDARDS<<$delim"
+            # Read from the base branch so a PR cannot rewrite its own review rules.
+            git show "FETCH_HEAD:.github/claude-review-standards.md" 2>/dev/null \
+              || echo "::warning::review standards missing on $BASE" >&2
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+      - name: Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          claude_args: |
+            --max-turns 15
+            --append-system-prompt "${{ env.STANDARDS }}"
