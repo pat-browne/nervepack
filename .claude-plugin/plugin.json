@@ -26,6 +26,7 @@
     "./skills/np-core-layout",
     "./skills/np-core-onboard",
     "./skills/np-core-recall",
+    "./skills/np-core-research",
     "./skills/np-core-suggestions-review",
     "./skills/np-core-sync",
     "./skills/np-core-toggle",
