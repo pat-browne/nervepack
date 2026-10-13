@@ -184,6 +184,31 @@ def _layout_validity_check():
             sys.stderr.write("np-core-sync: layout manifest invalid in %s: %s\n" % (r, exc))
 
 
+def _layout_drift_pass():
+    """Route content added since a layer's interview (np_layout.apply_drift).
+
+    Clear directories get a route recorded through np_layout.record(), which
+    writes the layer's manifest or, when that repo is read-only, the per-machine
+    cache. Never commits or pushes. Ambiguous directories print as open questions.
+    stderr only, fail-open, gated on the sync.layout_drift param."""
+    if np_toggle.param("sync.layout_drift", "on") != "on":
+        return
+    try:
+        roots = np_content.content_layers()
+    except Exception:
+        return
+    for r in roots:
+        try:
+            changes, questions = np_layout.apply_drift(r)
+        except Exception as exc:
+            sys.stderr.write("np-core-sync: layout drift skipped for %s: %s\n" % (r, exc))
+            continue
+        for line in changes:
+            sys.stderr.write("np-core-sync: layout drift: %s\n" % line)
+        for line in questions:
+            sys.stderr.write("np-core-sync: layout question: %s\n" % line)
+
+
 def _setup_step(target, step):
     """Run one `cli.py setup <step>` as a FRESH process from the SYNCED target.
 
@@ -359,6 +384,7 @@ def sync(mode="backup", verbose=False):
     if team_moved or content_moved:
         _relink_skills(target)
     _layout_validity_check()
+    _layout_drift_pass()
     return outcome
 
 

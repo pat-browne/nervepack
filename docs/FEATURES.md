@@ -598,6 +598,13 @@ never auto-rebase or autostash. `np-core-sync` does it on demand.
 
 **Assets.** `np_sync.py` (`cli.py sync`), `np-core-sync`. Toggle: `sync`.
 
+After the pulls, sync checks each layer for layout drift: directories of pages no
+route covers. A directory whose pages share one `type:` gets a route recorded in
+the layer manifest (or the per-machine cache for a read-only layer). A mixed one
+prints a layout question. Sync never commits the manifest. Param
+`sync.layout_drift` (default on) turns it off. The dashboard wiki nav now shows
+reference and roadmap routes as their own groups too.
+
 **Situational example.** A cron pushed a new skill from your laptop overnight. You sit
 down at the desktop, start a session, and the SessionStart backup sync fast-forwards
 it in. The new skill is live without a manual pull.

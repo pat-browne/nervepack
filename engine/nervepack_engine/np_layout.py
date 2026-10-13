@@ -442,7 +442,196 @@ def open_questions(root, layout=None):
             "evidence": "contains markdown: %s" % ", ".join(sample),
         })
 
+    seen = {q["id"] for q in questions}
+    try:
+        report = drift(root, layout)
+    except Exception:
+        report = {"clear": [], "ambiguous": []}
+    for item in report["ambiguous"]:
+        qid = "unmapped-dir:%s" % item["dir"]
+        if qid in seen:
+            continue
+        seen.add(qid)
+        questions.append({
+            "id": qid,
+            "question": ("What does %s/ hold, and should contributions ever land "
+                         "there? Answer with a kind, or say it is not a "
+                         "contribution target." % item["dir"]),
+            "evidence": "pages declare mixed or no type: %s"
+                        % (", ".join(item["values"]) or "none"),
+        })
+
     return questions
+
+
+# --- drift -------------------------------------------------------------------
+# Content added after the interview lands in directories no route names. drift()
+# finds them from page frontmatter heads only (no full content scan), so sync can
+# run it every pass. A directory whose pages all declare one `type:`/`kind:` value
+# is clear and gets a route automatically. Anything else becomes an open question.
+
+_IGNORED_PAGES = frozenset(("README.md", "INDEX.md"))
+_DRIFT_SKIP = _SKIP_DIRS | frozenset(("worktrees",))
+
+
+def _fm_field(head, key):
+    """One frontmatter scalar from a file's head text, unquoted, or ""."""
+    if not head.startswith("---"):
+        return ""
+    parts = head.split("---", 2)
+    if len(parts) < 3:
+        return ""
+    for line in parts[1].splitlines():
+        if line.startswith(key + ":"):
+            return line[len(key) + 1:].strip().strip("'\"")
+    return ""
+
+
+def _containers(layout):
+    """[(container_dir, deep)] for every route path. `deep` is True when the
+    template has a directory segment after the container, so the whole subtree
+    belongs to the route. A flat `dir/{name}.md` owns only `dir` itself."""
+    out = []
+    for spec in (layout.get("routes") or {}).values():
+        if not isinstance(spec, dict):
+            continue
+        for e in _entries(spec) or []:
+            path = (e or {}).get("path") or ""
+            if "{" not in path:
+                continue
+            head, rest = path.split("{", 1)
+            head = head.rstrip("/")
+            if head:
+                out.append((head, "/" in rest))
+    return out
+
+
+def _under(rel, base):
+    return rel == base or rel.startswith(base + "/")
+
+
+def _covered(rel, containers, unmapped):
+    if any(_under(rel, u) for u in unmapped):
+        return True
+    for head, deep in containers:
+        if rel == head or (deep and _under(rel, head)):
+            return True
+    return False
+
+
+def _drift_dirs(root, containers, depth=4):
+    """{rel_dir: [filename]} for markdown pages, bounded depth. Dot-dirs are walked
+    only along the paths some route points into."""
+    heads = [h for h, _d in containers]
+
+    def _on_route(rel):
+        return any(_under(rel, h) or _under(h, rel) for h in heads)
+
+    out = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        rel_dir = "" if rel_dir == "." else rel_dir
+        keep = []
+        for d in sorted(dirnames):
+            child = (rel_dir + "/" + d) if rel_dir else d
+            if d in _DRIFT_SKIP and not (d.startswith(".") and _on_route(child)):
+                continue
+            hidden = d.startswith(".") or any(
+                seg.startswith(".") for seg in rel_dir.split("/") if seg)
+            if hidden and not _on_route(child):
+                continue
+            keep.append(d)
+        dirnames[:] = keep if rel_dir.count("/") < depth - 1 or not rel_dir else []
+        if not rel_dir:
+            continue
+        pages = [f for f in sorted(filenames)
+                 if f.endswith(".md") and f not in _IGNORED_PAGES]
+        if pages:
+            out[rel_dir] = pages
+    return out
+
+
+def drift(root, layout):
+    """Directories holding pages no route or `unmapped` entry covers.
+
+    Returns {"clear": [...], "ambiguous": [...]}. A clear item names the one
+    frontmatter field + value every page shares and the kind it maps to. Reads
+    only each page's head, never its body."""
+    containers = _containers(layout)
+    unmapped = [u.rstrip("/") for u in (layout.get("unmapped") or [])]
+    clear, ambiguous = [], []
+    for rel_dir, pages in sorted(_drift_dirs(root, containers).items()):
+        if _covered(rel_dir, containers, unmapped):
+            continue
+        decl = []
+        for f in pages:
+            head = _read_head(os.path.join(root, rel_dir, f))
+            t = _fm_field(head, "type")
+            decl.append(("type", t) if t else ("kind", _fm_field(head, "kind")))
+        values = sorted({v for _f, v in decl})
+        if len(set(decl)) == 1 and decl[0][1]:
+            field, value = decl[0]
+            clear.append({"dir": rel_dir, "field": field, "value": value,
+                          "kind": "reference" if value in _REFERENCE_KINDS
+                          else "knowledge", "pages": len(pages)})
+        else:
+            ambiguous.append({"dir": rel_dir, "values": [v for v in values if v],
+                              "pages": len(pages)})
+    return {"clear": clear, "ambiguous": ambiguous}
+
+
+def add_route(layout, item):
+    """Add a variant for one clear drift item, in place. Converts a single-path
+    route into variants form without dropping its fields. Returns the variant
+    added, or None when a variant of that name or path already exists."""
+    routes = layout.setdefault("routes", {})
+    value = item["value"]
+    variant = {"name": value, "path": "%s/{name}.md" % item["dir"],
+               "frontmatter": {item["field"]: value},
+               "when": "pages declaring %s: %s (added by sync)"
+                       % (item["field"], value)}
+    spec = routes.get(item["kind"])
+    if not isinstance(spec, dict):
+        routes[item["kind"]] = {"variants": [variant]}
+        return variant
+    if "variants" not in spec:
+        first = dict(spec)
+        fm = first.get("frontmatter") or {}
+        first["name"] = (fm.get("type") or fm.get("kind") or item["kind"])
+        spec.clear()
+        spec["variants"] = [first]
+    for v in spec["variants"]:
+        if v.get("name") == value or v.get("path") == variant["path"]:
+            return None
+    spec["variants"].append(variant)
+    return variant
+
+
+def apply_drift(root):
+    """Run drift on one layer and record clear cases through record().
+
+    Only a layer with a manifest is changed: an inferred layout has no interview
+    yet, so writing one here would skip it. Returns (changes, questions) as
+    human-readable lines. Never commits or pushes."""
+    layout, source = resolve(root)
+    report = drift(root, layout)
+    changes = []
+    if source == "manifest" and report["clear"]:
+        for item in report["clear"]:
+            if add_route(layout, item):
+                changes.append("%s: routed %s/ as %s (%s: %s)"
+                               % (root, item["dir"], item["kind"], item["field"],
+                                  item["value"]))
+        if changes:
+            record(root, layout)
+    elif report["clear"]:
+        for item in report["clear"]:
+            changes.append("%s: %s/ looks like %s (%s: %s), not recorded: no manifest"
+                           % (root, item["dir"], item["kind"], item["field"],
+                              item["value"]))
+    questions = ["%s: %s/ holds mixed or untyped pages, run np-core-layout"
+                 % (root, a["dir"]) for a in report["ambiguous"]]
+    return changes, questions
 
 
 # --- recording ---------------------------------------------------------------
