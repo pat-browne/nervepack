@@ -7,7 +7,7 @@ blast_radius:
   - .github/workflows/claude-pr-review.yml
   - .github/workflows/claude-pr-respond.yml
   - .github/claude-review-standards.md
-  - change-specs/ci+pr-bot-workflows.md
+  - change-specs/ci-pr-bot-workflows.md
 ---
 
 # 0070: PR review and comment responder workflows
