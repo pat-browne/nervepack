@@ -541,6 +541,10 @@ def _group_label(key):
     return label if label.endswith("s") else label + "s"
 
 
+# Route kinds that hold readable pages. skill and prompt are not wiki content.
+_NAV_KINDS = ("knowledge", "reference", "roadmap")
+
+
 def _variant_plan(cd):
     """[(kind, container_subdir, group_key, folder_owning)] from the layer's declared
     knowledge/reference routes (nervepack#234).
@@ -555,25 +559,45 @@ def _variant_plan(cd):
         layout, _src = np_layout.resolve(cd)
     except Exception:
         return []
-    spec = (layout.get("routes") or {}).get("knowledge")
-    if not isinstance(spec, dict):
-        return []
-    entries = spec.get("variants") if "variants" in spec else [spec]
+    routes = layout.get("routes") or {}
     plan = []
-    for e in entries or []:
-        path = (e or {}).get("path") or ""
-        if "{" not in path:
+    owning = []                 # folder-owning knowledge containers
+    for route_kind in _NAV_KINDS:
+        if route_kind != "knowledge" and not plan:
+            # No knowledge route: keep the conventional split _scan_plan falls
+            # back to, so a reference-only layer does not lose its topics.
+            plan = [("topic", "wiki/topics", "topic", True),
+                    ("concept", "wiki/concepts", "concept", True)]
+            owning = ["wiki/topics", "wiki/concepts"]
+        spec = routes.get(route_kind)
+        if not isinstance(spec, dict):
             continue
-        head = path.split("{", 1)[0].rstrip("/")
-        if not head:
-            continue
-        kind = ((e.get("frontmatter") or {}).get("kind")
-                or e.get("name") or "").strip()
-        if not kind:
-            continue
-        folder_owning = "{topic}/{topic}" in path
-        key = e.get("name") or kind
-        plan.append((kind, head, key, folder_owning))
+        entries = spec.get("variants") if "variants" in spec else [spec]
+        for e in entries or []:
+            path = (e or {}).get("path") or ""
+            if "{" not in path:
+                continue
+            head = path.split("{", 1)[0].rstrip("/")
+            if not head:
+                continue
+            fm = e.get("frontmatter") or {}
+            kind = (fm.get("kind") or e.get("name") or "").strip()
+            if not kind and route_kind != "knowledge":
+                kind = route_kind
+            if not kind:
+                continue
+            # Co-located sources (`wiki/topics/{topic}/{name}.md`) already render
+            # as sources under the owning knowledge group. A second group would
+            # list every one of them twice.
+            if route_kind != "knowledge" and any(
+                    head == o or head.startswith(o + "/") for o in owning):
+                continue
+            if any(head == p[1] for p in plan):
+                continue
+            folder_owning = "{topic}/{topic}" in path
+            if folder_owning:
+                owning.append(head)
+            plan.append((kind, head, e.get("name") or kind, folder_owning))
     return plan
 
 

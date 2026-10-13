@@ -184,6 +184,37 @@ def _layout_validity_check():
             sys.stderr.write("np-core-sync: layout manifest invalid in %s: %s\n" % (r, exc))
 
 
+def _layout_drift_pass():
+    """Route content added since a layer's interview (np_layout.apply_drift).
+
+    Clear directories get a route recorded through np_layout.record(): the
+    personal overlay's manifest, or the per-machine cache for every other layer. Never commits or pushes. Ambiguous directories print as open questions.
+    stderr only, fail-open, gated on the sync.layout_drift param."""
+    if np_toggle.param("sync.layout_drift", "on") != "on":
+        return
+    try:
+        roots = np_content.content_layers()
+    except Exception:
+        return
+    try:
+        personal = os.path.realpath(np_content.content_dir() or "")
+    except Exception:
+        personal = ""
+    for r in roots:
+        # Only the personal overlay gets its repo manifest edited. A team layer
+        # syncs from a remote others write to, so its additions go to the cache.
+        own = bool(personal) and os.path.realpath(r) == personal
+        try:
+            changes, questions = np_layout.apply_drift(r, cache_only=not own)
+        except Exception as exc:
+            sys.stderr.write("np-core-sync: layout drift skipped for %s: %s\n" % (r, exc))
+            continue
+        for line in changes:
+            sys.stderr.write("np-core-sync: layout drift: %s\n" % line)
+        for line in questions:
+            sys.stderr.write("np-core-sync: layout question: %s\n" % line)
+
+
 def _setup_step(target, step):
     """Run one `cli.py setup <step>` as a FRESH process from the SYNCED target.
 
@@ -359,6 +390,7 @@ def sync(mode="backup", verbose=False):
     if team_moved or content_moved:
         _relink_skills(target)
     _layout_validity_check()
+    _layout_drift_pass()
     return outcome
 
 
