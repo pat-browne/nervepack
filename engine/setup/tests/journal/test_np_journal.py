@@ -36,9 +36,11 @@ class JournalBase(unittest.TestCase):
         os.environ.pop("NERVEPACK_AGENT", None)
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
-    def _write_transcript(self, first_prompt="fix the bug"):
-        rec = {"type": "user", "promptSource": "typed",
+    def _write_transcript(self, first_prompt="fix the bug", source="typed", origin=None):
+        rec = {"type": "user", "promptSource": source,
                "message": {"content": first_prompt}}
+        if origin is not None:
+            rec["origin"] = origin
         with open(self.transcript, "w") as fh:
             fh.write(json.dumps(rec) + "\n")
 
@@ -60,6 +62,17 @@ class TestSeed(JournalBase):
         self.assertIn("**Goal:** implement session journal", body)
         self.assertIn("**Hypotheses:** TBD", body)
         self.assertIn("SessionStart", body)
+
+    def test_seed_sdk_human_prompt_sets_goal(self):
+        self._write_transcript("desktop prompt", source="sdk", origin={"kind": "human"})
+        np_journal.seed(self._payload())
+        self.assertIn("**Goal:** desktop prompt", self._read())
+
+    def test_seed_sdk_without_human_origin_is_not_a_prompt(self):
+        self._write_transcript("<task-notification>x</task-notification>", source="sdk",
+                               origin={"kind": "task-notification"})
+        np_journal.seed(self._payload())
+        self.assertFalse(os.path.exists(np_journal.journal_path("sid-1")))
 
     def test_seed_no_transcript_is_noop(self):
         np_journal.seed(self._payload(transcript_path=""))
