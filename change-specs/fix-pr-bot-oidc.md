@@ -28,3 +28,8 @@ No change to triggers, trust filters, or tool allowlists.
 
 - Security: `id-token: write` only lets the job request an OIDC token for the
   action's own token exchange. It grants no repo write access.
+
+## Rollback
+
+Revert this commit. The workflows then fail at start again, as before, with no
+other effect on the repo.
