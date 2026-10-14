@@ -358,6 +358,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._json({"jobs": np_job_health.survey()})
                 except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
                     return self._json({"error": "job survey failed"}, 500)
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
