@@ -6,7 +6,7 @@ tier: standard
 blast_radius:
   - dashboard/index.html
   - engine/setup/tests/toggles/test_display_labels.py
-  - change-specs/feat-settings-display-labels.md
+  - change-specs/settings-display-labels.md
 ---
 
 # 0079: Display labels for Settings toggles
