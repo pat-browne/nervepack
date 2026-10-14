@@ -65,7 +65,7 @@ jobs:
           echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
       - name: Checkout PR branch
         if: steps.pr.outputs.skip != '1'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.pr.outputs.ref }}
           fetch-depth: 0
