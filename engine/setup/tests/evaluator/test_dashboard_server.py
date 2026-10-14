@@ -96,6 +96,7 @@ class TestServer(unittest.TestCase):
             "NP_TOGGLE_SCHEMA": cls.schema, "NP_TOGGLE_NO_COMMIT": "1",
             "NP_MODEL_PROBE_CACHE": os.path.join(d, "model-probe.json"),
             "NP_OWN_SESSIONS_DIR": os.path.join(d, "own-sessions"),
+            "NP_JOB_HEALTH_BACKEND": "none", "NP_JOB_HEALTH_LOG_DIR": os.path.join(d, "job-logs"),
         })
         cls.compact_dir = os.path.join(d, "compact-proposals"); os.makedirs(cls.compact_dir)
         cls.grad = os.path.join(d, "graduation-candidates.json")
@@ -160,6 +161,14 @@ class TestServer(unittest.TestCase):
         status, body = self._get("/api/health")
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ok"])
+
+    def test_jobs_endpoint_lists_scheduled_jobs(self):
+        status, body = self._get("/api/jobs")
+        self.assertEqual(status, 200)
+        jobs = {j["name"]: j for j in json.loads(body)["jobs"]}
+        self.assertIn("compact", jobs)
+        for key in ("installed", "enabled", "last_run", "status", "exit", "overdue"):
+            self.assertIn(key, jobs["compact"])
 
     def test_health_reports_code_fingerprint_and_pid(self):
         # A long-lived server keeps serving its old routes after an update.

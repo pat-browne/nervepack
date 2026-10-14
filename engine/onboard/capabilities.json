@@ -218,6 +218,17 @@
       }
     },
     {
+      "id": "job-health",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "every scheduled nervepack job is installed, enabled where expected, succeeding and on time",
+      "why": "maintenance-freshness only asks whether a job fired. A job can fire on time and still fail every run, or never be installed. This check reads the scheduler, the toggle, the last log block and the exit code per job.",
+      "accept": "No enabled job is missing from the scheduler, overdue, or ended its last run with an error, warning or nonzero exit.",
+      "hints": {
+        "generic": "run python3 engine/nervepack_engine/np_job_health.py for the per-job table, then read the named job's log under ~/.cache/nervepack/."
+      }
+    },
+    {
       "id": "episodic-freshness",
       "tier": "SHOULD",
       "check": "core",

@@ -48,6 +48,18 @@ _JOBS = [
     ("kb-promote-scan",    8, 45, ("1", "MON")),
 ]
 
+# The toggle each job's cron body gates on. np_job_health reads it to tell a
+# disabled job from a broken one. Keep one entry per _JOBS name.
+JOB_TOGGLES = {
+    "memory-promote": "memory.promote",
+    "episodic-maintain": "memory.maintain",
+    "aggregate-metrics": "evaluator.aggregate",
+    "skill-maintain": "skills",
+    "refine": "maintain.refine",
+    "compact": "maintain.compact",
+    "kb-promote-scan": "maintain.kb_promote_scan",
+}
+
 
 def _cron_rows():
     """(marker, cron-expr, cron_name) per job."""
