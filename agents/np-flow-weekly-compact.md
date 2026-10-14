@@ -145,7 +145,7 @@ M=$(grep -c "^### " "$PROPOSALS_DIR/$(date -u +%F).md" 2>/dev/null || echo 0)
 if [ "$(git -C "$OVERLAY" branch --show-current)" = main ]; then
   git -C "$OVERLAY" add compact-proposals/
   git -C "$OVERLAY" commit -m "compact: $M proposal(s) for review" -- compact-proposals/
-  git -C "$OVERLAY" push
+  git -C "$OVERLAY" push || exit 1
 fi
 ```
 

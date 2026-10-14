@@ -250,8 +250,8 @@ def report():
         if not np_toggle.enabled("maintain.job_health"):
             return "PASS (job-health disabled)"
         rows = survey()
-    except Exception:
-        return "PASS (job-health survey unavailable)"
+    except Exception as exc:
+        return "PASS (job-health survey unavailable: %s)" % type(exc).__name__
 
     bad = [(r["name"], _problems(r)) for r in rows]
     bad = [(n, p) for n, p in bad if p]
