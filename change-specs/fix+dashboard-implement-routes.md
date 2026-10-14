@@ -42,7 +42,7 @@ Restarting a server too old to report its pid. That one needs one manual kill.
 
 ## Cross-cutting concerns
 
-- Security: the kill targets only the pid the loopback server reports.
+- Security: the kill targets only the pid the loopback server reports, and only when it is a real pid (>1, not a bool) in an `ok: true` health reply.
 - Privacy: none.
 - Observability: /api/health now shows pid and code.
 

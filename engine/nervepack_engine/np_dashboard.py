@@ -81,7 +81,8 @@ def _stop_if_stale(port):
         return False
     pid, code = health.get("pid"), health.get("code")
     current = np_dashboard_actions.code_fingerprint()
-    if not isinstance(pid, int) or not current or code == current:
+    if (not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1
+            or health.get("ok") is not True or not current or code == current):
         return False
     try:
         os.kill(pid, signal.SIGTERM)

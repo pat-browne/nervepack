@@ -177,6 +177,17 @@ class TestStaleServerRestart(unittest.TestCase):
         self.assertEqual(kill.call_args[0][0], 999999)
         popen.assert_called_once()
 
+    def test_unsafe_pid_or_foreign_health_is_not_killed(self):
+        for health in ({"ok": True, "pid": 0, "code": "old"},
+                       {"ok": True, "pid": -1, "code": "old"},
+                       {"ok": True, "pid": True, "code": "old"},
+                       {"pid": 999999, "code": "old"}):
+            self.health = health
+            with mock.patch.object(np_dashboard.os, "kill") as kill, \
+                 mock.patch.object(np_dashboard.subprocess, "Popen"):
+                np_dashboard.dashboard_url()
+            kill.assert_not_called()
+
 
 class TestBootId(unittest.TestCase):
     def test_10_linux_path_read_when_present(self):
