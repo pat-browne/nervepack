@@ -83,8 +83,10 @@ def parse_proposals(path):
     out = []
     for title, start, end in _sections(lines):
         rec = _recommendation(lines[start + 1:end])
+        # body: the entry text under its heading, shown in the dashboard detail row
         out.append({"title": title, "recommendation": rec,
-                    "keep_separate": "keep separate" in rec.lower()})
+                    "keep_separate": "keep separate" in rec.lower(),
+                    "body": "\n".join(lines[start + 1:end]).strip()[:20000]})
     return out
 
 

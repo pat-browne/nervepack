@@ -156,16 +156,16 @@
   .stat b { display:block; font-size:18px; color:var(--text); }
   .stat span { font-size:11px; color:var(--text-secondary); }
 
-  /* Charts: vertical viewBox units == pixels (svg height fixed 120px); x stretches
-     to fill — so the line uses viewBox coords, static dots use left:% (resize-proof),
-     and the hover dot/tooltip are positioned in pixel space from the wrapper rect. */
-  .chartwrap { position:relative; width:100%; height:120px; margin-top:4px; }
-  .chart { width:100%; height:120px; display:block; }
+  /* Charts: wireChart() sets the viewBox to the wrapper's pixel size, so the scale
+     is 1:1 and nothing stretches. In a two-up row the chart grows to fill the cell. */
+  #panel-trend, #panel-tokens { display:flex; flex-direction:column; }
+  .chartwrap { position:relative; width:100%; flex:1 1 auto; min-height:140px; margin-top:4px; }
+  .chart { position:absolute; inset:0; display:block; overflow:visible; }
   .chart line.grid { stroke:var(--viz-grid); stroke-width:1; }
   .chart polyline { fill:none; stroke:var(--viz-line); stroke-width:2;
                     vector-effect:non-scaling-stroke; }
-  .pt { position:absolute; width:7px; height:7px; border-radius:50%;
-        background:var(--viz-line); transform:translate(-50%,-50%); opacity:.5;
+  .pt { position:absolute; width:8px; height:8px; border-radius:50%;
+        background:var(--viz-line); transform:translate(-50%,-50%); opacity:.9;
         box-shadow:0 0 0 1px var(--surface); pointer-events:none; }
   .pt.on { opacity:1; width:11px; height:11px; box-shadow:0 0 0 2px var(--surface); }
   .pt:focus-visible { opacity:1; outline:2px solid var(--accent-sage); outline-offset:2px; }
@@ -185,6 +185,16 @@
   .legend .sw.dot { width:9px; height:9px; border-radius:50%; }
   .legend .sw.grid { height:0; border-top:1px dashed var(--viz-grid); width:18px; }
   .legend .muted { color:var(--text-tertiary); }
+  .legend .hint { margin-left:auto; color:var(--text-tertiary); }
+  /* Expandable detail text on graduation and proposal rows */
+  .txt.has-detail { cursor:pointer; }
+  .detailtog { font:inherit; font-size:11px; color:var(--accent-sage); background:none;
+               border:none; padding:0; margin-top:4px; cursor:pointer; }
+  .detailtog:focus-visible { outline:2px solid var(--accent-sage); outline-offset:2px; }
+  .detail { white-space:pre-wrap; word-break:break-word; margin:6px 0 0; padding:8px 10px;
+            font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text);
+            background:var(--surface-alt); border:1px solid var(--border);
+            border-radius:var(--radius-sm); max-height:360px; overflow:auto; cursor:auto; }
 
   .sug { display:flex; align-items:flex-start; gap:12px; padding:10px 0;
          border-top:1px solid var(--border); flex-wrap:wrap; }
@@ -435,67 +445,89 @@
     return out.slice(0, limit);
   }
 
-  // ---- reusable line chart: line + static dots (CSS %) + hover tooltip ----
-  const W = 1000, H = 120, pad = 6;
-  const xVB = (i, n) => n === 1 ? W / 2 : pad + i * (W - 2 * pad) / (n - 1);
+  // ---- reusable line chart: line + dots + hover tooltip ----
+  // Callers give y in a 0..H unit space. wireChart() sizes the viewBox to the
+  // wrapper's real pixel size on render and on resize.
+  // The scale stays 1:1, so dots stay round at any cell width.
+  const H = 120, pad = 6, padX = 10;
 
-  // points: [{ vy (viewBox y 0..120), color?, tip (html) }]; grids: [viewBox y]
+  // points: [{ vy (0..H), color?, tip (html) }]. grids: [y in 0..H]
   function chartHTML(points, grids) {
-    const n = points.length;
-    points.forEach((p, i) => { p.vx = xVB(i, n); });
-    const validPts = points.filter(p => isFinite(p.vx) && isFinite(p.vy));
-    const line = validPts.map(p => `${p.vx.toFixed(1)},${p.vy.toFixed(1)}`).join(" ");
-    const g = (grids || []).map(v =>
-      `<line class="grid" x1="0" y1="${v}" x2="${W}" y2="${v}"></line>`).join("");
-    // SVG circle markers: make each point visible even when the line hugs the baseline
-    const markers = validPts.map(p =>
-      `<circle cx="${p.vx.toFixed(1)}" cy="${p.vy.toFixed(1)}" r="8"` +
-      ` fill="${p.color || "var(--viz-line)"}" stroke="var(--bg)" stroke-width="2"></circle>`).join("");
-    const dots = points.map((p, i) => {
-      const left = Number.isFinite(p.vx) ? (p.vx / W * 100) : 0;
-      const top  = Number.isFinite(p.vy) ? p.vy : (H - pad);
-      return `<span class="pt" data-i="${i}" tabindex="0" role="img" ` +
-        `aria-label="${esc(plain(p.tip))}" style="left:${left.toFixed(2)}%;` +
-        `top:${top.toFixed(1)}px;${p.color ? `background:${p.color};` : ""}"></span>`;
-    }).join("");
+    points.grids = grids || [];
+    const dots = points.map((p, i) =>
+      `<span class="pt" data-i="${i}" tabindex="0" role="img" ` +
+      `aria-label="${esc(plain(p.tip))}"${p.color ? ` style="background:${p.color}"` : ""}></span>`).join("");
     return `<div class="chartwrap">
-        <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-          ${g}<polyline points="${line}"></polyline>${markers}
-        </svg>${dots}
+        <svg class="chart" aria-hidden="true"></svg>${dots}
         <div class="tip" hidden></div>
       </div>`;
   }
 
   function wireChart(wrap, points) {
     if (!wrap || !points.length) return;
+    const svg = wrap.querySelector("svg");
     const tip = wrap.querySelector(".tip");
     const dots = [...wrap.querySelectorAll(".pt")];
     const n = points.length;
-    let cur = -1;
+    let cur = -1, w = 0, h = 0;
+    const xAt = i => n === 1 ? w / 2 : padX + i * (w - 2 * padX) / (n - 1);
+
+    function draw() {
+      const nw = Math.round(wrap.clientWidth) || 600, nh = Math.round(wrap.clientHeight) || H;
+      if (nw === w && nh === h) return;
+      w = nw;
+      h = nh;
+      const sy = h / H;
+      points.forEach((p, i) => {
+        p.px = xAt(i);
+        p.py = Number.isFinite(p.vy) ? p.vy * sy : h - pad;
+      });
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("width", w);
+      svg.setAttribute("height", h);
+      const g = points.grids.map(v =>
+        `<line class="grid" x1="0" y1="${(v * sy).toFixed(1)}" x2="${w}" y2="${(v * sy).toFixed(1)}"></line>`).join("");
+      const line = points.filter(p => Number.isFinite(p.vy))
+        .map(p => `${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(" ");
+      svg.innerHTML = `${g}<polyline points="${line}"></polyline>`;
+      dots.forEach((el, i) => {
+        el.style.left = points[i].px.toFixed(1) + "px";
+        el.style.top = points[i].py.toFixed(1) + "px";
+      });
+      if (cur >= 0) { const c = cur; cur = -1; show(c); }
+    }
+
     function show(i) {
       if (i === cur) return;
       cur = i;
-      const p = points[i], r = wrap.getBoundingClientRect();
-      const px = p.vx / W * r.width, py = p.vy;
+      const p = points[i];
       tip.innerHTML = p.tip;
       tip.hidden = false;
       const tw = tip.offsetWidth, th = tip.offsetHeight;
-      let tx = Math.max(0, Math.min(px - tw / 2, r.width - tw));
-      let ty = py - th - 12; if (ty < 0) ty = py + 16;
-      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+      const tx = Math.max(0, Math.min(p.px - tw / 2, w - tw));
+      let ty = p.py - th - 12;
+      if (ty < 0) ty = p.py + 16;
+      tip.style.left = tx + "px";
+      tip.style.top = ty + "px";
       dots.forEach((el, j) => el.classList.toggle("on", j === i));
     }
+
     function hide() {
-      cur = -1; tip.hidden = true; dots.forEach(el => el.classList.remove("on"));
+      cur = -1;
+      tip.hidden = true;
+      dots.forEach(el => el.classList.remove("on"));
     }
+
+    draw();
+    if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
     wrap.addEventListener("mousemove", e => {
-      const r = wrap.getBoundingClientRect();
-      let i = n === 1 ? 0 : Math.round((e.clientX - r.left) / r.width * (n - 1));
+      const x = e.clientX - wrap.getBoundingClientRect().left;
+      const i = n === 1 ? 0 : Math.round((x - padX) / (w - 2 * padX) * (n - 1));
       show(Math.max(0, Math.min(n - 1, i)));
     });
     wrap.addEventListener("mouseleave", hide);
-    // Keyboard/AT access: each dot is focusable (tabindex + aria-label); reveal the
-    // same visual tooltip on focus so keyboard and touch users get the detail too.
+    // Keyboard/AT access: each dot is focusable (tabindex + aria-label).
+    // Focus shows the same tooltip, so keyboard and touch users get the detail too.
     dots.forEach((el, i) => {
       el.addEventListener("focus", () => show(i));
       el.addEventListener("blur", hide);
@@ -503,9 +535,31 @@
   }
 
   function legend(keys) {
-    return `<div class="legend">` + keys.map(k =>
-      `<span class="key"><span class="sw ${k.cls || ""}" ${k.color ? `style="background:${k.color}"` : ""}></span>${k.label}</span>`
+    return `<div class="legend">` + keys.map(k => k.hint
+      ? `<span class="hint">${k.label}</span>`
+      : `<span class="key"><span class="sw ${k.cls || ""}" ${k.color ? `style="background:${k.color}"` : ""}></span>${k.label}</span>`
     ).join("") + `</div>`;
+  }
+
+  // Expandable detail: a toggle plus the full text, hidden until the row is clicked.
+  function detailRow(body) {
+    if (!body) return "";
+    return `<button type="button" class="detailtog" aria-expanded="false">Show text</button>` +
+      `<pre class="detail" hidden>${esc(body)}</pre>`;
+  }
+
+  function wireDetails(root) {
+    root.querySelectorAll(".detailtog").forEach(b => {
+      const txt = b.closest(".txt");
+      txt.classList.add("has-detail");
+      txt.addEventListener("click", e => {
+        if (e.target.closest(".detail")) return;
+        const d = b.nextElementSibling, open = d.hidden;
+        d.hidden = !open;
+        b.setAttribute("aria-expanded", String(open));
+        b.textContent = open ? "Hide text" : "Show text";
+      });
+    });
   }
 
   // ---- backend (only when SERVED over http) ----
@@ -982,12 +1036,14 @@
             <span class="tag">${esc(c.kind || "")}</span> <b>${esc(c.name || "")}</b>
             <div class="meta">seen ${c.seen || 0} · ${((c.bytes || 0) / 1024).toFixed(1)} KB · ${
               (Array.isArray(c.reasons) ? c.reasons : []).map(r => esc(r)).join(" + ") || "—"}</div>
+            ${detailRow(c.body)}
           </div>${SERVED ? `<span class="rowacts">
             <button class="btn sm primary" data-graduate>Graduate</button>
             <button class="btn sm" data-dismiss title="Hide this candidate. Stored next to graduation-candidates.json.">Dismiss</button>
           </span>` : ""}
         </div>`).join("") + thNote
       : empty("No strategies or playbooks are overdue to graduate."));
+    wireDetails(elGrad);
     if (!SERVED) return;
     const body = row => ({ kind: row.dataset.kind, name: row.dataset.name });
     elGrad.querySelectorAll("[data-dismiss]").forEach(b => b.addEventListener("click", async () => {
@@ -1050,6 +1106,7 @@
     elProp.innerHTML = `<span class="lbl">Compact proposals</span>` + rows.map(p => `<div class="sug" data-file="${esc(p.file)}" data-title="${esc(p.title)}">
         <div class="txt"><b>${esc(p.title)}</b>
           <div class="meta">${esc(p.date || "")} · ${p.recommendation ? esc(p.recommendation) : "no recommendation"}</div>
+          ${detailRow(p.body)}
         </div>${SERVED ? `<span class="rowacts">
           <!-- Apply is always primary to match the other approve actions. -->
           <button class="btn sm primary" data-apply>Apply</button>
@@ -1058,6 +1115,7 @@
       </div>`).join("")
       + (rows.length && !SERVED ? `<div class="note">Open the served dashboard for the Apply / Reject buttons.</div>` : "");
     paint();
+    wireDetails(elProp);
     if (!SERVED) return;
     const body = row => ({ file: row.dataset.file, title: row.dataset.title });
     elProp.querySelectorAll("[data-reject-prop]").forEach(b => b.addEventListener("click", async () => {
@@ -1171,9 +1229,11 @@
       </div>
       ${chartHTML(trendPts, [y(33), y(67)])}
       ${legend([
-        { cls: "dot", color: "var(--status-pos)", label: "score (green ≥67 · amber 34–66 · clay ≤33)" },
-        { cls: "grid", label: "33 / 67 band thresholds" },
-        { label: "hover a point for session stats" },
+        { cls: "dot", color: "var(--status-pos)", label: "≥67" },
+        { cls: "dot", color: "var(--status-warn)", label: "34–66" },
+        { cls: "dot", color: "var(--status-neg)", label: "≤33" },
+        { cls: "grid", label: "33 / 67 thresholds" },
+        { hint: true, label: "hover a point for session stats" },
       ])}`;
     wireChart(elTrend.querySelector(".chartwrap"), trendPts);
 
@@ -1222,9 +1282,10 @@
       </div>
       ${chartHTML(tokPts)}
       ${legend([
-        { color: "var(--viz-line)", label: "output tokens / session" },
-        { label: "hover a point for the full token breakdown" },
+        { cls: "dot", color: "var(--viz-line)", label: "output tokens / session" },
+        { hint: true, label: "hover a point for the full token breakdown" },
       ])}`;
+
     wireChart(elTokens.querySelector(".chartwrap"), tokPts);
 
     // B · Suggestions (+ http-only actions: per-row Implement / Reject, header Review / Clear)
@@ -1600,22 +1661,22 @@
       elCount.textContent = total ? `${items.length} of ${total} page(s)` : "";
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
-      // One section per declared knowledge variant (#234), in build order. Every
-      // group opens by default so a layer shows its Topics/Concepts children.
-      // Deeper levels (topics, subdirs) follow expandAll and stay collapsed.
+      // One section per declared knowledge variant (#234), in build order. On load
+      // every level is collapsed, so only the layer rows show. Search sets
+      // expandAll, which opens every level that holds a match.
       const groupOrder = groupLabels;
       const groups = ls => groupOrder.map(label =>
-        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label, true)).join("");
-      // Multi-layer: one collapsible section per content layer, precedence order,
-      // highest-precedence open. A single layer renders exactly as it always has —
-      // no gratuitous "Personal" wrapper around the whole tree (#142).
+        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label, expandAll)).join("");
+      // Multi-layer: one collapsible section per content layer, precedence order.
+      // A single layer renders without a layer wrapper (#142).
       const layers = W.layers || [];
       elList.classList.toggle("split", layers.length > 1);
       if (layers.length > 1) {
-        elList.innerHTML = layers.map((lab, i) => {
+        elList.innerHTML = layers.map(lab => {
+
           const mine = items.filter(l => l.layer === lab);
           if (!mine.length) return "";
-          const open = expandAll || i === 0;
+          const open = expandAll;
           return `<details class="wikilayer"${open ? " open" : ""}>
             <summary><span>${esc(lab)}</span><span>${mine.length}</span></summary>
             <div class="wikinest">${groups(mine)}</div></details>`;
@@ -1640,7 +1701,7 @@
       e.preventDefault();
       openViewer(a.getAttribute("href"), { title: a.getAttribute("title") || "Wiki" });
     });
-    // default: Topics group open, individual topics collapsed; Concepts collapsed
+    // default: every level collapsed, only the layer rows show
     draw(leaves, false);
   })();
 </script>

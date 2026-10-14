@@ -339,7 +339,8 @@ class TestBuild(unittest.TestCase):
             json.dump(fixture, gf)
             grad = gf.name
         try:
-            js = run_build("", NP_GRADUATION_CANDIDATES=grad)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad,
+                           NP_LESSONS_DIR="/nonexistent/lessons")
         finally:
             os.unlink(grad)
         m = re.search(r"window\.GRADUATION = (\{.*?\});", js, re.S)
@@ -1447,17 +1448,65 @@ class TestWikiExcludedGroups(unittest.TestCase):
                          {"receipts", "meetings", "plans"})
 
 
-class TestWikiLayerExpandsOneLevel(unittest.TestCase):
-    """Each layer section shows its group children (Topics, Concepts) open by
-    default. Deeper levels follow expandAll and stay collapsed."""
+class TestWikiLayersStartCollapsed(unittest.TestCase):
+    """On load only the layer rows show, all collapsed. Groups open only when a
+    layer opens, and search (expandAll) still opens everything that matches."""
 
-    def test_groups_open_inside_a_layer(self):
+    def test_layers_and_groups_follow_expand_all(self):
         index = os.path.normpath(os.path.join(
             os.path.dirname(__file__), "..", "..", "..", "..", "dashboard", "index.html"))
         with open(index, encoding="utf-8") as fh:
             html_text = fh.read()
-        self.assertNotIn("i === 0 ? true : expandAll", html_text)
-        self.assertIn("expandAll, label, true)", html_text)
+        self.assertNotIn("expandAll || i === 0", html_text)
+        self.assertNotIn("expandAll, label, true)", html_text)
+        self.assertIn("const open = expandAll;", html_text)
+        self.assertIn("expandAll, label, expandAll)", html_text)
+
+
+class TestDetailBodies(unittest.TestCase):
+    """Graduation candidates and compact proposals carry their full text."""
+
+    def test_graduation_candidate_carries_lesson_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(lessons, "s1.md"), "w") as fh:
+                fh.write("---\nname: s1\n---\nDo the thing first.\n")
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "success", "name": "s1"},
+                                          {"kind": "failure", "name": "gone"}],
+                           "thresholds": {}}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        cands = {c["name"]: c for c in json.loads(m.group(1))["candidates"]}
+        self.assertIn("Do the thing first.", cands["s1"]["body"])
+        self.assertNotIn("body", cands["gone"])
+
+    def test_graduation_name_cannot_escape_lessons_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(d, "secret.md"), "w") as fh:
+                fh.write("nope\n")
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "x", "name": "../secret"}]}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        self.assertNotIn("body", json.loads(m.group(1))["candidates"][0])
+
+    def test_proposal_carries_section_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "2026-09-30.md"), "w") as fh:
+                fh.write("# P\n\n### a vs b\n\nOverlap is large.\n\n"
+                         "**Recommendation: merge.**\n\n### c vs d\n\nOther.\n")
+            js = run_build("", NP_COMPACT_PROPOSALS_DIR=d)
+        m = re.search(r"window\.PROPOSALS = (\[.*?\]);\n", js, re.S)
+        props = json.loads(m.group(1))[0]["proposals"]
+        self.assertIn("Overlap is large.", props[0]["body"])
+        self.assertIn("Recommendation: merge.", props[0]["body"])
+        self.assertNotIn("Other.", props[0]["body"])
 
 
 if __name__ == "__main__":

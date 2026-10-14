@@ -90,5 +90,29 @@ class TestTwoUpRows(unittest.TestCase):
                          "grid cells need min-width:0 so wide charts do not overflow")
 
 
+
+
+
+class TestChartAspectAndDetailRows(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(INDEX, encoding="utf-8") as fh:
+            cls.html = fh.read()
+
+    def test_chart_never_scales_non_uniformly(self):
+        # A stretched viewBox turns round dots into ovals.
+        self.assertNotIn('preserveAspectRatio="none"', self.html)
+
+    def test_chart_viewbox_tracks_the_cell_width(self):
+        self.assertIn("new ResizeObserver(", self.html)
+        self.assertIn('svg.setAttribute("viewBox"', self.html)
+
+    def test_graduation_and_proposal_rows_expand_to_their_text(self):
+        self.assertIn("function detailRow(", self.html)
+        self.assertGreaterEqual(self.html.count("detailRow("), 3)
+        self.assertIn('aria-expanded="false"', self.html)
+        self.assertIn("function wireDetails(", self.html)
+
+
 if __name__ == "__main__":
     unittest.main()
