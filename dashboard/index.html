@@ -1513,13 +1513,12 @@
       elCount.textContent = total ? `${items.length} of ${total} page(s)` : "";
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
-      // One section per declared knowledge variant (#234), in build order. The
-      // first group stays open; the rest follow expandAll, matching the old
-      // Topics-open / Concepts-collapsed behavior for the conventional split.
+      // One section per declared knowledge variant (#234), in build order. Every
+      // group opens by default so a layer shows its Topics/Concepts children.
+      // Deeper levels (topics, subdirs) follow expandAll and stay collapsed.
       const groupOrder = groupLabels;
-      const groups = ls => groupOrder.map((label, i) =>
-        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label,
-                       i === 0 ? true : expandAll)).join("");
+      const groups = ls => groupOrder.map(label =>
+        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label, true)).join("");
       // Multi-layer: one collapsible section per content layer, precedence order,
       // highest-precedence open. A single layer renders exactly as it always has —
       // no gratuitous "Personal" wrapper around the whole tree (#142).

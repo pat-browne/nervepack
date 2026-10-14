@@ -1413,5 +1413,52 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         self.assertEqual([c["name"] for c in wiki["concepts"]], ["borrow"])
 
 
+class TestWikiExcludedGroups(unittest.TestCase):
+    """Receipts, meetings, and plans are layer records, not wiki reading. The
+    build drops them by group key or container name, case-insensitively."""
+
+    def test_excluded_groups_are_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = TestWikiNavFollowsLayerLayout._layer(
+                self, tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "note", "path": "notes/{name}.md"},
+                    {"name": "receipt", "path": "docs/receipts/{name}.md"},
+                    {"name": "meeting", "path": "docs/meetings/{name}.md"},
+                    {"name": "plan", "path": "docs/plans/{name}.md"},
+                    {"name": "doc", "path": "docs/Plans/{name}.md"},
+                    {"name": "misc", "path": "docs/Plans2/{name}.md"}]}}},
+                {"notes/keep.md": "---\ntitle: keep\n---\n\nKeep.\n",
+                 "docs/receipts/r1.md": "---\ntitle: r1\n---\n\nR.\n",
+                 "docs/meetings/m1.md": "---\ntitle: m1\n---\n\nM.\n",
+                 "docs/plans/p1.md": "---\ntitle: p1\n---\n\nP.\n",
+                 "docs/Plans/p2.md": "---\ntitle: p2\n---\n\nP.\n",
+                 "docs/Plans2/x.md": "---\ntitle: x\n---\n\nX.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        keys = {g["key"] for g in wiki.get("groups", [])}
+        self.assertIn("note", keys, wiki)
+        self.assertIn("misc", keys, wiki)        # a near-miss name still shows
+        for bad in ("receipt", "meeting", "plan", "doc"):
+            self.assertNotIn(bad, keys, wiki)
+
+    def test_exclusion_is_one_named_constant(self):
+        b = _load_build_direct()
+        self.assertEqual({x.lower() for x in b.WIKI_EXCLUDED_GROUPS},
+                         {"receipts", "meetings", "plans"})
+
+
+class TestWikiLayerExpandsOneLevel(unittest.TestCase):
+    """Each layer section shows its group children (Topics, Concepts) open by
+    default. Deeper levels follow expandAll and stay collapsed."""
+
+    def test_groups_open_inside_a_layer(self):
+        index = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "dashboard", "index.html"))
+        with open(index, encoding="utf-8") as fh:
+            html_text = fh.read()
+        self.assertNotIn("i === 0 ? true : expandAll", html_text)
+        self.assertIn("expandAll, label, true)", html_text)
+
+
 if __name__ == "__main__":
     unittest.main()
