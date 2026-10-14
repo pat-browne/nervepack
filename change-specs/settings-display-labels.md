@@ -1,5 +1,5 @@
 ---
-id: 0079
+id: 0080
 status: accepted
 date: 2026-10-14
 tier: normal
@@ -9,7 +9,7 @@ blast_radius:
   - change-specs/settings-display-labels.md
 ---
 
-# 0079: Display labels for Settings toggles
+# 0080: Display labels for Settings toggles
 
 ## Context and problem statement
 
