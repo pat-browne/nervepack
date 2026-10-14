@@ -244,6 +244,13 @@
   .verdict { font-size:11px; margin-top:3px; font-weight:600; }
   .verdict.implement { color:var(--status-pos); }
   .verdict.skip { color:var(--text-tertiary); }
+  /* Scheduled jobs: two-up rows; a job that needs attention gets a warm edge. */
+  .jobs { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+  .jobs > .sug:nth-child(2) { border-top:none; }
+  @media (max-width:900px) { .jobs { grid-template-columns:1fr; }
+    .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); } }
+  .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
+                background:var(--status-warn-bg); }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
 
   /* Feature-toggle switches (served-mode only; see renderToggles()) */
@@ -332,6 +339,9 @@
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-ledger"></section>
         <section class="panel" id="panel-latest"></section>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <section class="panel full" id="panel-jobs"></section>
       </div>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
@@ -683,6 +693,58 @@
     try { renderModels(await (await fetch("/api/models")).json()); } catch { /* older server without the route */ }
   }
   if (SERVED) refreshModels();
+
+  // ---- Scheduled jobs (GET /api/jobs, np_job_health). Served mode only. ----
+  const elJobs = document.getElementById("panel-jobs");
+  const JOB_PILL = { ok: "pos", warn: "warn", error: "neg" };
+  const jobBad = j => j.enabled !== false && (j.overdue || j.status === "warn" || j.status === "error"
+    || j.installed === false || (j.exit != null && j.exit !== 0));
+  function jobAge(h) {
+    if (h == null) return "never run";
+    if (h < 1) return Math.round(h * 60) + "m ago";
+    return h < 48 ? Math.round(h) + "h ago" : Math.round(h / 24) + "d ago";
+  }
+  function jobSummary(jobs) {
+    const n = s => jobs.filter(j => j.enabled !== false && j.status === s).length;
+    const parts = [`${jobs.length} job${jobs.length === 1 ? "" : "s"}`];
+    const err = n("error"), warn = n("warn");
+    const late = jobs.filter(j => j.enabled !== false && j.overdue).length;
+    if (err) parts.push(`${err} error${err === 1 ? "" : "s"}`);
+    if (warn) parts.push(`${warn} warning${warn === 1 ? "" : "s"}`);
+    if (late) parts.push(`${late} overdue`);
+    if (parts.length === 1) parts.push("all ok");
+    return parts.join(", ");
+  }
+  function renderJobs(jobs) {
+    const head = `<span class="lbl">Scheduled jobs</span>`;
+    if (!Array.isArray(jobs)) {
+      elJobs.innerHTML = head + empty("Job health needs the dashboard server. "
+        + "Open the served dashboard to see scheduled jobs.");
+      return;
+    }
+    if (!jobs.length) { elJobs.innerHTML = head + empty("No scheduled jobs found."); return; }
+    const rows = [...jobs].sort((a, b) => jobBad(b) - jobBad(a)).map(j => {
+      const pill = JOB_PILL[j.status] || "";
+      const flags = [
+        j.overdue && j.enabled !== false ? `<span class="pill warn">overdue</span>` : "",
+        j.installed === false ? `<span class="pill neg">not installed</span>` : "",
+        j.exit != null && j.exit !== 0 ? `<span class="pill neg">exit ${esc(j.exit)}</span>` : "",
+      ].join(" ");
+      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}">
+        <div class="txt"><b>${esc(j.name)}</b> <span class="pill ${pill}">${esc(j.status || "unknown")}</span> ${flags}
+          <div class="meta">${jobAge(j.age_h)} · ${esc(j.schedule || "")} · ${j.enabled === false ? "toggle off" : "toggle on"}</div>
+        </div></div>`;
+    }).join("");
+    elJobs.innerHTML = head + `<div class="kv">${esc(jobSummary(jobs))}</div><div class="jobs">${rows}</div>`;
+  }
+  async function refreshJobs() {
+    try {
+      const res = await fetch("/api/jobs");
+      renderJobs(res.ok ? (await res.json()).jobs : null);
+    } catch { renderJobs(null); }
+  }
+  if (!SERVED) renderJobs(null);
+  if (SERVED) refreshJobs();
 
   // ---- render ----
   const M = (window.METRICS || []).slice();
