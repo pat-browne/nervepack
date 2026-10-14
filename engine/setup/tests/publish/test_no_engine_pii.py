@@ -30,6 +30,12 @@ class TestNoEnginePII(unittest.TestCase):
             f"PII guard found secrets/PII in the engine tree:\n{r.stdout}\n{r.stderr}",
         )
 
+    def test_no_tracked_venv(self):
+        # The scanner skips .venv, so a force-added venv must fail here instead.
+        files = subprocess.check_output(["git", "ls-files"], cwd=REPO, text=True).splitlines()
+        tracked = [f for f in files if ".venv" in f.split("/")]
+        self.assertEqual(tracked, [], "a .venv path is tracked; the PII scan skips it")
+
     def test_scan_skips_venv(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

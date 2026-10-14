@@ -42,6 +42,6 @@ Adding any third-party dependency. The engine stays stdlib-only.
 
 ## Confirmation
 
-`test_scan_skips_venv` in `engine/setup/tests/publish/test_no_engine_pii.py`, and `git check-ignore engine/.venv engine/uv.lock`.
+`test_scan_skips_venv` and `test_no_tracked_venv` in `engine/setup/tests/publish/test_no_engine_pii.py`, and `git check-ignore engine/.venv engine/uv.lock`.
 
 ## Deviations
