@@ -1283,6 +1283,7 @@
         catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
         refreshQueue();
         let tries = 0;
+        const logHint = s => s.log ? " (log: " + s.log + ")" : "";
         const poll = () => setTimeout(async () => {
           let s;
           try { s = await (await fetch("/api/implement-status?text=" + encodeURIComponent(text))).json(); }
@@ -1293,14 +1294,14 @@
               ? ` — <a href="${esc(ref)}" target="_blank">${esc(ref.replace(/^https?:\/\/github\.com\//, ""))}</a>`
               : (ref ? " — " + esc(ref) : "");
             const note = document.createElement("div");
-            note.className = "note ok"; note.innerHTML = "✓ Implemented" + link;
+            note.className = "note ok"; note.innerHTML = "✓ Implemented" + link + esc(logHint(s));
             elSug.querySelector(".panelhead").after(note);
             dropResolved(text);
           } else if (s.state === "already_resolved") {
             // Another machine sharing this content overlay got there first.
             dropResolved(text);
           } else if (s.state === "not_implementable") {
-            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
+            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "") + logHint(s)); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "failed") {
             if (s.model_error) {
               pill.className = "pill neg"; pill.textContent = "✕ Model " + (s.model || "") + " unavailable: ";
@@ -1309,7 +1310,7 @@
               pill.append(a);
               refreshModels();
             } else {
-              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : ""));
+              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "") + logHint(s));
             }
             buttons.forEach(x => x.style.display = "");
 
