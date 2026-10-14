@@ -717,10 +717,10 @@
     if (off) parts.push(`${off} off`);
     return parts.join(", ");
   }
-  function renderJobs(jobs, failed) {
+  function renderJobs(jobs, served) {
     const head = `<span class="lbl">Scheduled jobs</span>`;
     if (!Array.isArray(jobs)) {
-      elJobs.innerHTML = head + empty(failed
+      elJobs.innerHTML = head + empty(served
         ? "Could not load job health from the dashboard server. Check its log, then reload."
         : "Job health needs the dashboard server. Open the served dashboard to see scheduled jobs.");
       return;
@@ -743,7 +743,7 @@
   async function refreshJobs() {
     try {
       const res = await fetch("/api/jobs", { signal: AbortSignal.timeout(10000) });
-      // A served body with no jobs array is an error, so failed is true below.
+      // In served mode a missing jobs array means the server call failed.
       if (!res.ok) throw new Error("HTTP " + res.status);
       renderJobs((await res.json()).jobs, true);
     } catch (e) {
