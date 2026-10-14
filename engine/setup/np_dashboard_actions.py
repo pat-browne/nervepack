@@ -24,7 +24,8 @@ import time
 PROPOSAL_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # The files that define the server's routes. A change to either means a
-# running server is stale.
+# running server is stale. A new route-defining file must be added here or
+# the stale-server check will not notice changes to it.
 _CODE_FILES = ("np-dashboard-server.py", "np_dashboard_actions.py")
 
 
