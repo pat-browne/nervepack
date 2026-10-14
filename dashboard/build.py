@@ -50,6 +50,45 @@ def default_graduation():
     return os.path.join(_content_dir(), "dashboard", "data", "graduation-candidates.json")
 
 
+# One cap and marker for every detail body, shared with the proposal parser
+DETAIL_MAX_CHARS = np_dashboard_actions.BODY_MAX_CHARS
+TRUNCATED_MARK = np_dashboard_actions.TRUNCATED_MARK
+
+
+def attach_lesson_bodies(grad, lessons_dir):
+    """Add `body` (the lesson file text) to each candidate whose
+    <lessons_dir>/<name>.md exists. A name that is not a plain file name is
+    skipped. Fail-open: an unreadable file leaves the candidate without a body.
+    A body cut at DETAIL_MAX_CHARS ends with TRUNCATED_MARK."""
+    cands = grad.get("candidates") or []
+    if cands and not os.path.isdir(lessons_dir):
+        sys.stderr.write("build.py graduation bodies: no lessons dir at %s\n" % lessons_dir)
+        return grad
+    attached, missing = 0, []
+    for c in cands:
+        name = c.get("name") if isinstance(c, dict) else None
+        if (not isinstance(name, str) or not name or name.startswith(".")
+                or os.path.basename(name) != name):
+            continue
+        try:
+            with open(os.path.join(lessons_dir, name + ".md"), encoding="utf-8",
+                      errors="replace") as fh:
+                body = fh.read(DETAIL_MAX_CHARS)
+                if fh.read(1):
+                    body += TRUNCATED_MARK
+        except OSError as exc:
+            missing.append("%s (%s)" % (name, exc.strerror or exc))
+            continue
+        c["body"] = body
+        attached += 1
+    if missing:
+        more = " and %d more" % (len(missing) - 10) if len(missing) > 10 else ""
+        sys.stderr.write("build.py graduation bodies: %d attached, %d without text: %s%s\n"
+                         % (attached, len(missing), ", ".join(missing[:10]), more))
+    return grad
+
+
+
 def load_graduation(path):
     """Graduation candidates (lessons overdue to become skills), as written
     by np_skill_maintain.py via np_graduation_detect.py. Shape:
@@ -1130,8 +1169,11 @@ def main(argv):
     dismissed_path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
         os.path.dirname(os.path.abspath(grad_path)), "graduation-dismissed.json")
     try:
-        graduation = json.dumps(np_dashboard_actions.filter_candidates(
-            load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)))
+        lessons_dir = os.environ.get("NP_LESSONS_DIR") or os.path.join(
+            _content_dir(), "memory", "lessons")
+        graduation = json.dumps(attach_lesson_bodies(np_dashboard_actions.filter_candidates(
+            load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)),
+            lessons_dir))
     except Exception as exc:  # fail-open, like render_pages
         sys.stderr.write("build.py graduation: %s\n" % exc)
         graduation = json.dumps({"candidates": []})
