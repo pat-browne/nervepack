@@ -700,7 +700,7 @@
   const jobBad = j => j.enabled !== false && (j.overdue || j.status === "warn" || j.status === "error"
     || j.installed === false || (j.exit != null && j.exit !== 0));
   function jobAge(h) {
-    if (h == null) return "never run";
+    if (h == null || !Number.isFinite(h)) return "never run";
     if (h < 1) return Math.round(h * 60) + "m ago";
     return h < 48 ? Math.round(h) + "h ago" : Math.round(h / 24) + "d ago";
   }
@@ -712,7 +712,9 @@
     if (err) parts.push(`${err} error${err === 1 ? "" : "s"}`);
     if (warn) parts.push(`${warn} warning${warn === 1 ? "" : "s"}`);
     if (late) parts.push(`${late} overdue`);
-    if (parts.length === 1) parts.push("all ok");
+    const off = jobs.filter(j => j.enabled === false).length;
+    if (parts.length === 1) parts.push(off ? "rest ok" : "all ok");
+    if (off) parts.push(`${off} off`);
     return parts.join(", ");
   }
   function renderJobs(jobs, failed) {
@@ -741,6 +743,7 @@
   async function refreshJobs() {
     try {
       const res = await fetch("/api/jobs", { signal: AbortSignal.timeout(10000) });
+      // A served body with no jobs array is an error, so failed is true below.
       if (!res.ok) throw new Error("HTTP " + res.status);
       renderJobs((await res.json()).jobs, true);
     } catch (e) {
