@@ -17,7 +17,6 @@ blast_radius:
   - engine/setup/toggles.conf
   - engine/setup/toggle-schema.json
   - docs/ARCHITECTURE.md
-  - change-specs/fix+compact-and-job-health.md
   - change-specs/fix-compact-and-job-health.md
 ---
 

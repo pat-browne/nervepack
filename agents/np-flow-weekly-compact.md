@@ -140,6 +140,7 @@ Commit and push it only when that checkout is on `main`.
 Otherwise leave it uncommitted and say so in the report.
 ```bash
 OVERLAY="$(dirname "$PROPOSALS_DIR")"
+M=$(grep -c "^### " "$PROPOSALS_DIR/$(date -u +%F).md" 2>/dev/null || echo 0)
 if [ "$(git -C "$OVERLAY" branch --show-current)" = main ]; then
   git -C "$OVERLAY" add compact-proposals/
   git -C "$OVERLAY" commit -m "compact: $M proposal(s) for review" -- compact-proposals/
