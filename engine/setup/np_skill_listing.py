@@ -107,8 +107,11 @@ def scan(roots, desc_max=DEFAULT_DESC_MAX, budget=DEFAULT_LAYER_BUDGET):
             if d in seen or not os.path.isfile(path):
                 continue
             seen.add(d)
-            with open(path, encoding="utf-8", errors="replace") as fh:
-                fields, errs = parse(fh.read())
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    fields, errs = parse(fh.read())
+            except OSError as e:
+                fields, errs = {}, ["unreadable: %s" % e.strerror]
             name = fields.get("name") or d
             desc = fields.get("description", "")
             if not fields.get("name"):
