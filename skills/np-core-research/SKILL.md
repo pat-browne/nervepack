@@ -1,6 +1,6 @@
 ---
 name: np-core-research
-description: Research a technical question from multiple reputable, version-pinned sources and distill one recommendation with its evidence, currency corrections, negative results, and limits. Use when the user asks "research X", "what's the standard / best practice for X", "how do others do X", or "is X still true"; during the brainstorm, spec, or design phase of an np-flow or superpowers run when the tech is unfamiliar or a choice rests on an external fact; and whenever a technical answer would otherwise come from model memory that may be stale.
+description: Research a technical question from several version-pinned sources and give one recommendation with evidence, negative results and limits. Use on "research X", "what's the best practice for X", "is X still true", or when an answer would rest on stale memory.
 ---
 
 # research: gather reputable sources, distill one answer

@@ -1,6 +1,6 @@
 ---
 name: np-core-recall
-description: Pull episodic working-memory themes ("what we did / decided / where we left off") from nervepack's episodic/ layer on demand. Use when the user says "/recall", "what did we do on X", "remind me where we left off on Y", or wants prior-session context that wasn't auto-injected. Read-only — episodic is the lowest-authority layer; durable skills/sources/wiki override it.
+description: Pull episodic memory (what we did, decided, where we left off) on demand. Read-only, lowest authority. Use on "/recall", "what did we do on X", "remind me where we left off on Y", or prior-session context that was not auto-injected.
 ---
 
 # recall
