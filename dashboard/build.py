@@ -50,8 +50,9 @@ def default_graduation():
     return os.path.join(_content_dir(), "dashboard", "data", "graduation-candidates.json")
 
 
-DETAIL_MAX_CHARS = 20000  # cap each detail body so one huge lesson can't bloat metrics.js
-TRUNCATED_MARK = "\n[... truncated, open the file for the full text]"
+# One cap and marker for every detail body, shared with the proposal parser
+DETAIL_MAX_CHARS = np_dashboard_actions.BODY_MAX_CHARS
+TRUNCATED_MARK = np_dashboard_actions.TRUNCATED_MARK
 
 
 def attach_lesson_bodies(grad, lessons_dir):
