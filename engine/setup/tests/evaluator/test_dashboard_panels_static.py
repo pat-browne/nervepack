@@ -62,5 +62,33 @@ class TestPanels(unittest.TestCase):
         self.assertIn('id="sug-next"', self.html)
 
 
+class TestTwoUpRows(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(INDEX, encoding="utf-8") as fh:
+            cls.html = fh.read()
+
+    def _assert_two_up(self, a, b):
+        sec = r'<section\s+class="[^"]*\bpanel\b[^"]*"\s+id="%s"[^>]*>\s*</section>'
+        pat = (r'<div\s+class="[^"]*\bgrid\b[^"]*"[^>]*>\s*' + sec + r'\s*' + sec + r'\s*</div>') % (a, b)
+        self.assertIsNotNone(re.search(pat, self.html), "%s and %s must share one .grid row" % (a, b))
+
+    def test_perf_charts_side_by_side(self):
+        self._assert_two_up("panel-trend", "panel-tokens")
+
+    def test_ledger_and_latest_side_by_side(self):
+        self._assert_two_up("panel-ledger", "panel-latest")
+
+    def test_grid_stacks_on_narrow_viewports(self):
+        m = re.search(r"@media\s*\(\s*max-width\s*:\s*(\d+)px\s*\)\s*\{\s*\.grid\s*\{[^}]*"
+                      r"grid-template-columns\s*:\s*1fr\b[^}]*\}", self.html)
+        self.assertIsNotNone(m, ".grid must collapse to one column inside a max-width media query")
+        self.assertEqual(int(m.group(1)), 900, "two-up rows must stack at and below 900px")
+
+    def test_grid_cells_can_shrink(self):
+        self.assertRegex(self.html, r"\.grid\s*>\s*\.panel\s*\{[^}]*min-width\s*:\s*0\b[^}]*\}",
+                         "grid cells need min-width:0 so wide charts do not overflow")
+
+
 if __name__ == "__main__":
     unittest.main()
