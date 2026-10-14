@@ -19,18 +19,18 @@ def conf_keys():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            cols = line.split("|")
+            cols = [c.strip() for c in line.split("|")]
             keys.add(cols[0])
             if len(cols) > 4 and cols[4]:
                 for kv in cols[4].split(","):
-                    keys.add(cols[0] + "." + kv.split("=", 1)[0])
+                    keys.add(cols[0] + "." + kv.split("=", 1)[0].strip())
     return keys
 
 
 def label_keys():
     with open(INDEX, encoding="utf-8") as fh:
         html = fh.read()
-    m = re.search(r"const TOGGLE_LABELS = \{(.*?)\n\s*\};", html, re.S)
+    m = re.search(r"const TOGGLE_LABELS = \{(.*?)\n\s*\}\s*;", html, re.S)
     if not m:
         raise AssertionError("TOGGLE_LABELS map not found in dashboard/index.html")
     return re.findall(r'^\s*"([^"]+)"\s*:', m.group(1), re.M)

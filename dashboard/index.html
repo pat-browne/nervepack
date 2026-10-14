@@ -776,8 +776,8 @@
     return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
   }
 
-  // Display labels for terse toggle/param keys. Keys stay the stored names
-  // (toggles.local and code read them). tests/toggles/test_display_labels.py
+  // Display labels for terse toggle/param keys. Keys stay unchanged:
+  // toggles.conf defines them, toggles.local stores overrides, code reads them. tests/toggles/test_display_labels.py
   // checks every key here exists in toggles.conf.
   const TOGGLE_LABELS = {
     "evaluator": "Session evaluator",
