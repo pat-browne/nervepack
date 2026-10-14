@@ -1,5 +1,5 @@
 ---
-id: 0079
+id: 0080
 status: accepted
 date: 2026-10-14
 tier: normal
@@ -9,7 +9,7 @@ blast_radius:
   - change-specs/dashboard-side-by-side-rows.md
 ---
 
-# 0079: Two-up rows for the performance charts and the ledger
+# 0080: Two-up rows for the performance charts and the ledger
 
 ## Context and problem statement
 
