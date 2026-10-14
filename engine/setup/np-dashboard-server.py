@@ -355,7 +355,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.split("?")[0] == "/api/jobs":
                 if not np_toggle.enabled("maintain.job_health"):
                     return self._json({"error": "not found"}, 404)
-                return self._json({"jobs": np_job_health.survey()})
+                try:
+                    return self._json({"jobs": np_job_health.survey()})
+                except Exception:
+                    return self._json({"error": "job survey failed"}, 500)
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
                     return self._json({"error": "not found"}, 404)

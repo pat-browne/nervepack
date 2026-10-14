@@ -31,7 +31,7 @@ steps in order, then stop.
 ### 1. Verify repo
 
 ```bash
-ls CLAUDE.md skills engine/setup INDEX.md >/dev/null
+ls CLAUDE.md skills engine/setup INDEX.md >/dev/null || exit 1
 ```
 
 If any are missing, stop and report.
@@ -43,7 +43,7 @@ Run the scanner. Do not recompute scores by hand.
 ```bash
 SCAN="${TMPDIR:-/tmp}/np-compact-scan.json"
 python3 engine/setup/np_compact_scan.py > "$SCAN" || { echo "ERROR: compact scan failed"; exit 1; }
-PROPOSALS_DIR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proposals_dir"])' "$SCAN")"
+PROPOSALS_DIR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proposals_dir"])' "$SCAN")" || { echo "ERROR: no proposals_dir in scan"; exit 1; }
 ```
 
 Its JSON covers this repo and every overlay skill root.
@@ -156,7 +156,8 @@ If nothing changed, exit silently. No empty commits.
 One short paragraph:
 
 - N auto-merges applied (with from→to names + scores)
-- M proposals written to `$PROPOSALS_DIR/<date>.md`
+- M proposals written to `$PROPOSALS_DIR/<date>.md`, and whether they
+  were committed or left uncommitted because the overlay is not on main
 - K splits proposed
 - Any structural concerns (e.g. "5 skills all in the 0.3-0.4 band — maybe
   consider a topic reorganization")
