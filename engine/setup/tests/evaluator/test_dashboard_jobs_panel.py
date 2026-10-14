@@ -20,7 +20,7 @@ class TestJobsPanel(unittest.TestCase):
         self.assertRegex(self.html, r'<div class="grid"[^>]*>\s*<section class="panel full" id="panel-jobs">')
 
     def test_fetches_jobs_endpoint_only_when_served(self):
-        self.assertIn('fetch("/api/jobs")', self.html)
+        self.assertIn('fetch("/api/jobs", ', self.html)
         self.assertIn("if (SERVED) refreshJobs();", self.html)
 
     def test_render_function_covers_each_field(self):
@@ -36,6 +36,15 @@ class TestJobsPanel(unittest.TestCase):
     def test_static_and_error_fallback_note(self):
         self.assertIn("needs the dashboard server", self.html)
         self.assertRegex(self.html, r"if \(!SERVED\)[^\n]*renderJobs\(null\)")
+
+    def test_static_call_comes_after_empty_helper(self):
+        # renderJobs(null) runs synchronously in static mode and calls empty().
+        self.assertLess(self.html.index("const empty = msg =>"),
+                        self.html.index("if (!SERVED) renderJobs(null)"))
+
+    def test_server_error_has_its_own_message(self):
+        self.assertIn("Could not load job health", self.fn)
+        self.assertIn("AbortSignal.timeout(", self.html)
 
     def test_names_are_escaped(self):
         self.assertIn("esc(j.name)", self.fn)

@@ -715,11 +715,12 @@
     if (parts.length === 1) parts.push("all ok");
     return parts.join(", ");
   }
-  function renderJobs(jobs) {
+  function renderJobs(jobs, failed) {
     const head = `<span class="lbl">Scheduled jobs</span>`;
     if (!Array.isArray(jobs)) {
-      elJobs.innerHTML = head + empty("Job health needs the dashboard server. "
-        + "Open the served dashboard to see scheduled jobs.");
+      elJobs.innerHTML = head + empty(failed
+        ? "Could not load job health from the dashboard server. Check its log, then reload."
+        : "Job health needs the dashboard server. Open the served dashboard to see scheduled jobs.");
       return;
     }
     if (!jobs.length) { elJobs.innerHTML = head + empty("No scheduled jobs found."); return; }
@@ -739,13 +740,14 @@
   }
   async function refreshJobs() {
     try {
-      const res = await fetch("/api/jobs");
-      renderJobs(res.ok ? (await res.json()).jobs : null);
-    } catch { renderJobs(null); }
+      const res = await fetch("/api/jobs", { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      renderJobs((await res.json()).jobs, true);
+    } catch (e) {
+      console.warn("GET /api/jobs failed:", e);
+      renderJobs(null, true);
+    }
   }
-  const empty = msg => `<div class="empty">${msg}</div>`;
-  if (!SERVED) renderJobs(null);
-  if (SERVED) refreshJobs();
 
   // ---- render ----
   const M = (window.METRICS || []).slice();
@@ -759,8 +761,12 @@
   const elGrad = document.getElementById("panel-graduation");
   const elBacklog = document.getElementById("panel-backlog");
   const elLedger = document.getElementById("panel-ledger");
-  const L =window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
+  const empty = msg => `<div class="empty">${msg}</div>`;
+  const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
+  // Jobs render here, after empty() exists: the static-mode call runs synchronously.
+  if (!SERVED) renderJobs(null);
+  if (SERVED) refreshJobs();
 
   // ---- E · Feature toggles (served-mode only — the panel needs a backend to
   // write through). Fetches /api/toggles, renders a switch per bare feature +
