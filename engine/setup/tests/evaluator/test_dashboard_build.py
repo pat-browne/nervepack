@@ -1483,6 +1483,21 @@ class TestDetailBodies(unittest.TestCase):
         self.assertIn("Do the thing first.", cands["s1"]["body"])
         self.assertNotIn("body", cands["gone"])
 
+    def test_long_lesson_body_is_marked_truncated(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(lessons, "big.md"), "w") as fh:
+                fh.write("x" * 25000)
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "x", "name": "big"}]}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        body = json.loads(m.group(1))["candidates"][0]["body"]
+        self.assertTrue(body.endswith("open the file for the full text]"))
+        self.assertLess(len(body), 20100)
+
     def test_graduation_name_cannot_escape_lessons_dir(self):
         with tempfile.TemporaryDirectory() as d:
             lessons = os.path.join(d, "lessons")

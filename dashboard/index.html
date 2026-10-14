@@ -520,6 +520,8 @@
 
     draw();
     if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
+    else window.addEventListener("resize", draw);
+
     wrap.addEventListener("mousemove", e => {
       const x = e.clientX - wrap.getBoundingClientRect().left;
       const i = n === 1 ? 0 : Math.round((x - padX) / (w - 2 * padX) * (n - 1));
@@ -554,10 +556,10 @@
       txt.classList.add("has-detail");
       txt.addEventListener("click", e => {
         if (e.target.closest(".detail")) return;
-        const d = b.nextElementSibling, open = d.hidden;
-        d.hidden = !open;
-        b.setAttribute("aria-expanded", String(open));
-        b.textContent = open ? "Hide text" : "Show text";
+        const d = b.nextElementSibling, wasHidden = d.hidden;
+        d.hidden = !wasHidden;
+        b.setAttribute("aria-expanded", String(wasHidden));
+        b.textContent = wasHidden ? "Hide text" : "Show text";
       });
     });
   }

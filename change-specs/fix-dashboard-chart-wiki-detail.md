@@ -10,7 +10,7 @@ blast_radius:
   - engine/setup/tests/evaluator/test_dashboard_build.py
   - engine/setup/tests/evaluator/test_dashboard_panels_static.py
   - docs/ARCHITECTURE.md
-  - change-specs/fix+dashboard-chart-wiki-detail.md
+  - change-specs/fix-dashboard-chart-wiki-detail.md
 ---
 
 # 0084: Round chart dots, collapsed wiki layers, row detail text

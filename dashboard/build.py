@@ -51,12 +51,15 @@ def default_graduation():
 
 
 DETAIL_MAX_CHARS = 20000  # cap each detail body so one huge lesson can't bloat metrics.js
+TRUNCATED_MARK = "\n[... truncated, open the file for the full text]"
 
 
 def attach_lesson_bodies(grad, lessons_dir):
     """Add `body` (the lesson file text) to each candidate whose
     <lessons_dir>/<name>.md exists. A name that is not a plain file name is
-    skipped. Fail-open: an unreadable file leaves the candidate without a body."""
+    skipped. Fail-open: an unreadable file leaves the candidate without a body.
+    A body cut at DETAIL_MAX_CHARS ends with TRUNCATED_MARK."""
+    attached, missing = 0, []
     for c in grad.get("candidates") or []:
         name = c.get("name") if isinstance(c, dict) else None
         if (not isinstance(name, str) or not name or name.startswith(".")
@@ -65,10 +68,19 @@ def attach_lesson_bodies(grad, lessons_dir):
         try:
             with open(os.path.join(lessons_dir, name + ".md"), encoding="utf-8",
                       errors="replace") as fh:
-                c["body"] = fh.read(DETAIL_MAX_CHARS)
-        except OSError:
-            pass
+                body = fh.read(DETAIL_MAX_CHARS)
+                if fh.read(1):
+                    body += TRUNCATED_MARK
+        except OSError as exc:
+            missing.append("%s (%s)" % (name, exc.strerror or exc))
+            continue
+        c["body"] = body
+        attached += 1
+    if missing:
+        sys.stderr.write("build.py graduation bodies: %d attached, %d without text: %s\n"
+                         % (attached, len(missing), ", ".join(missing)))
     return grad
+
 
 
 def load_graduation(path):
