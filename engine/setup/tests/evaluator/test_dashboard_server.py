@@ -161,6 +161,16 @@ class TestServer(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ok"])
 
+    def test_health_reports_code_fingerprint_and_pid(self):
+        # A long-lived server keeps serving its old routes after an update.
+        # The launcher compares this fingerprint to restart a stale one.
+        import sys
+        sys.path.insert(0, os.path.normpath(SETUP))
+        import np_dashboard_actions
+        h = json.loads(self._get("/api/health")[1])
+        self.assertEqual(h["code"], np_dashboard_actions.code_fingerprint())
+        self.assertEqual(h["pid"], self.proc.pid)
+
     def test_path_traversal_rejected(self):
         """Raw socket so the client can't normalize away the ../ — the server's
         _safe_path must refuse anything outside the dashboard root."""

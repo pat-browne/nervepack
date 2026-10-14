@@ -21,6 +21,25 @@ import re
 import time
 
 PROPOSAL_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# The files that define the server's routes. A change to either means a
+# running server is stale.
+_CODE_FILES = ("np-dashboard-server.py", "np_dashboard_actions.py")
+
+
+def code_fingerprint():
+    """Short hash of the server's route code. Empty when a file is unreadable."""
+    import hashlib
+    h = hashlib.sha256()
+    try:
+        for name in _CODE_FILES:
+            with open(os.path.join(_HERE, name), "rb") as fh:
+                h.update(fh.read())
+    except OSError:
+        return ""
+    return h.hexdigest()[:16]
+
+
 _HEAD_RE = re.compile(r"^(#{2,3})\s+(.*\S)\s*$")
 _REC_RE = re.compile(r"recommendation\s*:?\s*\**\s*:?\s*(.+)", re.I)
 

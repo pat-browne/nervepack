@@ -960,8 +960,8 @@
         <div class="txt"><b>${esc(p.title)}</b>
           <div class="meta">${esc(p.date || "")} · ${p.recommendation ? esc(p.recommendation) : "no recommendation"}</div>
         </div>${SERVED ? `<span class="rowacts">
-          <button class="btn sm${p.keep_separate ? "" : " primary"}" data-apply>Apply</button>
-          <button class="btn sm${p.keep_separate ? " primary" : ""}" data-reject-prop>Reject</button>
+          <button class="btn sm primary" data-apply>Apply</button>
+          <button class="btn sm" data-reject-prop>Reject</button>
         </span>` : ""}
       </div>`).join("")
       + (rows.length && !SERVED ? `<div class="note">Open the served dashboard for the Apply / Reject buttons.</div>` : "");

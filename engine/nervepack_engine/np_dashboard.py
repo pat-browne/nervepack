@@ -64,6 +64,36 @@ def is_listening(port, timeout=0.2):
         return False
 
 
+def _stop_if_stale(port):
+    """Stop a server that runs older route code. True when it stopped.
+
+    A long-lived server reads index.html fresh but keeps its startup routes.
+    New buttons then get "no such route". /api/health reports the pid and code
+    fingerprint. A server too old to report a pid is left alone."""
+    import json
+    import signal
+    import urllib.request
+    import np_dashboard_actions
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/api/health" % port, timeout=1) as r:
+            health = json.loads(r.read().decode("utf-8") or "{}")
+    except (OSError, ValueError):
+        return False
+    pid, code = health.get("pid"), health.get("code")
+    current = np_dashboard_actions.code_fingerprint()
+    if not isinstance(pid, int) or not current or code == current:
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return False
+    for _ in range(_POLL_ATTEMPTS):
+        if not is_listening(port):
+            return True
+        time.sleep(_POLL_INTERVAL)
+    return not is_listening(port)
+
+
 def dashboard_url():
     """np_dashboard_url: file:// when evaluator.dashboard_serve is off; else
     ensures the local backend (np-dashboard-server.py) is listening on
@@ -83,6 +113,8 @@ def dashboard_url():
     # (observed on macOS with a bare, non-accepting listen() socket) and
     # time out, so only re-probe when we actually attempted a spawn.
     listening = is_listening(port)
+    if listening and _stop_if_stale(port):
+        listening = False
     if not listening:
         server = os.path.join(np_paths.SETUP_DIR, "np-dashboard-server.py")
         env = dict(os.environ)
