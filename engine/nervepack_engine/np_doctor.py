@@ -331,7 +331,10 @@ def _core_check(cap_id, np):
 def _skill_listing_check():
     """SHOULD: the installed skill listing fits the host budget, so no skill
     shows as a bare name. NP_SKILL_LISTING_CONTEXT sets the context size."""
-    ctx = int(os.environ.get("NP_SKILL_LISTING_CONTEXT") or 1000000)
+    try:
+        ctx = int(os.environ.get("NP_SKILL_LISTING_CONTEXT") or 1000000)
+    except ValueError:
+        return "WARN (NP_SKILL_LISTING_CONTEXT is not an integer)"
     budget = np_skill_listing.host_budget(ctx)
     # Check against the host truncation cap, not the stricter engine lint cap.
     r = np_skill_listing.scan([np_host.skills_dir()],
