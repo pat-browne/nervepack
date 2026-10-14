@@ -26,13 +26,18 @@ _SETUP = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)
 if _SETUP not in sys.path:
     sys.path.insert(0, _SETUP)
 
+import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import time
+import urllib.request
 
+import np_bashlib
+import np_dashboard_actions
 import np_paths
 import np_toggle
 
@@ -66,7 +71,6 @@ def is_listening(port, timeout=0.2):
 
 def _run(cmd):
     """stdout of a native tool, or "" on any failure."""
-    import np_bashlib
     try:
         r = subprocess.run(np_bashlib.argv(cmd), capture_output=True, text=True, timeout=2)
     except Exception:  # fail closed: no answer means no signal
@@ -95,10 +99,6 @@ def _stop_if_stale(port):
     A long-lived server reads index.html fresh but keeps its startup routes.
     New buttons then get "no such route". /api/health reports the pid and code
     fingerprint. A server too old to report a pid is left alone."""
-    import json
-    import signal
-    import urllib.request
-    import np_dashboard_actions
     try:
         with urllib.request.urlopen("http://127.0.0.1:%d/api/health" % port, timeout=1) as r:
             health = json.loads(r.read().decode("utf-8") or "{}")

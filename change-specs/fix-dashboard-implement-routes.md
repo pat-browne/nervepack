@@ -9,7 +9,7 @@ blast_radius:
   - engine/nervepack_engine/np_dashboard.py
   - engine/setup/tests/evaluator/test_*dashboard*.py
   - dashboard/index.html
-  - change-specs/fix+dashboard-implement-routes.md
+  - change-specs/fix-dashboard-implement-routes.md
 ---
 
 # 0079: Restart a stale dashboard server
@@ -61,3 +61,5 @@ test_dashboard_server.test_health_reports_code_fingerprint_and_pid.
 Revert the PR.
 
 ## Deviations
+
+- 2026-10-14: renamed the spec to the slug spec-guard expects (fix-dashboard-...). No new code paths.

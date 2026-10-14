@@ -7,7 +7,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
 
   GET  /                      -> dashboard/index.html
   GET  /<path>                -> static file under dashboard/ (path-sanitized)
-  GET  /api/health            -> {"ok": true, "pid", "code": route-code fingerprint}
+  GET  /api/health            -> {"ok": true, "pid": <int>, "code": "<route-code fingerprint>"}
   POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
