@@ -1,6 +1,6 @@
 ---
 name: np-core-capture-learning
-description: Single entry point for capturing something worth remembering. Classifies the input as durable (→ nervepack repo) or session-scoped (→ local Claude memory store) and routes it to the right destination. Use when the user says "capture this", "remember this", "save this learning", "/capture", or "/learn" — any phrasing that signals "this is worth keeping" without specifying where.
+description: 'Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where.'
 ---
 
 # np-core-capture-learning
