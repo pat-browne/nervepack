@@ -17,7 +17,7 @@ or an OSS runner. The repo is at your working directory. No local-machine access
 **Standing mandate:** pre-authorized to auto-merge skills with very high
 similarity (Jaccard ≥ 0.85 on description + section headings) AND to
 auto-archive duplicates. For everything else, write proposals to a dated
-file under `compact-proposals/` and let the human decide.
+file under the content overlay's `compact-proposals/` and let the human decide.
 
 ---
 
@@ -31,28 +31,34 @@ steps in order, then stop.
 ### 1. Verify repo
 
 ```bash
-ls CLAUDE.md skills setup INDEX.md >/dev/null
+ls CLAUDE.md skills engine/setup INDEX.md >/dev/null
 ```
 
 If any are missing, stop and report.
 
-### 2. Build a similarity matrix across skills
+### 2. Score skills (deterministic)
 
-For every pair of skills in `skills/*/SKILL.md`:
+Run the scanner. Do not recompute scores by hand.
 
-- Extract the frontmatter `description:` (one sentence).
-- Extract all `##`-level section headings.
-- Tokenize: lowercase, strip punctuation, drop stopwords (use a small
-  built-in list: the, a, an, and, or, of, to, for, in, on, with, when,
-  use, that, this, is, are, be).
-- Compute Jaccard similarity = |A ∩ B| / |A ∪ B| over the union of tokens
-  from description + headings.
+```bash
+python3 engine/setup/np_compact_scan.py > "${TMPDIR:-/tmp}/np-compact-scan.json"
+```
 
-Record pairs above 0.3 similarity, ranked descending.
+Its JSON covers this repo and every overlay skill root.
+
+- `pairs` lists skill pairs scored by Jaccard on description and headings.
+- Each pair has a `band`: `auto-merge` (0.85 and up) or `propose`.
+- The floor is the `maintain.compact_propose_min` param (default 0.3).
+- Pairs named in `REJECTED.md` are already dropped.
+- `oversized` lists skills whose total size passes the split limit.
+- That total counts `SKILL.md` plus `references/`.
+- The limit is `maintain.compact_split_total_kb` (default 40 KB).
+- `proposals_dir` is the overlay's `compact-proposals/`, which the dashboard reads.
+- Never write proposals into the engine repo.
 
 ### 3. Auto-merge confident duplicates (Jaccard ≥ 0.85)
 
-For each pair above 0.85:
+For each `auto-merge` pair:
 
 1. Pick the keeper: the skill with more lines (more accumulated content),
    tie-break by alphabetical name.
@@ -68,10 +74,11 @@ For each pair above 0.85:
    ```
 5. Remove the loser's entry from `.claude-plugin/plugin.json`.
 
-### 4. Propose ambiguous merges (0.4 ≤ Jaccard < 0.85)
+### 4. Propose ambiguous merges (`propose` band)
 
-Write a proposal file at `compact-proposals/$(date -u +%F).md` if any
-pairs in this band exist. For each pair, include:
+Write a proposal file at `<proposals_dir>/$(date -u +%F).md` if any
+`propose` pairs exist. Open each pair with a `### <a> vs <b>` heading (the
+dashboard splits proposals on it), then include:
 
 - Both names, both descriptions, both line counts, the Jaccard score
 - A diff of what the merged skill would look like (use the same logic as
@@ -83,12 +90,13 @@ Don't apply these — they're for human review next session.
 
 ### 5. Propose splits for oversized skills
 
-For any `SKILL.md` over 300 lines:
+For each skill in `oversized`:
 
-- Identify the section boundaries (`##`-level headings).
+- Identify the section boundaries (`##`-level headings in `SKILL.md` and
+  in the files under `references/`).
 - If two or more sections could stand alone as their own skill, propose a
-  split in `compact-proposals/$(date -u +%F).md` (append, don't overwrite
-  step 4's output).
+  split in `<proposals_dir>/$(date -u +%F).md` under a `### split <name>`
+  heading (append, don't overwrite step 4's output).
 - Don't apply splits — splits are taste-heavy, always human.
 
 ### 6. Regenerate INDEX.md
@@ -123,10 +131,18 @@ EOF
 )" -- skills archive INDEX.md .claude-plugin/plugin.json   # same explicit paths
 ```
 
-**Commit B — proposals** (only if step 4 or 5 wrote anything):
+**Commit B — proposals** (only if step 4 or 5 wrote anything).
+The file lives in the overlay repo that holds `proposals_dir`.
+The dashboard reads it from disk, so it shows up either way.
+Commit and push it only when that checkout is on `main`.
+Otherwise leave it uncommitted and say so in the report.
 ```bash
-git add compact-proposals/
-git commit -m "compact: $M proposal(s) for review" -- compact-proposals/
+OVERLAY="$(dirname "<proposals_dir>")"
+if [ "$(git -C "$OVERLAY" branch --show-current)" = main ]; then
+  git -C "$OVERLAY" add compact-proposals/
+  git -C "$OVERLAY" commit -m "compact: $M proposal(s) for review" -- compact-proposals/
+  git -C "$OVERLAY" push
+fi
 ```
 
 Then `git push`.
@@ -138,7 +154,7 @@ If nothing changed, exit silently. No empty commits.
 One short paragraph:
 
 - N auto-merges applied (with from→to names + scores)
-- M proposals written to `compact-proposals/<date>.md`
+- M proposals written to `<proposals_dir>/<date>.md`
 - K splits proposed
 - Any structural concerns (e.g. "5 skills all in the 0.3-0.4 band — maybe
   consider a topic reorganization")

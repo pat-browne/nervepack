@@ -228,6 +228,19 @@
     "min": 0,
     "description": "Extra days past a maintenance job's cadence before the doctor's maintenance-freshness check calls it stale."
   },
+  "maintain.compact_propose_min": {
+    "type": "number",
+    "min": 0,
+    "description": "Lowest Jaccard score at which the weekly compact pass proposes a skill merge."
+  },
+  "maintain.compact_split_total_kb": {
+    "type": "number",
+    "min": 1,
+    "description": "Total size of a skill (SKILL.md plus references/) in KB above which the compact pass reviews it for a split."
+  },
+  "maintain.job_health": {
+    "description": "Scheduled-job health report: the doctor's job-health check and the dashboard's /api/jobs endpoint."
+  },
   "maintain.refine": {
     "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
   },
