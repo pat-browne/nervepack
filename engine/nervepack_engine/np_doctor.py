@@ -193,6 +193,11 @@ def _core_check(cap_id, np):
         # all die silently and identically. "When did each job last run?" is the
         # one observable that catches all three.
         return np_maintenance_freshness.report()
+    if cap_id == "job-health":
+        # Advisory: installed, toggle, last status, exit code and overdue for
+        # every scheduled job, including ones outside the maintenance list.
+        import np_job_health
+        return np_job_health.report()
     if cap_id == "episodic-freshness":
         # Advisory, and deliberately NOT the same question as maintenance-freshness:
         # that one asks "did the cron fire", this asks "did anything come out". The

@@ -12,6 +12,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
   GET  /api/models            -> model inventory, probe cache, probe_running
+  GET  /api/jobs              -> {"jobs": [...]} scheduled-job health (np_job_health)
   POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
   POST /api/compact/reject {file,title}  -> note in REJECTED.md, drop the entry
   POST /api/compact/apply  {file,title}  -> queue a `compact` agent job, {ok, started, text}
@@ -58,6 +59,7 @@ import np_content  # noqa: E402
 import np_dashboard_actions  # noqa: E402
 import np_dirs
 import np_implement_suggestion  # noqa: E402
+import np_job_health  # noqa: E402
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
@@ -350,6 +352,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(implement_queue())
             if self.path.split("?")[0] == "/api/models":
                 return self._json(models_view())
+            if self.path.split("?")[0] == "/api/jobs":
+                if not np_toggle.enabled("maintain.job_health"):
+                    return self._json({"error": "not found"}, 404)
+                try:
+                    return self._json({"jobs": np_job_health.survey()})
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json({"error": "job survey failed"}, 500)
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
                     return self._json({"error": "not found"}, 404)
