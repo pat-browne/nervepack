@@ -148,6 +148,7 @@
   .panel { background:var(--surface); border:1px solid var(--border);
            border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:16px; }
   .panel.full { grid-column:1 / -1; }
+  .grid > .panel { min-width:0; }   /* let wide charts and tables shrink inside a two-up cell */
   .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.04em;
          color:var(--status-pos); font-weight:600; }
   .empty { color:var(--text-tertiary); font-size:13px; padding:18px 0; text-align:center; }
@@ -309,15 +310,19 @@
                 aria-haspopup="dialog" aria-label="Settings" title="Settings: models and feature toggles">⚙</button>
       </header>
 
-      <section class="panel full" id="panel-trend"></section>
-      <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
+      <div class="grid" style="margin-top:0">
+        <section class="panel" id="panel-trend"></section>
+        <section class="panel" id="panel-tokens"></section>
+      </div>
       <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
       <section class="panel full" id="panel-proposals" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
-      <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
-      <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
+      <div class="grid" style="margin-top:16px">
+        <section class="panel" id="panel-ledger"></section>
+        <section class="panel" id="panel-latest"></section>
+      </div>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
         <section class="panel" id="panel-assets"></section>
