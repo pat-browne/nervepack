@@ -1,6 +1,6 @@
 ---
 name: np-flow-artifact-retro
-description: The retro that runs right after publishing or revising an Artifact, dashboard or long work product, to capture what the session learned before the context is gone. Covers the fold-do-not-append rule that keeps a document from growing a new section per round, re-checking stale verdicts when new evidence lands, declaring a length budget and measuring it mechanically, and routing each learning to the right nervepack layer. Use after any Artifact publish, after a document revision round, or when the user says the doc is too long, asks to update rather than append, or corrects a conclusion the doc still carries. Symptoms it prevents: a two-page brief that reached six pages by accretion, a verdict left standing after the evidence moved, a gate rejection diagnosed from scratch for the sixth time, and a session's process lesson lost at compaction.
+description: 'Retro after publishing or revising an Artifact, dashboard or long doc: fold, don''t append, recheck stale verdicts, measure a length budget, route learnings. Use after any publish or revision round, or when the user says the doc is too long.'
 ---
 
 # np-flow-artifact-retro

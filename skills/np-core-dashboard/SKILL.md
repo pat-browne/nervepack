@@ -1,6 +1,6 @@
 ---
 name: np-core-dashboard
-description: Launch or open the nervepack performance dashboard on demand, and explain its SessionStart auto-open behavior. Use when the user says "open the dashboard", "launch the nervepack dashboard", "show me the metrics", "/np-dashboard", or asks "why didn't the dashboard launch / open on session start". Covers the manual open path, the once-per-boot SessionStart guard, served (http) vs static (file://) modes, and the dashboard_open / dashboard_serve / dashboard_port toggles.
+description: Open the nervepack performance dashboard and explain its SessionStart auto-open, served vs static modes, and dashboard_* toggles. Use on "open the dashboard", "show me the metrics", "/np-dashboard", or "why didn't the dashboard open".
 ---
 
 # Opening the nervepack dashboard
