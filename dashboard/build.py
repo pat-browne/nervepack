@@ -59,8 +59,12 @@ def attach_lesson_bodies(grad, lessons_dir):
     <lessons_dir>/<name>.md exists. A name that is not a plain file name is
     skipped. Fail-open: an unreadable file leaves the candidate without a body.
     A body cut at DETAIL_MAX_CHARS ends with TRUNCATED_MARK."""
+    cands = grad.get("candidates") or []
+    if cands and not os.path.isdir(lessons_dir):
+        sys.stderr.write("build.py graduation bodies: no lessons dir at %s\n" % lessons_dir)
+        return grad
     attached, missing = 0, []
-    for c in grad.get("candidates") or []:
+    for c in cands:
         name = c.get("name") if isinstance(c, dict) else None
         if (not isinstance(name, str) or not name or name.startswith(".")
                 or os.path.basename(name) != name):
@@ -77,8 +81,9 @@ def attach_lesson_bodies(grad, lessons_dir):
         c["body"] = body
         attached += 1
     if missing:
-        sys.stderr.write("build.py graduation bodies: %d attached, %d without text: %s\n"
-                         % (attached, len(missing), ", ".join(missing)))
+        more = " and %d more" % (len(missing) - 10) if len(missing) > 10 else ""
+        sys.stderr.write("build.py graduation bodies: %d attached, %d without text: %s%s\n"
+                         % (attached, len(missing), ", ".join(missing[:10]), more))
     return grad
 
 
