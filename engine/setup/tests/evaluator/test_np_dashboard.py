@@ -120,6 +120,89 @@ class TestDashboardUrl(unittest.TestCase):
         self.assertTrue(url.startswith("file://"))
 
 
+class TestStaleServerRestart(unittest.TestCase):
+    """A server started before an update serves the new index.html but the old
+    routes, so new buttons get "no such route". dashboard_url() restarts it."""
+
+    def setUp(self):
+        import json, tempfile, threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        self.tmp = tempfile.mkdtemp()
+        self.health = {"ok": True}
+        test = self
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                b = json.dumps(test.health).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+
+            def log_message(self, *a):
+                pass
+
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.addCleanup(self.srv.server_close)
+        self.addCleanup(self.srv.shutdown)
+        port = self.srv.server_address[1]
+        conf = os.path.join(self.tmp, "toggles.conf")
+        with open(conf, "w") as fh:
+            fh.write("evaluator|shared|runtime|on|dashboard_serve=on,dashboard_port=%d\n" % port)
+        self._env = mock.patch.dict(os.environ, {
+            "NP_TOGGLES_CONF": conf, "NP_TOGGLES_LOCAL": os.path.join(self.tmp, "none")})
+        self._env.start()
+        self.addCleanup(self._env.stop)
+
+    def test_current_server_is_kept(self):
+        import np_dashboard_actions
+        self.health = {"ok": True, "pid": 999999, "code": np_dashboard_actions.code_fingerprint()}
+        with mock.patch.object(np_dashboard.os, "kill") as kill, \
+             mock.patch.object(np_dashboard.subprocess, "Popen") as popen:
+            np_dashboard.dashboard_url()
+        kill.assert_not_called()
+        popen.assert_not_called()
+
+    def test_stale_server_is_killed_and_respawned(self):
+        self.health = {"ok": True, "pid": 999999, "code": "old"}
+        def _kill(pid, sig):
+            self.srv.shutdown()
+            self.srv.server_close()
+        with mock.patch.object(np_dashboard, "_is_our_server", return_value=True), \
+             mock.patch.object(np_dashboard.os, "kill", side_effect=_kill) as kill, \
+             mock.patch.object(np_dashboard, "_POLL_ATTEMPTS", 1), \
+             mock.patch.object(np_dashboard, "_POLL_INTERVAL", 0.01), \
+             mock.patch.object(np_dashboard.subprocess, "Popen") as popen:
+            np_dashboard.dashboard_url()
+        self.assertEqual(kill.call_args[0][0], 999999)
+        popen.assert_called_once()
+
+    def test_bogus_pid_is_never_signalled(self):
+        # The pid comes from an HTTP reply. None of these may reach os.kill.
+        bogus = [{"ok": True, "pid": p, "code": "old"}
+                 for p in (0, 1, -1, os.getpid(), "123", 1.5, True, None, 999999)]
+        bogus.append({"pid": 999999, "code": "old"})
+        for health in bogus:
+            self.health = health
+            with mock.patch.object(np_dashboard.os, "kill") as kill, \
+                 mock.patch.object(np_dashboard.subprocess, "Popen"):
+                np_dashboard.dashboard_url()
+            kill.assert_not_called()
+
+    def test_foreign_listener_is_not_our_server(self):
+        # A pid that is not the port's listener, or not our script, is refused.
+        with mock.patch.object(np_dashboard, "_run", side_effect=["4242\n", ""]):
+            self.assertFalse(np_dashboard._is_our_server(999999, 1))
+        uid = str(os.getuid()) if hasattr(os, "getuid") else "0"
+        with mock.patch.object(np_dashboard, "_run",
+                               side_effect=["4242\n", uid + " /usr/bin/python3 other.py\n"]):
+            self.assertFalse(np_dashboard._is_our_server(4242, 1))
+        with mock.patch.object(np_dashboard, "_run",
+                               side_effect=["4242\n", "99999 python3 np-dashboard-server.py\n"]):
+            self.assertFalse(np_dashboard._is_our_server(4242, 1))
+
+
 class TestBootId(unittest.TestCase):
     def test_10_linux_path_read_when_present(self):
         with mock.patch("builtins.open", mock.mock_open(read_data="abc-123\n")):
