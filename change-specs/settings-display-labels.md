@@ -2,7 +2,7 @@
 id: 0079
 status: accepted
 date: 2026-10-14
-tier: standard
+tier: normal
 blast_radius:
   - dashboard/index.html
   - engine/setup/tests/toggles/test_display_labels.py
