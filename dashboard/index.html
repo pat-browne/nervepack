@@ -743,6 +743,7 @@
       renderJobs(res.ok ? (await res.json()).jobs : null);
     } catch { renderJobs(null); }
   }
+  const empty = msg => `<div class="empty">${msg}</div>`;
   if (!SERVED) renderJobs(null);
   if (SERVED) refreshJobs();
 
@@ -758,8 +759,7 @@
   const elGrad = document.getElementById("panel-graduation");
   const elBacklog = document.getElementById("panel-backlog");
   const elLedger = document.getElementById("panel-ledger");
-  const empty = msg => `<div class="empty">${msg}</div>`;
-  const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
+  const L =window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
 
   // ---- E · Feature toggles (served-mode only — the panel needs a backend to
