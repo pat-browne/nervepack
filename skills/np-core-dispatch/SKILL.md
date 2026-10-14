@@ -1,6 +1,6 @@
 ---
 name: np-core-dispatch
-description: Send a task or a handoff to a fresh agent and supervise it. Use when you want another agent to carry out work — executing a [[np-core-handoff]] doc, running a long/risky job, or parallelizing — especially when you tried to "continue" a previously spawned agent and the SendMessage capability isn't available in this environment. Covers the spawn-fresh-with-context fallback, scoping, stop-points, and verification. The dispatch half of the continuity pair with [[np-core-handoff]] (handoff writes the doc; dispatch sends it).
+description: 'Send a task or [[np-core-handoff]] doc to a fresh agent and supervise it: scope, stop-points, verification. Use for long or risky jobs, parallel work, or when SendMessage is unavailable to continue a spawned agent.'
 ---
 
 # dispatch — send work to a fresh agent
