@@ -62,10 +62,6 @@ class TestPanels(unittest.TestCase):
         self.assertIn('id="sug-next"', self.html)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestTwoUpRows(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -87,3 +83,7 @@ class TestTwoUpRows(unittest.TestCase):
         m = re.search(r"@media \(max-width:(\d+)px\) \{\s*\.grid \{ grid-template-columns:1fr; \}", self.html)
         self.assertIsNotNone(m)
         self.assertGreaterEqual(int(m.group(1)), 768)
+
+
+if __name__ == "__main__":
+    unittest.main()

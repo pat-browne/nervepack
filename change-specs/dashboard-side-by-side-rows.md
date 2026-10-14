@@ -32,7 +32,7 @@ Chosen option: "Reuse `.grid`", because it matches the existing idiom.
 
 ## Non-goals
 
-Changing the `.grid` breakpoint (900px). It already stacks below 768px.
+Changing the `.grid` breakpoint (900px). It already stacks at and below 900px.
 
 ## Cross-cutting concerns
 
