@@ -64,3 +64,26 @@ class TestPanels(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTwoUpRows(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(INDEX, encoding="utf-8") as fh:
+            cls.html = fh.read()
+
+    def _assert_two_up(self, a, b):
+        m = re.search(r'<div class="grid"[^>]*>\s*<section class="panel" id="%s"></section>'
+                      r'\s*<section class="panel" id="%s"></section>\s*</div>' % (a, b), self.html)
+        self.assertIsNotNone(m, "%s and %s must share one .grid row" % (a, b))
+
+    def test_perf_charts_side_by_side(self):
+        self._assert_two_up("panel-trend", "panel-tokens")
+
+    def test_ledger_and_latest_side_by_side(self):
+        self._assert_two_up("panel-ledger", "panel-latest")
+
+    def test_grid_stacks_on_narrow_viewports(self):
+        m = re.search(r"@media \(max-width:(\d+)px\) \{\s*\.grid \{ grid-template-columns:1fr; \}", self.html)
+        self.assertIsNotNone(m)
+        self.assertGreaterEqual(int(m.group(1)), 768)
