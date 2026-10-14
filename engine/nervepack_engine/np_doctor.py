@@ -333,6 +333,7 @@ def _skill_listing_check():
     shows as a bare name. NP_SKILL_LISTING_CONTEXT sets the context size."""
     ctx = np_skill_listing._env_int("NP_SKILL_LISTING_CONTEXT", 1000000)
     budget = np_skill_listing.host_budget(ctx)
+    # Check against the host truncation cap, not the stricter engine lint cap.
     r = np_skill_listing.scan([np_host.skills_dir()],
                               np_skill_listing.HOST_DESC_CAP, budget)
     broken = sorted({s["skill"] for s in r["skills"]
@@ -343,7 +344,8 @@ def _skill_listing_check():
                      "some skills lose their description"
                      % (r["total_chars"], budget, ctx))
     if broken:
-        notes.append("bad frontmatter: %s" % ", ".join(broken[:5]))
+        more = " (+%d more)" % (len(broken) - 5) if len(broken) > 5 else ""
+        notes.append("bad frontmatter: %s%s" % (", ".join(broken[:5]), more))
     if notes:
         return "WARN (%s -- run np_skill_listing.py on each skills/ tree)" % "; ".join(notes)
     return "PASS (%d/%d chars, %d skills)" % (r["total_chars"], budget, len(r["skills"]))

@@ -63,6 +63,7 @@ def _scalar(first, cont, key):
 
 def parse(text):
     """Return (fields, errors) for the first frontmatter block."""
+    text = text.replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return {}, ["no frontmatter block"]
     end = text.find("\n---", 3)
