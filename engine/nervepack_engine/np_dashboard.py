@@ -26,13 +26,18 @@ _SETUP = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)
 if _SETUP not in sys.path:
     sys.path.insert(0, _SETUP)
 
+import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import time
+import urllib.request
 
+import np_bashlib
+import np_dashboard_actions
 import np_paths
 import np_toggle
 
@@ -64,6 +69,88 @@ def is_listening(port, timeout=0.2):
         return False
 
 
+def _run(cmd):
+    """stdout of a native tool, or "" on any failure."""
+    try:
+        r = subprocess.run(np_bashlib.argv(cmd), capture_output=True, text=True, timeout=2)
+    except Exception:  # fail closed: no answer means no signal
+        return ""
+    return r.stdout if r.returncode == 0 and isinstance(r.stdout, str) else ""
+
+
+def _log(msg):
+    """One stderr line. Stdout stays clean for hook output."""
+    try:
+        sys.stderr.write("np-dashboard: %s\n" % msg)
+    except (OSError, ValueError):
+        pass
+
+
+def _is_our_server(pid, port):
+    """True only when pid is a sane int, listens on port, runs our server, and is ours.
+
+    The pid comes from an HTTP reply, so it is checked before any signal.
+    Each refusal logs its reason and fails closed."""
+    if type(pid) is not int or pid <= 1 or pid == os.getpid():
+        _log("stale-check: refused pid %r (not a valid server pid)" % (pid,))
+        return False
+    if not hasattr(os, "getuid"):
+        _log("stale-check: refused pid %d (no uid check on this OS)" % pid)
+        return False
+    listeners = _run(["lsof", "-nP", "-t", "-iTCP:%d" % port, "-sTCP:LISTEN"]).split()
+    if str(pid) not in listeners:
+        _log("stale-check: refused pid %d (not the listener on port %d)" % (pid, port))
+        return False
+    fields = _run(["ps", "-o", "uid=", "-o", "command=", "-p", str(pid)]).strip().split(None, 1)
+    if len(fields) != 2 or fields[0] != str(os.getuid()):
+        _log("stale-check: refused pid %d (other uid or no ps output)" % pid)
+        return False
+    if "np-dashboard-server.py" not in fields[1]:
+        _log("stale-check: refused pid %d (not np-dashboard-server.py)" % pid)
+        return False
+    return True
+
+
+def _stop_if_stale(port):
+    """Stop a server that runs older route code. True when it stopped.
+
+    A long-lived server reads index.html fresh but keeps its startup routes.
+    New buttons then get "no such route". /api/health reports the pid and code
+    fingerprint. A server too old to report a pid is left alone."""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/api/health" % port, timeout=1) as r:
+            health = json.loads(r.read().decode("utf-8") or "{}")
+    except (OSError, ValueError) as exc:  # ValueError covers UnicodeDecodeError
+        _log("stale-check: health probe failed on port %d: %s" % (port, exc))
+        return False
+    pid, code = health.get("pid"), health.get("code")
+    current = np_dashboard_actions.code_fingerprint()
+    if health.get("ok") is not True:
+        _log("stale-check: health reply is not ours, server left running")
+        return False
+    if not current:
+        _log("stale-check: no local fingerprint, server left running")
+        return False
+    if code == current:
+        return False
+    if not _is_our_server(pid, port):
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError as exc:
+        _log("stale-check: kill of pid %d failed: %s" % (pid, exc))
+        return False
+    _log("stale-check: sent SIGTERM to stale server pid %d" % pid)
+    for _ in range(_POLL_ATTEMPTS):
+        if not is_listening(port):
+            return True
+        time.sleep(_POLL_INTERVAL)
+    if is_listening(port):
+        _log("stale-check: pid %d still listening after SIGTERM" % pid)
+        return False
+    return True
+
+
 def dashboard_url():
     """np_dashboard_url: file:// when evaluator.dashboard_serve is off; else
     ensures the local backend (np-dashboard-server.py) is listening on
@@ -83,6 +170,8 @@ def dashboard_url():
     # (observed on macOS with a bare, non-accepting listen() socket) and
     # time out, so only re-probe when we actually attempted a spawn.
     listening = is_listening(port)
+    if listening and _stop_if_stale(port):
+        listening = False
     if not listening:
         server = os.path.join(np_paths.SETUP_DIR, "np-dashboard-server.py")
         env = dict(os.environ)

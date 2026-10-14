@@ -7,7 +7,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
 
   GET  /                      -> dashboard/index.html
   GET  /<path>                -> static file under dashboard/ (path-sanitized)
-  GET  /api/health            -> {"ok": true}
+  GET  /api/health            -> {"ok": true, "pid": <int>, "code": "<route-code fingerprint>"}
   POST /api/resolve {text}    -> mark one suggestion acted-on (np_suggestion_resolve.py)
   POST /api/review  {}        -> top-N open suggestions + a single Haiku verdict pass
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
@@ -70,6 +70,9 @@ DASH = os.path.realpath(os.environ.get("NP_DASH_ROOT") or os.path.join(NP, "dash
 # served root; ../ escaping BOTH roots is still rejected (see _safe_path).
 DATA = os.path.realpath(os.path.join(DASH, "data"))
 _PROBE_CLAIM_LOCK = threading.Lock()
+# Fingerprint of the route code this process loaded. The launcher restarts
+# the server when the code on disk no longer matches.
+CODE = np_dashboard_actions.code_fingerprint()
 PROBE_SCRIPT = os.path.join(_ENGINE_PKG, "np_model.py")
 REVIEW = os.path.join(HERE, "np-suggestions-review.py")
 # NP_IMPLEMENT overrides with a single script path (test seam -- e2e/test stubs use
@@ -337,7 +340,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "forbidden"}, 403)
         try:
             if self.path.split("?")[0] == "/api/health":
-                return self._json({"ok": True})
+                return self._json({"ok": True, "pid": os.getpid(), "code": CODE})
             if self.path.split("?")[0] == "/api/config":
                 return self._json({"implement_mode": current_mode()})
             if self.path.split("?")[0] == "/api/implement-status":
