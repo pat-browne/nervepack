@@ -542,6 +542,17 @@ def _group_label(key):
     return label if label.endswith("s") else label + "s"
 
 
+# Nav groups dropped from the wiki view, matched case-insensitively against a
+# variant's heading ("Receipts") or its container dir name ("receipts").
+WIKI_EXCLUDED_GROUPS = ("receipts", "meetings", "plans")
+
+
+def _excluded_group(key, container):
+    """True when a variant is a record stream, not wiki reading."""
+    drop = {x.lower() for x in WIKI_EXCLUDED_GROUPS}
+    return _group_label(key).lower() in drop or container.lower() in drop
+
+
 # Route kinds that hold readable pages. skill and prompt are not wiki content.
 _NAV_KINDS = ("knowledge", "reference", "roadmap")
 
@@ -613,10 +624,12 @@ def _scan_plan(cd, groups):
                     ("concept", "wiki/concepts", "concept", True)]
     plan = []
     for kind, subdir, key, folder_owning in variants:
-        holder = groups.setdefault(key, [])
         # The rendered-page path keeps only the container's LAST segment, so
         # `wiki/topics` still renders under data/wiki/<layer>/topics/… as before.
         html_seg = subdir.rstrip("/").rsplit("/", 1)[-1]
+        if _excluded_group(key, html_seg):
+            continue
+        holder = groups.setdefault(key, [])
 
         def synth_fn(p, html, root, layer, _kind=kind):
             return {"name": p["name"], "kind": _kind, "excerpt": p["excerpt"],
