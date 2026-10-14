@@ -246,6 +246,7 @@
   .togparams { margin:6px 0 0 4px; display:flex; flex-direction:column; gap:6px; }
   .togparam { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
   .togparam .togkey { color:var(--text-secondary); }
+  .tograw { color:var(--text-tertiary, #888); font-size:10px; font-family:var(--font-mono, monospace); margin-left:6px; font-weight:400; }
   .togro { color:var(--text-tertiary); font-size:11px; margin-left:6px; }
   .togwarn { color:var(--status-neg); font-size:10px; margin-left:6px; }
   /* CSS-only tooltip (not the native `title` attribute — that's delayed ~1s and
@@ -780,6 +781,91 @@
     return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
   }
 
+  // Display labels for terse toggle/param keys. Keys stay unchanged:
+  // toggles.conf defines them, toggles.local stores overrides, code reads them. tests/toggles/test_display_labels.py
+  // checks every key here exists in toggles.conf.
+  const TOGGLE_LABELS = {
+    "evaluator": "Session evaluator",
+    "allowlist": "Permission allowlist",
+    "directive": "Session directive",
+    "pii_filter": "PII filter",
+    "mcp": "MCP server",
+    "turn_gate": "Turn output gate",
+    "form_gate": "Write form gate",
+    "form_directive": "Form directive",
+    "gates": "CI change gates",
+    "memory.cap_bytes": "Memory size cap (bytes)",
+    "memory.backcapture_days": "Back-capture window (days)",
+    "memory.backcapture_max": "Back-capture sessions per sweep",
+    "memory.flush_interval": "Flush interval (seconds)",
+    "memory.drain_grace_days": "Drain grace period (days)",
+    "lessons.enforce": "Enforce lesson gates",
+    "sync.interval": "Sync interval (seconds)",
+    "sync.content": "Sync content overlay",
+    "sync.layout_drift": "Check layout drift",
+    "evaluator.cap_bytes": "Evaluator size cap (bytes)",
+    "evaluator.dashboard_sessions": "Sessions shown",
+    "evaluator.dashboard_days": "Days shown",
+    "evaluator.min_tool_calls": "Minimum tool calls to show a session",
+    "evaluator.dashboard_open": "Open dashboard at session start",
+    "evaluator.dashboard_serve": "Serve dashboard locally",
+    "evaluator.dashboard_port": "Dashboard port",
+    "evaluator.suggestions_top": "Suggestions shown",
+    "evaluator.implement": "Allow implementing suggestions",
+    "evaluator.implement_mode": "Implement mode",
+    "evaluator.implement_status_ttl_days": "Keep implement status (days)",
+    "evaluator.escalation_min_struggles": "Escalate after struggles",
+    "evaluator.escalation_min_prompts": "Escalate after prompts",
+    "evaluator.retain_days": "Keep records (days)",
+    "evaluator.wiki_nav": "Wiki navigation",
+    "evaluator.wiki_mermaid": "Render Mermaid in wiki",
+    "evaluator.toggle_ui": "Toggle editing in dashboard",
+    "skills.split_kb": "Split skill body above (KB)",
+    "skills.soft_kb": "Warn on skill body above (KB)",
+    "skills.catalog_tok": "Skill catalog budget (tokens)",
+    "skills.max_per_run": "Skills split per run",
+    "skills.graduate_seen": "Graduate after times seen",
+    "skills.graduate_kb": "Graduate size limit (KB)",
+    "skills.trigger_recall": "Recall skills by trigger",
+    "skills.security_recall": "Recall security skills",
+    "team.merge": "Team layer merge mode",
+    "mcp.writes": "Allow MCP writes",
+    "mcp.contribute": "Allow MCP contribute",
+    "maintain.freshness_grace_days": "Freshness grace period (days)",
+    "resume.interval": "Live write interval (seconds)",
+    "resume.max_age": "Max pointer age (seconds)",
+    "resume.cron": "Interval cron backstop",
+    "resume.cron_min": "Cron interval (minutes)",
+    "resume.active_window": "Active session window (seconds)",
+    "journal.ttl_days": "Keep entries (days)",
+    "journal.recall_sources": "Recall sources",
+    "models.cheap": "Cheap model",
+    "models.agent": "Agentic model",
+    "turn_gate.ui": "UI check mode",
+    "turn_gate.diff": "Diff check mode",
+    "turn_gate.form": "Form check mode",
+    "turn_gate.form_threshold": "Form score threshold",
+    "turn_gate.timeout_s": "Timeout (seconds)",
+    "turn_gate.subagent": "Gate subagents",
+    "form_gate.categorical": "Categorical rule mode",
+    "form_gate.rate": "Rate rule mode",
+    "form_gate.rate_threshold": "Rate threshold",
+    "form_gate.timeout_s": "Timeout (seconds)",
+    "form_gate.exempt_globs": "Exempt path globs",
+    "form_gate.prose_ext": "Prose file extensions",
+    "form_gate.comment_ext": "Code comment extensions",
+    "form_gate.comment_block_max": "Max comment block lines",
+    "form_directive.cadence": "Directive cadence",
+    "gates.spec_guard.enforce": "Enforce spec guard",
+    "gates.drift_guard.enforce": "Enforce drift guard",
+    "gates.tier_guard.enforce": "Enforce tier guard",
+  };
+  // Label with the raw key shown smaller beside it; unmapped keys render as-is.
+  function keyLabel(key, shown) {
+    const lbl = TOGGLE_LABELS[key];
+    return lbl ? `${esc(lbl)}<span class="tograw">${esc(shown)}</span>` : esc(shown);
+  }
+
   function paramControl(fam, p) {
     const dotted = fam + "." + p.key;
     const ro = p.self_lockout || !p.schema;
@@ -806,7 +892,7 @@
         data-saved="${esc(p.value)}" value="${esc(p.value)}">`;
     }
     return `<div class="togparam">
-      <span class="togkey">${esc(p.key)}${helpIcon((p.schema || {}).description)}${roNote}${warn}</span>${control}
+      <span class="togkey">${keyLabel(dotted, p.key)}${helpIcon((p.schema || {}).description)}${roNote}${warn}</span>${control}
     </div>`;
   }
 
@@ -854,7 +940,7 @@
     elToggles.innerHTML = (families.length ? families.map(fam => `
       <div class="togfam">
         <div class="togfamhead">
-          <span class="togfamname">${esc(fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
+          <span class="togfamname">${keyLabel(fam.feature, fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
           ${familyControl(fam)}
         </div>
         ${fam.feature === "models"
