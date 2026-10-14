@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 
+# Local virtualenv and lockfile from uv (the engine is stdlib-only)
+.venv/
+engine/uv.lock
+
 # superpowers visual-companion brainstorm scratch
 .superpowers/
 /dashboard/data

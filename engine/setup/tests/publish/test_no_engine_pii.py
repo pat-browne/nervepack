@@ -30,6 +30,15 @@ class TestNoEnginePII(unittest.TestCase):
             f"PII guard found secrets/PII in the engine tree:\n{r.stdout}\n{r.stderr}",
         )
 
+    def test_scan_skips_venv(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, ".venv", "bin"))
+            with open(os.path.join(d, ".venv", "bin", "activate"), "w") as f:
+                f.write("# maintainer someone.real@gmail.com\n")
+            r = subprocess.run([sys.executable, SCAN, d], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
