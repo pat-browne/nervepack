@@ -86,7 +86,7 @@ class TestTwoUpRows(unittest.TestCase):
         self.assertEqual(int(m.group(1)), 900, "two-up rows must stack at and below 900px")
 
     def test_grid_cells_can_shrink(self):
-        self.assertRegex(self.html, r"\.grid\s*>\s*\.panel\s*\{\s*min-width\s*:\s*0\s*;?\s*\}",
+        self.assertRegex(self.html, r"\.grid\s*>\s*\.panel\s*\{[^}]*min-width\s*:\s*0\b[^}]*\}",
                          "grid cells need min-width:0 so wide charts do not overflow")
 
 
