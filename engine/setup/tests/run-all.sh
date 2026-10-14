@@ -80,6 +80,8 @@ np_hermetic_env
 # mutated. (Per-test NP_CONTENT_DIR isolation also helps, but build.py's DEFAULT_OUT is
 # not content-dir-relative, so scripts that omit the out arg can't be isolated that way.)
 NP_ROOT="$(cd "$HERE/../../.." && pwd)"
+# Content-overlay tests import engine modules (np_skill_listing) from here.
+export NP_ENGINE_ROOT="$NP_ROOT"
 _dash_snap="$(mktemp -d)"
 for _f in metrics.js metrics.jsonl; do
   [[ -e "$NP_ROOT/dashboard/data/$_f" ]] && cp -p "$NP_ROOT/dashboard/data/$_f" "$_dash_snap/$_f"

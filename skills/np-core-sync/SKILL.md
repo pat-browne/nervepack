@@ -1,6 +1,6 @@
 ---
 name: np-core-sync
-description: Sync ~/Code/nervepack with origin/main using strict-safe semantics (fast-forward only; never auto-rebase or autostash). Use when the user says "sync nervepack", "pull nervepack", "what's new in nervepack", when starting work after a known cron run, or when the SessionStart status file reports anything other than "up to date".
+description: Sync ~/Code/nervepack with origin/main, fast-forward only, never rebase or autostash. Use on "sync nervepack", "pull nervepack", "what's new in nervepack", after a cron run, or when the SessionStart status is not "up to date".
 ---
 
 # np-core-sync

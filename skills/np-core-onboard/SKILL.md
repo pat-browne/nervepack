@@ -1,6 +1,6 @@
 ---
 name: np-core-onboard
-description: Install/onboard nervepack onto this machine for whatever agentic host you are (Claude Code, Goose, OpenHands, Cline, Continue, …) by reading the tool-neutral onboard contract, wiring the host yourself, and verifying with the doctor. Use when setting up nervepack on a new machine/host, when the user says "/np-onboard" or "onboard nervepack" / "set up nervepack here", or when np-doctor reports MUST failures.
+description: 'Install nervepack on this machine for any agent host (Claude Code, Goose, Cline, others): read the onboard contract, wire the host, verify with the doctor. Use on "/np-onboard", "set up nervepack here", a new machine, or doctor MUST failures.'
 ---
 
 # Onboard nervepack to this host

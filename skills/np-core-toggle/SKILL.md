@@ -1,6 +1,6 @@
 ---
 name: np-core-toggle
-description: Turn Nervepack features on/off and adjust their settings. Use when the user says "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or wants to change a param like the sync interval. Wraps the `cli.py toggle` command (engine/nervepack_engine/cli.py).
+description: Turn nervepack features on or off and change their params via cli.py toggle. Use on "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or a param change.
 ---
 
 # np-core-toggle

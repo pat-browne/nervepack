@@ -456,5 +456,56 @@ class TestLayerLayoutCheck(unittest.TestCase):
         self.assertEqual(row[0]["tier"], "SHOULD")
         self.assertEqual(row[0]["check"], "core")
 
+
+class TestSkillListingCheck(unittest.TestCase):
+    """skill-listing warns when the installed listing passes the host budget."""
+
+    def setUp(self):
+        self.dst = tempfile.mkdtemp(prefix="npdoc-skills-")
+        self._saved = {k: os.environ.get(k)
+                       for k in ("NP_SKILLS_DST", "NP_SKILL_LISTING_CONTEXT")}
+        os.environ["NP_SKILLS_DST"] = self.dst
+        os.environ["NP_SKILL_LISTING_CONTEXT"] = "2500"
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.dst, ignore_errors=True)
+
+    def _skill(self, name, desc):
+        d = os.path.join(self.dst, name)
+        os.makedirs(d)
+        with open(os.path.join(d, "SKILL.md"), "w") as fh:
+            fh.write("---\nname: %s\ndescription: %s\n---\n" % (name, desc))
+
+    def test_fits_budget_passes(self):
+        self._skill("a", "Use when testing.")
+        st = np_doctor._core_check("skill-listing", "")
+        self.assertTrue(st.startswith("PASS"), st)
+
+    def test_over_budget_warns(self):
+        self._skill("a", "x" * 60)
+        self._skill("b", "x" * 60)
+        st = np_doctor._core_check("skill-listing", "")
+        self.assertTrue(st.startswith("WARN"), st)
+        self.assertIn("listing 131 chars > 100 budget", st)
+
+    def test_bad_frontmatter_warns(self):
+        os.environ["NP_SKILL_LISTING_CONTEXT"] = "1000000"
+        self._skill("a", "Bad: colon")
+        st = np_doctor._core_check("skill-listing", "")
+        self.assertTrue(st.startswith("WARN"), st)
+        self.assertIn("bad frontmatter: a", st)
+
+    def test_skill_listing_is_a_should_capability(self):
+        with open(os.path.normpath(_CAPS), encoding="utf-8") as fh:
+            caps = json.load(fh)["capabilities"]
+        row = [c for c in caps if c.get("id") == "skill-listing"]
+        self.assertEqual(len(row), 1)
+        self.assertEqual((row[0]["tier"], row[0]["check"]), ("SHOULD", "core"))
+
 if __name__ == "__main__":
     unittest.main()

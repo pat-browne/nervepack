@@ -35,6 +35,11 @@ class TestField(unittest.TestCase):
         self.assertEqual(np_frontmatter.field(self.DOC, "description"), "a demo skill")
         self.assertEqual(np_frontmatter.field(self.DOC, "name"), "demo")
 
+    def test_quoted_value_is_unquoted(self):
+        doc = "---\ndescription: 'Use when it''s: quoted'\nname: \"n: q\"\n---\n"
+        self.assertEqual(np_frontmatter.field(doc, "description"), "Use when it's: quoted")
+        self.assertEqual(np_frontmatter.field(doc, "name"), "n: q")
+
     def test_absent_field_returns_default(self):
         self.assertIsNone(np_frontmatter.field(self.DOC, "missing"))       # default None
         self.assertEqual(np_frontmatter.field(self.DOC, "missing", ""), "")  # default ""

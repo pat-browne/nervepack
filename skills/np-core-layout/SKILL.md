@@ -1,6 +1,6 @@
 ---
 name: np-core-layout
-description: Learn and record how a content layer is organized, so contributions land in the right place without the engine hardcoding a directory tree. Use when onboarding a new content or team layer, when np-doctor reports layer-layout as inferred, when a contribution reports no declared route for its kind, or when the user asks where something should go in a knowledge repo.
+description: Learn and record how a content layer is organized so contributions land in the right place. Use when onboarding a content or team layer, when np-doctor reports layer-layout inferred, when a contribution has no route, or on "where should this go".
 ---
 
 # np-core-layout

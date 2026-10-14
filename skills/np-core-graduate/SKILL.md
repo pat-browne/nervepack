@@ -1,6 +1,6 @@
 ---
 name: np-core-graduate
-description: Use when promoting an existing nervepack SKILL.md UP the content-overlay stack — personal → team → org (never the engine repo). Triggers — "graduate this skill to the team layer", "promote np-kb-* to the org overlay", "share this skill with the team/org", "move this skill up a layer". Not for lesson→skill promotion (that is [[np-core-contribute]]).
+description: Promote a nervepack SKILL.md up the overlay stack, personal to team to org, never into the engine. Use on "graduate this skill to the team layer", "promote to the org overlay", "share this skill with the team". Not for lesson-to-skill.
 ---
 
 # Graduating a skill up the overlay stack

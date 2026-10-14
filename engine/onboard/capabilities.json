@@ -98,6 +98,17 @@
       }
     },
     {
+      "id": "skill-listing",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "every installed skill keeps its description in the host skill listing",
+      "why": "The host caps the skill listing at a share of the context window. Over the cap it drops descriptions, and a skill with no description never auto-triggers.",
+      "accept": "`cli.py doctor` reports skill-listing PASS: the installed listing fits the budget and every SKILL.md has valid frontmatter.",
+      "hints": {
+        "generic": "run `python3 engine/setup/np_skill_listing.py <layer>/skills` on each layer and shorten the flagged descriptions, or disable unused skills and plugins."
+      }
+    },
+    {
       "id": "dashboard-data",
       "tier": "SHOULD",
       "check": "core",

@@ -1,6 +1,6 @@
 """Bash-free Python doctor — the sole implementation of nervepack's install
 health check (phase 15; np-doctor.sh retired). Verifies an install against the
-onboard contract (engine/onboard/capabilities.json), running ALL 16 capabilities
+onboard contract (engine/onboard/capabilities.json), running ALL 20 capabilities
 in-process: the host-neutral `check:core` checks (llm-cli, git-sync, toggles,
 content, team, dashboard-data, hook-scripts, resume-pointer, scheduled-auth-token,
 pii_filter_full) via native git + np_toggle / np_content / np_model / np_token_lib,
@@ -40,6 +40,7 @@ import np_episodic_freshness
 import np_layout
 import np_dirs          # engine/setup, reachable via the _SETUP bootstrap above
 import np_host
+import np_skill_listing
 
 
 def _load_json(path):
@@ -109,6 +110,8 @@ def _core_check(cap_id, np):
         if inferred == 0 and pending == 0:
             return "PASS"
         return "PASS (inferred: %d layer(s), %d open question(s))" % (inferred, pending)
+    if cap_id == "skill-listing":
+        return _skill_listing_check()
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call
@@ -323,6 +326,32 @@ def _core_check(cap_id, np):
         return ("WARN (resume-pointer hooks not registered in %s — run: "
                 "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
     return "SKIP"
+
+
+def _skill_listing_check():
+    """SHOULD: the installed skill listing fits the host budget, so no skill
+    shows as a bare name. NP_SKILL_LISTING_CONTEXT sets the context size."""
+    try:
+        ctx = int(os.environ.get("NP_SKILL_LISTING_CONTEXT") or 1000000)
+    except ValueError:
+        return "WARN (NP_SKILL_LISTING_CONTEXT is not an integer)"
+    budget = np_skill_listing.host_budget(ctx)
+    # Check against the host truncation cap, not the stricter engine lint cap.
+    r = np_skill_listing.scan([np_host.skills_dir()],
+                              np_skill_listing.HOST_DESC_CAP, budget)
+    broken = sorted({s["skill"] for s in r["skills"]
+                     if any("chars >" not in e for e in s["errors"])})
+    notes = []
+    if r["total_chars"] > budget:
+        notes.append("listing %d chars > %d budget at %d-token context, "
+                     "some skills lose their description"
+                     % (r["total_chars"], budget, ctx))
+    if broken:
+        more = " (+%d more)" % (len(broken) - 5) if len(broken) > 5 else ""
+        notes.append("bad frontmatter: %s%s" % (", ".join(broken[:5]), more))
+    if notes:
+        return "WARN (%s -- run np_skill_listing.py on each skills/ tree)" % "; ".join(notes)
+    return "PASS (%d/%d chars, %d skills)" % (r["total_chars"], budget, len(r["skills"]))
 
 
 # ============================================================================

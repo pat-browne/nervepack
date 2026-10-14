@@ -1,6 +1,6 @@
 ---
 name: np-core-suggestions-review
-description: Triage the nervepack performance dashboard's accumulated evaluator suggestions — rank the open ones, decide which to implement (with reasoning), then clear the slate so new suggestions accumulate fresh. Use when the user says "review nervepack suggestions", "evaluate the evaluator/dashboard suggestions", "which suggestions should we build", "clear the suggestions", "/np-suggestions", or after a stretch of sessions when the Suggestions panel has filled up. Tool-agnostic: works from any host (Claude Code, Goose, a terminal); the dashboard's served-mode buttons are the GUI shortcut for the same flow.
+description: 'Triage the dashboard''s evaluator suggestions: rank them, pick which to build with reasons, then clear the slate. Use on "review nervepack suggestions", "which suggestions should we build", "clear the suggestions", "/np-suggestions".'
 ---
 
 # Reviewing nervepack evaluator suggestions

@@ -1,6 +1,6 @@
 ---
 name: np-core-contribute
-description: Capture a new durable learning (rule, preference, plugin choice, environment quirk, useful command) into the correct nervepack file. Use when the user says "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or whenever you notice a fact worth keeping across sessions.
+description: Save a durable learning (rule, preference, plugin choice, env quirk, useful command) to the right nervepack file. Use on "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or any fact worth keeping.
 ---
 
 # np-core-contribute

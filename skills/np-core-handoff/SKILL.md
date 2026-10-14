@@ -1,6 +1,6 @@
 ---
 name: np-core-handoff
-description: Compact the current conversation into a handoff document a fresh agent can pick up from — written to the OS temp dir (never the repo), with a suggested-skills section and any secrets/PII redacted. Use when the user says "/handoff", "hand this off", "write a handoff", or "summarize this for the next session"; when context is about to run out or before a compact; or when switching agents/machines mid-task. Pairs with [[np-core-recall]] (its inverse — recall pulls prior context back; handoff pushes it forward).
+description: Compact this conversation into a redacted handoff doc in the OS temp dir, with suggested skills, for a fresh agent. Use on "/handoff", "hand this off", "summarize this for the next session", before a compact, or when switching agents or machines.
 argument-hint: "What will the next session be used for?"
 ---
 

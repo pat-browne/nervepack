@@ -33,6 +33,7 @@ import re
 import sys
 
 import np_content
+import np_frontmatter
 import np_layout
 import np_toggle
 
@@ -80,8 +81,8 @@ def _extract(skill_file):
             name = line[len("name:"):].lstrip(" \t")
         elif in_fm and line.startswith("description:"):
             desc = line[len("description:"):].lstrip(" \t")
-    name = name.replace("|", "\\|")
-    desc = desc.replace("|", "\\|")
+    name = np_frontmatter.unquote(name).replace("|", "\\|")
+    desc = np_frontmatter.unquote(desc).replace("|", "\\|")
     return name, desc, len(lines)
 
 
