@@ -161,6 +161,12 @@ class TestRoutedAttempts(unittest.TestCase):
         self.assertIn("engine", st["ref"].lower())
         self.assertIn("content overlay", st["ref"].lower())
 
+    def test_8b_terminal_status_carries_the_log_path(self):
+        """So the dashboard can tell the user exactly where to read the result."""
+        text = "Invoke the security-review skill first"
+        self._run(text)
+        self.assertEqual(self._status(text)["log"], self.log)
+
     def test_9_a_success_stops_before_the_second_repo(self):
         def implement_in_first(prompt, tools, cwd, timeout):
             which = "content" if os.path.exists(os.path.join(cwd, "content-marker.txt")) else "engine"
