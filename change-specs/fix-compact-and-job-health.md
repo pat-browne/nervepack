@@ -2,7 +2,7 @@
 id: 0083
 status: accepted
 date: 2026-10-14
-tier: normal
+tier: high
 blast_radius:
   - agents/np-flow-weekly-compact.md
   - engine/setup/np_compact_scan.py
@@ -18,6 +18,7 @@ blast_radius:
   - engine/setup/toggle-schema.json
   - docs/ARCHITECTURE.md
   - change-specs/fix+compact-and-job-health.md
+  - change-specs/fix-compact-and-job-health.md
 ---
 
 # 0083: Reachable compact thresholds and a scheduled-job health report
@@ -83,4 +84,16 @@ Toggle: `maintain.job_health`.
 `test_np_compact_scan.py`, `test_np_job_health.py`, and
 `test_jobs_endpoint_lists_scheduled_jobs` in `test_dashboard_server.py`.
 
+## Rollback
+
+Revert the squash commit.
+
+The scheduler change only adds the `JOB_TOGGLES` map.
+Installed plists, crontab lines and tasks stay byte-identical.
+
+To stop the new check without a revert, set `maintain.job_health` off.
+
 ## Deviations
+
+- 2026-10-14: renamed this spec to match the branch slug that spec-guard expects.
+- 2026-10-14: raised the tier to high, which the scheduler installer path forces.
