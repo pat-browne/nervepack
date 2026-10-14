@@ -71,6 +71,12 @@ class ScanTest(unittest.TestCase):
             fh.write("- x1 vs x2 -- keep separate\n")
         self.assertEqual(self._scan()["pairs"], [])
 
+    def test_output_names_the_roots_scanned(self):
+        _skill(self.root, "a", "alpha", ["A"])
+        out = self._scan()
+        self.assertEqual(out["roots"], [self.root])
+        self.assertEqual(out["skills_scanned"], 1)
+
     def test_proposals_dir_is_the_content_overlay(self):
         self.assertEqual(self._scan()["proposals_dir"],
                          os.path.join(self.content, "compact-proposals"))

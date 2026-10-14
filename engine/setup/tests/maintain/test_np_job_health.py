@@ -72,6 +72,17 @@ class JobListTest(Base):
         self.assertEqual(rows["ado-status-sync"]["cadence_s"], 3600)
         self.assertFalse(rows["ado-status-sync"]["managed"])
 
+    def test_plist_log_outside_log_dir_is_ignored(self):
+        with open(os.path.join(self.la, "com.nervepack.extra.plist"), "wb") as fh:
+            plistlib.dump({"Label": "com.nervepack.extra", "StandardOutPath": "/etc/hosts"}, fh)
+        inside = os.path.join(self.logs, "extra-stdout.log")
+        _write(inside, "ok\n")
+        with open(os.path.join(self.la, "com.nervepack.inside.plist"), "wb") as fh:
+            plistlib.dump({"Label": "com.nervepack.inside", "StandardOutPath": inside}, fh)
+        rows = self.survey()
+        self.assertEqual(rows["extra"]["log"], os.path.join(self.logs, "extra.log"))
+        self.assertEqual(rows["inside"]["log"], inside)
+
 
 class RowTest(Base):
     def _plist(self, name):

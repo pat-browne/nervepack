@@ -41,7 +41,9 @@ If any are missing, stop and report.
 Run the scanner. Do not recompute scores by hand.
 
 ```bash
-python3 engine/setup/np_compact_scan.py > "${TMPDIR:-/tmp}/np-compact-scan.json"
+SCAN="${TMPDIR:-/tmp}/np-compact-scan.json"
+python3 engine/setup/np_compact_scan.py > "$SCAN" || { echo "ERROR: compact scan failed"; exit 1; }
+PROPOSALS_DIR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proposals_dir"])' "$SCAN")"
 ```
 
 Its JSON covers this repo and every overlay skill root.
@@ -76,7 +78,7 @@ For each `auto-merge` pair:
 
 ### 4. Propose ambiguous merges (`propose` band)
 
-Write a proposal file at `<proposals_dir>/$(date -u +%F).md` if any
+Write a proposal file at `$PROPOSALS_DIR/$(date -u +%F).md` if any
 `propose` pairs exist. Open each pair with a `### <a> vs <b>` heading (the
 dashboard splits proposals on it), then include:
 
@@ -95,7 +97,7 @@ For each skill in `oversized`:
 - Identify the section boundaries (`##`-level headings in `SKILL.md` and
   in the files under `references/`).
 - If two or more sections could stand alone as their own skill, propose a
-  split in `<proposals_dir>/$(date -u +%F).md` under a `### split <name>`
+  split in `$PROPOSALS_DIR/$(date -u +%F).md` under a `### split <name>`
   heading (append, don't overwrite step 4's output).
 - Don't apply splits — splits are taste-heavy, always human.
 
@@ -137,7 +139,7 @@ The dashboard reads it from disk, so it shows up either way.
 Commit and push it only when that checkout is on `main`.
 Otherwise leave it uncommitted and say so in the report.
 ```bash
-OVERLAY="$(dirname "<proposals_dir>")"
+OVERLAY="$(dirname "$PROPOSALS_DIR")"
 if [ "$(git -C "$OVERLAY" branch --show-current)" = main ]; then
   git -C "$OVERLAY" add compact-proposals/
   git -C "$OVERLAY" commit -m "compact: $M proposal(s) for review" -- compact-proposals/
@@ -154,7 +156,7 @@ If nothing changed, exit silently. No empty commits.
 One short paragraph:
 
 - N auto-merges applied (with from→to names + scores)
-- M proposals written to `<proposals_dir>/<date>.md`
+- M proposals written to `$PROPOSALS_DIR/<date>.md`
 - K splits proposed
 - Any structural concerns (e.g. "5 skills all in the 0.3-0.4 band — maybe
   consider a topic reorganization")

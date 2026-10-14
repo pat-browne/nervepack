@@ -92,6 +92,7 @@ def scan(roots, propose_min, split_total_kb, content_dir):
     oversized = [{"name": s["name"], "path": s["path"], "bytes": s["bytes"]}
                  for s in skills if s["bytes"] > limit]
     return {"pairs": pairs, "oversized": oversized, "proposals_dir": proposals_dir,
+            "roots": list(roots), "skills_scanned": len(skills),
             "thresholds": {"propose_min": propose_min, "auto_merge": AUTO_MERGE,
                            "split_total_kb": split_total_kb}}
 

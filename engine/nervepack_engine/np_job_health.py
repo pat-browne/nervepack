@@ -167,9 +167,12 @@ def _grace_s():
 
 def _log_for(job, log_dir):
     own = os.path.join(log_dir, "%s.log" % job["name"])
-    if os.path.exists(own) or not job.get("stdout"):
+    alt = job.get("stdout")
+    if os.path.exists(own) or not alt:
         return own
-    return job["stdout"]
+    # A plist names its own log. Only trust one inside the nervepack log dir.
+    root = os.path.realpath(log_dir)
+    return alt if os.path.realpath(alt).startswith(root + os.sep) else own
 
 
 def _installed(name, kind, la_dir, cron, schtasks_fn):
