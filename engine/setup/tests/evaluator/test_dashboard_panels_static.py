@@ -92,7 +92,6 @@ class TestTwoUpRows(unittest.TestCase):
 
 
 
-
 class TestChartAspectAndDetailRows(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
