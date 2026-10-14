@@ -80,10 +80,10 @@ class TestTwoUpRows(unittest.TestCase):
         self._assert_two_up("panel-ledger", "panel-latest")
 
     def test_grid_stacks_on_narrow_viewports(self):
-        m = re.search(r"@media\s*\(\s*max-width\s*:\s*(\d+)px\s*\)\s*\{\s*\.grid\s*\{\s*"
-                      r"grid-template-columns\s*:\s*1fr\s*;?\s*\}", self.html)
+        m = re.search(r"@media\s*\(\s*max-width\s*:\s*(\d+)px\s*\)\s*\{\s*\.grid\s*\{[^}]*"
+                      r"grid-template-columns\s*:\s*1fr\b[^}]*\}", self.html)
         self.assertIsNotNone(m, ".grid must collapse to one column inside a max-width media query")
-        self.assertGreaterEqual(int(m.group(1)), 900, "two-up rows must stack at or below 900px")
+        self.assertEqual(int(m.group(1)), 900, "two-up rows must stack at and below 900px")
 
     def test_grid_cells_can_shrink(self):
         self.assertRegex(self.html, r"\.grid\s*>\s*\.panel\s*\{\s*min-width\s*:\s*0\s*;?\s*\}",
