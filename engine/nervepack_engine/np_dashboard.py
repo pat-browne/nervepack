@@ -78,19 +78,37 @@ def _run(cmd):
     return r.stdout if r.returncode == 0 and isinstance(r.stdout, str) else ""
 
 
+def _log(msg):
+    """One stderr line. Stdout stays clean for hook output."""
+    try:
+        sys.stderr.write("np-dashboard: %s\n" % msg)
+    except (OSError, ValueError):
+        pass
+
+
 def _is_our_server(pid, port):
     """True only when pid is a sane int, listens on port, runs our server, and is ours.
 
-    The pid comes from an HTTP reply, so it is checked before any signal."""
-    if type(pid) is not int or pid <= 1 or pid == os.getpid() or not hasattr(os, "getuid"):
+    The pid comes from an HTTP reply, so it is checked before any signal.
+    Each refusal logs its reason and fails closed."""
+    if type(pid) is not int or pid <= 1 or pid == os.getpid():
+        _log("stale-check: refused pid %r (not a valid server pid)" % (pid,))
+        return False
+    if not hasattr(os, "getuid"):
+        _log("stale-check: refused pid %d (no uid check on this OS)" % pid)
         return False
     listeners = _run(["lsof", "-nP", "-t", "-iTCP:%d" % port, "-sTCP:LISTEN"]).split()
     if str(pid) not in listeners:
+        _log("stale-check: refused pid %d (not the listener on port %d)" % (pid, port))
         return False
     fields = _run(["ps", "-o", "uid=", "-o", "command=", "-p", str(pid)]).strip().split(None, 1)
     if len(fields) != 2 or fields[0] != str(os.getuid()):
+        _log("stale-check: refused pid %d (other uid or no ps output)" % pid)
         return False
-    return "np-dashboard-server.py" in fields[1]
+    if "np-dashboard-server.py" not in fields[1]:
+        _log("stale-check: refused pid %d (not np-dashboard-server.py)" % pid)
+        return False
+    return True
 
 
 def _stop_if_stale(port):
@@ -102,22 +120,35 @@ def _stop_if_stale(port):
     try:
         with urllib.request.urlopen("http://127.0.0.1:%d/api/health" % port, timeout=1) as r:
             health = json.loads(r.read().decode("utf-8") or "{}")
-    except (OSError, ValueError):
+    except (OSError, ValueError) as exc:  # ValueError covers UnicodeDecodeError
+        _log("stale-check: health probe failed on port %d: %s" % (port, exc))
         return False
     pid, code = health.get("pid"), health.get("code")
     current = np_dashboard_actions.code_fingerprint()
-    if (health.get("ok") is not True or not current or code == current
-            or not _is_our_server(pid, port)):
+    if health.get("ok") is not True:
+        _log("stale-check: health reply is not ours, server left running")
+        return False
+    if not current:
+        _log("stale-check: no local fingerprint, server left running")
+        return False
+    if code == current:
+        return False
+    if not _is_our_server(pid, port):
         return False
     try:
         os.kill(pid, signal.SIGTERM)
-    except OSError:
+    except OSError as exc:
+        _log("stale-check: kill of pid %d failed: %s" % (pid, exc))
         return False
+    _log("stale-check: sent SIGTERM to stale server pid %d" % pid)
     for _ in range(_POLL_ATTEMPTS):
         if not is_listening(port):
             return True
         time.sleep(_POLL_INTERVAL)
-    return not is_listening(port)
+    if is_listening(port):
+        _log("stale-check: pid %d still listening after SIGTERM" % pid)
+        return False
+    return True
 
 
 def dashboard_url():

@@ -15,6 +15,7 @@ The compact agent reads it so it does not re-propose a rejected pair.
 Graduation dismissals sit next to graduation-candidates.json.
 The file is graduation-dismissed.json, a JSON list of "<kind>:<name>" keys.
 """
+import hashlib
 import json
 import os
 import re
@@ -29,13 +30,14 @@ _CODE_FILES = ("np-dashboard-server.py", "np_dashboard_actions.py")
 
 def code_fingerprint():
     """Short hash of the server's route code. Empty when a file is unreadable."""
-    import hashlib
     h = hashlib.sha256()
     try:
         for name in _CODE_FILES:
             with open(os.path.join(_HERE, name), "rb") as fh:
                 h.update(fh.read())
-    except OSError:
+    except OSError as exc:
+        import sys
+        sys.stderr.write("np-dashboard: code fingerprint unreadable: %s\n" % exc)
         return ""
     return h.hexdigest()[:16]
 

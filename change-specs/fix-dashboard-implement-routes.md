@@ -1,5 +1,5 @@
 ---
-id: 0080
+id: 0082
 status: accepted
 date: 2026-10-14
 tier: normal
@@ -12,7 +12,7 @@ blast_radius:
   - change-specs/fix-dashboard-implement-routes.md
 ---
 
-# 0080: Restart a stale dashboard server
+# 0082: Restart a stale dashboard server
 
 ## Context and problem statement
 

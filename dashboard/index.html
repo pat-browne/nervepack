@@ -1046,6 +1046,7 @@
         <div class="txt"><b>${esc(p.title)}</b>
           <div class="meta">${esc(p.date || "")} · ${p.recommendation ? esc(p.recommendation) : "no recommendation"}</div>
         </div>${SERVED ? `<span class="rowacts">
+          <!-- Apply is always primary to match the other approve actions. -->
           <button class="btn sm primary" data-apply>Apply</button>
           <button class="btn sm" data-reject-prop>Reject</button>
         </span>` : ""}
