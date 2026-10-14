@@ -628,6 +628,7 @@ def _scan_plan(cd, groups):
         # `wiki/topics` still renders under data/wiki/<layer>/topics/… as before.
         html_seg = subdir.rstrip("/").rsplit("/", 1)[-1]
         if _excluded_group(key, html_seg):
+            print("[build] wiki: excluded group %r (%s)" % (key, subdir), file=sys.stderr)
             continue
         holder = groups.setdefault(key, [])
 
