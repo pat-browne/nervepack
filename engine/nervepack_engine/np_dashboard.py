@@ -64,6 +64,31 @@ def is_listening(port, timeout=0.2):
         return False
 
 
+def _run(cmd):
+    """stdout of a native tool, or "" on any failure."""
+    import np_bashlib
+    try:
+        r = subprocess.run(np_bashlib.argv(cmd), capture_output=True, text=True, timeout=2)
+    except Exception:  # fail closed: no answer means no signal
+        return ""
+    return r.stdout if r.returncode == 0 and isinstance(r.stdout, str) else ""
+
+
+def _is_our_server(pid, port):
+    """True only when pid is a sane int, listens on port, runs our server, and is ours.
+
+    The pid comes from an HTTP reply, so it is checked before any signal."""
+    if type(pid) is not int or pid <= 1 or pid == os.getpid() or not hasattr(os, "getuid"):
+        return False
+    listeners = _run(["lsof", "-nP", "-t", "-iTCP:%d" % port, "-sTCP:LISTEN"]).split()
+    if str(pid) not in listeners:
+        return False
+    fields = _run(["ps", "-o", "uid=", "-o", "command=", "-p", str(pid)]).strip().split(None, 1)
+    if len(fields) != 2 or fields[0] != str(os.getuid()):
+        return False
+    return "np-dashboard-server.py" in fields[1]
+
+
 def _stop_if_stale(port):
     """Stop a server that runs older route code. True when it stopped.
 
@@ -81,8 +106,8 @@ def _stop_if_stale(port):
         return False
     pid, code = health.get("pid"), health.get("code")
     current = np_dashboard_actions.code_fingerprint()
-    if (not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1
-            or health.get("ok") is not True or not current or code == current):
+    if (health.get("ok") is not True or not current or code == current
+            or not _is_our_server(pid, port)):
         return False
     try:
         os.kill(pid, signal.SIGTERM)
