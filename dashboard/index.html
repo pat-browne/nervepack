@@ -191,6 +191,7 @@
   .legend .sw.dot { width:9px; height:9px; border-radius:50%; }
   .legend .sw.grid { height:0; border-top:1px dashed var(--viz-grid); width:18px; }
   .legend .muted { color:var(--text-tertiary); }
+  /* Hint on its own row in every legend, so legend height (and the chart bottom) match across a two-up row */
   .legend .hint { flex-basis:100%; text-align:right; color:var(--text-tertiary); }
   /* Expandable detail text on graduation and proposal rows */
   .txt.has-detail { cursor:pointer; }
@@ -417,7 +418,7 @@
   // Log10 domain that hugs the data, plus 1-2-5 ticks inside it (decades first;
   // 2s and 5s only when fewer than two decades fall inside).
   function logDomain(vals) {
-    const pos = vals.filter(v => v > 0);
+    const pos = vals.filter(v => Number.isFinite(v) && v > 0);
     let lo = Math.log10(pos.length ? Math.min(...pos) : 1);
     let hi = Math.log10(pos.length ? Math.max(...pos) : 10);
     if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
