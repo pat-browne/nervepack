@@ -2,7 +2,7 @@
 id: 0085
 status: accepted
 date: 2026-10-14
-tier: standard
+tier: high
 blast_radius:
   - publish/np-publish-scan.py
   - .gitignore
@@ -43,5 +43,9 @@ Adding any third-party dependency. The engine stays stdlib-only.
 ## Confirmation
 
 `test_scan_skips_venv` and `test_no_tracked_venv` in `engine/setup/tests/publish/test_no_engine_pii.py`, and `git check-ignore engine/.venv engine/uv.lock`.
+
+## Rollback
+
+Revert this PR. The scanner then scans `.venv` again, and git stops ignoring it.
 
 ## Deviations

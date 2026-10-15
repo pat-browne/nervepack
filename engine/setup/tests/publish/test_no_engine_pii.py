@@ -9,6 +9,7 @@ crept into a tracked engine file. It is the local mirror of the CI PII guard.
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,13 +38,12 @@ class TestNoEnginePII(unittest.TestCase):
         self.assertEqual(tracked, [], "a .venv path is tracked; the PII scan skips it")
 
     def test_scan_skips_venv(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as d:
             os.makedirs(os.path.join(d, ".venv", "bin"))
             with open(os.path.join(d, ".venv", "bin", "activate"), "w") as f:
                 f.write("# maintainer someone.real@gmail.com\n")
             r = subprocess.run([sys.executable, SCAN, d], capture_output=True, text=True)
-            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertEqual(r.returncode, 0, f"stdout: {r.stdout}\nstderr: {r.stderr}")
 
 
 if __name__ == "__main__":
