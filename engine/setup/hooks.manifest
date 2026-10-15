@@ -73,6 +73,9 @@ SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-sessio
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-recall
 # --- 63: open artifact on write (Write-scoped) ---
 PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
+# --- 63b: post-ship capture (Bash-scoped). After a successful merge or deploy,
+# injects a prompt to run np-core-capture-learning before the turn ends.
+PostToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook post-ship-capture
 # --- 64: turn-completion gate (Stop + SubagentStop; the one hook permitted to
 # block). The SubagentStop row exists because a fan-out's agents write and report
 # with no other form check; turn_gate skips the delivery checks on that event
