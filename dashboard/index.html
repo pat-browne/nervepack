@@ -728,8 +728,9 @@
     if (!jobs.length) { elJobs.innerHTML = head + empty("No scheduled jobs found."); return; }
     const rows = [...jobs].sort((a, b) => jobBad(b) - jobBad(a)).map(j => {
       const pill = JOB_PILL[j.status] || "";
-      const flags = [
-        j.overdue && j.enabled !== false ? `<span class="pill warn">overdue</span>` : "",
+      const on = j.enabled !== false
+      const flags = !on ? "" : [
+        j.overdue ? `<span class="pill warn">overdue</span>` : "",
         j.installed === false ? `<span class="pill neg">not installed</span>` : "",
         j.exit != null && j.exit !== 0 ? `<span class="pill neg">exit ${esc(j.exit)}</span>` : "",
       ].join(" ");
