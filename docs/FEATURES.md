@@ -225,6 +225,31 @@ finishes typing the "spec written, please review" message — the file pops
 open in your editor/default `.md` handler, already in focus. You read it right
 there instead of trusting a chat summary.
 
+## Post-ship capture — prompt a learning capture after a merge or deploy
+
+**Purpose.** A merge or a deploy is the moment a change's lessons are freshest
+and the moment a session is most likely to end. This hook makes capture the
+default next step instead of a thing the user has to remember to ask for.
+
+**Workflow.** A single `PostToolUse` hook, matcher `Bash`:
+`cli.py hook post-ship-capture` → `engine/nervepack_engine/hooks/post_ship_capture.py`.
+It matches the command against `SHIP_PATTERNS`: `gh pr merge`,
+`az repos pr update --status completed`, `git push` to `main`/`master`,
+`databricks bundle deploy`, `terragrunt apply`, `terraform apply`,
+`az deployment ... create`, and `npm run deploy`. It skips `--dry-run`, a
+branch-delete push, and any result showing a non-zero exit, an interrupt, or an
+`error:`/`fatal:` line. On a hit it returns `additionalContext` telling the
+session to invoke `np-core-capture-learning` before ending the turn, and writes
+a `post-ship-capture` session-signal marker.
+
+**Assets.** `engine/nervepack_engine/hooks/post_ship_capture.py`, its tests in
+`engine/setup/tests/nervepack_engine/test_post_ship_capture.py`, and a routing row
+in `engine/setup/nervepack-session-directive.md`. Toggle: `post_ship` (no params).
+
+**Situational example.** A session runs `gh pr merge 42 --squash`. The merge
+succeeds and the next model step sees the prompt. It runs
+`np-core-capture-learning`, which routes the CI gotcha it hit to nervepack.
+
 ## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
 
 **Purpose.** A session loses working context on a compaction, a resume, or a

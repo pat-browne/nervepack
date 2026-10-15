@@ -418,6 +418,9 @@
   "focus": {
     "description": "Open a spec or plan doc in the OS default app when a session writes one under docs/superpowers/specs or plans."
   },
+  "post_ship": {
+    "description": "After a successful PR merge or deploy command, prompt the session to run np-core-capture-learning before the turn ends."
+  },
   "turn_gate": {
     "description": "Stop-hook turn gate: blocks a turn once when it edited UI files without showing the result, or when the closing message fails the form check."
   },
