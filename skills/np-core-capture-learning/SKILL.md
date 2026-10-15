@@ -15,6 +15,7 @@ Any of these should invoke this skill:
 - `/capture`, `/np-core-capture-learning`, `/learn`
 - "capture this", "remember this", "save this learning"
 - "this is worth keeping"
+- After a PR merge or deploy (auto-prompted by the post-ship hook)
 
 If the user explicitly says where it should go ("save to nervepack",
 "add to memory") — skip this skill and use the targeted one directly

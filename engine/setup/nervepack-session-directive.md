@@ -24,6 +24,7 @@ preferences you'd otherwise reinvent); this is the HOW it expects them used.
 | When you are about to… | Invoke |
 |---|---|
 | Need to remember something durable | `np-core-capture-learning` / `np-core-contribute` |
+| Just merged a PR or finished a deploy | `np-core-capture-learning` |
 | Need external facts, a standard, or best practice (incl. a flow's design phase) | `np-core-research` |
 | Modify nervepack's OWN code/features (hooks, crons, dashboard, skills machinery) | read `~/Code/nervepack/docs/ARCHITECTURE.md` first — the cheap map + "touch X → check Y" table |
 

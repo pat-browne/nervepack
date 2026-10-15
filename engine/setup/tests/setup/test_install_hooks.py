@@ -94,6 +94,11 @@ class TestInstallHooks(unittest.TestCase):
         post = _cmds(s, "PostToolUse")
         self.assertTrue(any(m == "Write" and "hook open-artifact" in c for m, c in post))
 
+    def test_post_ship_capture_matcher_is_bash(self):
+        s = self._install()
+        post = _cmds(s, "PostToolUse")
+        self.assertTrue(any(m == "Bash" and "hook post-ship-capture" in c for m, c in post))
+
     def test_backgrounded_hooks_keep_redirect(self):
         s = self._install()
         all_cmds = []
