@@ -155,6 +155,9 @@
   .statstrip { display:flex; gap:18px; margin:8px 0 12px; flex-wrap:wrap; }
   .stat b { display:block; font-size:18px; color:var(--text); }
   .stat span { font-size:11px; color:var(--text-secondary); }
+  /* Token card: five stats share one row, tighter gap so they fit a two-up cell */
+  .statstrip.tokstrip { gap:8px 14px; }
+  .tokstrip .stat span { white-space:nowrap; }
 
   /* Charts: wireChart() sets the viewBox to the wrapper's pixel size, so the scale
      is 1:1 and nothing stretches. In a two-up row the chart grows to fill the cell. */
@@ -1337,7 +1340,7 @@
       "Lower bound — does not include skill/recall counterfactuals.";
     elTokens.innerHTML = `
       <span class="lbl">Token usage · deterministic · output / session · log scale</span>
-      <div class="statstrip">
+      <div class="statstrip tokstrip">
         <div class="stat"><b>${fmtTok(tk.sum.output)}</b><span>output (generated)</span></div>
         <div class="stat"><b>${fmtTok(tk.sum.input)}</b><span>input (fresh)</span></div>
         <div class="stat"><b>${fmtTok(tk.sum.cache_creation)}</b><span>cache write</span></div>
@@ -1736,8 +1739,8 @@
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
       // One section per declared knowledge variant (#234), in build order. On load
-      // every level is collapsed, so only the layer rows show. Search sets
-      // expandAll, which opens every level that holds a match.
+      // layer rows open and their groups stay collapsed. Search sets expandAll,
+      // which opens every level that holds a match.
       const groupOrder = groupLabels;
       const groups = ls => groupOrder.map(label =>
         topicGroupHTML(ls.filter(l => l.group === label), expandAll, label, expandAll)).join("");
@@ -1749,7 +1752,7 @@
         elList.innerHTML = layers.map(lab => {
           const mine = items.filter(l => l.layer === lab);
           if (!mine.length) return "";
-          const open = expandAll;
+          const open = true;  // layers open, groups below follow expandAll
           return `<details class="wikilayer"${open ? " open" : ""}>
             <summary><span>${esc(lab)}</span><span>${mine.length}</span></summary>
             <div class="wikinest">${groups(mine)}</div></details>`;
@@ -1774,7 +1777,7 @@
       e.preventDefault();
       openViewer(a.getAttribute("href"), { title: a.getAttribute("title") || "Wiki" });
     });
-    // default: every level collapsed, only the layer rows show
+    // default: layers open, groups collapsed
     draw(leaves, false);
   })();
 </script>
