@@ -1448,9 +1448,9 @@ class TestWikiExcludedGroups(unittest.TestCase):
                          {"receipts", "meetings", "plans"})
 
 
-class TestWikiLayersStartCollapsed(unittest.TestCase):
-    """On load only the layer rows show, all collapsed. Groups open only when a
-    layer opens, and search (expandAll) still opens everything that matches."""
+class TestWikiLayersStartExpanded(unittest.TestCase):
+    """On load layer rows open and their groups stay collapsed. Search
+    (expandAll) still opens every group that holds a match."""
 
     def test_layers_and_groups_follow_expand_all(self):
         index = os.path.normpath(os.path.join(
@@ -1459,7 +1459,8 @@ class TestWikiLayersStartCollapsed(unittest.TestCase):
             html_text = fh.read()
         self.assertNotIn("expandAll || i === 0", html_text)
         self.assertNotIn("expandAll, label, true)", html_text)
-        self.assertIn("const open = expandAll;", html_text)
+        self.assertNotIn("const open = expandAll;", html_text)
+        self.assertIn("const open = true;", html_text)
         self.assertIn("expandAll, label, expandAll)", html_text)
 
 
