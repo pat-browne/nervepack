@@ -162,7 +162,10 @@
   /* Charts: wireChart() sets the viewBox to the wrapper's pixel size, so the scale
      is 1:1 and nothing stretches. In a two-up row the chart grows to fill the cell. */
   #panel-trend, #panel-tokens { display:flex; flex-direction:column; }
-  .chartwrap { position:relative; width:100%; flex:1 1 auto; min-height:140px; margin-top:4px; }
+  /* Fixed plot height so both two-up charts match. margin-top:auto pins the chart and
+     legend to the card bottom, so bottoms line up when the stat blocks differ. */
+  .chartwrap { position:relative; width:100%; flex:none; height:180px; margin-top:auto; }
+  .chart text.tick { fill:var(--text-tertiary); font-size:10px; }
   .chart { position:absolute; inset:0; display:block; overflow:visible; }
   .chart line.grid { stroke:var(--viz-grid); stroke-width:1; }
   .chart polyline { fill:none; stroke:var(--viz-line); stroke-width:2;
@@ -188,7 +191,8 @@
   .legend .sw.dot { width:9px; height:9px; border-radius:50%; }
   .legend .sw.grid { height:0; border-top:1px dashed var(--viz-grid); width:18px; }
   .legend .muted { color:var(--text-tertiary); }
-  .legend .hint { margin-left:auto; color:var(--text-tertiary); }
+  /* Hint on its own row in every legend, so legend height (and the chart bottom) match across a two-up row */
+  .legend .hint { flex-basis:100%; text-align:right; color:var(--text-tertiary); }
   /* Expandable detail text on graduation and proposal rows */
   .txt.has-detail { cursor:pointer; }
   .detailtog { font:inherit; font-size:11px; color:var(--accent-sage); background:none;
@@ -411,6 +415,26 @@
     return n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
          : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
   }
+  // Log10 domain that hugs the data, plus 1-2-5 ticks inside it (decades first;
+  // 2s and 5s only when fewer than two decades fall inside).
+  function logDomain(vals) {
+    const pos = vals.filter(v => Number.isFinite(v) && v > 0);
+    let lo = Math.log10(pos.length ? Math.min(...pos) : 1);
+    let hi = Math.log10(pos.length ? Math.max(...pos) : 10);
+    if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
+    const padL = (hi - lo) * 0.1;
+    lo -= padL; hi += padL;
+    const inside = v => Math.log10(v) >= lo && Math.log10(v) <= hi;
+    const cand = mults => {
+      const out = [];
+      for (let e = Math.floor(lo); e <= Math.ceil(hi); e++)
+        mults.forEach(m => { const v = m * 10 ** e; if (v >= 1 && inside(v)) out.push(v); });
+      return out;
+    };
+    let ticks = cand([1]);
+    if (ticks.length < 2) ticks = cand([1, 2, 5]);
+    return { lo, hi, ticks };
+  }
   function aggregateTokens(records) {
     const sum = { input: 0, output: 0, cache_read: 0, cache_creation: 0, total: 0 };
     const series = []; // output tokens per session — the cost driver
@@ -464,7 +488,9 @@
   // The scale stays 1:1, so dots stay round at any cell width.
   const H = 120, pad = 6, padX = 10;
 
-  // points: [{ vy (0..H), color?, tip (html) }]. grids: [y in 0..H]
+  // points: [{ vy (0..H), color?, tip (html) }]. grids: [{ y (0..H), label }]
+  // Labelled grids reserve a left gutter (GUT) for the tick text.
+  const GUT = 30;
   function chartHTML(points, grids) {
     points.grids = grids || [];
     const dots = points.map((p, i) =>
@@ -483,7 +509,8 @@
     const dots = [...wrap.querySelectorAll(".pt")];
     const n = points.length;
     let cur = -1, w = 0, h = 0;
-    const xAt = i => n === 1 ? w / 2 : padX + i * (w - 2 * padX) / (n - 1);
+    const left = points.grids.length ? GUT : padX;
+    const xAt = i => n === 1 ? (left + w - padX) / 2 : left + i * (w - left - padX) / (n - 1);
 
     function draw() {
       const nw = Math.round(wrap.clientWidth) || 600, nh = Math.round(wrap.clientHeight) || H;
@@ -498,8 +525,11 @@
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       svg.setAttribute("width", w);
       svg.setAttribute("height", h);
-      const g = points.grids.map(v =>
-        `<line class="grid" x1="0" y1="${(v * sy).toFixed(1)}" x2="${w}" y2="${(v * sy).toFixed(1)}"></line>`).join("");
+      const g = points.grids.map(gr => {
+        const gy = (gr.y * sy).toFixed(1);
+        return `<line class="grid" x1="${left - 4}" y1="${gy}" x2="${w}" y2="${gy}"></line>` +
+          `<text class="tick" x="${left - 8}" y="${gy}" text-anchor="end" dominant-baseline="middle">${gr.label}</text>`;
+      }).join("");
       const line = points.filter(p => Number.isFinite(p.vy))
         .map(p => `${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(" ");
       svg.innerHTML = `${g}<polyline points="${line}"></polyline>`;
@@ -537,7 +567,7 @@
 
     wrap.addEventListener("mousemove", e => {
       const x = e.clientX - wrap.getBoundingClientRect().left;
-      const i = n === 1 ? 0 : Math.round((x - padX) / (w - 2 * padX) * (n - 1));
+      const i = n === 1 ? 0 : Math.round((x - left) / (w - left - padX) * (n - 1));
       show(Math.max(0, Math.min(n - 1, i)));
     });
     wrap.addEventListener("mouseleave", hide);
@@ -1304,7 +1334,7 @@
         <div class="stat"><b>${wins}</b><span>total wins</span></div>
         <div class="stat"><b>${struggles}</b><span>total struggles</span></div>
       </div>
-      ${chartHTML(trendPts, [y(33), y(67)])}
+      ${chartHTML(trendPts, [0, 33, 67, 100].map(v => ({ y: y(v), label: v })))}
       ${legend([
         { cls: "dot", color: "var(--status-pos)", label: "≥67" },
         { cls: "dot", color: "var(--status-warn)", label: "34–66" },
@@ -1315,11 +1345,14 @@
     wireChart(elTrend.querySelector(".chartwrap"), trendPts);
 
     // A2 · Token usage (deterministic — summed once per assistant message.id)
-    // Log scale: token counts span orders of magnitude; log prevents one outlier
-    // from collapsing the other sessions into a bottom-3px sliver.
+    // Log scale: per-session output spans 2+ decades; linear would crush most
+    // sessions into a sliver under one outlier. The domain hugs the data
+    // (min..max, padded 10% in log space) so dots fill the plot, and labelled
+    // decade gridlines make the scale readable.
     const tk = aggregateTokens(M);
-    const tmax = Math.max(10, ...tk.series);  // floor at 10 to avoid log10(0)/negative
-    const ty = v => H - pad - (Math.log10(Math.max(v, 1)) / Math.log10(tmax)) * (H - 2 * pad);
+    const td = logDomain(tk.series);
+    const ty = v => H - pad - (Math.log10(Math.max(v, 1)) - td.lo) / (td.hi - td.lo) * (H - 2 * pad);
+    const tokGrids = td.ticks.map(v => ({ y: ty(v), label: fmtTok(v) }));
     const tokPts = tk.series.map((v, i) => {
       const r = M[i], t = (r.signals || {}).tokens || {};
       return {
@@ -1357,7 +1390,7 @@
           <span>est. saved / session ⓘ</span>
         </div>
       </div>
-      ${chartHTML(tokPts)}
+      ${chartHTML(tokPts, tokGrids)}
       ${legend([
         { cls: "dot", color: "var(--viz-line)", label: "output tokens / session" },
         { hint: true, label: "hover a point for the full token breakdown" },
