@@ -112,6 +112,26 @@ class TestChartAspectAndDetailRows(unittest.TestCase):
         self.assertIn('aria-expanded="false"', self.html)
         self.assertIn("function wireDetails(", self.html)
 
+class TestTokenChartScale(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(INDEX, encoding="utf-8") as fh:
+            cls.html = fh.read()
+
+    def test_token_log_domain_hugs_the_data(self):
+        # A [1, max] domain left the dots in a thin band with blank space below.
+        self.assertIn("function logDomain(", self.html)
+        self.assertIn("const td = logDomain(tk.series)", self.html)
+        self.assertNotIn("Math.log10(tmax)", self.html)
+
+    def test_both_charts_have_labelled_gridlines(self):
+        self.assertIn("chartHTML(tokPts, tokGrids)", self.html)
+        self.assertIn('<text class="tick"', self.html)
+        self.assertRegex(self.html, r"chartHTML\(trendPts, \[0, 33, 67, 100\]")
+
+    def test_two_up_charts_share_a_fixed_height(self):
+        self.assertRegex(self.html, r"\.chartwrap\s*\{[^}]*height:180px[^}]*margin-top:auto")
+
 
 if __name__ == "__main__":
     unittest.main()
