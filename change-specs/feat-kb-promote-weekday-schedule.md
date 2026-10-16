@@ -1,8 +1,8 @@
 ---
-id: 0090
+id: 0091
 status: accepted
 date: 2026-10-16
-tier: normal
+tier: high
 blast_radius:
   - agents/np-flow-kb-promote-scan.md
   - agents/README.md
@@ -12,7 +12,7 @@ blast_radius:
   - change-specs/feat-kb-promote-weekday-schedule.md
 ---
 
-# 0090: kb-promote-scan weekday schedule
+# 0091: kb-promote-scan weekday schedule
 
 ## Context and problem statement
 
@@ -57,6 +57,12 @@ The data-base-side skill and the agent phases do not change. The agent's
 
 `test_np_scheduler_install.py` asserts the cron line `0 11 * * 1-5` and five
 launchd weekday dicts at 11:00, with no Saturday or Sunday entry.
+
+## Rollback
+
+1. Revert the PR, or set the `kb-promote-scan` row in `_JOBS` back to `8, 45, ("1", "MON")`.
+2. Re-run `cli.py setup install-memory-launchd` on macOS. On Linux run `install-memory-cron`. On Windows run `install-memory-schtasks`.
+3. Confirm with `plutil -lint ~/Library/LaunchAgents/com.nervepack.kb-promote-scan.plist`.
 
 ## Deviations
 

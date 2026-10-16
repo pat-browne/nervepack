@@ -107,7 +107,13 @@ def _dow_numbers(dow):
     days = []
     for part in dow.split(","):
         lo, _, hi = part.partition("-")
-        days.extend(range(int(lo), int(hi or lo) + 1))
+        try:
+            first, last = int(lo), int(hi or lo)
+        except ValueError:
+            raise ValueError("bad cron day-of-week %r" % dow)
+        if not 0 <= first <= last <= 7:
+            raise ValueError("cron day-of-week %r must be 0-7 and ascending" % dow)
+        days.extend(range(first, last + 1))
     return days
 
 
