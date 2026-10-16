@@ -52,6 +52,7 @@ import time
 
 import np_bashlib
 import np_content
+import np_dashboard_actions
 import np_model
 import np_suggestion_resolve
 import np_toggle
@@ -296,6 +297,18 @@ _KIND_PROMPTS = {
 }
 
 
+# Kind jobs act on overlay content only: compact proposals, lessons, and
+# np-kb-*/np-env-* skills. The engine is never tried, so a dead end can't read
+# "engine: wrong repo". The overlay has no PR gate, so a kind job lands direct
+# on the overlay's origin default branch.
+_KIND_REPOS = ("content",)
+
+
+def _kind_repos(kind):
+    """Repos a kind job may run in, or None for a plain suggestion."""
+    return _KIND_REPOS if _normalize_kind(kind) else None
+
+
 def _normalize_kind(kind):
     k = (kind or "").strip().lower()
     return k if k in _KIND_PROMPTS else ""
@@ -426,16 +439,40 @@ def _agent_commit(repo, wt, base_sha):
     return end_sha
 
 
+def _origin_base(repo, log_path=None):
+    """(branch, sha) of origin's default branch after a fetch, else ("", "").
+    A failed fetch is logged and the last fetched refs (or local branches) are used."""
+    if _git(repo, "remote", "get-url", "origin").returncode != 0:
+        return "", ""
+    fetch = _git(repo, "fetch", "-q", "origin")
+    if fetch.returncode != 0 and log_path:
+        _log(log_path, "fetch origin failed, using last fetched or local refs: %s"
+             % (fetch.stderr or "").strip()[:160])
+    head = (_git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
+    for name in ([head.split("/", 1)[1]] if "/" in head else []) + ["main", "master"]:
+        r = _git(repo, "rev-parse", "--verify", "-q", "refs/remotes/origin/%s" % name)
+        sha = (r.stdout or "").strip()
+        if r.returncode == 0 and _SHA_RE.match(sha):
+            return name, sha
+    return "", ""
+
+
 def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
-                  tools=_AGENT_TOOLS, commit_msg=None):
+                  tools=_AGENT_TOOLS, commit_msg=None, from_origin=False, apply_fn=None):
     """Isolate the agent in a throwaway git WORKTREE off the committed base tip
     of `repo`. The agent never sees (and can never commit) the caller's
     uncommitted work; the worktree lives OUTSIDE the repo (a temp dir, always
     removed here) so it never pollutes the main tree's `git status`."""
     a = _Attempt()
-    base = (_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() or "main"
-    base_sha_r = _git(repo, "rev-parse", "HEAD")
-    base_sha = (base_sha_r.stdout or "").strip() if base_sha_r.returncode == 0 else ""
+    # from_origin: a kind job bases on the overlay's origin default branch, so a
+    # checkout drifted onto a feature branch can't capture or block it.
+    base, base_sha = _origin_base(repo, log_path) if from_origin else ("", "")
+    if from_origin and not base_sha:
+        _log(log_path, "%s repo: no origin default branch, basing on local HEAD" % label)
+    if not base_sha:
+        base = (_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() or "main"
+        base_sha_r = _git(repo, "rev-parse", "HEAD")
+        base_sha = (base_sha_r.stdout or "").strip() if base_sha_r.returncode == 0 else ""
     if not base_sha:
         a.state = "worktree_failed"
         a.detail = "%s repo: no base commit" % label
@@ -468,7 +505,22 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
         return a
 
     try:
-        out, failure = _agent_call(prompt, wt, agent_fn, log_path, tools)
+        # apply_fn: a deterministic edit that needs no agent pass. It returns
+        # True when it handled the job.
+        try:
+            handled = apply_fn is not None and apply_fn(wt)
+        except Exception as exc:
+            # The worktree is thrown away, so a half-applied edit never lands.
+            a.state = "no_commit"
+            full = ("%s repo: deterministic apply raised: %s: %s"
+                    % (label, type(exc).__name__, exc))
+            a.detail = full[:200]
+            _log(log_path, full)
+            return a
+        if handled:
+            out, failure = "", ""
+        else:
+            out, failure = _agent_call(prompt, wt, agent_fn, log_path, tools)
 
         if "NOT_IMPLEMENTABLE" in out:
             a.state = "not_implementable"
@@ -833,9 +885,8 @@ def _run_one(text, edited, target, ctx, kind=None):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
-    # Kind jobs never land direct, whatever implement_mode says.
-    if kind:
-        mode = "pr"
+    # Mode only affects engine landings. Kind jobs run in the overlay, which
+    # always lands direct (see _land), so implement_mode cannot block them.
     tools = _KIND_TOOLS if kind else _AGENT_TOOLS
     commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
     content_repo = _resolve_content_repo(repo)
@@ -843,9 +894,17 @@ def _run_one(text, edited, target, ctx, kind=None):
     branch = "np-suggest/%s" % slug
 
     # Best repo first, per the evaluator's target. Absent repos drop out.
+    # A kind job runs in the overlay only.
     repos = {"engine": repo, "content": content_repo}
     labels = {"engine": "engine", "content": "content overlay"}
-    planned = [r for r in _attempt_order(target) if repos.get(r)]
+    order = _kind_repos(kind) or _attempt_order(target)
+    planned = [r for r in order if repos.get(r)]
+    if kind and not planned:
+        reason = "no content overlay configured; %s jobs act on overlay content only" % kind
+        _write_status(status_dir, key, "failed", reason, log=log_path)
+        _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
+        return
+    apply_fn = _keep_separate_fn(task) if kind == "compact" else None
 
     land_repo = land_label = base = base_sha = agent_sha = ""
     tried = []
@@ -855,7 +914,8 @@ def _run_one(text, edited, target, ctx, kind=None):
         for index, r in enumerate(planned, 1):
             prompt = _build_prompt(ctx["prompt_file"], task, labels[r], index, len(planned), target)
             attempt = _attempt_repo(repos[r], labels[r], branch, prompt, ctx["agent_fn"], log_path,
-                                    tools=tools, commit_msg=commit_msg)
+                                    tools=tools, commit_msg=commit_msg, from_origin=bool(kind),
+                                    apply_fn=apply_fn)
             tried.append((labels[r], attempt))
             if attempt.state == "implemented":
                 land_repo, land_label = repos[r], r
@@ -877,7 +937,7 @@ def _run_one(text, edited, target, ctx, kind=None):
     if not land_repo:
         # Name EVERY repo tried, never just the first (the reported bug).
         reason = "; ".join("%s: %s" % (label, a.detail or a.state) for label, a in tried)
-        if "content" not in planned:
+        if "content" not in planned and not kind:
             reason = "%s (no content overlay configured to retry against)" % reason
         reason = reason[:300]
         all_not_implementable = bool(tried) and all(
@@ -890,8 +950,9 @@ def _run_one(text, edited, target, ctx, kind=None):
             _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
         return
 
-    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"],
-                force_pr=bool(kind))
+    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"])
+    if kind == "graduate":
+        _dismiss_graduated(task, log_path)
 
     note = ("implemented as: %s" % task) if task != text else ""
     try:
@@ -904,8 +965,7 @@ def _run_one(text, edited, target, ctx, kind=None):
          % (text, (" as %r" % task) if task != text else "", ref, land_label))
 
 
-def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn,
-          force_pr=False):
+def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn):
     """Land the agent's commit per mode/repo. Returns the ref (a branch name,
     a base branch name, or a PR URL) recorded in the status file."""
     gh_pr_create_fn = gh_pr_create_fn or _default_gh_pr_create
@@ -918,8 +978,7 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
         _log(log_path, "refusing to land %r: not a verified commit sha (%s repo)" % (agent_sha, land_label))
         return branch
 
-    # force_pr: a kind job lands as a branch plus PR in either repo, never direct.
-    if force_pr or (land_label == "engine" and mode == "pr"):
+    if land_label == "engine" and mode == "pr":
         ref = branch
         if _git(land_repo, "remote", "get-url", "origin").returncode == 0:
             push = _git(land_repo, "push", "-q", "-u", "origin", branch)
@@ -944,15 +1003,57 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
     else:
         _log(log_path, "no origin remote; change is local on %s (%s repo)" % (branch, land_label))
 
-    # Advance the LOCAL base too -- only when clean, so we never clobber
-    # uncommitted work. If dirty, the commit stays on `branch`.
+    # Advance the LOCAL base too -- only when it is checked out and clean, so we
+    # never clobber uncommitted work or move some other branch. A checkout that
+    # drifted onto a feature branch stays as it is. It picks the commit up from
+    # origin on its next merge. Else the commit stays on `branch`.
+    current = (_git(land_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
     dirty = bool((_git(land_repo, "status", "--porcelain").stdout or "").strip())
-    if not dirty and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0:
+    if (current == base and not dirty
+            and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0):
         _git(land_repo, "branch", "-D", branch)
     else:
         _log(log_path, "local %s not advanced (dirty or non-ff, %s repo); commit on %s" % (base, land_label, branch))
         ref = branch
     return ref
+
+
+def _split_proposal(task):
+    """("<file>", "<title>") from "<file> :: <title>", else ("", "")."""
+    fname, sep, title = (task or "").partition(" :: ")
+    fname = os.path.basename(fname.strip())
+    return (fname, title.strip()) if sep else ("", "")
+
+
+def _keep_separate_fn(task):
+    """apply_fn for a compact job: a "keep separate" proposal is applied as
+    written. Record the pair in REJECTED.md and drop the entry, no agent pass.
+    Any other recommendation returns False and goes to the agent."""
+    fname, title = _split_proposal(task)
+
+    def apply(wt):
+        pdir = os.path.join(wt, "compact-proposals")
+        prop = np_dashboard_actions.find_proposal(pdir, fname, title)
+        if not prop or not prop.get("keep_separate"):
+            return False
+        if not np_dashboard_actions.reject_proposal(pdir, fname, title, action="kept separate"):
+            raise RuntimeError("keep-separate entry vanished mid-apply: %s :: %s" % (fname, title))
+        return True
+    return apply
+
+
+def _dismiss_graduated(task, log_path):
+    """Drop a graduated candidate from the dashboard now. The next scan also
+    skips it, since the lesson is marked promoted."""
+    kind, _, name = (task or "").partition(":")
+    if not (kind and name):
+        return
+    path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
+        np_content.content_dir(), "dashboard", "data", "graduation-dismissed.json")
+    try:
+        np_dashboard_actions.dismiss(path, kind.strip(), name.strip())
+    except OSError as exc:
+        _log(log_path, "graduation dismiss failed for %r: %s" % (task, exc))
 
 
 def _default_gh_pr_create(repo, branch, base):
