@@ -439,11 +439,15 @@ def _agent_commit(repo, wt, base_sha):
     return end_sha
 
 
-def _origin_base(repo):
-    """(branch, sha) of origin's default branch after a fetch, else ("", "")."""
+def _origin_base(repo, log_path=None):
+    """(branch, sha) of origin's default branch after a fetch, else ("", "").
+    A failed fetch is logged and the last fetched refs are used."""
     if _git(repo, "remote", "get-url", "origin").returncode != 0:
         return "", ""
-    _git(repo, "fetch", "-q", "origin")
+    fetch = _git(repo, "fetch", "-q", "origin")
+    if fetch.returncode != 0 and log_path:
+        _log(log_path, "fetch origin failed, using last fetched refs: %s"
+             % (fetch.stderr or "").strip()[:160])
     head = (_git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
     for name in ([head.split("/", 1)[1]] if "/" in head else []) + ["main", "master"]:
         r = _git(repo, "rev-parse", "--verify", "-q", "refs/remotes/origin/%s" % name)
@@ -462,7 +466,9 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
     a = _Attempt()
     # from_origin: a kind job bases on the overlay's origin default branch, so a
     # checkout drifted onto a feature branch can't capture or block it.
-    base, base_sha = _origin_base(repo) if from_origin else ("", "")
+    base, base_sha = _origin_base(repo, log_path) if from_origin else ("", "")
+    if from_origin and not base_sha:
+        _log(log_path, "%s repo: no origin default branch, basing on local HEAD" % label)
     if not base_sha:
         base = (_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() or "main"
         base_sha_r = _git(repo, "rev-parse", "HEAD")
@@ -501,7 +507,16 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
     try:
         # apply_fn: a deterministic edit that needs no agent pass. It returns
         # True when it handled the job.
-        if apply_fn is not None and apply_fn(wt):
+        try:
+            handled = apply_fn is not None and apply_fn(wt)
+        except Exception as exc:
+            # The worktree is thrown away, so a half-applied edit never lands.
+            a.state = "no_commit"
+            a.detail = ("%s repo: deterministic apply raised: %s: %s"
+                        % (label, type(exc).__name__, exc))[:200]
+            _log(log_path, a.detail)
+            return a
+        if handled:
             out, failure = "", ""
         else:
             out, failure = _agent_call(prompt, wt, agent_fn, log_path, tools)

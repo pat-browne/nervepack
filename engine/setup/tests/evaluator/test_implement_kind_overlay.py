@@ -146,6 +146,17 @@ class TestCompactKeepSeparate(_Base):
         self.assertIsNone(acts.find_proposal(os.path.join(self.content, "compact-proposals"),
                                              "2026-10-15.md", "np-kb-a vs np-kb-b"))
 
+    def test_apply_that_raises_lands_nothing(self):
+        def boom(*a, **k):
+            raise OSError("disk full")
+        orig = imp.np_dashboard_actions.reject_proposal
+        imp.np_dashboard_actions.reject_proposal = boom
+        self.addCleanup(setattr, imp.np_dashboard_actions, "reject_proposal", orig)
+        st = self.run_job("2026-10-15.md :: np-kb-a vs np-kb-b", "compact")
+        self.assertEqual(st["state"], "failed")
+        self.assertIn("disk full", st["ref"])
+        self.assertIsNone(self.origin_file("compact-proposals/REJECTED.md"))
+
     def test_reject_note_names_the_action(self):
         pdir = os.path.join(self.content, "compact-proposals")
         self.assertTrue(acts.reject_proposal(pdir, "2026-10-15.md", "np-kb-a vs np-kb-b",
