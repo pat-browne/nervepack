@@ -121,7 +121,7 @@ def find_proposal(pdir, fname, title):
     return None
 
 
-def reject_proposal(pdir, fname, title, today=None):
+def reject_proposal(pdir, fname, title, today=None, action="rejected from dashboard"):
     """Note the rejection in REJECTED.md and drop the entry from its file.
 
     The file is deleted once no `###` entry remains.
@@ -141,8 +141,8 @@ def reject_proposal(pdir, fname, title, today=None):
     rec = _recommendation(lines[sec[1] + 1:sec[2]])
 
     day = today or time.strftime("%Y-%m-%d")
-    note = "- %s | %s | %s | rejected from dashboard%s\n" % (
-        day, fname, title, (" (" + rec + ")") if rec else "")
+    note = "- %s | %s | %s | %s%s\n" % (
+        day, fname, title, action, (" (" + rec + ")") if rec else "")
     # Drop the entry first (atomic replace), then record it, so a failure
     # never leaves a recorded rejection whose entry still shows.
     if _sections(rest):

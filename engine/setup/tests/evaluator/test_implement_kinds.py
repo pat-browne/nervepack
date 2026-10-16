@@ -2,8 +2,8 @@
 """np_implement_suggestion job kinds.
 
 The dashboard's compact-proposal Apply and graduation Graduate buttons reuse the
-suggestion Implement machinery. A `kind` picks the agent prompt, routes the
-content overlay first, and skips the suggestion ledger.
+suggestion Implement machinery. A `kind` picks the agent prompt, runs in the
+content overlay only, and skips the suggestion ledger.
 """
 import os
 import subprocess
@@ -76,7 +76,8 @@ class TestKinds(unittest.TestCase):
 
     def test_graduate_kind_uses_its_prompt(self):
         self._run("strategy:security-review", "graduate")
-        self.assertIn("np-core-graduate", self.calls[0][1])
+        self.assertIn("graduate one lesson into a skill", self.calls[0][1])
+        self.assertEqual([c[0] for c in self.calls], ["content"])
 
     def test_unknown_kind_falls_back_to_suggestion(self):
         self._run("Do a thing", "../../etc")
@@ -87,7 +88,7 @@ class TestKinds(unittest.TestCase):
         self.assertTrue(imp.enqueue(qdir, self.status, "x", kind="compact"))
         self.assertEqual(imp.queue_entries(qdir)[0][1]["kind"], "compact")
 
-    def test_kind_job_never_gets_bash_and_never_lands_direct(self):
+    def test_kind_job_never_gets_bash_and_lands_on_the_overlay(self):
         tools_seen = []
         orig = imp.np_toggle.param
         imp.np_toggle.param = lambda name, default=None: "direct" if name == "evaluator.implement_mode" else orig(name, default)
@@ -96,8 +97,8 @@ class TestKinds(unittest.TestCase):
 
         def agent(prompt, tools, cwd, timeout):
             tools_seen.append(tools)
-            with open(os.path.join(cwd, "merged.md"), "w") as fh:
-                fh.write("merged\n")
+            with open(os.path.join(cwd, "edit-%d.md" % len(tools_seen)), "w") as fh:
+                fh.write("edited\n")
             return (0, "done", "")
 
         for kind, text in (("compact", "2026-09-30.md :: a vs b"), ("graduate", "strategy:s1")):
@@ -111,10 +112,12 @@ class TestKinds(unittest.TestCase):
         self.assertEqual(len(tools_seen), 2)
         for t in tools_seen:
             self.assertNotIn("Bash", t.split())
-        # The harness committed on a job branch. The overlay base never moved.
-        self.assertEqual(_git(self.content, "rev-parse", "main").stdout.strip(), base_before)
-        branches = _git(self.content, "branch", "--list", "np-suggest/*").stdout
-        self.assertTrue(branches.strip())
+        # The harness committed and landed direct on the overlay base.
+        # The overlay has no PR gate. The engine never moved.
+        self.assertNotEqual(_git(self.content, "rev-parse", "main").stdout.strip(), base_before)
+        log = _git(self.content, "log", "--format=%s", "main").stdout
+        self.assertIn("compact:", log)
+        self.assertIn("graduate:", log)
 
     def test_suggestion_job_keeps_bash(self):
         seen = []
