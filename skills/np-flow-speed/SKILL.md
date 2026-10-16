@@ -31,10 +31,12 @@ model that can do its job. The session default is never a worker's model.
 |---|---|
 | Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps | Haiku |
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
-| Coordination, hard calls, final verification | Coordinator only |
+| Coordination, hard calls, final verification | Coordinator (the session model) |
 
 - Pass a model on every subagent spawn. An unset model silently inherits the coordinator's model and costs the most.
-- Start each worker at its tier in the table. Move it up one tier (Haiku to Sonnet) only after it fails, and record the step-up in the decisions log.
+- Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
+- A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker goes to the coordinator, never to a higher-tier worker.
+- Record each step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
 - Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
 
@@ -81,7 +83,7 @@ Stopped at limits
 ```
 
 The final report also gives the PR link, merge state, CI result, the worker
-lines from the log, and status per environment.
+and step-up lines from the log, and status per environment.
 
 ## What this is not
 
