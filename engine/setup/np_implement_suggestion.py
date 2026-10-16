@@ -512,9 +512,10 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
         except Exception as exc:
             # The worktree is thrown away, so a half-applied edit never lands.
             a.state = "no_commit"
-            a.detail = ("%s repo: deterministic apply raised: %s: %s"
-                        % (label, type(exc).__name__, exc))[:200]
-            _log(log_path, a.detail)
+            full = ("%s repo: deterministic apply raised: %s: %s"
+                    % (label, type(exc).__name__, exc))
+            a.detail = full[:200]
+            _log(log_path, full)
             return a
         if handled:
             out, failure = "", ""
