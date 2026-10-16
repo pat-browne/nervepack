@@ -43,14 +43,14 @@ model that can do its job. The session default is never a worker's model.
 - The coordinator does no hands-on work a worker could do.
 - Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
 
-## The finish line: bot, resolve, deploy, verify
+## The finish line
 
 Opening the PR starts this phase. It ends only when the deploy has landed and
 a live check passes. Do not hand back at "PR open" or "merged".
 
 1. **Review bot.** On a repo with the bot ([[np-kb-pr-review-bot]]), wait for
    its review and the responder run. With no bot, or a run that posted
-   nothing, use its route B (dispatched review). Either way a review happens.
+   nothing, use its route B: a read-only reviewer dispatched with [[np-core-dispatch]]. Either way a review happens.
 2. **Resolve every thread.** Fix each real finding, then reply with the commit
    and resolve the thread. Resolve repeats and "undefined name" false
    positives with the evidence. Leave a human-decision question open and
