@@ -45,7 +45,7 @@ _JOBS = [
     ("skill-maintain",     9, 15, None),
     ("refine",             9, 30, ("0", "SUN")),
     ("compact",           10,  0, ("3", "WED")),
-    ("kb-promote-scan",    8, 45, ("1", "MON")),
+    ("kb-promote-scan",   11,  0, ("1-5", "MON,TUE,WED,THU,FRI")),
 ]
 
 # The toggle each job's cron body gates on. np_job_health reads it to tell a
@@ -95,15 +95,35 @@ _PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
     <string>%s</string>
   </array>
   <key>StartCalendarInterval</key>
-  <dict>
-%s    <key>Hour</key><integer>%d</integer>
-    <key>Minute</key><integer>%d</integer>
-  </dict>
-  <key>StandardOutPath</key><string>%s</string>
+%s  <key>StandardOutPath</key><string>%s</string>
   <key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
 """
+
+
+def _dow_numbers(dow):
+    """Cron day-of-week string ("1", "1-5", "0,3") to a list of ints."""
+    days = []
+    for part in dow.split(","):
+        lo, _, hi = part.partition("-")
+        days.extend(range(int(lo), int(hi or lo) + 1))
+    return days
+
+
+def _launchd_interval(weekday, hour, minute):
+    """StartCalendarInterval XML: one dict, or an array of dicts for a day range."""
+    days = _dow_numbers(weekday) if weekday else [None]
+    pad = "  " if len(days) == 1 else "    "
+    dicts = []
+    for day in days:
+        day_line = "%s  <key>Weekday</key><integer>%d</integer>\n" % (pad, day) if day is not None else ""
+        dicts.append("%s<dict>\n%s%s  <key>Hour</key><integer>%d</integer>\n"
+                     "%s  <key>Minute</key><integer>%d</integer>\n%s</dict>\n"
+                     % (pad, day_line, pad, hour, pad, minute, pad))
+    if len(dicts) == 1:
+        return dicts[0]
+    return "  <array>\n%s  </array>\n" % "".join(dicts)
 
 
 def _home():
@@ -228,9 +248,8 @@ def install_launchd(la_dir=None, log_dir=None, setup_dir=None, force=None,
         plist_path = os.path.join(la_dir, "%s.plist" % label)
         log_path = os.path.join(log_dir, "%s.log" % suffix)
         exec_cmd = "%sexec python3 %s cron %s" % (token_prefix_fn(), cli, cron_name)
-        weekday_line = ("    <key>Weekday</key><integer>%s</integer>\n" % weekday) if weekday else ""
-        content = _PLIST_TEMPLATE % (label, _xml_escape(exec_cmd), weekday_line, hour, minute,
-                                     log_path, log_path)
+        content = _PLIST_TEMPLATE % (label, _xml_escape(exec_cmd),
+                                     _launchd_interval(weekday, hour, minute), log_path, log_path)
         with open(plist_path, "w", encoding="utf-8") as fh:
             fh.write(content)
         launchctl_fn(plist_path)
