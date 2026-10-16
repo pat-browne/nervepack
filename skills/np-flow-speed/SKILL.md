@@ -31,10 +31,10 @@ model that can do its job. The session default is never a worker's model.
 |---|---|
 | Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps | Haiku |
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
-| Coordination, hard calls, final verification | The coordinator. Never a worker |
+| Coordination, hard calls, final verification | Coordinator only |
 
-- Pass a model on every subagent spawn. An unset model inherits the coordinator's top tier.
-- Default down. Move a worker up one tier only after it fails at the cheaper one, and log the step-up.
+- Pass a model on every subagent spawn. An unset model silently inherits the coordinator's model and costs the most.
+- Start each worker at its tier in the table. Move it up one tier (Haiku to Sonnet) only after it fails, and record the step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
 - Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
 
@@ -73,14 +73,15 @@ Keep it as you go. Hand it back at the end.
 Decisions
 1. <decision> -- <one-line reason>
 2. <decision> -- <one-line reason> (deferred to coordinator)
-3. <worker> on <model> -- <task> (log each step-up and why)
+3. <worker> on <model> -- <task>
+4. <worker> step-up <from> to <to> -- <failure that caused it>
 
 Stopped at limits
 - <action> -- <which limit> -- <your recommendation>
 ```
 
-The final report also gives the PR link, merge state, CI result, the workers and models used, and status per
-environment.
+The final report also gives the PR link, merge state, CI result, the worker
+lines from the log, and status per environment.
 
 ## What this is not
 
