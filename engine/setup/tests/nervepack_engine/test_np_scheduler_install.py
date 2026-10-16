@@ -150,7 +150,7 @@ class TestInstallCron(unittest.TestCase):
         self.assertIn("15 9 * * *", text)  # skill-maintain
         self.assertIn("30 9 * * 0", text)  # refine (weekly Sun)
         self.assertIn("0 10 * * 3", text)  # compact (weekly Wed)
-        self.assertIn("45 8 * * 1", text)  # kb-promote-scan (weekly Mon)
+        self.assertIn("0 11 * * 1-5", text)  # kb-promote-scan (Mon-Fri)
 
     def test_4_idempotent_replaces_not_duplicates(self):
         self._run()
@@ -264,15 +264,24 @@ class TestInstallLaunchd(unittest.TestCase):
         with open(os.path.join(self.la_dir, "com.nervepack.memory-promote.plist")) as fh:
             self.assertIn("<key>Hour</key><integer>8</integer>", fh.read())
 
+    def test_dow_numbers_rejects_bad_ranges(self):
+        for bad in ("5-1", "1-9", "x", "1-5-9"):
+            with self.assertRaises(ValueError):
+                np_scheduler_install._dow_numbers(bad)
+        self.assertEqual(np_scheduler_install._dow_numbers("1-3,5"), [1, 2, 3, 5])
+
     def test_3b_weekly_jobs_carry_weekday_daily_jobs_do_not(self):
         self._run()
         def read(j):
             with open(os.path.join(self.la_dir, "com.nervepack.%s.plist" % j)) as fh:
                 return fh.read()
         kb = read("kb-promote-scan")
-        self.assertIn("<key>Weekday</key><integer>1</integer>", kb)
-        self.assertIn("<key>Hour</key><integer>8</integer>", kb)
-        self.assertIn("<key>Minute</key><integer>45</integer>", kb)
+        for day in range(1, 6):
+            self.assertIn("<key>Weekday</key><integer>%d</integer>" % day, kb)
+        self.assertNotIn("<key>Weekday</key><integer>6</integer>", kb)
+        self.assertNotIn("<key>Weekday</key><integer>0</integer>", kb)
+        self.assertEqual(kb.count("<key>Hour</key><integer>11</integer>"), 5)
+        self.assertIn("<key>Minute</key><integer>0</integer>", kb)
         self.assertIn("cron kb-promote-scan", kb)
         self.assertIn("<key>Weekday</key><integer>0</integer>", read("refine"))
         self.assertIn("<key>Weekday</key><integer>3</integer>", read("compact"))
