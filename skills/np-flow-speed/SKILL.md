@@ -16,9 +16,27 @@ Announce: "Using np-flow-speed."
 - No clarifying questions. Pick the most reasonable reading, log it, continue.
 - No approval check-ins between phases. Spec, plan and execution choices are
   yours.
+- Workers run on the cheapest model that fits. The coordinator only briefs,
+  decides and verifies.
 - Run the [[np-flow-develop]] phases in order. Tests stay first and the
   deterministic gate still blocks.
 - Merge on green when the repo allows a merge without a human.
+
+## Model tiering: cheapest model that fits
+
+Speed mode delegates hands-on work to subagents. Each one runs on the cheapest
+model that can do its job. The session default is never a worker's model.
+
+| Work | Model |
+|---|---|
+| Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps | Haiku |
+| Implementation, research, debugging, code review, multi-step edits | Sonnet |
+| Coordination, hard calls, final verification | The coordinator. Never a worker |
+
+- Pass a model on every subagent spawn. An unset model inherits the coordinator's top tier.
+- Default down. Move a worker up one tier only after it fails at the cheaper one, and log the step-up.
+- The coordinator does no hands-on work a worker could do.
+- Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
 
 ## Deferring a hard call
 
@@ -55,12 +73,13 @@ Keep it as you go. Hand it back at the end.
 Decisions
 1. <decision> -- <one-line reason>
 2. <decision> -- <one-line reason> (deferred to coordinator)
+3. <worker> on <model> -- <task> (log each step-up and why)
 
 Stopped at limits
 - <action> -- <which limit> -- <your recommendation>
 ```
 
-The final report also gives the PR link, merge state, CI result, and status per
+The final report also gives the PR link, merge state, CI result, the workers and models used, and status per
 environment.
 
 ## What this is not
