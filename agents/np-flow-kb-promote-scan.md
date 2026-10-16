@@ -1,9 +1,9 @@
 # kb-promote-scan
 
-Weekly agent prompt that runs data-base's `harness-promote-scan` skill against
+Weekday agent prompt that runs data-base's `harness-promote-scan` skill against
 this machine's harness and opens a data-base PR when the scan queues items.
 
-**Cadence:** weekly, Monday 08:45 local, before the Monday weekly review.
+**Cadence:** Monday to Friday, 11:00 local.
 Installed by `cli.py setup install-memory-{cron,launchd,schtasks}`. Default-on.
 Toggle off with `maintain.kb_promote_scan=off`.
 
@@ -31,7 +31,7 @@ checks them and fails loudly if one is missing.
 
 ## Prompt
 
-You are the weekly kb-promote-scan agent. Your stdout is the run log. Print one
+You are the kb-promote-scan agent. Your stdout is the run log. Print one
 line `PHASE <name>: <result>` at the end of each phase below. Do the phases in
 order, then stop.
 
@@ -48,7 +48,7 @@ worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
      A kept older worktree never blocks this run, because each run uses its own dated path.
    - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
    - If today's worktree path already exists, a same-day run is in progress or crashed.
-     Print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop. Next week's run is unaffected.
+     Print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop. The next day's run is unaffected.
    - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
    - Confirm `.claude/skills/harness-promote-scan/SKILL.md`,
      `.claude/skills/pr-review/SKILL.md` and `docs/reviews/queue.md` exist in the
