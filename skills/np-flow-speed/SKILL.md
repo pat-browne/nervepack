@@ -49,14 +49,15 @@ Opening the PR starts this phase. It ends only when the deploy has landed and
 a live check passes. Do not hand back at "PR open" or "merged".
 
 1. **Review bot.** On a repo with the bot ([[np-kb-pr-review-bot]]), wait for
-   its review and the responder run. A missing bot run is not a pass: use its
-   route B (dispatched review) instead.
+   its review and the responder run. With no bot, or a run that posted
+   nothing, use its route B (dispatched review). Either way a review happens.
 2. **Resolve every thread.** Fix each real finding, then reply with the commit
    and resolve the thread. Resolve repeats and "undefined name" false
    positives with the evidence. Leave a human-decision question open and
    surface it. The bot's threads block merge under
    `required_review_thread_resolution`, and every push can add new ones, so
-   re-query the threads after each push, not once.
+   re-query the threads after each push, not once. After 3 rounds that add no
+   real finding, stop iterating and surface what remains.
 3. **Merge on green.** Read `gh pr checks`. Pending, queued or missing is not
    green. If hosted CI cannot run, run the gate locally and say so.
 4. **Deploy** by the repo's own recipe (its `CLAUDE.md` and deploy docs), in
@@ -64,8 +65,12 @@ a live check passes. Do not hand back at "PR open" or "merged".
    or the user authorizes it. Otherwise it is a hard limit: stop and surface.
 5. **Verify live.** Hit the deployed thing: a health route, a real response,
    the page in a browser, or the new infrastructure's own check. A green
-   deploy command is not verification. A failed check means diagnose and fix
-   forward, or roll back, and say which.
+   deploy command is not verification. Retry over a couple of minutes to ride
+   out propagation, and log each result.
+   A failed check means diagnose with the deploy output and the live response,
+   never retry silently, then fix forward or roll back and say which. To roll
+   back, use the repo's procedure or revert the merge commit, redeploy, and
+   pass the same live check.
 6. **Report** the PR, merge SHA, deploy result and the live check evidence.
 
 ## Deferring a hard call
