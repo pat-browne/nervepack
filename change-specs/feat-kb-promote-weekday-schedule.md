@@ -1,5 +1,5 @@
 ---
-id: 0091
+id: 0092
 status: accepted
 date: 2026-10-16
 tier: high
@@ -12,7 +12,7 @@ blast_radius:
   - change-specs/feat-kb-promote-weekday-schedule.md
 ---
 
-# 0091: kb-promote-scan weekday schedule
+# 0092: kb-promote-scan weekday schedule
 
 ## Context and problem statement
 
