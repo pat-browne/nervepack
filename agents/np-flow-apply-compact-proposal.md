@@ -27,8 +27,8 @@ Follow AGENTS.md "When you find a compact-proposal awaiting review".
 4. Remove that `###` section from the proposal file. Delete the file once no `###`
    section remains.
 
-5. A "keep separate" recommendation is applied as written. The wrapper normally
-   handles it before you start. If you get one, append a line to
+5. The wrapper applies a "keep separate" recommendation itself, with no agent
+   pass. If one still reaches you, apply it as written: append a line to
    `compact-proposals/REJECTED.md`:
    `- <YYYY-MM-DD> | <file> | <title> | kept separate (<one-line reason>)`.
    Then remove the `###` section as in step 4.

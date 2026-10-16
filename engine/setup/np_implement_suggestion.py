@@ -1004,8 +1004,9 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
         _log(log_path, "no origin remote; change is local on %s (%s repo)" % (branch, land_label))
 
     # Advance the LOCAL base too -- only when it is checked out and clean, so we
-    # never clobber uncommitted work or move some other branch. Else the commit
-    # stays on `branch`.
+    # never clobber uncommitted work or move some other branch. A checkout that
+    # drifted onto a feature branch stays as it is. It picks the commit up from
+    # origin on its next merge. Else the commit stays on `branch`.
     current = (_git(land_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
     dirty = bool((_git(land_repo, "status", "--porcelain").stdout or "").strip())
     if (current == base and not dirty
@@ -1035,7 +1036,9 @@ def _keep_separate_fn(task):
         prop = np_dashboard_actions.find_proposal(pdir, fname, title)
         if not prop or not prop.get("keep_separate"):
             return False
-        return np_dashboard_actions.reject_proposal(pdir, fname, title, action="kept separate")
+        if not np_dashboard_actions.reject_proposal(pdir, fname, title, action="kept separate"):
+            raise RuntimeError("keep-separate entry vanished mid-apply: %s :: %s" % (fname, title))
+        return True
     return apply
 
 

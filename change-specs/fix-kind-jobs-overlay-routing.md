@@ -1,5 +1,5 @@
 ---
-id: 0090
+id: 0091
 status: accepted
 date: 2026-10-16
 tier: normal
@@ -13,7 +13,7 @@ blast_radius:
   - change-specs/fix-kind-jobs-overlay-routing.md
 ---
 
-# 0090: Run compact and graduate jobs in the content overlay only
+# 0091: Run compact and graduate jobs in the content overlay only
 
 ## Context and problem statement
 
