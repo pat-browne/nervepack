@@ -884,9 +884,8 @@ def _run_one(text, edited, target, ctx, kind=None):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
-    # Kind jobs never land direct, whatever implement_mode says.
-    if kind:
-        mode = "pr"
+    # Mode only affects engine landings. Kind jobs run in the overlay, which
+    # always lands direct (see _land), so implement_mode cannot block them.
     tools = _KIND_TOOLS if kind else _AGENT_TOOLS
     commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
     content_repo = _resolve_content_repo(repo)

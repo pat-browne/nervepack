@@ -90,8 +90,9 @@ class TestKinds(unittest.TestCase):
 
     def test_kind_job_never_gets_bash_and_lands_on_the_overlay(self):
         tools_seen = []
+        # Force pr mode: overlay kind jobs must still land direct.
         orig = imp.np_toggle.param
-        imp.np_toggle.param = lambda name, default=None: "direct" if name == "evaluator.implement_mode" else orig(name, default)
+        imp.np_toggle.param = lambda name, default=None: "pr" if name == "evaluator.implement_mode" else orig(name, default)
         self.addCleanup(setattr, imp.np_toggle, "param", orig)
         base_before = _git(self.content, "rev-parse", "main").stdout.strip()
 
