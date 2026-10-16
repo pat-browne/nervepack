@@ -441,12 +441,12 @@ def _agent_commit(repo, wt, base_sha):
 
 def _origin_base(repo, log_path=None):
     """(branch, sha) of origin's default branch after a fetch, else ("", "").
-    A failed fetch is logged and the last fetched refs are used."""
+    A failed fetch is logged and the last fetched refs (or local branches) are used."""
     if _git(repo, "remote", "get-url", "origin").returncode != 0:
         return "", ""
     fetch = _git(repo, "fetch", "-q", "origin")
     if fetch.returncode != 0 and log_path:
-        _log(log_path, "fetch origin failed, using last fetched refs: %s"
+        _log(log_path, "fetch origin failed, using last fetched or local refs: %s"
              % (fetch.stderr or "").strip()[:160])
     head = (_git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
     for name in ([head.split("/", 1)[1]] if "/" in head else []) + ["main", "master"]:
