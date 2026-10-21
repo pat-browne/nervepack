@@ -46,7 +46,7 @@ class TestLessonRecall(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def _write(self, name, content):
-        with open(os.path.join(self.lessons, name), "w") as fh:
+        with open(os.path.join(self.lessons, name), "w", encoding="utf-8") as fh:
             fh.write(content)
 
     def _run(self, sid, prompt):

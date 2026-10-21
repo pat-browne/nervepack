@@ -90,9 +90,9 @@ class _RecallFixture(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def recall(self, body, sid="s1"):
-        with open(os.path.join(self.lessons, "INDEX.md"), "w") as fh:
+        with open(os.path.join(self.lessons, "INDEX.md"), "w", encoding="utf-8") as fh:
             fh.write(INDEX)
-        with open(os.path.join(self.lessons, "git-shared-tree.md"), "w") as fh:
+        with open(os.path.join(self.lessons, "git-shared-tree.md"), "w", encoding="utf-8") as fh:
             fh.write(body)
         from nervepack_engine.hooks import lesson_recall
         out = lesson_recall.run(json.dumps({"session_id": sid, "prompt": "git add then commit"}),
