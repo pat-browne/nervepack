@@ -10,7 +10,7 @@ Three groups:
 
 1. Baseline (passes today): measures what the current recall injects for a
    representative legacy lesson, so the comparison below has a fixed reference.
-2. Recall against the current implementation (expectedFailure today): the
+2. Recall of the paired format (expectedFailure before spec 0093): the
    current lesson_recall only keeps lines starting with a bold **Header:**, so a
    paired-rule line is silently dropped and only an empty "[topic]" tag is
    injected. These flip to unexpected-success once
@@ -120,7 +120,7 @@ class TestBaseline(_RecallFixture):
 
 class TestPairedRecallAgainstCurrent(_RecallFixture):
     def test_paired_rule_is_recalled(self):
-        # Current recall keeps only **Header:** lines, so this comes back empty.
+        # Before spec 0093, recall kept only **Header:** lines and dropped this rule.
         ctx = self.recall(PAIRED)
         self.assertIn("DON'T `git add -A`", ctx)
         self.assertIn("**when**", ctx)
@@ -133,7 +133,7 @@ class TestPairedRecallAgainstCurrent(_RecallFixture):
         self.assertLessEqual(len(paired), len(legacy) // 2)
 
     def test_paired_injection_omits_the_narrative(self):
-        # Today a paired-format file injects only an empty "[topic]" tag.
+        # Before spec 0093, a paired-format file injected only an empty "[topic]" tag.
         ctx = self.recall(PAIRED)
         self.assertIn("DON'T", ctx)
         self.assertNotIn("A cron's commit picked up", ctx)
@@ -168,6 +168,15 @@ class TestFormatLint(unittest.TestCase):
     def test_lone_dont_is_flagged(self):
         bad = PAIRED.replace(' → DO `git commit -m "..." -- <paths>`', "")
         self.assertIn("lone-dont", self.codes(bad))
+
+    def test_why_before_when_parses_both(self):
+        swapped = PAIRED.replace(
+            " — **when** another session or cron may share the tree — **why** it sweeps their staged work into your commit",
+            " — **why** it sweeps their staged work into your commit — **when** another session or cron may share the tree")
+        rule = self.fmt.parse(swapped)[0].rules[0]
+        self.assertTrue(rule.when.startswith("another session or cron may share the tree"))
+        self.assertTrue(rule.why.startswith("it sweeps their staged work"))
+        self.assertNotIn("**when**", rule.why)
 
     def test_lone_do_is_allowed(self):
         ok = PAIRED.replace('DON\'T `git add -A` / bare `git commit` → ', "")

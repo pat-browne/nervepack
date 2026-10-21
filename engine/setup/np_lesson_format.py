@@ -45,21 +45,16 @@ def _parse_rule(objective, text, line, nlines):
     """Split one rule entry (continuation lines already joined) into its parts."""
     body = text[2:].strip()
     links = _LINK_RE.findall(body)
-    why = when = ""
-    m = _WHY_RE.search(body)
-    if m:
-        why = body[m.end():].strip()
-        body = body[:m.start()]
-    m = _WHEN_RE.search(body)
-    if m:
-        when = body[m.end():].strip()
-        body = body[:m.start()]
-    if not why:
-        # "**why**" placed before "**when**" still counts.
-        m = _WHY_RE.search(body)
-        if m:
-            why = body[m.end():].strip()
-            body = body[:m.start()]
+    # Slice at each labelled marker, in whichever order they appear.
+    marks = sorted((m.start(), m.end(), name) for name, m in
+                   (("when", _WHEN_RE.search(body)), ("why", _WHY_RE.search(body))) if m)
+    parts = {"when": "", "why": ""}
+    for i, (_, end, name) in enumerate(marks):
+        stop = marks[i + 1][0] if i + 1 < len(marks) else len(body)
+        parts[name] = body[end:stop].strip()
+    when, why = parts["when"], parts["why"]
+    if marks:
+        body = body[:marks[0][0]]
     head = body.strip()
     dont = do = ""
     m = _DONT_RE.match(head)
