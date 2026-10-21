@@ -119,7 +119,6 @@ class TestBaseline(_RecallFixture):
 
 
 class TestPairedRecallAgainstCurrent(_RecallFixture):
-    @unittest.expectedFailure
     def test_paired_rule_is_recalled(self):
         # Current recall keeps only **Header:** lines, so this comes back empty.
         ctx = self.recall(PAIRED)
@@ -127,14 +126,12 @@ class TestPairedRecallAgainstCurrent(_RecallFixture):
         self.assertIn("**when**", ctx)
         self.assertIn("**why**", ctx)
 
-    @unittest.expectedFailure
     def test_paired_injection_is_at_most_half_the_legacy_size(self):
         legacy = self.recall(LEGACY, sid="a")
         paired = self.recall(PAIRED, sid="b")
         self.assertIn("DON'T", paired, "paired rule was not injected")
         self.assertLessEqual(len(paired), len(legacy) // 2)
 
-    @unittest.expectedFailure
     def test_paired_injection_omits_the_narrative(self):
         # Today a paired-format file injects only an empty "[topic]" tag.
         ctx = self.recall(PAIRED)
