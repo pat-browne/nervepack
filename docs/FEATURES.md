@@ -350,16 +350,30 @@ topic-matched entries on a session's first prompts, framing by provenance:
 imperative "avoid X" wording for `failure`, advisory "the approach that worked is
 Y" wording for `success`.
 
+**Body format (paired rules).** Each entry is one line under an `## <objective>`
+heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
+DON'T → DO is the default; a lone DO is allowed for a win (no invented DON'T); a lone
+DON'T is a lint finding. `when` and `why` are required; budget is ≤ 2 lines / ~320
+chars. The narrative lives in `memory/episodic/<topic>.md`, one backlink away. Recall
+injects `<objective>:` plus the rule line (backlinks stripped; success objectives get
+" (worked before)"), so a rule is one cheap, untruncated line. The maintain pass lints
+changed lessons with `engine/setup/np_lesson_format.py lint` (codes `missing-when`,
+`missing-why`, `lone-dont`, `too-long`, `legacy-format`) and reverts the write if it
+can't fix a finding; it also adds a `Lessons: [[lessons/<topic>]]` backlink to the
+matching skill or wiki topic page. Legacy Symptom/Why/Do/Avoid bodies are converted by
+`np-migrate-lessons.py --bodies <content_root>` (idempotent, `enforce` kept
+byte-for-byte). Spec: `change-specs/ccr-4c5160e5-j1j5k6.md`.
+
 **Assets.** `engine/nervepack_engine/hooks/lesson_recall.py`,
 `engine/nervepack_engine/hooks/lesson_guard.py` (both Python ports via `cli.py`
-dispatcher), `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
+dispatcher), `engine/setup/np_lesson_format.py`, `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
 Toggle: `lessons` (param `lessons.enforce`, default on, disables the guard while
 advisory recall stays on).
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into a `provenance: failure`
 `safe-git-grep` lesson with an `enforce` block; now when a prompt mentions git-grep,
-the recall hook injects "use long-form flags" *before* you make the same mistake
+the recall hook injects the rule (`DON'T combine short flags → DO use long-form flags — when …`) *before* you make the same mistake
 again, no skill invocation required. Separately, across several sessions you find
 that searching GitHub issues surfaces tool limitations faster than official docs —
 that becomes a `provenance: success` `github-issue-research` lesson with no `enforce`

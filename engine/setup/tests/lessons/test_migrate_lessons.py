@@ -114,6 +114,55 @@ wiki: []
 """
 
 
+sys.path.insert(0, os.path.join(HERE, "..", ".."))
+import np_lesson_format  # noqa: E402
+
+FAIL_FM = """---
+name: Grep combined flags dropped
+kind: lesson
+provenance: failure
+status: confirmed
+seen: 7
+last_updated: 2026-06-20
+topic_triggers: [git, grep]
+enforce:
+  tool_match: "grep -[a-z]*l[a-z]*i"
+  gate: ask
+  tool_name_match: Bash
+wiki: []
+---
+"""
+FAIL_BODY = """**Symptom:** `grep -li` flags get silently reordered by a wrapping tool
+and the second line CONTINUATION-TEXT explains the wrapper. Extra sentence.
+**Why:** Some shells alias grep in ways that eat combined short flags.
+**Do:** Spell out `grep --files-with-matches --ignore-case` instead of `-li`.
+**Avoid:** Trusting combined short flags survive every wrapper.
+"""
+SUCC_FM = """---
+name: Prefer long grep flags
+kind: lesson
+provenance: success
+status: verified
+seen: 3
+last_updated: 2026-06-21
+topic_triggers: [git]
+wiki: []
+---
+"""
+SUCC_BODY = """**Title:** Prefer long-form grep flags in wrapped contexts.
+**When:** A grep invocation runs inside another tool.
+**Do:** Use `--files-with-matches` so wrappers cannot eat flags.
+"""
+PAIRED = SUCC_FM + """## Paired already
+- DO use long flags \u2014 **when** wrapped \u2014 **why** it worked. [[episodic/git]]
+"""
+
+
+def run_bodies(root):
+    return subprocess.run([sys.executable, SCRIPT, "--bodies", root],
+                          capture_output=True, text=True)
+
+
 def write(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
@@ -310,6 +359,107 @@ class TestMigrateLessons(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, msg=proc.stderr)
             text = read(os.path.join(root, "memory", "lessons", "extra.md"))
             self.assertIn("custom_field: hello", text)
+
+
+class TestMigrateBodies(unittest.TestCase):
+    def _tree(self, root, lesson_text, episodic=None):
+        write(os.path.join(root, "memory", "lessons", "git.md"), lesson_text)
+        if episodic is not None:
+            write(os.path.join(root, "memory", "episodic", "git.md"), episodic)
+
+    def test_converts_failure_and_stacked_success(self):
+        with tempfile.TemporaryDirectory() as root:
+            src = FAIL_FM + FAIL_BODY + SUCC_FM + SUCC_BODY
+            self._tree(root, src)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            lp = os.path.join(root, "memory", "lessons", "git.md")
+            ep = os.path.join(root, "memory", "episodic", "git.md")
+            new = read(lp)
+            self.assertEqual(np_lesson_format.lint(new), [])
+            self.assertIn(FAIL_FM, new)
+            self.assertIn(SUCC_FM, new)
+            blocks = np_lesson_format.parse(new)
+            self.assertEqual(len(blocks), 2)
+            r = blocks[0].rules[0]
+            self.assertEqual(r.objective, "Grep combined flags dropped")
+            self.assertEqual(r.dont, "Trusting combined short flags survive every wrapper")
+            self.assertTrue(r.do and r.when and r.why)
+            self.assertIn("working with git, grep", r.when)
+            self.assertEqual(r.links, ["episodic/git"])
+            self.assertIn("DON'T", r.text)
+            self.assertIn("**when**", r.text)
+            self.assertIn("**why**", r.text)
+            s = blocks[1].rules[0]
+            self.assertEqual(s.objective, "Prefer long-form grep flags in wrapped contexts")
+            self.assertEqual(s.dont, "")
+            epi = read(ep)
+            self.assertTrue(epi.startswith("---\nname: git\nkind: episodic\n"))
+            self.assertIn("last_updated: 2026-06-21", epi)
+            self.assertIn("CONTINUATION-TEXT explains the wrapper", epi)
+            self.assertIn("migrated evidence: Grep combined flags dropped", epi)
+            self.assertIn(FAIL_BODY, epi)
+            self.assertIn(SUCC_BODY, epi)
+            # idempotent
+            proc2 = run_bodies(root)
+            self.assertEqual(proc2.returncode, 0, msg=proc2.stderr)
+            self.assertEqual(read(lp), new)
+            self.assertEqual(read(ep), epi)
+
+    def test_existing_episodic_gets_section_after_frontmatter(self):
+        with tempfile.TemporaryDirectory() as root:
+            epi_src = ("---\nname: git\nkind: episodic\nlast_updated: 2026-01-01\n"
+                       "wiki: []\nprojects: []\n---\n## [2026-01-01] earlier\n\nold stuff\n")
+            self._tree(root, FAIL_FM + FAIL_BODY, episodic=epi_src)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            epi = read(os.path.join(root, "memory", "episodic", "git.md"))
+            fm_end = epi_src.index("---\n## [2026-01-01]")
+            self.assertTrue(epi.startswith(epi_src[:fm_end + 4]))
+            after = epi[fm_end + 4:]
+            self.assertTrue(after.startswith(
+                "## [2026-06-20] lessons \u2014 migrated evidence: Grep combined flags dropped"))
+            self.assertIn(FAIL_BODY, after)
+            self.assertTrue(after.endswith("## [2026-01-01] earlier\n\nold stuff\n"))
+
+    def test_already_paired_untouched(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._tree(root, PAIRED)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            self.assertEqual(read(os.path.join(root, "memory", "lessons", "git.md")), PAIRED)
+            self.assertFalse(os.path.exists(os.path.join(root, "memory", "episodic")))
+
+    def test_default_mode_leaves_legacy_bodies(self):
+        with tempfile.TemporaryDirectory() as root:
+            src = FAIL_FM + FAIL_BODY
+            self._tree(root, src)
+            proc = run_migration(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            self.assertEqual(read(os.path.join(root, "memory", "lessons", "git.md")), src)
+            self.assertFalse(os.path.exists(os.path.join(root, "memory", "episodic")))
+
+    def test_missing_last_updated_falls_back_to_today(self):
+        with tempfile.TemporaryDirectory() as root:
+            fm = FAIL_FM.replace("last_updated: 2026-06-20\n", "")
+            self._tree(root, fm + FAIL_BODY)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            epi = read(os.path.join(root, "memory", "episodic", "git.md"))
+            m = re.search(r"^last_updated: (\d{4}-\d\d-\d\d)$", epi, re.M)
+            self.assertTrue(m, epi)
+            self.assertIn("## [%s] lessons" % m.group(1), epi)
+
+    def test_long_fields_shortened_to_fit(self):
+        with tempfile.TemporaryDirectory() as root:
+            long_do = "Do " + "very long " * 60
+            src = FAIL_FM + "**Symptom:** s.\n**Why:** w.\n**Do:** %s.\n" % long_do
+            self._tree(root, src)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            new = read(os.path.join(root, "memory", "lessons", "git.md"))
+            self.assertEqual(np_lesson_format.lint(new), [])
+            self.assertIn("\u2026", new)
 
 
 if __name__ == "__main__":
