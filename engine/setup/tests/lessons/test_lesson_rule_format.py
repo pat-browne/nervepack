@@ -11,7 +11,7 @@ Three groups:
 1. Baseline (passes today): measures what the current recall injects for a
    representative legacy lesson, so the comparison below has a fixed reference.
 2. Recall of the paired format (expectedFailure before spec 0093): the
-   current lesson_recall only keeps lines starting with a bold **Header:**, so a
+   pre-0093 lesson_recall only kept lines starting with a bold **Header:**, so a
    paired-rule line is silently dropped and only an empty "[topic]" tag is
    injected. These flip to unexpected-success once
    recall learns the format, which fails the suite and forces removing the
