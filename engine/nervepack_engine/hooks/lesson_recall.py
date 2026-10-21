@@ -86,7 +86,7 @@ def _lesson_blocks(path):
         result = []
         for block in fmt.parse(text):
             if not block.provenance:
-                break
+                break  # same as the legacy reader: blocks stop at the first without provenance
             if block.rules:
                 suffix = " (worked before)" if block.provenance == "success" else ""
                 result.append((block.provenance, fmt.render(block, suffix), True))
