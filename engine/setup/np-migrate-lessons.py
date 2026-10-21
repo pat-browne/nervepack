@@ -4,6 +4,7 @@ memory/lessons layer, per docs/superpowers/specs/2026-07-02-lessons-layer-merge-
 design.md ("The entity" / "Migration"). stdlib only.
 
 Usage: np-migrate-lessons.py <content_root>
+       np-migrate-lessons.py --bodies <content_root>
 
 For each old entry:
   - kind: playbook -> kind: lesson, provenance: failure, keep the enforce
@@ -28,11 +29,22 @@ memory FIRST; nothing is written to disk unless ALL of it parses cleanly. Any
 parse failure aborts the whole migration (source dirs untouched) with a
 message on stderr and a non-zero exit.
 
+--bodies mode (opt-in): rewrites legacy Symptom/Why/Do/Avoid and Title/When/Do
+bodies in memory/lessons/*.md to one paired-rule line per entry under an
+objective heading (`- DON'T x -> DO y -- **when** .. -- **why** .. [[episodic/t]]`).
+Frontmatter (incl. enforce:) is kept byte-for-byte; the verbatim legacy body is
+filed in memory/episodic/<topic>.md under a "migrated evidence" section. Every
+converted file must pass np_lesson_format.lint or nothing is written. Entries
+already in paired form are untouched, so a re-run is a no-op.
+
 Idempotent: once memory/playbooks and memory/strategies are both gone (this
 script's own doing, or because they never existed), re-running is a no-op
 success -- memory/lessons is left exactly as it is.
 """
+import datetime
+import importlib.util
 import os
+import re
 import shutil
 import sys
 
@@ -300,9 +312,9 @@ def migrate(root):
     shutil.rmtree(st_dir, ignore_errors=True)
 
 
-def main(argv):
+def _main_merge(argv):
     if len(argv) != 2:
-        sys.stderr.write("usage: np-migrate-lessons.py <content_root>\n")
+        sys.stderr.write("usage: np-migrate-lessons.py [--bodies] <content_root>\n")
         return 2
     root = argv[1]
     try:
@@ -314,6 +326,218 @@ def main(argv):
         sys.stderr.write("np-migrate-lessons: %s\n" % exc)
         return 1
     return 0
+
+
+# ---------------------------------------------------------------------------
+# --bodies mode: legacy Symptom/Why/Do/Avoid + Title/When/Do bodies in
+# memory/lessons/*.md -> one paired-rule line per entry (change spec 0093).
+# Frontmatter is kept byte-for-byte; the verbatim legacy body moves to
+# memory/episodic/<topic>.md. Fail-safe: all computed in memory, linted, and
+# only then written.
+# ---------------------------------------------------------------------------
+
+_FIELD_RE = re.compile(
+    r"^\*\*(Symptom|Why|Do|Avoid|Title|When):\*{0,2}\s*(.*)$")
+_SENT_END_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`\"'(\[])")
+
+
+def _load_format():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "np_lesson_format.py")
+    spec = importlib.util.spec_from_file_location("np_lesson_format", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _split_entries(text, path):
+    """-> list of {"head": str (frontmatter incl. both --- lines), "body": str}."""
+    entries = []
+    state = 0  # 0 outside, 1 in frontmatter, 2 in body
+    for line in text.splitlines(keepends=True):
+        if line.rstrip("\r\n") == "---" and state != 1:
+            entries.append({"head": line, "body": ""})
+            state = 1
+        elif line.rstrip("\r\n") == "---":
+            entries[-1]["head"] += line
+            state = 2
+        elif state == 1:
+            entries[-1]["head"] += line
+        elif state == 2:
+            entries[-1]["body"] += line
+        elif line.strip():
+            raise ParseError("%s: text before first frontmatter" % path)
+    if state == 1:
+        raise ParseError("%s: unterminated frontmatter" % path)
+    return entries
+
+
+def _head_value(head, key):
+    m = re.search(r"^%s:[ \t]*(.*?)[ \t]*$" % re.escape(key), head, re.M)
+    if not m:
+        m = re.search(r"^[ \t]+%s:[ \t]*(.*?)[ \t]*$" % re.escape(key), head, re.M)
+    return m.group(1) if m else ""
+
+
+def _legacy_fields(body):
+    fields = {}
+    cur = None
+    for line in body.split("\n"):
+        m = _FIELD_RE.match(line)
+        if m:
+            cur = m.group(1)
+            fields[cur] = m.group(2).strip()
+        elif cur is not None and line.strip():
+            fields[cur] = (fields[cur] + " " + line.strip()).strip()
+        else:
+            cur = None
+    return fields
+
+
+def _first_sentence(val):
+    val = _SENT_END_RE.split(val.strip(), 1)[0].strip()
+    return val.rstrip(".").strip()
+
+
+def _shorten(fmt, fields, max_chars):
+    """Trim the longest field(s) with a trailing ellipsis until the rule fits."""
+    for _ in range(400):
+        rule = fmt(fields)
+        excess = len(rule) - max_chars
+        if excess <= 0:
+            return rule
+        key = max(fields, key=lambda k: len(fields[k]))
+        val = fields[key].rstrip("\u2026").rstrip()
+        if len(val) <= 2:
+            break
+        fields[key] = val[:max(1, len(val) - excess - 1)].rstrip() + "\u2026"
+    return fmt(fields)
+
+
+def _convert_body(entry, topic, path, fmtmod):
+    """-> (new_body, verbatim_legacy_body) or None if nothing to convert."""
+    body = entry["body"]
+    if not any(fmtmod.LEGACY_HEADER_RE.match(l) for l in body.split("\n")):
+        return None
+    f = _legacy_fields(body)
+    name = _head_value(entry["head"], "name")
+    triggers = _head_value(entry["head"], "topic_triggers").strip()
+    if triggers.startswith("[") and triggers.endswith("]"):
+        triggers = triggers[1:-1].strip()
+    scope = "working with %s" % (triggers or topic)
+    link = "[[episodic/%s]]" % topic
+    do = _first_sentence(f.get("Do", ""))
+    if not do:
+        raise ParseError("%s: entry %r has no Do field" % (path, name))
+    if "Symptom" in f or "Avoid" in f or "Why" in f:
+        heading = name
+        avoid = _first_sentence(f.get("Avoid", ""))
+        why = _first_sentence(f.get("Why", "")) or "it failed before"
+        fields = {"avoid": avoid, "do": do, "when": scope, "why": why}
+
+        def fmt(x):
+            head = ("DON'T %s \u2192 DO %s" % (x.get("avoid"), x["do"])
+                    if x.get("avoid") else "DO %s" % x["do"])
+            return "- %s \u2014 **when** %s \u2014 **why** %s%s %s" % (
+                head, x["when"], x["why"],
+                "" if x["why"].endswith("\u2026") else ".", link)
+        if not avoid:
+            del fields["avoid"]
+    else:
+        heading = _first_sentence(f.get("Title", "")) or name
+        when = _first_sentence(f.get("When", "")) or scope
+        fields = {"do": do, "when": when}
+
+        def fmt(x):
+            return "- DO %s \u2014 **when** %s \u2014 **why** it worked before. %s" % (
+                x["do"], x["when"], link)
+    if not heading:
+        raise ParseError("%s: entry has no name/title" % path)
+    rule = _shorten(fmt, fields, fmtmod.MAX_CHARS)
+    return "## %s\n%s\n" % (heading, rule), body
+
+
+def _episodic_section(name, date, body):
+    body = body if body.endswith("\n") else body + "\n"
+    return "## [%s] lessons \u2014 migrated evidence: %s\n\n%s" % (date, name, body)
+
+
+def migrate_bodies(root):
+    fmtmod = _load_format()
+    lessons_dir = os.path.join(root, "memory", "lessons")
+    epi_dir = os.path.join(root, "memory", "episodic")
+    if not os.path.isdir(lessons_dir):
+        return
+    out_lessons = {}   # path -> new text
+    sections = {}      # topic -> [(date, section text)]
+    for fname in sorted(os.listdir(lessons_dir)):
+        if not fname.endswith(".md") or fname in SKIP_NAMES or fname.startswith("."):
+            continue
+        path = os.path.join(lessons_dir, fname)
+        if not os.path.isfile(path):
+            continue
+        topic = fname[:-3]
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        entries = _split_entries(text, path)
+        changed = False
+        parts = []
+        for e in entries:
+            res = _convert_body(e, topic, path, fmtmod)
+            if res is None:
+                parts.append(e["head"] + e["body"])
+                continue
+            new_body, legacy = res
+            changed = True
+            date = (_head_value(e["head"], "last_updated")
+                    or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"))
+            name = _head_value(e["head"], "name")
+            sections.setdefault(topic, []).append(
+                (date, _episodic_section(name, date, legacy)))
+            parts.append(e["head"] + new_body)
+        if not changed:
+            continue
+        new_text = "".join(parts)
+        findings = fmtmod.lint(new_text)
+        if findings or len(fmtmod.parse(new_text)) != len(entries):
+            raise ParseError("%s: converted file fails lint: %s" % (
+                path, ", ".join("%s@%d" % (x.code, x.line) for x in findings)
+                or "entry count changed"))
+        out_lessons[path] = new_text
+
+    out_epi = {}
+    for topic, secs in sections.items():
+        epath = os.path.join(epi_dir, topic + ".md")
+        block = "".join(s for _, s in secs)
+        if os.path.isfile(epath):
+            with open(epath, encoding="utf-8") as fh:
+                etext = fh.read()
+            fm_block, rest = _split_frontmatter(etext, epath)
+            head = etext[:len(etext) - len(rest)]
+            out_epi[epath] = head + block + ("\n" + rest if rest.strip() else rest)
+        else:
+            date = max(d for d, _ in secs)
+            out_epi[epath] = (
+                "---\nname: %s\nkind: episodic\nlast_updated: %s\n"
+                "wiki: []\nprojects: []\n---\n" % (topic, date)) + block
+
+    # All computed and linted; only now touch the disk.
+    if out_epi:
+        os.makedirs(epi_dir, exist_ok=True)
+    for p, t in list(out_epi.items()) + list(out_lessons.items()):
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(t)
+
+
+def main(argv):
+    if len(argv) == 3 and argv[1] == "--bodies":
+        try:
+            migrate_bodies(argv[2])
+        except (ParseError, OSError) as exc:
+            sys.stderr.write("np-migrate-lessons: %s\n" % exc)
+            return 1
+        return 0
+    return _main_merge(argv)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ resolver since the sourced bash layer lib was retired in phase 18).
 PII filtering shells to np-pii-filter.py via sys.executable (Python-to-Python,
 still bash-free), matching episodic_recall.py's established pattern.
 """
+import importlib.util
 import json
 import os
 import re
@@ -25,6 +26,24 @@ import np_toggle
 
 _HEADER_RE = re.compile(r'^\*\*(Symptom|Why|Do|Avoid|Title|When):')
 _TOOL_NAME_MATCH_RE = re.compile(r'^  tool_name_match:', re.MULTILINE)
+_FORMAT_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "setup", "np_lesson_format.py"))
+_format_mod = None
+
+
+def _format():
+    """engine/setup/np_lesson_format.py (the paired-rule parser), loaded once.
+    None when it can't load -- recall then falls back to legacy bodies only."""
+    global _format_mod
+    if _format_mod is None:
+        try:
+            spec = importlib.util.spec_from_file_location("np_lesson_format", _FORMAT_PATH)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _format_mod = mod
+        except Exception:
+            _format_mod = False
+    return _format_mod or None
 
 
 def _max_prompts():
@@ -51,14 +70,31 @@ def _layer_roots():
 
 
 def _lesson_blocks(path):
-    """Mirror bash's _ls_blocks: yield (provenance, body) per frontmatter+body
-    block. A file has 1 block (single provenance) or 2 (merged playbook+
-    strategy entry)."""
+    """Mirror bash's _ls_blocks: yield (provenance, body, paired) per
+    frontmatter+body block. A file has 1 block (single provenance) or 2 (merged playbook+
+    strategy entry). A paired-rule body (spec 0093, paired=True) yields its
+    rendered objective headings + rule lines; a legacy body yields its `**Header:**` lines (first
+    line of each field only -- wrapped continuations are dropped, which is why
+    legacy bodies are migrated)."""
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
-            lines = fh.readlines()
+            text = fh.read()
     except OSError:
         return []
+    fmt = _format()
+    if fmt is not None:
+        result = []
+        for block in fmt.parse(text):
+            if not block.provenance:
+                break  # same as the legacy reader: blocks stop at the first without provenance
+            if block.rules:
+                suffix = " (worked before)" if block.provenance == "success" else ""
+                result.append((block.provenance, fmt.render(block, suffix), True))
+            else:
+                body = " ".join(block.legacy)
+                result.append((block.provenance, body + " " if body else "", False))
+        return result
+    lines = text.splitlines(True)
     c = 0
     prov = {}
     body = {}
@@ -79,7 +115,7 @@ def _lesson_blocks(path):
     result = []
     b = 1
     while b in prov:
-        result.append((prov[b], body.get(b, "")))
+        result.append((prov[b], body.get(b, ""), False))
         b += 1
     return result
 
@@ -123,6 +159,7 @@ def run(payload_text, pii_filter_fn=None):
     except OSError:
         pass
 
+    rule_ctx = ""
     fail_ctx = ""
     success_ctx = ""
     seen = []
@@ -160,9 +197,17 @@ def run(payload_text, pii_filter_fn=None):
             f = os.path.join(d, topic + ".md")
             if not os.path.isfile(f):
                 continue
-            for prov, body in _lesson_blocks(f):
+            for prov, body, paired in _lesson_blocks(f):
+                # Never inject a bare "[topic]" tag for a body recall can't read.
+                entry = "[%s] %s\n" % (topic, body) if body.strip() else ""
+                if paired:
+                    # A paired rule is self-framing (DON'T -> DO, when, why), so it
+                    # skips the legacy preamble and topic tag -- that keeps the
+                    # per-prompt cost at the rule itself (spec 0093).
+                    rule_ctx += body + "\n"
+                    entry = ""
                 if prov == "failure":
-                    fail_ctx += "[%s] %s\n" % (topic, body)
+                    fail_ctx += entry
                     try:
                         with open(f, encoding="utf-8", errors="replace") as fh:
                             whole = fh.read()
@@ -178,9 +223,9 @@ def run(payload_text, pii_filter_fn=None):
                         except OSError:
                             pass
                 elif prov == "success":
-                    success_ctx += "[%s] %s\n" % (topic, body)
+                    success_ctx += entry
 
-    ctx = ""
+    ctx = rule_ctx
     if fail_ctx:
         ctx += "Before proceeding — past failure patterns apply (Nervepack lessons; apply the Do/Avoid):\n" + fail_ctx
     if success_ctx:
