@@ -461,6 +461,49 @@ class TestMigrateBodies(unittest.TestCase):
             self.assertEqual(np_lesson_format.lint(new), [])
             self.assertIn("\u2026", new)
 
+    # --- stacked-entry shapes found in a real overlay (bare `---` separators) ---
+    def _convert(self, src):
+        with tempfile.TemporaryDirectory() as root:
+            self._tree(root, src)
+            proc = run_bodies(root)
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            new = read(os.path.join(root, "memory", "lessons", "git.md"))
+            self.assertEqual(np_lesson_format.lint(new), [])
+            again = run_bodies(root)
+            self.assertEqual(again.returncode, 0, msg=again.stderr)
+            self.assertEqual(read(os.path.join(root, "memory", "lessons", "git.md")), new)
+            return new, np_lesson_format.parse(new)
+
+    def test_bare_separator_stacks_success_entry(self):
+        new, blocks = self._convert(FAIL_FM + FAIL_BODY + "\n---\n\n" + SUCC_BODY)
+        self.assertEqual([b.provenance for b in blocks], ["failure", "success"])
+        # enforce gates the entry that earned it only, and survives byte-for-byte.
+        self.assertEqual(new.count("enforce:"), 1)
+        self.assertIn('  tool_match: "grep -[a-z]*l[a-z]*i"\n  gate: ask\n', new)
+
+    def test_bare_separator_with_partial_keys(self):
+        new, blocks = self._convert(
+            FAIL_FM + FAIL_BODY + "\n---\nprovenance: success\n\n" + SUCC_BODY)
+        self.assertEqual([b.provenance for b in blocks], ["failure", "success"])
+
+    def test_bare_separator_with_prose_lead_and_doubled_separator(self):
+        second = ("(failure entry: another angle)\n**Symptom:** s2.\n**Why:** w2.\n"
+                  "**Do:** d2.\n**Avoid:** a2.\n")
+        new, blocks = self._convert(
+            FAIL_FM + FAIL_BODY + "\n---\n\n---\n\n" + second)
+        self.assertEqual([b.provenance for b in blocks], ["failure", "failure"])
+        self.assertIn("DON'T a2", new)
+
+    def test_shortening_keeps_every_field_readable(self):
+        # Overflow larger than the longest field used to cut fields to one char.
+        f = lambda n: " ".join(["word%d" % i for i in range(n)])
+        src = FAIL_FM + "**Symptom:** s.\n**Why:** %s.\n**Do:** %s.\n**Avoid:** %s.\n" % (
+            f(40), f(40), f(40))
+        new, blocks = self._convert(src)
+        r = blocks[0].rules[0]
+        for part in (r.dont, r.do, r.why):
+            self.assertGreater(len(part.rstrip("\u2026")), 20, part)
+
 
 if __name__ == "__main__":
     unittest.main()
