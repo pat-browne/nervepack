@@ -390,23 +390,25 @@ def _stacked_keys(lines, start):
     """After a bare `---` inside a body: -> (keys, body_start) when what follows
     is a stacked entry (body text, optionally led by `key: value` lines with no
     closing `---`), else None (a real frontmatter block, or nothing at all)."""
-    keys = {}
     i = start
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    while i < len(lines):
-        m = re.match(r"^([a-z_]+):[ \t]*(.*?)\s*$", lines[i])
-        if not m:
-            break
-        keys[m.group(1)] = m.group(2)
-        i += 1
-    if i < len(lines) and lines[i].rstrip("\r\n") == "---":
-        if keys:
-            return None  # a real frontmatter block
-        return _stacked_keys(lines, i + 1)  # a doubled separator
-    if i >= len(lines) or not any(l.strip() for l in lines[i:]):
-        return None
-    return keys, i
+    while True:
+        keys = {}
+        while i < len(lines) and not lines[i].strip():
+            i += 1
+        while i < len(lines):
+            m = re.match(r"^([a-z_]+):[ \t]*(.*?)\s*$", lines[i])
+            if not m:
+                break
+            keys[m.group(1)] = m.group(2)
+            i += 1
+        if i < len(lines) and lines[i].rstrip("\r\n") == "---":
+            if keys:
+                return None  # a real frontmatter block
+            i += 1  # a doubled separator
+            continue
+        if i >= len(lines) or not any(l.strip() for l in lines[i:]):
+            return None
+        return keys, i
 
 
 def _stacked_head(first_head, keys, lines, start):
@@ -417,7 +419,11 @@ def _stacked_head(first_head, keys, lines, start):
         body.append(line)
     prov = keys.get("provenance") or (
         "success" if re.search(r"^\*\*Title:", "".join(body), re.M) else "failure")
-    head = re.sub(r"^provenance:.*$", "provenance: " + prov, first_head, count=1, flags=re.M)
+    line = "provenance: " + prov
+    if re.search(r"^provenance:", first_head, re.M):
+        head = re.sub(r"^provenance:.*$", lambda _: line, first_head, count=1, flags=re.M)
+    else:
+        head = first_head.replace("\n---\n", "\n%s\n---\n" % line, 1)
     # An enforce block gates the tool call for the entry that earned it only.
     return re.sub(r"^enforce:\n(?:[ \t]+.*\n)*", "", head, flags=re.M)
 

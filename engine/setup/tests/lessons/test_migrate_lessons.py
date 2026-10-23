@@ -504,6 +504,20 @@ class TestMigrateBodies(unittest.TestCase):
         for part in (r.dont, r.do, r.why):
             self.assertGreater(len(part.rstrip("\u2026")), 20, part)
 
+    def test_stacked_entry_gets_provenance_when_first_head_has_none(self):
+        head = FAIL_FM.replace("provenance: failure\n", "")
+        new, blocks = self._convert(head + FAIL_BODY + "\n---\n\n" + SUCC_BODY)
+        self.assertEqual(blocks[1].provenance, "success")
+
+    def test_partial_key_value_is_not_read_as_a_regex_template(self):
+        new, blocks = self._convert(
+            FAIL_FM + FAIL_BODY + "\n---\nprovenance: success\\1\n\n" + SUCC_BODY)
+        self.assertIn("provenance: success\\1", new)
+
+    def test_many_doubled_separators(self):
+        new, blocks = self._convert(FAIL_FM + FAIL_BODY + "\n---\n" * 3000 + "\n" + SUCC_BODY)
+        self.assertEqual(len(blocks), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
