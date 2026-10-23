@@ -354,8 +354,22 @@ def _split_entries(text, path):
     """-> list of {"head": str (frontmatter incl. both --- lines), "body": str}."""
     entries = []
     state = 0  # 0 outside, 1 in frontmatter, 2 in body
-    for line in text.splitlines(keepends=True):
-        if line.rstrip("\r\n") == "---" and state != 1:
+    lines = text.splitlines(keepends=True)
+    skip_to = 0
+    for i, line in enumerate(lines):
+        if i < skip_to:
+            continue
+        stacked = (_stacked_keys(lines, i + 1)
+                   if line.rstrip("\r\n") == "---" and state == 2 else None)
+        if stacked:
+            # A bare `---` between bodies (the shape §5b used to ask for),
+            # optionally led by partial keys: the stacked entry inherits the
+            # first entry's frontmatter, with its own provenance.
+            keys, body_start = stacked
+            entries.append({"head": _stacked_head(entries[0]["head"], keys, lines, body_start),
+                            "body": ""})
+            skip_to = body_start
+        elif line.rstrip("\r\n") == "---" and state != 1:
             entries.append({"head": line, "body": ""})
             state = 1
         elif line.rstrip("\r\n") == "---":
@@ -370,6 +384,48 @@ def _split_entries(text, path):
     if state == 1:
         raise ParseError("%s: unterminated frontmatter" % path)
     return entries
+
+
+def _stacked_keys(lines, start):
+    """After a bare `---` inside a body: -> (keys, body_start) when what follows
+    is a stacked entry (body text, optionally led by `key: value` lines with no
+    closing `---`), else None (a real frontmatter block, or nothing at all)."""
+    i = start
+    while True:
+        keys = {}
+        while i < len(lines) and not lines[i].strip():
+            i += 1
+        while i < len(lines):
+            m = re.match(r"^([a-z_]+):[ \t]*(.*?)\s*$", lines[i])
+            if not m:
+                break
+            keys[m.group(1)] = m.group(2)
+            i += 1
+        if i < len(lines) and lines[i].rstrip("\r\n") == "---":
+            if keys:
+                return None  # a real frontmatter block
+            i += 1  # a doubled separator
+            continue
+        if i >= len(lines) or not any(l.strip() for l in lines[i:]):
+            return None
+        return keys, i
+
+
+def _stacked_head(first_head, keys, lines, start):
+    body = []
+    for line in lines[start:]:
+        if line.rstrip("\r\n") == "---":
+            break
+        body.append(line)
+    prov = keys.get("provenance") or (
+        "success" if re.search(r"^\*\*Title:", "".join(body), re.M) else "failure")
+    line = "provenance: " + prov
+    if re.search(r"^provenance:", first_head, re.M):
+        head = re.sub(r"^provenance:.*$", lambda _: line, first_head, count=1, flags=re.M)
+    else:
+        head = first_head.replace("\n---\n", "\n%s\n---\n" % line, 1)
+    # An enforce block gates the tool call for the entry that earned it only.
+    return re.sub(r"^enforce:\n(?:[ \t]+.*\n)*", "", head, flags=re.M)
 
 
 def _head_value(head, key):
@@ -400,18 +456,31 @@ def _first_sentence(val):
 
 
 def _shorten(fmt, fields, max_chars):
-    """Trim the longest field(s) with a trailing ellipsis until the rule fits."""
-    for _ in range(400):
-        rule = fmt(fields)
-        excess = len(rule) - max_chars
-        if excess <= 0:
-            return rule
-        key = max(fields, key=lambda k: len(fields[k]))
-        val = fields[key].rstrip("\u2026").rstrip()
-        if len(val) <= 2:
-            break
-        fields[key] = val[:max(1, len(val) - excess - 1)].rstrip() + "\u2026"
-    return fmt(fields)
+    """Cap every field at one shared length, the largest cap that fits the rule
+    into max_chars, cutting at a word boundary with a trailing ellipsis. An
+    even cap keeps each field readable; trimming the longest field first cut
+    some fields to a single character when the overflow exceeded its length."""
+    if len(fmt(fields)) <= max_chars:
+        return fmt(fields)
+
+    def capped(cap):
+        out = {}
+        for k, v in fields.items():
+            if len(v) <= cap:
+                out[k] = v
+            else:
+                cut = v[:cap].rsplit(" ", 1)[0] if " " in v[:cap] else v[:cap]
+                out[k] = cut.rstrip(" ,;:-") + "\u2026"
+        return out
+
+    lo, hi = 1, max(len(v) for v in fields.values())
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(fmt(capped(mid))) <= max_chars:
+            lo = mid
+        else:
+            hi = mid - 1
+    return fmt(capped(lo))
 
 
 def _convert_body(entry, topic, path, fmtmod):

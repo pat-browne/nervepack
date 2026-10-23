@@ -126,8 +126,11 @@ enforcement gates the tool call — the two are decoupled).
    `memory/lessons/<topic>.md` with `kind: lesson`, `provenance: success`, and
    paired-rule entries from the `{title, description, content}` items (lone DO when
    there is no genuine anti-pattern). If a topic already holds a failure entry, add the
-   success entry to the *same* file separated by a `---` line (one file per topic,
-   entries stacked).
+   success entry to the *same* file as a second, **complete** frontmatter block (its own
+   `---` … `---` with `name`, `kind`, `provenance`, `topic_triggers`, …) followed by its
+   body (one file per topic, entries stacked). Never separate entries with a bare `---`:
+   recall and the linter read every `---` as a frontmatter delimiter, so a bare one
+   turns the next entry's body into frontmatter and that entry is never recalled.
    Legacy-format files (Symptom/Why/Do/Avoid or Title/When/Do bodies) are converted by
    `np-migrate-lessons.py --bodies <content_root>`, not hand-rewritten; the linter flags
    them as `legacy-format`.
