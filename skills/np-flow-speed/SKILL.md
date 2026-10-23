@@ -36,7 +36,7 @@ model that can do its job. The session default is never a worker's model.
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
 | Coordination, hard calls, final verification | Coordinator (the session model) |
 
-- Pass a model on every subagent spawn. An unset model silently inherits the coordinator's model and costs the most.
+- Pass a model on every subagent spawn and every separate session. An unset model silently inherits the coordinator's model and costs the most. The coordinator rule is in [[np-flow-orchestrate]] § Worker models.
 - Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
 - A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker escalates to the coordinator. If the coordinator cannot finish it either, it stops and surfaces it to the user.
 - Record each step-up in the decisions log.
