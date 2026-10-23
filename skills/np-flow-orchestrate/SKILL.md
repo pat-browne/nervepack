@@ -70,7 +70,8 @@ itself. This section owns the rule for every coordinator, including
   Sonnet for implementation, research and review. The table is in
   [[np-flow-speed]].
 - When the host's session-start tool takes a model argument, always pass it.
-  An omitted argument inherits yours.
+  An omitted argument inherits yours. If the tool offers no model argument, as
+  with a forked session, start a fresh session or a subagent that takes one.
 - Ticket children plan and implement, so start them on Sonnet unless the user
   names another model.
 - A worker sends a hard call back as a decision request: the options and its
