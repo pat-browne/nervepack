@@ -87,6 +87,17 @@ class T(unittest.TestCase):
         self.assertEqual(out["hookSpecificOutput"]["hookEventName"], "SessionStart")
         self.assertIn("2 commit(s) behind", ctx)
 
+    def test_hook_silent_when_toggle_off(self):
+        import np_toggle
+        orig = g.checkouts
+        self.addCleanup(setattr, g, "checkouts", orig)
+        g.checkouts = lambda: [self.clone]
+        self.advance_origin(1)
+        orig_en = np_toggle.enabled
+        self.addCleanup(setattr, np_toggle, "enabled", orig_en)
+        np_toggle.enabled = lambda f, *a, **k: f != "checkout"
+        self.assertEqual(checkout_guard.run(""), "")
+
     def test_doctor_status_warn_and_pass(self):
         orig = g.checkouts
         self.addCleanup(setattr, g, "checkouts", orig)

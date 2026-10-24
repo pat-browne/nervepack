@@ -5,9 +5,12 @@ network). Fail-open."""
 import json
 
 import np_checkout_guard
+import np_toggle
 
 
 def run(payload_text):
+    if not np_toggle.enabled("checkout"):
+        return ""
     try:
         text = np_checkout_guard.warning(np_checkout_guard.scan())
     except Exception:
