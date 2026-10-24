@@ -73,7 +73,7 @@ Dispatch repo-editing agents with **`isolation: "worktree"`** whenever an auto-c
 cron or another session may be active in that tree. A worktree off the committed base
 prevents staged-work sweeps; parallel edits land on separate branches (combine both, don't
 pick a side). After it reports, verify on its branch, then merge — keeping the agent off
-`main`. See `superpowers:using-git-worktrees`.
+`main`. See [[using-git-worktrees]].
 Tasks that are independent by file list can share ONE worktree: rules in
 references/parallel-one-worktree.md.
 
