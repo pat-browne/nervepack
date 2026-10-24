@@ -99,6 +99,33 @@ class T(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(root, ".git")) or os.path.isfile(os.path.join(root, ".git")))
         self.assertTrue(os.path.isdir(os.path.join(root, "engine", "nervepack_engine")))
 
+    def _doctor_with(self, info):
+        orig = g.scan
+        self.addCleanup(setattr, g, "scan", orig)
+        g.scan = lambda fetch=False, repos=None: [info]
+        return g.doctor_status()
+
+    def test_doctor_warns_on_unknown_dirty(self):
+        st = self._doctor_with({"repo": self.clone, "branch": "main", "behind": 0, "dirty": None})
+        self.assertTrue(st.startswith("WARN"))
+        self.assertIn("1 checkout(s) with unknown dirty state", st)
+
+    def test_doctor_warns_on_unknown_behind(self):
+        st = self._doctor_with({"repo": self.clone, "branch": "main", "behind": None, "dirty": False})
+        self.assertTrue(st.startswith("WARN"))
+        self.assertIn("1 checkout(s) with unknown behind-count", st)
+
+    def test_overlay_resolution_failure_is_surfaced(self):
+        import np_content
+        orig = np_content.content_layers
+        self.addCleanup(setattr, np_content, "content_layers", orig)
+        def boom():
+            raise RuntimeError("x")
+        np_content.content_layers = boom
+        self.addCleanup(setattr, g, "_overlay_error", "")
+        g.checkouts()
+        self.assertIn("overlays NOT checked", g.warning([]))
+
     def test_behind_warns_with_count(self):
         self.advance_origin(3)
         info = g.check(self.clone)

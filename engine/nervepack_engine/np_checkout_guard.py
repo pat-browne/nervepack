@@ -17,6 +17,7 @@ import subprocess
 import np_content
 
 _BASE = "origin/main"
+_overlay_error = ""  # set by checkouts() when overlay resolution fails
 
 
 def _git(repo, *args, timeout=5):
@@ -75,10 +76,12 @@ def checkouts():
     first and personal last; reversed() yields personal, then team."""
     engine = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     repos = [engine]
+    global _overlay_error
+    _overlay_error = ""
     try:
         repos += list(reversed(np_content.content_layers()))
-    except Exception:
-        pass
+    except Exception as exc:
+        _overlay_error = "overlay resolution failed (%s): overlays NOT checked" % _clean(repr(exc))
     seen, out = set(), []
     for r in repos:
         real = os.path.realpath(r)
@@ -98,7 +101,7 @@ def warning(infos):
     Branch names and paths are attacker-influenced data: each is sanitized and
     the list sits inside nonce-delimited UNTRUSTED markers."""
     bad = [(i, problems(i)) for i in infos if problems(i)]
-    if not bad:
+    if not bad and not _overlay_error:
         return ""
     nonce = secrets.token_hex(6)
     lines = ["NERVEPACK WARNING: stale knowledge checkout. Working-tree reads of wiki, "
@@ -108,6 +111,8 @@ def warning(infos):
              "UNTRUSTED_BEGIN_%s" % nonce]
     for i, ps in bad:
         lines.append("- %s: %s%s" % (_clean(i["repo"]), "; ".join(ps), _dirty_text(i)))
+    if _overlay_error:
+        lines.append("- %s" % _overlay_error)
     lines.append("UNTRUSTED_END_%s" % nonce)
     lines.append("Do NOT trust those working trees. Read knowledge with "
                  "`git -C <repo> show origin/main:<path>`, or sync first "
@@ -120,8 +125,16 @@ def doctor_status(fetch=True):
     if not infos:
         return "WARN (no git checkouts could be inspected)"
     bad = [(i, problems(i)) for i in infos if problems(i)]
-    if not bad:
-        nd = sum(1 for i in infos if i["dirty"])
-        return "PASS (%d checkout(s) on main and current; %d dirty)" % (len(infos), nd)
-    return "WARN (%s -- read via `git -C <repo> show origin/main:<path>` or sync)" % "; ".join(
-        "%s: %s%s" % (_clean(i["repo"]), ", ".join(ps), _dirty_text(i)) for i, ps in bad)
+    n_dirty = sum(1 for i in infos if i["dirty"])
+    n_unk_dirty = sum(1 for i in infos if i["dirty"] is None)
+    n_unk_behind = sum(1 for i in infos if i["behind"] is None)
+    if not bad and not n_unk_dirty and not _overlay_error:
+        return "PASS (%d checkout(s) on main and current; %d dirty)" % (len(infos), n_dirty)
+    parts = ["%s: %s%s" % (_clean(i["repo"]), ", ".join(ps), _dirty_text(i)) for i, ps in bad]
+    if n_unk_dirty:
+        parts.append("%d checkout(s) with unknown dirty state" % n_unk_dirty)
+    if n_unk_behind:
+        parts.append("%d checkout(s) with unknown behind-count" % n_unk_behind)
+    if _overlay_error:
+        parts.append(_overlay_error)
+    return "WARN (%s -- read via `git -C <repo> show origin/main:<path>` or sync)" % "; ".join(parts)
