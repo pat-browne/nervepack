@@ -65,7 +65,7 @@ jobs:
           echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
       - name: Checkout PR branch
         if: steps.pr.outputs.skip != '1'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.pr.outputs.ref }}
           fetch-depth: 0
@@ -135,7 +135,7 @@ jobs:
       - name: Upload respond transcript
         continue-on-error: true
         if: always() && steps.respond.outputs.execution_file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: claude-respond-transcript
           path: ${{ steps.respond.outputs.execution_file }}

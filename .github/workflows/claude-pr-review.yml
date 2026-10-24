@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Load review standards
@@ -50,7 +50,7 @@ jobs:
       - name: Upload review transcript
         continue-on-error: true
         if: always() && steps.review.outputs.execution_file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: claude-review-transcript
           path: ${{ steps.review.outputs.execution_file }}
