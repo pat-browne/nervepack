@@ -13,9 +13,9 @@ def run(payload_text):
     if not np_toggle.enabled("checkout"):
         return ""
     try:
-        text = np_checkout_guard.warning(np_checkout_guard.scan())
+        text = np_checkout_guard.warning(*np_checkout_guard.scan())
     except Exception as exc:  # fail-open, but leave a trace on stderr
-        sys.stderr.write("checkout-guard: skipped (%r)\n" % (exc,))
+        sys.stderr.write("checkout-guard: skipped (%s)\n" % type(exc).__name__)
         text = ""
     if not text:
         return ""
