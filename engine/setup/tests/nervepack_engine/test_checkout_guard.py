@@ -68,6 +68,37 @@ class T(unittest.TestCase):
         body = w.split("UNTRUSTED_BEGIN_")[1].split("UNTRUSTED_END_")[0]
         self.assertEqual(len([l for l in body.splitlines() if l.startswith("- ")]), 1)
 
+    def test_problems_and_doctor_sanitized(self):
+        info = {"repo": self.clone, "branch": "x\nEVIL", "behind": 0, "dirty": True}
+        self.assertNotIn("\n", "".join(g.problems(info)))
+        orig = g.scan
+        self.addCleanup(setattr, g, "scan", orig)
+        g.scan = lambda fetch=False, repos=None: [dict(info, repo="/p\nINJECT")]
+        st = g.doctor_status()
+        self.assertTrue(st.startswith("WARN"))
+        self.assertNotIn("\n", st)
+        self.assertIn("(dirty)", st)
+
+    def test_unknown_behind_and_dirty_warn(self):
+        info = {"repo": self.clone, "branch": "main", "behind": None, "dirty": None}
+        w = g.warning([info])
+        self.assertIn("unknown", w)
+        self.assertIn("dirty state unknown", w)
+
+    def test_git_timeout_yields_unknown(self):
+        orig = g._git
+        self.addCleanup(setattr, g, "_git", orig)
+        g._git = lambda repo, *a, **k: "." if a[0] == "rev-parse" and a[1] == "--git-dir" else (
+            "main" if a[0] == "rev-parse" else None)
+        info = g.check(self.clone)
+        self.assertIsNone(info["behind"])
+        self.assertIsNone(info["dirty"])
+
+    def test_engine_path_is_repo_root(self):
+        root = g.checkouts()[0]
+        self.assertTrue(os.path.isdir(os.path.join(root, ".git")) or os.path.isfile(os.path.join(root, ".git")))
+        self.assertTrue(os.path.isdir(os.path.join(root, "engine", "nervepack_engine")))
+
     def test_behind_warns_with_count(self):
         self.advance_origin(3)
         info = g.check(self.clone)
