@@ -32,6 +32,7 @@ import sys
 
 import np_paths
 import np_toggle
+import np_checkout_guard
 import np_content
 import np_model
 import np_token_lib
@@ -263,6 +264,8 @@ def _core_check(cap_id, np):
             return ("PASS (implicit engine-root fallback — set NP_CONTENT_DIR or "
                     "~/.config/nervepack/content-dir; writers skip commits until then)")
         return "PASS"
+    if cap_id == "checkout-freshness":
+        return np_checkout_guard.doctor_status()
     if cap_id == "team":
         tdirs = np_content.team_dirs()
         if not tdirs:
