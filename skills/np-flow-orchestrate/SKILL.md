@@ -20,7 +20,7 @@ Announce: "Using np-flow-orchestrate."
 
 Then, for each chosen ticket:
 
-1. Call `start_session` once. The brief names the ticket.
+1. Call `start_session` once, with a model. The brief names the ticket.
 2. The brief tells the child to run the repo's plan/work entry point in its own
    worktree: [[np-flow-develop]], or the repo's own factory when it has one.
 3. Talk to children with the session tools (`send_message`, `get_session`,
@@ -32,6 +32,9 @@ Then, for each chosen ticket:
 You are my orchestrator for [category of work]. No code here. Start one Claude
 session per ticket. Each runs [the repo's plan/work entry point] in its own
 worktree.
+
+- Never let a session inherit your model. Pass the cheapest model that fits on
+  every start. Hard calls come back to you as decision requests.
 
 - Lead with what needs me, then in progress, then done.
 
@@ -54,6 +57,25 @@ worktree.
 List my tickets for this work, including ones that name me as owner in the
 body, and wait for my reply.
 ```
+
+## Worker models
+
+The coordinator is top tier. It plans and decides, and does no worker task
+itself. This section owns the rule for every coordinator, including
+[[np-flow-speed]] and [[np-core-dispatch]].
+
+- Never let a worker inherit your model. Set one on every subagent and every
+  separate session you start.
+- Pick the cheapest model that fits: Haiku for lookups and mechanical steps,
+  Sonnet for implementation, research and review. The table is in
+  [[np-flow-speed]].
+- When the host's session-start tool takes a model argument, always pass it.
+  An omitted argument inherits yours. If the tool offers no model argument, as
+  with a forked session, start a fresh session or a subagent that takes one.
+- Ticket children plan and implement, so start them on Sonnet unless the user
+  names another model.
+- A worker sends a hard call back as a decision request: the options and its
+  pick. You decide, tell the worker, and record the call in the ledger.
 
 ## The loop
 
