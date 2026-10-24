@@ -101,16 +101,39 @@ across the inbox into ONE `memory/lessons/` layer. Each lesson carries a `proven
 tag and, *independently*, an optional `enforce` block (provenance frames recall;
 enforcement gates the tool call — the two are decoupled).
 
-1. **Failures → `provenance: failure`.** Cluster recurring `struggles[]` by failure
+1. **Body format: paired rules under objective headings.** Every lesson body is
+   `## <objective>` headings (the goal a session is pursuing, e.g. "Search a repo
+   reliably"), each followed by one line per rule:
+
+   ```
+   ## <objective>
+   - DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]
+   ```
+
+   Rules: DON'T → DO is the default (always pair the avoid with its alternative). A
+   **lone DO** is allowed for a win with no real anti-pattern — **never invent a
+   DON'T**; a lone DON'T is a lint finding. **when** (where the rule applies) and
+   **why** (the reason, so a session can handle an unanticipated case) are both
+   required, labelled, and separate. Budget: ≤ 2 lines / ~320 chars per entry. The
+   scenario narrative (the old Symptom) does NOT go in the lesson — it stays in
+   `memory/episodic/<topic>.md`, reached by the trailing `[[episodic/<topic>]]` backlink.
+2. **Failures → `provenance: failure`.** Cluster recurring `struggles[]` by failure
    pattern. For each cluster, create or refresh `memory/lessons/<topic>.md` with
-   `kind: lesson`, `provenance: failure`, and a **Symptom / Why / Do / Avoid** body
+   `kind: lesson`, `provenance: failure`, and paired-rule entries (DON'T → DO)
    synthesized from the struggle items.
-2. **Successes → `provenance: success`.** Cluster recurring `strategies[]` by approach
-   (reusable approaches that worked, ReasoningBank-shaped). For each cluster, create or
-   refresh `memory/lessons/<topic>.md` with `kind: lesson`, `provenance: success`, and a
-   **Title / When / Do** body from the `{title, description, content}` items. If a topic
-   already holds a failure entry, add the success entry to the *same* file separated by a
-   `---` line (one file per topic, entries stacked).
+   **Successes → `provenance: success`.** Cluster recurring `strategies[]` by approach
+   (reusable approaches that worked, ReasoningBank-shaped). Create or refresh
+   `memory/lessons/<topic>.md` with `kind: lesson`, `provenance: success`, and
+   paired-rule entries from the `{title, description, content}` items (lone DO when
+   there is no genuine anti-pattern). If a topic already holds a failure entry, add the
+   success entry to the *same* file as a second, **complete** frontmatter block (its own
+   `---` … `---` with `name`, `kind`, `provenance`, `topic_triggers`, …) followed by its
+   body (one file per topic, entries stacked). Never separate entries with a bare `---`:
+   recall and the linter read every `---` as a frontmatter delimiter, so a bare one
+   turns the next entry's body into frontmatter and that entry is never recalled.
+   Legacy-format files (Symptom/Why/Do/Avoid or Title/When/Do bodies) are converted by
+   `np-migrate-lessons.py --bodies <content_root>`, not hand-rewritten; the linter flags
+   them as `legacy-format`.
 3. **`enforce` block (optional, any provenance).** Add one only when a pattern warrants
    gating at the tool call — almost always a failure with a detectable Bash signature:
    `tool_match` = an ERE matching the offending command (e.g. `sed -i .*s[#/]` or
@@ -135,7 +158,18 @@ enforcement gates the tool call — the two are decoupled).
    `| <topic> | <tool_match> | <gate> | <topic_triggers> |` (empty `tool_match`/`gate`
    cells for advisory entries), so `engine/nervepack_engine/hooks/lesson_guard.py`'s
    parser reads it unchanged.
-6. In your final report, FLAG lessons with high `seen` (≥3) as **promotion candidates**
+6. **Discoverability backlink.** For each lesson file written, if a matching overlay
+   skill (`skills/<name>/SKILL.md`) or wiki topic page (`wiki/topics/<topic>/<topic>.md`)
+   clearly matches the topic, add a `Lessons: [[lessons/<topic>]]` line to it unless
+   already present (so hosts without the recall hook still find lessons). That line is
+   the ONLY edit allowed to those pages. No clear match → skip.
+7. **Lint gate (before committing).** Run the linter over the changed lesson files:
+   `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_lesson_format.py" lint memory/lessons/*.md`
+   (limit to files you changed). On any finding (`missing-when`, `missing-why`,
+   `lone-dont`, `too-long`, `legacy-format`), fix and re-lint. If it still fails, revert
+   the lessons write (`git checkout -- memory/lessons`, and remove new untracked lesson
+   files) and list the findings in the final report.
+8. In your final report, FLAG lessons with high `seen` (≥3) as **promotion candidates**
    for a human to graduate into a `skills/np-kb-*` rule via `np-core-contribute`. Prune
    stale/disproven lessons to `archive/lessons/`.
 
@@ -156,6 +190,8 @@ git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
 _paths="memory/episodic archive/episodic memory/lessons archive/lessons"
+# Plus each skill/wiki page that got a `Lessons: [[lessons/<topic>]]` backlink in 5b —
+# append those paths explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
 git add $_paths
 git commit -m "episodic(maintain): weekly drain ($(date -u +%F))" \
   -m "Themes touched: <list>. Notes merged: <N>. Compacted: <list or none>." \

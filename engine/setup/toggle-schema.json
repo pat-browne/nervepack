@@ -228,6 +228,19 @@
     "min": 0,
     "description": "Extra days past a maintenance job's cadence before the doctor's maintenance-freshness check calls it stale."
   },
+  "maintain.compact_propose_min": {
+    "type": "number",
+    "min": 0,
+    "description": "Lowest Jaccard score at which the weekly compact pass proposes a skill merge."
+  },
+  "maintain.compact_split_total_kb": {
+    "type": "number",
+    "min": 1,
+    "description": "Total size of a skill (SKILL.md plus references/) in KB above which the compact pass reviews it for a split."
+  },
+  "maintain.job_health": {
+    "description": "Scheduled-job health report: the doctor's job-health check and the dashboard's /api/jobs endpoint."
+  },
   "maintain.refine": {
     "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
   },
@@ -404,6 +417,9 @@
   },
   "focus": {
     "description": "Open a spec or plan doc in the OS default app when a session writes one under docs/superpowers/specs or plans."
+  },
+  "post_ship": {
+    "description": "After a successful PR merge or deploy command, prompt the session to run np-core-capture-learning before the turn ends."
   },
   "turn_gate": {
     "description": "Stop-hook turn gate: blocks a turn once when it edited UI files without showing the result, or when the closing message fails the form check."

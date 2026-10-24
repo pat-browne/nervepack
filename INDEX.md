@@ -8,7 +8,7 @@ extend rather than create overlapping duplicates.
 
 | Skill | Lines | Description |
 |---|---:|---|
-| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 105 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
+| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 106 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
 | [np-core-contribute](skills/np-core-contribute/SKILL.md) | 144 | Save a durable learning (rule, preference, plugin choice, env quirk, useful command) to the right nervepack file. Use on "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or any fact worth keeping. |
 | [np-core-dashboard](skills/np-core-dashboard/SKILL.md) | 95 | Open the nervepack performance dashboard and explain its SessionStart auto-open, served vs static modes, and dashboard_* toggles. Use on "open the dashboard", "show me the metrics", "/np-dashboard", or "why didn't the dashboard open". |
 | [np-core-dispatch](skills/np-core-dispatch/SKILL.md) | 120 | Send a task or [[np-core-handoff]] doc to a fresh agent and supervise it: scope, stop-points, verification. Use for long or risky jobs, parallel work, or when SendMessage is unavailable to continue a spawned agent. |
@@ -24,6 +24,8 @@ extend rather than create overlapping duplicates.
 | [np-core-toggle](skills/np-core-toggle/SKILL.md) | 42 | Turn nervepack features on or off and change their params via cli.py toggle. Use on "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or a param change. |
 | [np-flow-artifact-retro](skills/np-flow-artifact-retro/SKILL.md) | 109 | Retro after publishing or revising an Artifact, dashboard or long doc: fold, don't append, recheck stale verdicts, measure a length budget, route learnings. Use after any publish or revision round, or when the user says the doc is too long. |
 | [np-flow-merge-gate](skills/np-flow-merge-gate/SKILL.md) | 60 | Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". |
+| [np-flow-orchestrate](skills/np-flow-orchestrate/SKILL.md) | 104 | Use when several tickets of one kind of work should run at once, each in its own session and worktree, with one coordinator driving them. Triggers: "orchestrate my tickets", "run these tickets in parallel", "be my orchestrator", "/np-orchestrate". |
+| [np-flow-speed](skills/np-flow-speed/SKILL.md) | 72 | Use when the user wants a change delivered end to end with no clarifying questions or permission check-ins. Triggers: "speed mode", "/np-speed", "just ship it", "no questions", "don't ask, just do it". |
 
 ## Archived skills
 

@@ -32,9 +32,9 @@ continuation channel that isn't there.
    (pull fresh via [[np-env-secrets-refresh]] — never inline them). Tell it to STOP and
    report on a dirty/diverged tree rather than force anything.
 4. **Pick the lane.** Foreground when you want to review + relay the result this turn;
-   background for long autonomous jobs that should notify on completion. **Tier the model
-   to the phase:** strongest for spec/design authorship, smaller (Sonnet, or Haiku for
-   mechanical steps) once the plan is approved and the work is execution or testing.
+   background for long autonomous jobs that should notify on completion. **Always set the
+   model:** a dispatched agent never inherits yours. The rule and tiers are in
+   [[np-flow-orchestrate]] § Worker models.
 5. **Verify the result yourself.** Treat the agent's report as a claim — independently
    re-check the key invariants (tree clean, tests/doctor green, nothing pushed public)
    before you trust "done."

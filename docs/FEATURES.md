@@ -225,6 +225,31 @@ finishes typing the "spec written, please review" message — the file pops
 open in your editor/default `.md` handler, already in focus. You read it right
 there instead of trusting a chat summary.
 
+## Post-ship capture — prompt a learning capture after a merge or deploy
+
+**Purpose.** A merge or a deploy is the moment a change's lessons are freshest
+and the moment a session is most likely to end. This hook makes capture the
+default next step instead of a thing the user has to remember to ask for.
+
+**Workflow.** A single `PostToolUse` hook, matcher `Bash`:
+`cli.py hook post-ship-capture` → `engine/nervepack_engine/hooks/post_ship_capture.py`.
+It matches the command against `SHIP_PATTERNS`: `gh pr merge`,
+`az repos pr update --status completed`, `git push` to `main`/`master`,
+`databricks bundle deploy`, `terragrunt apply`, `terraform apply`,
+`az deployment ... create`, and `npm run deploy`. It skips `--dry-run`, a
+branch-delete push, and any result showing a non-zero exit, an interrupt, or an
+`error:`/`fatal:` line. On a hit it returns `additionalContext` telling the
+session to invoke `np-core-capture-learning` before ending the turn, and writes
+a `post-ship-capture` session-signal marker.
+
+**Assets.** `engine/nervepack_engine/hooks/post_ship_capture.py`, its tests in
+`engine/setup/tests/nervepack_engine/test_post_ship_capture.py`, and a routing row
+in `engine/setup/nervepack-session-directive.md`. Toggle: `post_ship` (no params).
+
+**Situational example.** A session runs `gh pr merge 42 --squash`. The merge
+succeeds and the next model step sees the prompt. It runs
+`np-core-capture-learning`, which routes the CI gotcha it hit to nervepack.
+
 ## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
 
 **Purpose.** A session loses working context on a compaction, a resume, or a
@@ -325,16 +350,30 @@ topic-matched entries on a session's first prompts, framing by provenance:
 imperative "avoid X" wording for `failure`, advisory "the approach that worked is
 Y" wording for `success`.
 
+**Body format (paired rules).** Each entry is one line under an `## <objective>`
+heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
+DON'T → DO is the default; a lone DO is allowed for a win (no invented DON'T); a lone
+DON'T is a lint finding. `when` and `why` are required; budget is ≤ 2 lines / ~320
+chars. The narrative lives in `memory/episodic/<topic>.md`, one backlink away. Recall
+injects `<objective>:` plus the rule line (backlinks stripped; success objectives get
+" (worked before)"), so a rule is one cheap, untruncated line. The maintain pass lints
+changed lessons with `engine/setup/np_lesson_format.py lint` (codes `missing-when`,
+`missing-why`, `lone-dont`, `too-long`, `legacy-format`) and reverts the write if it
+can't fix a finding; it also adds a `Lessons: [[lessons/<topic>]]` backlink to the
+matching skill or wiki topic page. Legacy Symptom/Why/Do/Avoid bodies are converted by
+`np-migrate-lessons.py --bodies <content_root>` (idempotent, `enforce` kept
+byte-for-byte). Spec: `change-specs/ccr-4c5160e5-j1j5k6.md`.
+
 **Assets.** `engine/nervepack_engine/hooks/lesson_recall.py`,
 `engine/nervepack_engine/hooks/lesson_guard.py` (both Python ports via `cli.py`
-dispatcher), `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
+dispatcher), `engine/setup/np_lesson_format.py`, `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
 Toggle: `lessons` (param `lessons.enforce`, default on, disables the guard while
 advisory recall stays on).
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into a `provenance: failure`
 `safe-git-grep` lesson with an `enforce` block; now when a prompt mentions git-grep,
-the recall hook injects "use long-form flags" *before* you make the same mistake
+the recall hook injects the rule (`DON'T combine short flags → DO use long-form flags — when …`) *before* you make the same mistake
 again, no skill invocation required. Separately, across several sessions you find
 that searching GitHub issues surfaces tool limitations faster than official docs —
 that becomes a `provenance: success` `github-issue-research` lesson with no `enforce`
