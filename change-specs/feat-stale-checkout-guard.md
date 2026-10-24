@@ -2,7 +2,7 @@
 id: 0095
 status: accepted
 date: 2026-10-24
-tier: standard
+tier: high
 blast_radius:
   - engine/nervepack_engine/np_checkout_guard.py
   - engine/nervepack_engine/hooks/checkout_guard.py
@@ -61,5 +61,9 @@ Auto-syncing or switching branches: the guard only warns.
 ## Confirmation
 
 `engine/setup/tests/nervepack_engine/test_checkout_guard.py`.
+
+## Rollback
+
+Revert the squash commit, or `cli.py toggle checkout off` to silence the hook.
 
 ## Deviations
