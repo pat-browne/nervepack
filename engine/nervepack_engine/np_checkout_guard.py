@@ -19,7 +19,7 @@ import np_content
 _BASE = "origin/main"
 
 
-def _git(repo, *args, timeout=20):
+def _git(repo, *args, timeout=5):
     try:
         r = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
                            text=True, timeout=timeout)
@@ -56,7 +56,8 @@ def problems(info):
 
 
 def checkouts():
-    """Engine plus each resolved overlay (personal, then team), deduped."""
+    """Engine plus each resolved overlay, deduped. content_layers() lists team
+    first and personal last; reversed() yields personal, then team."""
     engine = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     repos = [engine]
     try:
@@ -112,6 +113,8 @@ def warning(infos):
 
 def doctor_status(fetch=True):
     infos = scan(fetch=fetch)
+    if not infos:
+        return "WARN (no git checkouts could be inspected)"
     bad = [(i, problems(i)) for i in infos if problems(i)]
     if not bad:
         return "PASS (%d checkout(s) on main and current)" % len(infos)

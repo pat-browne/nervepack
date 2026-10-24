@@ -3,6 +3,7 @@ content overlay checkout is off main or behind origin/main. Silent when clean,
 so the clean-case context stays empty. Uses the last-fetched ref only (no
 network). Fail-open."""
 import json
+import sys
 
 import np_checkout_guard
 import np_toggle
@@ -13,7 +14,8 @@ def run(payload_text):
         return ""
     try:
         text = np_checkout_guard.warning(np_checkout_guard.scan())
-    except Exception:
+    except Exception as exc:  # fail-open, but leave a trace on stderr
+        sys.stderr.write("checkout-guard: skipped (%r)\n" % (exc,))
         text = ""
     if not text:
         return ""
