@@ -268,7 +268,7 @@ def _core_check(cap_id, np):
         try:
             return np_checkout_guard.doctor_status()
         except Exception as exc:
-            return "WARN (checkout freshness check failed: %r)" % (exc,)
+            return "WARN (checkout freshness check failed: %s)" % type(exc).__name__
     if cap_id == "team":
         tdirs = np_content.team_dirs()
         if not tdirs:
