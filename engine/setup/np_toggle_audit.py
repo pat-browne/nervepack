@@ -59,6 +59,7 @@ _MAP = {
     "resume-sessionstart": "resume",
     "resume-recall": "resume",
     "open-artifact": "focus",
+    "post-ship-capture": "post_ship",
     "refine": "maintain",
     "compact": "maintain",
     "kb-promote-scan": "maintain",

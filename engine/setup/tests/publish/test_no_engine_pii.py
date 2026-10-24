@@ -9,6 +9,7 @@ crept into a tracked engine file. It is the local mirror of the CI PII guard.
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +30,20 @@ class TestNoEnginePII(unittest.TestCase):
             r.returncode, 0,
             f"PII guard found secrets/PII in the engine tree:\n{r.stdout}\n{r.stderr}",
         )
+
+    def test_no_tracked_venv(self):
+        # The scanner skips .venv, so a force-added venv must fail here instead.
+        files = subprocess.check_output(["git", "ls-files"], cwd=REPO, text=True).splitlines()
+        tracked = [f for f in files if ".venv" in f.split("/")]
+        self.assertEqual(tracked, [], "a .venv path is tracked; the PII scan skips it")
+
+    def test_scan_skips_venv(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, ".venv", "bin"))
+            with open(os.path.join(d, ".venv", "bin", "activate"), "w") as f:
+                f.write("# maintainer someone.real@gmail.com\n")
+            r = subprocess.run([sys.executable, SCAN, d], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, f"stdout: {r.stdout}\nstderr: {r.stderr}")
 
 
 if __name__ == "__main__":

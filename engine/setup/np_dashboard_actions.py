@@ -72,6 +72,10 @@ def _recommendation(body_lines):
     return ""
 
 
+BODY_MAX_CHARS = 20000  # cap per entry so one long proposal can't bloat metrics.js
+TRUNCATED_MARK = "\n[... truncated, open the file for the full text]"
+
+
 def parse_proposals(path):
     """[{title, recommendation, keep_separate}] for one proposal file."""
     try:
@@ -83,8 +87,12 @@ def parse_proposals(path):
     out = []
     for title, start, end in _sections(lines):
         rec = _recommendation(lines[start + 1:end])
+        # body: the entry text under its heading, shown in the dashboard detail row
+        body = "\n".join(lines[start + 1:end]).strip()
+        if len(body) > BODY_MAX_CHARS:
+            body = body[:BODY_MAX_CHARS] + TRUNCATED_MARK
         out.append({"title": title, "recommendation": rec,
-                    "keep_separate": "keep separate" in rec.lower()})
+                    "keep_separate": "keep separate" in rec.lower(), "body": body})
     return out
 
 
@@ -113,7 +121,7 @@ def find_proposal(pdir, fname, title):
     return None
 
 
-def reject_proposal(pdir, fname, title, today=None):
+def reject_proposal(pdir, fname, title, today=None, action="rejected from dashboard"):
     """Note the rejection in REJECTED.md and drop the entry from its file.
 
     The file is deleted once no `###` entry remains.
@@ -133,8 +141,8 @@ def reject_proposal(pdir, fname, title, today=None):
     rec = _recommendation(lines[sec[1] + 1:sec[2]])
 
     day = today or time.strftime("%Y-%m-%d")
-    note = "- %s | %s | %s | rejected from dashboard%s\n" % (
-        day, fname, title, (" (" + rec + ")") if rec else "")
+    note = "- %s | %s | %s | %s%s\n" % (
+        day, fname, title, action, (" (" + rec + ")") if rec else "")
     # Drop the entry first (atomic replace), then record it, so a failure
     # never leaves a recorded rejection whose entry still shows.
     if _sections(rest):

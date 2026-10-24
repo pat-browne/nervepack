@@ -46,7 +46,7 @@ class TestLessonRecall(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def _write(self, name, content):
-        with open(os.path.join(self.lessons, name), "w") as fh:
+        with open(os.path.join(self.lessons, name), "w", encoding="utf-8") as fh:
             fh.write(content)
 
     def _run(self, sid, prompt):
@@ -227,6 +227,69 @@ class TestLessonRecall(unittest.TestCase):
         self._run("s11", "drafting a concise pr description")
         self.assertTrue(os.path.exists(
             os.path.join(self.tmp, "state", "s11-concise-output-gate-armed")))
+
+    # --- paired-rule format (spec 0093) ---
+    def test_11_paired_success_rule_injected_without_backlink(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| bulk-rename |  |  | rename |\n")
+        self._write("bulk-rename.md",
+            "---\nname: bulk-rename\nprovenance: success\n---\n"
+            "## Ship the rename safely\n"
+            "- DO run the guarded rename in one pass — **when** renaming across the repo — "
+            "**why** a bare replace hits unrelated words. [[episodic/bulk-rename]]\n")
+        out = self._run("s12", "need to do a bulk rename")
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Ship the rename safely (worked before):", ctx)
+        self.assertIn("- DO run the guarded rename in one pass", ctx)
+        self.assertNotIn("[[", ctx)
+        self.assertNotIn("episodic/bulk-rename", ctx)
+        # Paired rules are self-framing: no legacy "approaches that worked" preamble.
+        self.assertNotIn("Approaches that worked before", ctx)
+
+    def test_12_empty_failure_body_injects_no_topic_tag(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| empty-lesson |  |  | deploy |\n")
+        self._write("empty-lesson.md",
+            "---\nname: empty-lesson\nprovenance: failure\n---\n")
+        out = self._run("s13", "about to deploy")
+        self.assertEqual(out, "")
+
+    def test_13_legacy_failure_stacked_with_paired_success(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| mixed |  |  | lockfile |\n")
+        self._write("mixed.md",
+            "---\nname: mixed\nprovenance: failure\n---\n"
+            "**Do:** pin the lockfile first.\n"
+            "---\nname: mixed\nprovenance: success\n---\n"
+            "## Ship the lockfile bump\n"
+            "- DO run the audit before merging — **when** bumping deps — "
+            "**why** it catches drift early. [[episodic/mixed]]\n")
+        out = self._run("s14", "bump the lockfile")
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("past failure patterns apply", ctx)
+        self.assertIn("[mixed] **Do:** pin the lockfile first.", ctx)
+        self.assertIn("Ship the lockfile bump (worked before):", ctx)
+        self.assertIn("- DO run the audit before merging", ctx)
+        self.assertNotIn("[[", ctx)
+
+    def test_14_paired_failure_with_tool_name_match_arms_gate(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| guarded-write |  | ask | edit, lockfile |\n")
+        self._write("guarded-write.md",
+            "---\nname: guarded-write\nprovenance: failure\n"
+            "enforce:\n  tool_match: \"\"\n  tool_name_match: \"Edit\"\n  gate: ask\n---\n"
+            "## Editing generated files\n"
+            "- DON'T edit the lockfile by hand → DO regenerate it — **when** touching deps — "
+            "**why** hand edits drift from the resolver. [[episodic/guarded-write]]\n")
+        out = self._run("s15", "edit the lockfile now")
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("DO regenerate it", ctx)
+        self.assertTrue(os.path.exists(
+            os.path.join(self.tmp, "state", "s15-guarded-write-gate-armed")))
 
 
 if __name__ == "__main__":
