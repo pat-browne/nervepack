@@ -421,6 +421,9 @@
   "post_ship": {
     "description": "After a successful PR merge or deploy command, prompt the session to run np-core-capture-learning before the turn ends."
   },
+  "checkout": {
+    "description": "SessionStart warning when the engine or a content overlay checkout is off main or behind origin/main, telling the agent to read via git show origin/main:<path> or sync first."
+  },
   "turn_gate": {
     "description": "Stop-hook turn gate: blocks a turn once when it edited UI files without showing the result, or when the closing message fails the form check."
   },

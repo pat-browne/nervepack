@@ -34,6 +34,7 @@ for _p in (_HERE, _ENGINE_DIR, _ENGINE_SETUP):
 
 import np_dirs
 from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
+from nervepack_engine.hooks import checkout_guard  # noqa: E402
 from nervepack_engine.hooks import drift_guard  # noqa: E402
 from nervepack_engine.hooks import episodic_capture  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
@@ -80,6 +81,7 @@ import np_toggle  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
+    "checkout-guard": checkout_guard.run,
     "drift-guard": drift_guard.run,
     "episodic-capture": episodic_capture.run,
     "episodic-recall": episodic_recall.run,

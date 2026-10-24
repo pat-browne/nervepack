@@ -27,6 +27,8 @@ SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py sync exit >/dev/null
 SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
 # --- 51: consult-nervepack directive (synchronous) ---
 SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook session-directive
+# --- 51b: stale-checkout guard (synchronous; silent when clean, no network) ---
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook checkout-guard
 # --- 52: episodic capture + recall ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture session-end &
 PreCompact||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture checkpoint

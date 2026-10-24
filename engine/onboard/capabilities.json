@@ -76,6 +76,17 @@
       }
     },
     {
+      "id": "checkout-freshness",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the engine and content overlays are on main and not behind origin/main",
+      "why": "Sessions read wiki and skills from these working trees; a feature branch or a stale checkout serves outdated knowledge.",
+      "accept": "Each checkout is on main and 0 commits behind origin/main (doctor fetches first).",
+      "hints": {
+        "generic": "git -C <repo> checkout main && git -C <repo> pull --ff-only; until then read via git -C <repo> show origin/main:<path>."
+      }
+    },
+    {
       "id": "team",
       "tier": "SHOULD",
       "check": "core",
