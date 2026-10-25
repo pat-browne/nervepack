@@ -41,7 +41,7 @@ One integration branch pays those costs once.
      conflict resolution): fix them on the integration branch.
    - A failure that belongs to one source PR: drop that PR from the batch
      and fix it on its own branch. To drop one, rebuild the integration branch
-     without it, then re-run the local gate before going on.
+     without it (reset to the default branch, re-merge the rest in order), then re-run the local gate before going on.
 7. **Merge once.** Squash-merge, then watch the single apply. Hand-apply only
    what the CI role cannot. Hand-apply means:
    - A targeted plan, then an apply, of only the resources the CI role
