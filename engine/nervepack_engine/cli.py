@@ -47,6 +47,7 @@ from nervepack_engine.hooks import lesson_guard  # noqa: E402
 from nervepack_engine.hooks import lesson_recall  # noqa: E402
 from nervepack_engine.hooks import open_artifact  # noqa: E402
 from nervepack_engine.hooks import open_dashboard  # noqa: E402
+from nervepack_engine.hooks import quota_detect  # noqa: E402
 from nervepack_engine.hooks import post_ship_capture  # noqa: E402
 from nervepack_engine.hooks import resume_recall  # noqa: E402
 from nervepack_engine.hooks import resume_sessionstart  # noqa: E402
@@ -72,6 +73,7 @@ import np_layout_cli  # noqa: E402
 import np_link_skills  # noqa: E402
 import np_mcp_install  # noqa: E402
 import np_merge_wait  # noqa: E402
+import np_quota_watch  # noqa: E402
 import np_onboard  # noqa: E402
 import np_scheduler_install  # noqa: E402
 import np_skill_maintain  # noqa: E402
@@ -94,6 +96,7 @@ _HOOKS = {
     "lesson-recall": lesson_recall.run,
     "open-artifact": open_artifact.run,
     "open-dashboard": open_dashboard.run,
+    "quota-detect": quota_detect.run,
     "post-ship-capture": post_ship_capture.run,
     "resume-recall": resume_recall.run,
     "resume-sessionstart": resume_sessionstart.run,
@@ -113,6 +116,8 @@ _CRONS = {
     "episodic-maintain": np_agentic_cron.episodic_maintain,
     "refine": np_agentic_cron.refine,
     "compact": np_agentic_cron.compact,
+    "quota-watch": np_quota_watch.cron_scan,
+    "quota-notify": np_quota_watch.notify_now,
     "kb-promote-scan": np_agentic_cron.kb_promote_scan,
 }
 

@@ -83,6 +83,10 @@ PostToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook post-ship-
 # with no other form check; turn_gate skips the delivery checks on that event
 # (turn_gate.subagent controls the lane).
 Stop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
+# --- 66: quota-watch (Stop; non-blocking). Catches a usage-limit
+# violation right after it happens; the quota-watch cron re-checks every
+# 30 min as a backstop. See np-flow-quota-watch.
+Stop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook quota-detect
 SubagentStop||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook turn-gate
 # --- 65: durable-text form gate (PreToolUse). One row per matcher: Claude Code
 # only invokes a PreToolUse hook for a REGISTERED matcher, same constraint the

@@ -41,8 +41,8 @@ to model knowledge.
 
 A project's own instruction file (`CLAUDE.md` / `AGENTS.md` / Cursor rules) overrides nervepack skills where they conflict. Nervepack
 skills override generic defaults. Within Nervepack's own layers, authority runs
-`skills > sources > wiki > playbooks > episodic`: playbooks are auto-distilled
-failure→recovery interventions (enforced at the tool call), episodic is narrative —
+`skills > sources > wiki > lessons > episodic`: lessons are auto-distilled
+failure→recovery and success patterns (optionally enforced at the tool call), episodic is narrative —
 both yield to human-reviewed skills. When you make a NEW durable design/architecture
 decision, fold it back into the right nervepack skill (via `np-core-contribute`) so the
 next session inherits it instead of re-deciding.
