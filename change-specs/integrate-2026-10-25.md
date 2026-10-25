@@ -9,7 +9,6 @@ blast_radius:
   - agents/README.md
   - engine/nervepack_engine/cli.py
   - engine/nervepack_engine/hooks/quota_detect.py
-  - engine/nervepack_engine/hooks/quota_notify.py
   - engine/nervepack_engine/np_quota_watch.py
   - engine/setup/hooks.manifest
   - engine/setup/np_bootstrap.py

@@ -48,7 +48,6 @@ from nervepack_engine.hooks import lesson_recall  # noqa: E402
 from nervepack_engine.hooks import open_artifact  # noqa: E402
 from nervepack_engine.hooks import open_dashboard  # noqa: E402
 from nervepack_engine.hooks import quota_detect  # noqa: E402
-from nervepack_engine.hooks import quota_notify  # noqa: E402
 from nervepack_engine.hooks import post_ship_capture  # noqa: E402
 from nervepack_engine.hooks import resume_recall  # noqa: E402
 from nervepack_engine.hooks import resume_sessionstart  # noqa: E402
@@ -98,7 +97,6 @@ _HOOKS = {
     "open-artifact": open_artifact.run,
     "open-dashboard": open_dashboard.run,
     "quota-detect": quota_detect.run,
-    "quota-notify": quota_notify.run,
     "post-ship-capture": post_ship_capture.run,
     "resume-recall": resume_recall.run,
     "resume-sessionstart": resume_sessionstart.run,
@@ -119,6 +117,7 @@ _CRONS = {
     "refine": np_agentic_cron.refine,
     "compact": np_agentic_cron.compact,
     "quota-watch": np_quota_watch.cron_scan,
+    "quota-notify": np_quota_watch.notify_now,
     "kb-promote-scan": np_agentic_cron.kb_promote_scan,
 }
 

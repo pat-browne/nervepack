@@ -105,7 +105,7 @@ def _schedule_at(resume_epoch):
         _log("`at` not installed -- falling back to cron-only detection")
         return False
     cli = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cli.py")
-    cmd = "%s %s hook quota-notify" % (sys.executable, cli)
+    cmd = "%s %s cron quota-notify" % (sys.executable, cli)
     when = time.strftime("%H:%M %Y-%m-%d", time.localtime(resume_epoch))
     try:
         subprocess.run(["at", when], input=cmd + "\n", text=True,
