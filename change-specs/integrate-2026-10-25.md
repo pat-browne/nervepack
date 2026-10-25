@@ -17,10 +17,11 @@ blast_radius:
   - engine/setup/toggles.conf
   - engine/setup/tests/nervepack_engine/test_np_quota_watch.py
   - skills/np-flow-quota-watch/SKILL.md
-  - change-specs/feat-quota-watch.md
+  - engine/setup/nervepack-session-directive.md
+  - change-specs/integrate-2026-10-25.md
 ---
 
-# 0097: Quota-watch resume nudge
+# 0097: Quota-watch resume nudge, with a directive wording fix
 
 ## Context and problem statement
 
@@ -65,5 +66,7 @@ Set `quota_watch` off with `cli.py toggle`. The detect and notify steps then do 
 To remove the code, revert the merge commit of this PR. Then delete the crontab line marked `nervepack-quota-watch` with `crontab -e`.
 
 ## Deviations
+
+2026-10-25: this integration branch also carries #408, a two-line wording fix in `engine/setup/nervepack-session-directive.md` (playbooks renamed to lessons). The spec for #409 was renamed to match the branch slug.
 
 2026-10-25: this branch also carries a merge of `origin/main`. The merge touched `INDEX.md`, `agents/README.md`, `engine/nervepack_engine/cli.py` and `engine/setup/toggles.conf` to keep both sides. All four are already in the blast radius.
