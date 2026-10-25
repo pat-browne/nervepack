@@ -31,7 +31,7 @@ One integration branch pays those costs once.
    **Abort cleanup:**
    - Delete the integration branch, local and remote.
    - Leave the source PRs open.
-   - Re-queue their CI.
+   - Re-run their CI only if step 5 already cancelled it.
    - Comment on each why the batch was abandoned.
 5. **Free the runner.** Cancel queued and in-progress CI runs for the source branches, since
    the integration PR supersedes them.
@@ -40,7 +40,7 @@ One integration branch pays those costs once.
    - Test or build failures that come from the integration itself (a
      conflict resolution): fix them on the integration branch.
    - A failure that belongs to one source PR: drop that PR from the batch
-     and fix it on its own branch. To drop one, rebuild the integration branch
+     and fix it on its own branch; re-run its CI if step 5 cancelled it. To drop one, rebuild the integration branch
      without it (reset to the default branch, re-merge the rest in order), then re-run the local gate before going on.
 7. **Merge once.** Squash-merge, then watch the single apply. Hand-apply only
    what the CI role cannot. Hand-apply means:
