@@ -470,5 +470,13 @@
     "type": "number",
     "min": 1,
     "description": "Maximum lines in one comment block before the gate flags it."
+  },
+  "quota_watch": {
+    "description": "Detects a claude.ai usage-limit hit and sends a notification shortly after the limit resets, so you can type continue."
+  },
+  "quota_watch.resume_delay_s": {
+    "type": "number",
+    "min": 0,
+    "description": "Seconds to wait after the limit resets before notifying."
   }
 }

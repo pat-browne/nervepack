@@ -203,6 +203,11 @@ def install_cron(nervepack_root=None, crontab_list_fn=None, crontab_set_fn=None,
         lines = _install_line(lines, marker, line)
         print("Installed cron entry: %s" % line)
 
+    quota_marker = "nervepack-quota-watch"
+    line = "*/30 * * * * %spython3 %s cron quota-watch # %s" % (token_prefix_fn(), cli, quota_marker)
+    lines = _install_line(lines, quota_marker, line)
+    print("Installed cron entry: %s" % line)
+
     resume_marker = "nervepack-resume-cron"
     if np_toggle.param("resume.cron", "off") == "on":
         # .strip(): a conf value can carry a stray trailing \r (e.g. a toggles.conf

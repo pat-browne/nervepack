@@ -40,7 +40,7 @@ def _print_versions(run_fn, specs):
 
 _APT_PACKAGES = [
     "git", "gh", "jq", "nodejs", "npm", "python3-pip", "python3-venv", "pipx",
-    "golang-go", "build-essential", "curl", "ca-certificates", "cron",
+    "golang-go", "build-essential", "curl", "ca-certificates", "cron", "at",
 ]
 
 
