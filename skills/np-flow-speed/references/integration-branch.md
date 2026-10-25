@@ -23,17 +23,17 @@ One integration branch pays those costs once.
    resolution for the PR body (step 6). A semantic conflict (incompatible changes to the same thing)
    means abort the integration and merge those PRs serially.
 4. **Gate locally.** Run the repo's full test suite by the command in its CLAUDE.md or
-   AGENTS.md, and keep the output. For infra, run validate
-   and a read-only plan, and list every change. Find destroys and replaces by grepping the plan for
-   `destroy` and `replace`. Abort on any destroy or
-   replace that no source PR asked for.
+   AGENTS.md, and keep the output. For infra, run the validate
+   and read-only plan commands that doc names (e.g. `terraform validate`, `terraform plan`),
+   and list every change. Read the plan's own summary for destroys and replaces; a grep alone can miss them.
+   Abort on any destroy or replace that no source PR asked for, and name the source PR for each change in the PR body.
 
    **Abort cleanup:**
    - Delete the integration branch, local and remote.
    - Leave the source PRs open.
    - Re-queue their CI.
    - Comment on each why the batch was abandoned.
-5. **Free the runner.** Cancel queued CI runs for the source branches, since
+5. **Free the runner.** Cancel queued and in-progress CI runs for the source branches, since
    the integration PR supersedes them.
 6. **One PR.** Its body lists each source PR, the conflict resolutions, the
    plan summary and the test results. Wait for CI. If it fails, triage each failure:
