@@ -18,17 +18,36 @@ One integration branch pays those costs once.
 2. **Branch.** `git switch -c integrate/<date> origin/<default>`.
 3. **Merge in order.** `git merge --no-ff origin/<branch>` for each PR. Put
    infra PRs first and PRs that touch the same files next to each other.
-   Resolve each conflict keeping both sides' intent, and note the resolution.
+   Resolve each text conflict keeping both sides' intent, and note the
+   resolution. A semantic conflict (incompatible changes to the same thing)
+   means abort the integration and merge those PRs serially.
 4. **Gate locally.** Run the repo's full test suite. For infra, run validate
    and a read-only plan, and list every change. Abort on any destroy or
    replace that no source PR asked for.
+
+   **Abort cleanup:**
+   - Delete the integration branch, local and remote.
+   - Leave the source PRs open.
+   - Re-queue their CI.
+   - Comment on each why the batch was abandoned.
 5. **Free the runner.** Cancel queued CI runs for the source branches, since
    the integration PR supersedes them.
 6. **One PR.** Its body lists each source PR, the conflict resolutions, the
-   plan summary and the test results. Wait for green and fix real failures on
-   the integration branch.
+   plan summary and the test results. Wait for green, then triage each failure:
+   - Test or build failures that come from the integration itself (a
+     conflict resolution): fix them on the integration branch.
+   - A failure that belongs to one source PR: drop that PR from the batch
+     and fix it on its own branch.
 7. **Merge once.** Squash-merge, then watch the single apply. Hand-apply only
-   what the CI role cannot, with a targeted plan first.
+   what the CI role cannot. Hand-apply means:
+   - A targeted plan, then an apply, of only the resources the CI role
+     cannot change, run with the owner's credentials.
+   - The plan shows 0 destroys.
+   - A CI plan afterward shows no drift.
+
+   **Rollback.** If the apply fails after the merge, either revert the merge
+   commit or fix forward. Then re-apply, pass the live check, and say which
+   you chose.
 8. **Close the sources.** Comment "Landed in #N (<sha>)" on each, close it, and
    delete its branch.
 9. **Verify live** once for the whole batch, as in the finish line.
