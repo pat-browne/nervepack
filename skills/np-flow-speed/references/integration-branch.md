@@ -14,15 +14,18 @@ One integration branch pays those costs once.
 ## Steps
 
 1. **Quiesce.** Check that no PR is mid-merge and no deploy or apply run is in
-   progress on the default branch. Wait for any that is.
+   progress on the default branch (`gh run list --branch <default>
+   --status in_progress`). Wait for any that is.
 2. **Branch.** `git switch -c integrate/<date> origin/<default>`.
 3. **Merge in order.** `git merge --no-ff origin/<branch>` for each PR. Put
    infra PRs first and PRs that touch the same files next to each other.
    Resolve each text conflict keeping both sides' intent, and note the
    resolution. A semantic conflict (incompatible changes to the same thing)
    means abort the integration and merge those PRs serially.
-4. **Gate locally.** Run the repo's full test suite. For infra, run validate
-   and a read-only plan, and list every change. Abort on any destroy or
+4. **Gate locally.** Run the repo's full test suite by the command in its CLAUDE.md or
+   AGENTS.md, and keep the output. For infra, run validate
+   and a read-only plan, and list every change. Find destroys and replaces by grepping the plan for
+   `destroy` and `replace`. Abort on any destroy or
    replace that no source PR asked for.
 
    **Abort cleanup:**
@@ -33,11 +36,12 @@ One integration branch pays those costs once.
 5. **Free the runner.** Cancel queued CI runs for the source branches, since
    the integration PR supersedes them.
 6. **One PR.** Its body lists each source PR, the conflict resolutions, the
-   plan summary and the test results. Wait for green, then triage each failure:
+   plan summary and the test results. Wait for CI. If it fails, triage each failure:
    - Test or build failures that come from the integration itself (a
      conflict resolution): fix them on the integration branch.
    - A failure that belongs to one source PR: drop that PR from the batch
-     and fix it on its own branch.
+     and fix it on its own branch. To drop one, rebuild the integration branch
+     without it, then re-run the local gate before going on.
 7. **Merge once.** Squash-merge, then watch the single apply. Hand-apply only
    what the CI role cannot. Hand-apply means:
    - A targeted plan, then an apply, of only the resources the CI role
@@ -46,7 +50,9 @@ One integration branch pays those costs once.
    - A CI plan afterward shows no drift.
 
    **Rollback.** If the apply fails after the merge, either revert the merge
-   commit or fix forward. Then re-apply, pass the live check, and say which
+   commit or fix forward. Revert when the cause is unclear or the fix is not
+   small and certain, since it restores the last known state fastest. Fix
+   forward only when the cause is understood and the fix is a few lines. Then re-apply, pass the live check, and say which
    you chose.
 8. **Close the sources.** Comment "Landed in #N (<sha>)" on each, close it, and
    delete its branch.
