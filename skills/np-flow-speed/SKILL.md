@@ -73,6 +73,20 @@ a live check passes. Do not hand back at "PR open" or "merged".
    pass the same live check.
 6. **Report** the PR, merge SHA, deploy result and the live check evidence.
 
+## Landing several PRs: one integration branch
+
+Default when a run leaves two or more PRs ready, or CI is the bottleneck:
+
+- Merge them all into `integrate/<date>` off the default branch.
+- Resolve conflicts once, then run one local gate and one infra plan.
+- Cancel the source branches' queued CI runs, then open one PR.
+- Merge it on green and watch the single apply.
+- Close each source PR with "Landed in #N" and delete its branch.
+- Verify live once for the batch, as in the finish line.
+
+Merge serially only when PRs conflict in meaning or one is too risky to
+bundle. Steps: references/integration-branch.md
+
 ## Deferring a hard call
 
 Some calls need higher judgment, such as a costly design fork or two
