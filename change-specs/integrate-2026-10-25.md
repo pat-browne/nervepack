@@ -15,6 +15,7 @@ blast_radius:
   - engine/setup/np_bootstrap.py
   - engine/setup/np_scheduler_install.py
   - engine/setup/toggles.conf
+  - engine/setup/toggle-schema.json
   - engine/setup/tests/nervepack_engine/test_np_quota_watch.py
   - skills/np-flow-quota-watch/SKILL.md
   - engine/setup/nervepack-session-directive.md

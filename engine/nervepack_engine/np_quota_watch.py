@@ -23,6 +23,7 @@ if _SETUP not in sys.path:
     sys.path.insert(0, _SETUP)
 
 import np_dirs  # noqa: E402
+import np_host  # noqa: E402
 import np_toggle  # noqa: E402
 
 # Claude Code's own literal message: "Claude AI usage limit reached|1717027200".
@@ -30,7 +31,6 @@ _LIMIT_RE = re.compile(r"usage limit reached\|(\d{9,13})", re.I)
 
 _RESUME_DELAY_S_DEFAULT = 60  # "1 minute after that time" (user's spec, verbatim)
 _STATE_FILE = "quota-watch-state.json"
-_TRANSCRIPT_GLOB = os.path.join(os.path.expanduser("~"), ".claude", "projects", "*", "*.jsonl")
 
 
 def _state_path():
@@ -176,7 +176,7 @@ def notify_now():
 
 def _recent_transcripts(within_s):
     cutoff = time.time() - within_s
-    for path in glob.glob(_TRANSCRIPT_GLOB):
+    for path in glob.glob(os.path.join(np_host.transcripts_dir(), "*", "*.jsonl")):
         try:
             if os.path.getmtime(path) >= cutoff:
                 yield path
