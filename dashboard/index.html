@@ -121,9 +121,24 @@
                    padding:60px 20px; z-index:50; }
   .modal-overlay[hidden] { display:none; }
   .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
-           box-shadow:var(--shadow); width:100%; max-width:560px;
+           box-shadow:var(--shadow); width:100%; max-width:760px;
            max-height:calc(100vh - 120px); overflow-y:auto; padding:16px; }
   .modalhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  /* Overlay viewer: one sandboxed iframe for wiki pages and large panels. */
+  .viewer-overlay { padding:24px; align-items:stretch; }
+  .viewer { max-width:1100px; max-height:none; height:calc(100vh - 48px);
+            display:flex; flex-direction:column; overflow:hidden; }
+  .viewer iframe { flex:1 1 auto; width:100%; border:1px solid var(--border);
+                   border-radius:var(--radius-sm); background:var(--surface); }
+  a.btn { text-decoration:none; color:inherit; display:inline-flex; align-items:center; }
+  .pager { display:flex; align-items:center; justify-content:flex-end; gap:8px;
+           margin-top:8px; font-size:11px; color:var(--text-tertiary); }
+  /* ?view=settings: the settings panel alone, as a page inside the viewer. */
+  body.view-settings .shell { display:none; }
+  body.view-settings #settings-overlay { position:static; background:none; padding:0; }
+  body.view-settings #settings-overlay .modal { max-width:none; max-height:none;
+                                                box-shadow:none; border:none; }
+  body.view-settings #btn-settings-close { display:none; }
   .grid { display:grid; gap:16px; margin-top:18px; grid-template-columns:1fr 1fr; }
   /* Must come AFTER the base .grid rule — same specificity, so source order decides.
      Declared up in the top @media block it silently lost and the grid never stacked. */
@@ -133,23 +148,30 @@
   .panel { background:var(--surface); border:1px solid var(--border);
            border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:16px; }
   .panel.full { grid-column:1 / -1; }
+  .grid > .panel { min-width:0; }   /* let wide charts and tables shrink inside a two-up cell */
   .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.04em;
          color:var(--status-pos); font-weight:600; }
   .empty { color:var(--text-tertiary); font-size:13px; padding:18px 0; text-align:center; }
   .statstrip { display:flex; gap:18px; margin:8px 0 12px; flex-wrap:wrap; }
   .stat b { display:block; font-size:18px; color:var(--text); }
   .stat span { font-size:11px; color:var(--text-secondary); }
+  /* Token card: five stats share one row, tighter gap so they fit a two-up cell */
+  .statstrip.tokstrip { gap:8px 14px; }
+  .tokstrip .stat span { white-space:nowrap; }
 
-  /* Charts: vertical viewBox units == pixels (svg height fixed 120px); x stretches
-     to fill — so the line uses viewBox coords, static dots use left:% (resize-proof),
-     and the hover dot/tooltip are positioned in pixel space from the wrapper rect. */
-  .chartwrap { position:relative; width:100%; height:120px; margin-top:4px; }
-  .chart { width:100%; height:120px; display:block; }
+  /* Charts: wireChart() sets the viewBox to the wrapper's pixel size, so the scale
+     is 1:1 and nothing stretches. In a two-up row the chart grows to fill the cell. */
+  #panel-trend, #panel-tokens { display:flex; flex-direction:column; }
+  /* Fixed plot height so both two-up charts match. margin-top:auto pins the chart and
+     legend to the card bottom, so bottoms line up when the stat blocks differ. */
+  .chartwrap { position:relative; width:100%; flex:none; height:180px; margin-top:auto; }
+  .chart text.tick { fill:var(--text-tertiary); font-size:10px; }
+  .chart { position:absolute; inset:0; display:block; overflow:visible; }
   .chart line.grid { stroke:var(--viz-grid); stroke-width:1; }
   .chart polyline { fill:none; stroke:var(--viz-line); stroke-width:2;
                     vector-effect:non-scaling-stroke; }
-  .pt { position:absolute; width:7px; height:7px; border-radius:50%;
-        background:var(--viz-line); transform:translate(-50%,-50%); opacity:.5;
+  .pt { position:absolute; width:8px; height:8px; border-radius:50%;
+        background:var(--viz-line); transform:translate(-50%,-50%); opacity:.9;
         box-shadow:0 0 0 1px var(--surface); pointer-events:none; }
   .pt.on { opacity:1; width:11px; height:11px; box-shadow:0 0 0 2px var(--surface); }
   .pt:focus-visible { opacity:1; outline:2px solid var(--accent-sage); outline-offset:2px; }
@@ -169,6 +191,17 @@
   .legend .sw.dot { width:9px; height:9px; border-radius:50%; }
   .legend .sw.grid { height:0; border-top:1px dashed var(--viz-grid); width:18px; }
   .legend .muted { color:var(--text-tertiary); }
+  /* Hint on its own row in every legend, so legend height (and the chart bottom) match across a two-up row */
+  .legend .hint { flex-basis:100%; text-align:right; color:var(--text-tertiary); }
+  /* Expandable detail text on graduation and proposal rows */
+  .txt.has-detail { cursor:pointer; }
+  .detailtog { font:inherit; font-size:11px; color:var(--accent-sage); background:none;
+               border:none; padding:0; margin-top:4px; cursor:pointer; }
+  .detailtog:focus-visible { outline:2px solid var(--accent-sage); outline-offset:2px; }
+  .detail { white-space:pre-wrap; word-break:break-word; margin:6px 0 0; padding:8px 10px;
+            font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--text);
+            background:var(--surface-alt); border:1px solid var(--border);
+            border-radius:var(--radius-sm); max-height:360px; overflow:auto; cursor:auto; }
 
   .sug { display:flex; align-items:flex-start; gap:12px; padding:10px 0;
          border-top:1px solid var(--border); flex-wrap:wrap; }
@@ -218,6 +251,13 @@
   .verdict { font-size:11px; margin-top:3px; font-weight:600; }
   .verdict.implement { color:var(--status-pos); }
   .verdict.skip { color:var(--text-tertiary); }
+  /* Scheduled jobs: two-up rows; a job that needs attention gets a warm edge. */
+  .jobs { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+  .jobs > .sug:nth-child(2) { border-top:none; }
+  @media (max-width:900px) { .jobs { grid-template-columns:1fr; }
+    .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); } }
+  .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
+                background:var(--status-warn-bg); }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
 
   /* Feature-toggle switches (served-mode only; see renderToggles()) */
@@ -230,6 +270,7 @@
   .togparams { margin:6px 0 0 4px; display:flex; flex-direction:column; gap:6px; }
   .togparam { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
   .togparam .togkey { color:var(--text-secondary); }
+  .tograw { color:var(--text-tertiary, #888); font-size:10px; font-family:var(--font-mono, monospace); margin-left:6px; font-weight:400; }
   .togro { color:var(--text-tertiary); font-size:11px; margin-left:6px; }
   .togwarn { color:var(--status-neg); font-size:10px; margin-left:6px; }
   /* CSS-only tooltip (not the native `title` attribute — that's delayed ~1s and
@@ -240,14 +281,13 @@
     border:1px solid var(--border); background:var(--surface-alt);
     color:var(--text-tertiary); font-size:9px; font-weight:700; line-height:1;
     cursor:help; flex:0 0 auto; }
-  .tighelp::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px);
-    left:50%; transform:translateX(-50%); width:max-content; max-width:240px;
+  /* One fixed-position bubble, placed by JS (placeTip) and clamped to the
+     viewport. A CSS ::after bubble clipped at the scrolling modal's edge. */
+  #tiptip { position:fixed; left:0; top:0; max-width:min(280px, calc(100vw - 16px));
     background:var(--text); color:var(--surface); font-size:11px; font-weight:400;
-    line-height:1.4; white-space:normal; text-align:left; padding:6px 9px;
+    line-height:1.4; white-space:normal; overflow-wrap:anywhere; text-align:left; padding:6px 9px;
     border-radius:var(--radius-sm); box-shadow:var(--shadow);
-    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease;
-    z-index:20; }
-  .tighelp:hover::after, .tighelp:focus-visible::after { opacity:1; visibility:visible; }
+    pointer-events:none; z-index:100; }
   .swtoggle { position:relative; display:inline-block; width:34px; height:19px; flex:0 0 auto; }
   .swtoggle input { opacity:0; width:0; height:0; }
   .swtoggle .swtrack { position:absolute; inset:0; background:var(--surface-alt);
@@ -260,6 +300,19 @@
   .togin { font:inherit; font-size:12px; width:90px; padding:2px 6px;
     border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); }
   .togin:disabled { opacity:.6; }
+  /* Models panel and missing-model banner, served mode only */
+  .banner { background:var(--status-neg-bg); color:var(--status-neg); border:1px solid #dcb3aa;
+    border-radius:var(--radius-sm); padding:8px 12px; margin:0 0 16px; font-size:12px; font-weight:600; }
+  .banner a { color:inherit; }
+
+  .modtable { width:100%; border-collapse:collapse; font-size:12px; }
+  .modtable th, .modtable td { text-align:left; padding:5px 6px; border-top:1px solid var(--border); }
+  .modtable th { color:var(--text-tertiary); font-weight:600; font-size:11px; }
+
+  .modtable tr:target td { background:var(--status-warn-bg); }
+  .modtable select { font:inherit; font-size:12px; max-width:220px; }
+  .modtablewrap { overflow-x:auto; }
+  .modtable .pill { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -278,16 +331,25 @@
           <div class="sub" id="subtitle">loading…</div>
         </div>
         <button class="btn-icon" id="btn-settings" type="button"
-                aria-haspopup="dialog" aria-label="Settings" title="Feature toggles">⚙</button>
+                aria-haspopup="dialog" aria-label="Settings" title="Settings: models and feature toggles">⚙</button>
       </header>
 
-      <section class="panel full" id="panel-trend"></section>
-      <section class="panel full" id="panel-tokens" style="margin-top:16px"></section>
+      <div class="grid" style="margin-top:0">
+        <section class="panel" id="panel-trend"></section>
+        <section class="panel" id="panel-tokens"></section>
+      </div>
+      <div class="banner" id="model-banner" role="alert" hidden></div>
       <section class="panel full" id="panel-suggestions" style="margin-top:16px"></section>
       <section class="panel full" id="panel-graduation" style="margin-top:16px"></section>
+      <section class="panel full" id="panel-proposals" style="margin-top:16px"></section>
       <section class="panel full" id="panel-backlog" style="margin-top:16px"></section>
-      <section class="panel full" id="panel-ledger" style="margin-top:16px"></section>
-      <section class="panel full" id="panel-latest" style="margin-top:16px"></section>
+      <div class="grid" style="margin-top:16px">
+        <section class="panel" id="panel-ledger"></section>
+        <section class="panel" id="panel-latest"></section>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <section class="panel full" id="panel-jobs"></section>
+      </div>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
         <section class="panel" id="panel-assets"></section>
@@ -298,13 +360,33 @@
   <div class="modal-overlay" id="settings-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modalhead">
-        <span class="lbl" id="settings-title">Feature toggles</span>
+        <span class="lbl" id="settings-title">Settings</span>
         <button class="btn sm" id="btn-settings-close" type="button">Close</button>
       </div>
-      <div id="panel-toggles"></div>
+      <section class="settings-section" id="panel-models" hidden></section>
+      <section class="settings-section" id="settings-toggles" style="margin-top:16px">
+        <div class="panelhead"><span class="lbl">Feature toggles</span></div>
+        <div id="panel-toggles"></div>
+      </section>
     </div>
   </div>
 
+  <div class="modal-overlay viewer-overlay" id="viewer-overlay" hidden>
+    <div class="modal viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
+      <div class="modalhead">
+        <span class="lbl" id="viewer-title">Viewer</span>
+        <div class="btnrow">
+          <a class="btn sm" id="viewer-newtab" href="about:blank" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+          <button class="btn sm" id="viewer-close" type="button">Close</button>
+        </div>
+      </div>
+      <iframe id="viewer-frame" title="Viewer" src="about:blank"
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              referrerpolicy="no-referrer"></iframe>
+    </div>
+  </div>
+
+<div id="tiptip" role="tooltip" hidden></div>
 <script src="data/metrics.js"></script>
 <script>
   // ---- pure helpers ----
@@ -332,6 +414,26 @@
     n = n || 0;
     return n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
          : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+  }
+  // Log10 domain that hugs the data, plus 1-2-5 ticks inside it (decades first;
+  // 2s and 5s only when fewer than two decades fall inside).
+  function logDomain(vals) {
+    const pos = vals.filter(v => Number.isFinite(v) && v > 0);
+    let lo = Math.log10(pos.length ? Math.min(...pos) : 1);
+    let hi = Math.log10(pos.length ? Math.max(...pos) : 10);
+    if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
+    const padL = (hi - lo) * 0.1;
+    lo -= padL; hi += padL;
+    const inside = v => Math.log10(v) >= lo && Math.log10(v) <= hi;
+    const cand = mults => {
+      const out = [];
+      for (let e = Math.floor(lo); e <= Math.ceil(hi); e++)
+        mults.forEach(m => { const v = m * 10 ** e; if (v >= 1 && inside(v)) out.push(v); });
+      return out;
+    };
+    let ticks = cand([1]);
+    if (ticks.length < 2) ticks = cand([1, 2, 5]);
+    return { lo, hi, ticks };
   }
   function aggregateTokens(records) {
     const sum = { input: 0, output: 0, cache_read: 0, cache_creation: 0, total: 0 };
@@ -380,67 +482,97 @@
     return out.slice(0, limit);
   }
 
-  // ---- reusable line chart: line + static dots (CSS %) + hover tooltip ----
-  const W = 1000, H = 120, pad = 6;
-  const xVB = (i, n) => n === 1 ? W / 2 : pad + i * (W - 2 * pad) / (n - 1);
+  // ---- reusable line chart: line + dots + hover tooltip ----
+  // Callers give y in a 0..H unit space. wireChart() sizes the viewBox to the
+  // wrapper's real pixel size on render and on resize.
+  // The scale stays 1:1, so dots stay round at any cell width.
+  const H = 120, pad = 6, padX = 10;
 
-  // points: [{ vy (viewBox y 0..120), color?, tip (html) }]; grids: [viewBox y]
+  // points: [{ vy (0..H), color?, tip (html) }]. grids: [{ y (0..H), label }]
+  // Labelled grids reserve a left gutter (GUT) for the tick text.
+  const GUT = 30;
   function chartHTML(points, grids) {
-    const n = points.length;
-    points.forEach((p, i) => { p.vx = xVB(i, n); });
-    const validPts = points.filter(p => isFinite(p.vx) && isFinite(p.vy));
-    const line = validPts.map(p => `${p.vx.toFixed(1)},${p.vy.toFixed(1)}`).join(" ");
-    const g = (grids || []).map(v =>
-      `<line class="grid" x1="0" y1="${v}" x2="${W}" y2="${v}"></line>`).join("");
-    // SVG circle markers: make each point visible even when the line hugs the baseline
-    const markers = validPts.map(p =>
-      `<circle cx="${p.vx.toFixed(1)}" cy="${p.vy.toFixed(1)}" r="8"` +
-      ` fill="${p.color || "var(--viz-line)"}" stroke="var(--bg)" stroke-width="2"></circle>`).join("");
-    const dots = points.map((p, i) => {
-      const left = Number.isFinite(p.vx) ? (p.vx / W * 100) : 0;
-      const top  = Number.isFinite(p.vy) ? p.vy : (H - pad);
-      return `<span class="pt" data-i="${i}" tabindex="0" role="img" ` +
-        `aria-label="${esc(plain(p.tip))}" style="left:${left.toFixed(2)}%;` +
-        `top:${top.toFixed(1)}px;${p.color ? `background:${p.color};` : ""}"></span>`;
-    }).join("");
+    points.grids = grids || [];
+    const dots = points.map((p, i) =>
+      `<span class="pt" data-i="${i}" tabindex="0" role="img" ` +
+      `aria-label="${esc(plain(p.tip))}"${p.color ? ` style="background:${p.color}"` : ""}></span>`).join("");
     return `<div class="chartwrap">
-        <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-          ${g}<polyline points="${line}"></polyline>${markers}
-        </svg>${dots}
+        <svg class="chart" aria-hidden="true"></svg>${dots}
         <div class="tip" hidden></div>
       </div>`;
   }
 
   function wireChart(wrap, points) {
     if (!wrap || !points.length) return;
+    const svg = wrap.querySelector("svg");
     const tip = wrap.querySelector(".tip");
     const dots = [...wrap.querySelectorAll(".pt")];
     const n = points.length;
-    let cur = -1;
+    let cur = -1, w = 0, h = 0;
+    const left = points.grids.length ? GUT : padX;
+    const xAt = i => n === 1 ? (left + w - padX) / 2 : left + i * (w - left - padX) / (n - 1);
+
+    function draw() {
+      const nw = Math.round(wrap.clientWidth) || 600, nh = Math.round(wrap.clientHeight) || H;
+      if (nw === w && nh === h) return;
+      w = nw;
+      h = nh;
+      const sy = h / H;
+      points.forEach((p, i) => {
+        p.px = xAt(i);
+        p.py = Number.isFinite(p.vy) ? p.vy * sy : h - pad;
+      });
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("width", w);
+      svg.setAttribute("height", h);
+      const g = points.grids.map(gr => {
+        const gy = (gr.y * sy).toFixed(1);
+        return `<line class="grid" x1="${left - 4}" y1="${gy}" x2="${w}" y2="${gy}"></line>` +
+          `<text class="tick" x="${left - 8}" y="${gy}" text-anchor="end" dominant-baseline="middle">${gr.label}</text>`;
+      }).join("");
+      const line = points.filter(p => Number.isFinite(p.vy))
+        .map(p => `${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(" ");
+      svg.innerHTML = `${g}<polyline points="${line}"></polyline>`;
+      dots.forEach((el, i) => {
+        el.style.left = points[i].px.toFixed(1) + "px";
+        el.style.top = points[i].py.toFixed(1) + "px";
+      });
+      if (cur >= 0) { const c = cur; cur = -1; show(c); }
+    }
+
     function show(i) {
       if (i === cur) return;
       cur = i;
-      const p = points[i], r = wrap.getBoundingClientRect();
-      const px = p.vx / W * r.width, py = p.vy;
+      const p = points[i];
       tip.innerHTML = p.tip;
       tip.hidden = false;
       const tw = tip.offsetWidth, th = tip.offsetHeight;
-      let tx = Math.max(0, Math.min(px - tw / 2, r.width - tw));
-      let ty = py - th - 12; if (ty < 0) ty = py + 16;
-      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+      const tx = Math.max(0, Math.min(p.px - tw / 2, w - tw));
+      let ty = p.py - th - 12;
+      if (ty < 0) ty = p.py + 16;
+      tip.style.left = tx + "px";
+      tip.style.top = ty + "px";
       dots.forEach((el, j) => el.classList.toggle("on", j === i));
     }
+
     function hide() {
-      cur = -1; tip.hidden = true; dots.forEach(el => el.classList.remove("on"));
+      cur = -1;
+      tip.hidden = true;
+      dots.forEach(el => el.classList.remove("on"));
     }
+
+    draw();
+    if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
+    else window.addEventListener("resize", draw);
+
     wrap.addEventListener("mousemove", e => {
-      const r = wrap.getBoundingClientRect();
-      let i = n === 1 ? 0 : Math.round((e.clientX - r.left) / r.width * (n - 1));
+      const x = e.clientX - wrap.getBoundingClientRect().left;
+      const i = n === 1 ? 0 : Math.round((x - left) / (w - left - padX) * (n - 1));
       show(Math.max(0, Math.min(n - 1, i)));
     });
     wrap.addEventListener("mouseleave", hide);
-    // Keyboard/AT access: each dot is focusable (tabindex + aria-label); reveal the
-    // same visual tooltip on focus so keyboard and touch users get the detail too.
+    // Keyboard/AT access: each dot is focusable (tabindex + aria-label).
+    // Focus shows the same tooltip, so keyboard and touch users get the detail too.
     dots.forEach((el, i) => {
       el.addEventListener("focus", () => show(i));
       el.addEventListener("blur", hide);
@@ -448,9 +580,31 @@
   }
 
   function legend(keys) {
-    return `<div class="legend">` + keys.map(k =>
-      `<span class="key"><span class="sw ${k.cls || ""}" ${k.color ? `style="background:${k.color}"` : ""}></span>${k.label}</span>`
+    return `<div class="legend">` + keys.map(k => k.hint
+      ? `<span class="hint">${k.label}</span>`
+      : `<span class="key"><span class="sw ${k.cls || ""}" ${k.color ? `style="background:${k.color}"` : ""}></span>${k.label}</span>`
     ).join("") + `</div>`;
+  }
+
+  // Expandable detail: a toggle plus the full text, hidden until the row is clicked.
+  function detailRow(body) {
+    if (!body) return "";
+    return `<button type="button" class="detailtog" aria-expanded="false">Show text</button>` +
+      `<pre class="detail" hidden>${esc(body)}</pre>`;
+  }
+
+  function wireDetails(root) {
+    root.querySelectorAll(".detailtog").forEach(b => {
+      const txt = b.closest(".txt");
+      txt.classList.add("has-detail");
+      txt.addEventListener("click", e => {
+        if (e.target.closest(".detail")) return;
+        const d = b.nextElementSibling, wasHidden = d.hidden;
+        d.hidden = !wasHidden;
+        b.setAttribute("aria-expanded", String(wasHidden));
+        b.textContent = wasHidden ? "Hide text" : "Show text";
+      });
+    });
   }
 
   // ---- backend (only when SERVED over http) ----
@@ -469,6 +623,169 @@
     return data;
   }
 
+  // ---- Implement queue count, served mode only ----
+  let queueTimer = null;
+
+  async function refreshQueue() {
+    const el = document.getElementById("queue-count");
+    if (!el) return;
+    let q;
+    try { q = await (await fetch("/api/implement-queue")).json(); } catch { return; }
+    const n = (q.count || 0) + (q.running ? 1 : 0);
+    el.hidden = !n;
+    el.textContent = q.running ? `1 running, ${q.count || 0} queued` : `${q.count || 0} queued`;
+    clearTimeout(queueTimer);
+    if (n) queueTimer = setTimeout(refreshQueue, 5000);
+  }
+
+  // ---- Models panel and missing-model banner, served mode only ----
+  // The Models section lives in the settings modal. Selecting a model writes a
+  // per-machine models.<feature> param. Banner links open the modal at the row.
+  const elModels = document.getElementById("panel-models");
+  const elBanner = document.getElementById("model-banner");
+
+  function paintBanner(m) {
+    const probe = m.probe || {};
+    const hits = [];
+    (m.features || []).forEach(r => {
+      if ((probe[r.effective] || {}).status === "missing") hits.push({ model: r.effective, key: r.key, feature: r.feature });
+    });
+    (m.model_errors || []).forEach(e => hits.push({ model: e.model, key: "implement", feature: e.feature || "implement" }));
+    const seen = new Set();
+    const uniq = hits.filter(h => !seen.has(h.model + h.key) && seen.add(h.model + h.key));
+    if (!uniq.length) { elBanner.hidden = true; elBanner.innerHTML = ""; return; }
+    elBanner.innerHTML = "Model unavailable: " + uniq.map(h =>
+      `<a href="#model-row-${esc(h.key)}">${esc(h.model)} (${esc(h.feature)})</a>`).join(", ")
+      + ". Pick another model in Settings.";
+    elBanner.hidden = false;
+  }
+
+  function probeCell(p) {
+    if (!p) return `<span class="pill">not probed</span>`;
+    const cls = p.status === "available" ? "pos" : p.status === "missing" ? "neg" : "warn";
+    const tip = esc((p.reason || "") + (p.ts ? " at " + p.ts : ""));
+    return `<span class="pill ${cls}" title="${tip}">${esc(p.status)}</span>`;
+  }
+
+  function modelOptions(inv, sel, isTier) {
+    const inherit = isTier ? "" : `<option value=""${sel ? "" : " selected"}>inherit tier</option>`;
+    return inherit + inv.map(x => `<option value="${esc(x.id)}"${x.id === sel ? " selected" : ""}>`
+      + `${esc(x.label || x.id)}${x.legacy ? " (legacy)" : ""}${x.tier === "premium" ? ", premium" : ""}</option>`).join("");
+  }
+
+  function modelRow(r, inv, probe) {
+    const tag = r.is_tier ? "tier" : r.tier;
+    return `<tr id="model-row-${esc(r.key)}">
+        <td>${esc(r.feature)} <span class="togscope">${esc(tag)}</span></td>
+        <td><select data-model-feature="${esc(r.key)}" aria-label="Model for ${esc(r.feature)}">${modelOptions(inv, r.selected, r.is_tier)}</select></td>
+        <td><code>${esc(r.effective)}</code>${r.env_override ? ' <span class="togro">env override</span>' : ""}</td>
+        <td>${probeCell(probe[r.effective])}</td>
+        <td><button class="btn sm" data-probe="${esc(r.effective)}">Probe</button></td>
+      </tr>`;
+  }
+
+  function renderModels(m) {
+    paintBanner(m);
+    if (!m.enabled) { elModels.hidden = true; return; }
+    const inv = m.inventory || [], probe = m.probe || {};
+    const rows = (m.features || []).map(r => modelRow(r, inv, probe)).join("");
+    elModels.innerHTML = `<div class="panelhead"><span class="lbl">Models</span>
+        <div class="btnrow"><button class="btn" id="btn-probe-all">Probe all</button></div></div>
+      <div class="modtablewrap"><table class="modtable">
+        <thead><tr><th>Feature</th><th>Selected</th><th>Effective</th><th>Probe</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <div class="note">Selections are per machine (toggles.local). NP_LLM_MODEL_CHEAP and NP_LLM_MODEL_AGENT win when set.</div>`;
+    elModels.hidden = false;
+    wireModels();
+    if (m.probe_running) {
+      elModels.querySelectorAll("[data-probe], #btn-probe-all").forEach(b => { b.disabled = true; b.textContent = "Probing…"; });
+      clearTimeout(probePoll);
+      probePoll = setTimeout(refreshModels, 3000);
+    }
+  }
+  let probePoll = null;
+
+  function wireModels() {
+    elModels.querySelectorAll("[data-model-feature]").forEach(sel =>
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try { renderModels((await api("/api/models/select", { feature: sel.dataset.modelFeature, model: sel.value })).models); }
+        catch (e) { sel.disabled = false; alert("Model select failed: " + e.message); }
+      }));
+    const probeBtn = async (btn, model) => {
+      btn.disabled = true; btn.textContent = "Probing…";
+      try { await api("/api/models/probe", model ? { model } : {}); await refreshModels(); }
+      catch (e) { btn.disabled = false; btn.textContent = "Probe"; alert("Probe failed: " + e.message); }
+    };
+    elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));
+    const all = document.getElementById("btn-probe-all");
+    if (all) all.addEventListener("click", () => probeBtn(all, ""));
+  }
+
+  async function refreshModels() {
+    try { renderModels(await (await fetch("/api/models")).json()); } catch { /* older server without the route */ }
+  }
+  if (SERVED) refreshModels();
+
+  // ---- Scheduled jobs (GET /api/jobs, np_job_health). Served mode only. ----
+  const elJobs = document.getElementById("panel-jobs");
+  const JOB_PILL = { ok: "pos", warn: "warn", error: "neg" };
+  const jobBad = j => j.enabled !== false && (j.overdue || j.status === "warn" || j.status === "error"
+    || j.installed === false || (j.exit != null && j.exit !== 0));
+  function jobAge(h) {
+    if (h == null || !Number.isFinite(h)) return "never run";
+    if (h < 1) return Math.round(h * 60) + "m ago";
+    return h < 48 ? Math.round(h) + "h ago" : Math.round(h / 24) + "d ago";
+  }
+  function jobSummary(jobs) {
+    const n = s => jobs.filter(j => j.enabled !== false && j.status === s).length;
+    const parts = [`${jobs.length} job${jobs.length === 1 ? "" : "s"}`];
+    const err = n("error"), warn = n("warn");
+    const late = jobs.filter(j => j.enabled !== false && j.overdue).length;
+    if (err) parts.push(`${err} error${err === 1 ? "" : "s"}`);
+    if (warn) parts.push(`${warn} warning${warn === 1 ? "" : "s"}`);
+    if (late) parts.push(`${late} overdue`);
+    const off = jobs.filter(j => j.enabled === false).length;
+    if (parts.length === 1) parts.push(off ? "rest ok" : "all ok");
+    if (off) parts.push(`${off} off`);
+    return parts.join(", ");
+  }
+  function renderJobs(jobs, served) {
+    const head = `<span class="lbl">Scheduled jobs</span>`;
+    if (!Array.isArray(jobs)) {
+      elJobs.innerHTML = head + empty(served
+        ? "Could not load job health from the dashboard server. Check its log, then reload."
+        : "Job health needs the dashboard server. Open the served dashboard to see scheduled jobs.");
+      return;
+    }
+    if (!jobs.length) { elJobs.innerHTML = head + empty("No scheduled jobs found."); return; }
+    const rows = [...jobs].sort((a, b) => jobBad(b) - jobBad(a)).map(j => {
+      const pill = JOB_PILL[j.status] || "";
+      const on = j.enabled !== false
+      const flags = !on ? "" : [
+        j.overdue ? `<span class="pill warn">overdue</span>` : "",
+        j.installed === false ? `<span class="pill neg">not installed</span>` : "",
+        j.exit != null && j.exit !== 0 ? `<span class="pill neg">exit ${esc(j.exit)}</span>` : "",
+      ].join(" ");
+      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}">
+        <div class="txt"><b>${esc(j.name)}</b> <span class="pill ${pill}">${esc(j.status || "unknown")}</span> ${flags}
+          <div class="meta">${jobAge(j.age_h)} · ${esc(j.schedule || "")} · ${j.enabled === false ? "toggle off" : "toggle on"}</div>
+        </div></div>`;
+    }).join("");
+    elJobs.innerHTML = head + `<div class="kv">${esc(jobSummary(jobs))}</div><div class="jobs">${rows}</div>`;
+  }
+  async function refreshJobs() {
+    try {
+      const res = await fetch("/api/jobs", { signal: AbortSignal.timeout(10000) });
+      // In served mode a missing jobs array means the server call failed.
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      renderJobs((await res.json()).jobs, true);
+    } catch (e) {
+      console.warn("GET /api/jobs failed:", e);
+      renderJobs(null, true);
+    }
+  }
+
   // ---- render ----
   const M = (window.METRICS || []).slice();
   const S = window.TOKENS_SAVED || { total: 0, per_session: 0 };
@@ -484,6 +801,9 @@
   const empty = msg => `<div class="empty">${msg}</div>`;
   const L = window.LEARNED || { playbooks: 0, strategies: 0, strategy_names: [] };
   const learnedNote = ` · learned: ${L.playbooks} playbook(s), ${L.strategies} strategy(ies)`;
+  // Jobs render here, after empty() exists: the static-mode call runs synchronously.
+  if (!SERVED) renderJobs(null);
+  if (SERVED) refreshJobs();
 
   // ---- E · Feature toggles (served-mode only — the panel needs a backend to
   // write through). Fetches /api/toggles, renders a switch per bare feature +
@@ -492,21 +812,219 @@
   // server's own refusal to write them — see np-dashboard-server.py SELF_LOCKOUT_*.
   const elToggles = document.getElementById("panel-toggles");
 
+  // ---- Overlay viewer: one sandboxed iframe modal for wiki/skill pages and for
+  // large panels (settings). Esc or a backdrop click closes it. The page behind
+  // never navigates, so lists keep their scroll, and focus returns to the opener.
+  const VIEW = new URLSearchParams(location.search).get("view") || "";
+  const SANDBOX = {
+    // Rendered wiki pages run mermaid but need no origin, storage or parent access.
+    PAGE: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
+    // Dashboard views (?view=...) call the same-origin API, so they keep the origin.
+    APP: "allow-scripts allow-same-origin allow-forms allow-modals",
+  };
+  const viewerOverlay = document.getElementById("viewer-overlay");
+  let viewerFrame = document.getElementById("viewer-frame");
+  const viewerNewTab = document.getElementById("viewer-newtab");
+  let viewerOpener = null, viewerOnClose = null;
+  function openViewer(url, opts = {}) {
+    viewerOpener = document.activeElement;
+    viewerOnClose = opts.onClose || null;
+    // A fresh frame per open, so its sandbox is fixed at creation. Flipping the
+    // attribute on a live frame is unreliable across browsers.
+    const f = viewerFrame.cloneNode(false);
+    f.setAttribute("sandbox", opts.sandbox || SANDBOX.PAGE);
+    f.setAttribute("referrerpolicy", "no-referrer");
+    f.src = url;
+    f.addEventListener("load", wireFrameEsc);
+    viewerFrame.replaceWith(f);
+    viewerFrame = f;
+    viewerNewTab.href = url;
+    document.getElementById("viewer-title").textContent = opts.title || "Viewer";
+    viewerOverlay.hidden = false;
+    document.getElementById("viewer-close").focus();
+  }
+  function closeViewer() {
+    if (viewerOverlay.hidden) return;
+    viewerOverlay.hidden = true;
+    viewerFrame.src = "about:blank";
+    viewerOpener?.focus?.({ preventScroll: true });
+    const after = viewerOnClose; viewerOnClose = null;
+    if (after) after();
+  }
+  document.getElementById("viewer-close").addEventListener("click", closeViewer);
+  viewerOverlay.addEventListener("click", e => { if (e.target === viewerOverlay) closeViewer(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !viewerOverlay.hidden) closeViewer();
+  });
+  // Esc inside a same-origin view closes too. A sandboxed page is cross-origin,
+  // so the access throws and only the parent handler applies.
+  function wireFrameEsc() {
+    try {
+      viewerFrame.contentDocument.addEventListener("keydown", e => {
+        if (e.key === "Escape") closeViewer();
+      });
+    } catch (e) { /* opaque-origin page */ }
+  }
+  // Any link marked data-viewer opens in the overlay instead of a new tab.
+  // A modified click (cmd/ctrl/shift/middle) keeps the browser's own behavior.
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest("a[data-viewer]");
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    openViewer(a.getAttribute("href"), { title: a.getAttribute("data-viewer") || "Viewer" });
+  });
+  function openSettingsView(hash) {
+    openViewer("index.html?view=settings" + (hash || ""),
+               { sandbox: SANDBOX.APP, title: "Settings", onClose: () => refreshModels() });
+  }
+
   // Settings modal (feature toggles live behind the header cog rather than inline).
+  // Served, the cog opens it as a page in the viewer (?view=settings) for more room.
   const settingsOverlay = document.getElementById("settings-overlay");
   const btnSettings = document.getElementById("btn-settings");
   const btnSettingsClose = document.getElementById("btn-settings-close");
-  function openSettings() { settingsOverlay.hidden = false; renderToggles(); }
-  function closeSettings() { settingsOverlay.hidden = true; }
-  btnSettings?.addEventListener("click", openSettings);
+  function openSettings() {
+    settingsOverlay.hidden = false; renderToggles();
+    return SERVED ? refreshModels() : Promise.resolve();
+  }
+  // Open the modal and scroll to one feature's model row (#model-row-<key>).
+  async function openModelRow(hash) {
+    if (SERVED && VIEW !== "settings") return openSettingsView(hash);
+    await openSettings();
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "center" });
+  }
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[href^="#model-row-"]');
+    if (!a) return;
+    e.preventDefault();
+    history.replaceState(null, "", a.getAttribute("href"));
+    openModelRow(a.getAttribute("href"));
+  });
+  window.addEventListener("hashchange", () => { if (location.hash.startsWith("#model-row-")) openModelRow(location.hash); });
+  if (location.hash.startsWith("#model-row-")) openModelRow(location.hash);
+  function closeSettings() { if (VIEW !== "settings") settingsOverlay.hidden = true; }
+  btnSettings?.addEventListener("click", () =>
+    SERVED && VIEW !== "settings" ? openSettingsView() : openSettings());
+  if (VIEW === "settings") {
+    document.body.classList.add("view-settings");
+    if (!location.hash.startsWith("#model-row-")) openSettings();
+  }
   btnSettingsClose?.addEventListener("click", closeSettings);
   settingsOverlay?.addEventListener("click", e => { if (e.target === settingsOverlay) closeSettings(); });
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && settingsOverlay && !settingsOverlay.hidden) closeSettings();
   });
 
+  // Help bubble: shown above the badge (below when no room), clamped 8px
+  // inside the viewport on both axes so it never clips at the modal edge.
+  const tipEl = document.getElementById("tiptip");
+  function placeTip(badge) {
+    tipEl.textContent = badge.dataset.tip;
+    tipEl.hidden = false;
+    const b = badge.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), m = 8;
+    const left = Math.min(Math.max(b.left + b.width / 2 - t.width / 2, m), window.innerWidth - t.width - m);
+    let top = b.top - t.height - 6;
+    if (top < m) top = b.bottom + 6;
+    tipEl.style.left = Math.max(left, m) + "px";
+    tipEl.style.top = Math.min(top, window.innerHeight - t.height - m) + "px";
+  }
+  const hideTip = () => { tipEl.hidden = true; };
+  ["mouseover", "focusin"].forEach(ev => document.addEventListener(ev, e => {
+    const badge = e.target.closest && e.target.closest(".tighelp");
+    if (badge) placeTip(badge);
+  }));
+  ["mouseout", "focusout"].forEach(ev => document.addEventListener(ev, e => {
+    if (e.target.closest && e.target.closest(".tighelp")) hideTip();
+  }));
+  document.addEventListener("scroll", hideTip, true);
+
   function helpIcon(desc) {
     return desc ? `<span class="tighelp" tabindex="0" data-tip="${esc(desc)}" aria-label="${esc(desc)}">?</span>` : "";
+  }
+
+  // Display labels for terse toggle/param keys. Keys stay unchanged:
+  // toggles.conf defines them, toggles.local stores overrides, code reads them. tests/toggles/test_display_labels.py
+  // checks every key here exists in toggles.conf.
+  const TOGGLE_LABELS = {
+    "evaluator": "Session evaluator",
+    "allowlist": "Permission allowlist",
+    "directive": "Session directive",
+    "pii_filter": "PII filter",
+    "mcp": "MCP server",
+    "turn_gate": "Turn output gate",
+    "form_gate": "Write form gate",
+    "form_directive": "Form directive",
+    "gates": "CI change gates",
+    "memory.cap_bytes": "Memory size cap (bytes)",
+    "memory.backcapture_days": "Back-capture window (days)",
+    "memory.backcapture_max": "Back-capture sessions per sweep",
+    "memory.flush_interval": "Flush interval (seconds)",
+    "memory.drain_grace_days": "Drain grace period (days)",
+    "lessons.enforce": "Enforce lesson gates",
+    "sync.interval": "Sync interval (seconds)",
+    "sync.content": "Sync content overlay",
+    "sync.layout_drift": "Check layout drift",
+    "evaluator.cap_bytes": "Evaluator size cap (bytes)",
+    "evaluator.dashboard_sessions": "Sessions shown",
+    "evaluator.dashboard_days": "Days shown",
+    "evaluator.min_tool_calls": "Minimum tool calls to show a session",
+    "evaluator.dashboard_open": "Open dashboard at session start",
+    "evaluator.dashboard_serve": "Serve dashboard locally",
+    "evaluator.dashboard_port": "Dashboard port",
+    "evaluator.suggestions_top": "Suggestions shown",
+    "evaluator.implement": "Allow implementing suggestions",
+    "evaluator.implement_mode": "Implement mode",
+    "evaluator.implement_status_ttl_days": "Keep implement status (days)",
+    "evaluator.escalation_min_struggles": "Escalate after struggles",
+    "evaluator.escalation_min_prompts": "Escalate after prompts",
+    "evaluator.retain_days": "Keep records (days)",
+    "evaluator.wiki_nav": "Wiki navigation",
+    "evaluator.wiki_mermaid": "Render Mermaid in wiki",
+    "evaluator.toggle_ui": "Toggle editing in dashboard",
+    "skills.split_kb": "Split skill body above (KB)",
+    "skills.soft_kb": "Warn on skill body above (KB)",
+    "skills.catalog_tok": "Skill catalog budget (tokens)",
+    "skills.max_per_run": "Skills split per run",
+    "skills.graduate_seen": "Graduate after times seen",
+    "skills.graduate_kb": "Graduate size limit (KB)",
+    "skills.trigger_recall": "Recall skills by trigger",
+    "skills.security_recall": "Recall security skills",
+    "team.merge": "Team layer merge mode",
+    "mcp.writes": "Allow MCP writes",
+    "mcp.contribute": "Allow MCP contribute",
+    "maintain.freshness_grace_days": "Freshness grace period (days)",
+    "resume.interval": "Live write interval (seconds)",
+    "resume.max_age": "Max pointer age (seconds)",
+    "resume.cron": "Interval cron backstop",
+    "resume.cron_min": "Cron interval (minutes)",
+    "resume.active_window": "Active session window (seconds)",
+    "journal.ttl_days": "Keep entries (days)",
+    "journal.recall_sources": "Recall sources",
+    "models.cheap": "Cheap model",
+    "models.agent": "Agentic model",
+    "turn_gate.ui": "UI check mode",
+    "turn_gate.diff": "Diff check mode",
+    "turn_gate.form": "Form check mode",
+    "turn_gate.form_threshold": "Form score threshold",
+    "turn_gate.timeout_s": "Timeout (seconds)",
+    "turn_gate.subagent": "Gate subagents",
+    "form_gate.categorical": "Categorical rule mode",
+    "form_gate.rate": "Rate rule mode",
+    "form_gate.rate_threshold": "Rate threshold",
+    "form_gate.timeout_s": "Timeout (seconds)",
+    "form_gate.exempt_globs": "Exempt path globs",
+    "form_gate.prose_ext": "Prose file extensions",
+    "form_gate.comment_ext": "Code comment extensions",
+    "form_gate.comment_block_max": "Max comment block lines",
+    "form_directive.cadence": "Directive cadence",
+    "gates.spec_guard.enforce": "Enforce spec guard",
+    "gates.drift_guard.enforce": "Enforce drift guard",
+    "gates.tier_guard.enforce": "Enforce tier guard",
+  };
+  // Label with the raw key shown smaller beside it; unmapped keys render as-is.
+  function keyLabel(key, shown) {
+    const lbl = TOGGLE_LABELS[key];
+    return lbl ? `${esc(lbl)}<span class="tograw">${esc(shown)}</span>` : esc(shown);
   }
 
   function paramControl(fam, p) {
@@ -535,7 +1053,7 @@
         data-saved="${esc(p.value)}" value="${esc(p.value)}">`;
     }
     return `<div class="togparam">
-      <span class="togkey">${esc(p.key)}${helpIcon((p.schema || {}).description)}${roNote}${warn}</span>${control}
+      <span class="togkey">${keyLabel(dotted, p.key)}${helpIcon((p.schema || {}).description)}${roNote}${warn}</span>${control}
     </div>`;
   }
 
@@ -583,10 +1101,12 @@
     elToggles.innerHTML = (families.length ? families.map(fam => `
       <div class="togfam">
         <div class="togfamhead">
-          <span class="togfamname">${esc(fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
+          <span class="togfamname">${keyLabel(fam.feature, fam.feature)}${helpIcon(fam.description)}<span class="togscope">${esc(fam.scope)}</span></span>
           ${familyControl(fam)}
         </div>
-        ${fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
+        ${fam.feature === "models"
+          ? `<div class="note">Pick models in the Models section above.</div>`
+          : fam.params.length ? `<div class="togparams">${fam.params.map(p => paramControl(fam.feature, p)).join("")}</div>` : ""}
       </div>`).join("") : empty("No toggles declared.")) +
       `<div class="note">Shared-scope switches commit + push toggles.conf; params always stay local to this machine.</div>`;
     wireToggleInputs();
@@ -615,17 +1135,106 @@
     const cands = Array.isArray(G.candidates) ? G.candidates : [];
     const th = G.thresholds || {};
     const thNote = (th.graduate_seen != null && th.graduate_kb != null)
-      ? `<div class="note">overdue when seen ≥ ${th.graduate_seen} or body &gt; ${th.graduate_kb} KB · run <code>np-core-contribute</code> to graduate</div>`
+      ? `<div class="note">overdue when seen ≥ ${th.graduate_seen} or body &gt; ${th.graduate_kb} KB · Graduate runs the <code>np-core-graduate</code> flow as an agent job</div>`
       : "";
     elGrad.innerHTML = `<span class="lbl">Graduation candidates</span>` + (cands.length
-      ? cands.map(c => `<div class="sug">
+      ? cands.map(c => `<div class="sug" data-kind="${esc(c.kind || "")}" data-name="${esc(c.name || "")}">
           <div class="txt">
             <span class="tag">${esc(c.kind || "")}</span> <b>${esc(c.name || "")}</b>
             <div class="meta">seen ${c.seen || 0} · ${((c.bytes || 0) / 1024).toFixed(1)} KB · ${
               (Array.isArray(c.reasons) ? c.reasons : []).map(r => esc(r)).join(" + ") || "—"}</div>
-          </div>
+            ${detailRow(c.body)}
+          </div>${SERVED ? `<span class="rowacts">
+            <button class="btn sm primary" data-graduate>Graduate</button>
+            <button class="btn sm" data-dismiss title="Hide this candidate. Stored next to graduation-candidates.json.">Dismiss</button>
+          </span>` : ""}
         </div>`).join("") + thNote
       : empty("No strategies or playbooks are overdue to graduate."));
+    wireDetails(elGrad);
+    if (!SERVED) return;
+    const body = row => ({ kind: row.dataset.kind, name: row.dataset.name });
+    elGrad.querySelectorAll("[data-dismiss]").forEach(b => b.addEventListener("click", async () => {
+      const row = b.closest(".sug");
+      b.disabled = true;
+      try { await api("/api/graduation/dismiss", body(row)); row.remove(); }
+      catch (e) { b.disabled = false; alert("Dismiss failed: " + e.message); }
+    }));
+    elGrad.querySelectorAll("[data-graduate]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/graduation/graduate", body(row), () => setTimeout(() => row.remove(), 4000));
+    }));
+  }
+
+  // Shared runner for agent jobs queued through the implement machinery
+  // (compact Apply, graduation Graduate). Starts the job, then polls
+  // /api/implement-status with the job text the server returns.
+  async function runJob(b, route, body, onDone) {
+    const acts = b.closest(".rowacts");
+    const buttons = [...acts.querySelectorAll("button")];
+    buttons.forEach(x => x.style.display = "none");
+    const pill = document.createElement("span");
+    acts.appendChild(pill);
+    const set = (cls, t) => { pill.className = "pill " + cls; pill.textContent = t; };
+    const restore = () => buttons.forEach(x => x.style.display = "");
+    set("warn", "⋯ Starting…");
+    let r;
+    try { r = await api(route, body); }
+    catch (e) { set("neg", "✕ " + e.message); setTimeout(() => { pill.remove(); restore(); }, 4000); return; }
+    if (r.deduped) set("warn", "⋯ Already queued");
+    refreshQueue();
+    let tries = 0;
+    const poll = () => setTimeout(async () => {
+      let st;
+      try { st = await (await fetch("/api/implement-status?text=" + encodeURIComponent(r.text))).json(); }
+      catch { return (++tries < 220) && poll(); }
+      const ref = st.ref ? ": " + st.ref : "";
+      if (st.state === "done") { set("pos", "✓ Done" + ref); if (onDone) onDone(); }
+      else if (st.state === "not_implementable") { set("warn", "▲ Left open" + ref); restore(); }
+      else if (st.state === "failed") { set("neg", "✕ Failed" + ref); restore(); }
+      else if (st.state === "queued") { set("warn", "⋯ Queued" + (st.position ? " #" + st.position : "")); poll(); }
+      else if (++tries < 220) { if (st.state === "running") set("warn", "⋯ Running…"); poll(); }
+      else set("warn", "… still running, refresh the page later");
+    }, 3000);
+    poll();
+  }
+
+  // Compact proposals from the weekly-compact agent (compact-proposals/<date>.md),
+  // one row per `### a vs b` entry. Reject notes it in REJECTED.md and drops the
+  // entry. Apply queues an agent job that applies it per AGENTS.md. A "keep
+  // separate" recommendation makes Reject the primary, one-click action.
+  const elProp = document.getElementById("panel-proposals");
+  function renderProposals() {
+    const P = Array.isArray(window.PROPOSALS) ? window.PROPOSALS : [];
+    const rows = [];
+    P.forEach(f => (f.proposals || []).forEach(p => rows.push(Object.assign({ file: f.file, date: f.date }, p))));
+    const paint = () => {
+      if (!elProp.querySelector(".sug")) elProp.innerHTML = `<span class="lbl">Compact proposals</span>` + empty("No compact proposals awaiting review.");
+    };
+    elProp.innerHTML = `<span class="lbl">Compact proposals</span>` + rows.map(p => `<div class="sug" data-file="${esc(p.file)}" data-title="${esc(p.title)}">
+        <div class="txt"><b>${esc(p.title)}</b>
+          <div class="meta">${esc(p.date || "")} · ${p.recommendation ? esc(p.recommendation) : "no recommendation"}</div>
+          ${detailRow(p.body)}
+        </div>${SERVED ? `<span class="rowacts">
+          <!-- Apply is always primary to match the other approve actions. -->
+          <button class="btn sm primary" data-apply>Apply</button>
+          <button class="btn sm" data-reject-prop>Reject</button>
+        </span>` : ""}
+      </div>`).join("")
+      + (rows.length && !SERVED ? `<div class="note">Open the served dashboard for the Apply / Reject buttons.</div>` : "");
+    paint();
+    wireDetails(elProp);
+    if (!SERVED) return;
+    const body = row => ({ file: row.dataset.file, title: row.dataset.title });
+    elProp.querySelectorAll("[data-reject-prop]").forEach(b => b.addEventListener("click", async () => {
+      const row = b.closest(".sug");
+      b.disabled = true;
+      try { await api("/api/compact/reject", body(row)); row.remove(); paint(); }
+      catch (e) { b.disabled = false; alert("Reject failed: " + e.message); }
+    }));
+    elProp.querySelectorAll("[data-apply]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/compact/apply", body(row), () => setTimeout(() => { row.remove(); paint(); }, 4000));
+    }));
   }
 
   // B4 · Back-capture backlog: how many prior sessions are still waiting on
@@ -688,6 +1297,7 @@
     elAssets.innerHTML = `<span class="lbl">Asset usefulness</span>` + empty("No asset usage yet.");
     elWins.innerHTML = `<span class="lbl">Wins &amp; learnings</span>` + empty("No wins recorded yet.");
     renderGraduation();
+    renderProposals();
     renderToggles();
     renderBacklog();
     renderLedger();
@@ -724,20 +1334,25 @@
         <div class="stat"><b>${wins}</b><span>total wins</span></div>
         <div class="stat"><b>${struggles}</b><span>total struggles</span></div>
       </div>
-      ${chartHTML(trendPts, [y(33), y(67)])}
+      ${chartHTML(trendPts, [0, 33, 67, 100].map(v => ({ y: y(v), label: v })))}
       ${legend([
-        { cls: "dot", color: "var(--status-pos)", label: "score (green ≥67 · amber 34–66 · clay ≤33)" },
-        { cls: "grid", label: "33 / 67 band thresholds" },
-        { label: "hover a point for session stats" },
+        { cls: "dot", color: "var(--status-pos)", label: "≥67" },
+        { cls: "dot", color: "var(--status-warn)", label: "34–66" },
+        { cls: "dot", color: "var(--status-neg)", label: "≤33" },
+        { cls: "grid", label: "33 / 67 thresholds" },
+        { hint: true, label: "hover a point for session stats" },
       ])}`;
     wireChart(elTrend.querySelector(".chartwrap"), trendPts);
 
     // A2 · Token usage (deterministic — summed once per assistant message.id)
-    // Log scale: token counts span orders of magnitude; log prevents one outlier
-    // from collapsing the other sessions into a bottom-3px sliver.
+    // Log scale: per-session output spans 2+ decades; linear would crush most
+    // sessions into a sliver under one outlier. The domain hugs the data
+    // (min..max, padded 10% in log space) so dots fill the plot, and labelled
+    // decade gridlines make the scale readable.
     const tk = aggregateTokens(M);
-    const tmax = Math.max(10, ...tk.series);  // floor at 10 to avoid log10(0)/negative
-    const ty = v => H - pad - (Math.log10(Math.max(v, 1)) / Math.log10(tmax)) * (H - 2 * pad);
+    const td = logDomain(tk.series);
+    const ty = v => H - pad - (Math.log10(Math.max(v, 1)) - td.lo) / (td.hi - td.lo) * (H - 2 * pad);
+    const tokGrids = td.ticks.map(v => ({ y: ty(v), label: fmtTok(v) }));
     const tokPts = tk.series.map((v, i) => {
       const r = M[i], t = (r.signals || {}).tokens || {};
       return {
@@ -758,7 +1373,7 @@
       "Lower bound — does not include skill/recall counterfactuals.";
     elTokens.innerHTML = `
       <span class="lbl">Token usage · deterministic · output / session · log scale</span>
-      <div class="statstrip">
+      <div class="statstrip tokstrip">
         <div class="stat"><b>${fmtTok(tk.sum.output)}</b><span>output (generated)</span></div>
         <div class="stat"><b>${fmtTok(tk.sum.input)}</b><span>input (fresh)</span></div>
         <div class="stat"><b>${fmtTok(tk.sum.cache_creation)}</b><span>cache write</span></div>
@@ -775,11 +1390,12 @@
           <span>est. saved / session ⓘ</span>
         </div>
       </div>
-      ${chartHTML(tokPts)}
+      ${chartHTML(tokPts, tokGrids)}
       ${legend([
-        { color: "var(--viz-line)", label: "output tokens / session" },
-        { label: "hover a point for the full token breakdown" },
+        { cls: "dot", color: "var(--viz-line)", label: "output tokens / session" },
+        { hint: true, label: "hover a point for the full token breakdown" },
       ])}`;
+
     wireChart(elTokens.querySelector(".chartwrap"), tokPts);
 
     // B · Suggestions (+ http-only actions: per-row Implement / Reject, header Review / Clear)
@@ -803,19 +1419,36 @@
       </div>`;
     }
 
-    function renderSug(list, note) {
+    // 10 per page. Review / Clear re-render from page 1. Paging keeps the filters.
+    const SUG_PAGE = 10;
+    let sugPage = 0;
+    function renderSug(list, note, keepPage) {
       list = (list || []).filter(s => !resolvedTexts.has(normSug(s.text)));   // never show resolved
+      const pages = Math.max(1, Math.ceil(list.length / SUG_PAGE));
+      sugPage = keepPage ? Math.min(sugPage, pages - 1) : 0;
+      const shown = list.slice(sugPage * SUG_PAGE, (sugPage + 1) * SUG_PAGE);
+      const pager = pages > 1
+        ? `<div class="pager">
+             <button class="btn sm" id="sug-prev" type="button"${sugPage === 0 ? " disabled" : ""}>‹ Prev</button>
+             <span>Page ${sugPage + 1} of ${pages} · ${list.length} total</span>
+             <button class="btn sm" id="sug-next" type="button"${sugPage >= pages - 1 ? " disabled" : ""}>Next ›</button>
+           </div>`
+        : "";
       const actions = SERVED
         ? `<div class="btnrow">
              <button class="btn" id="btn-mode" title="How Implement applies a change — PR: branch + pull request for review; direct: commit to main and push (no review gate)">Mode: …</button>
+             <span class="pill warn" id="queue-count" hidden></span>
              <button class="btn" id="btn-review">Review</button>
              <button class="btn primary" id="btn-clear">Clear</button>
            </div>`
         : "";
       elSug.innerHTML = `<div class="panelhead"><span class="lbl">Suggestions</span>${actions}</div>`
-        + (list.length ? list.map(sugRow).join("") : empty("Nothing to act on yet."))
+        + (list.length ? shown.map(sugRow).join("") + pager : empty("Nothing to act on yet."))
         + (note ? `<div class="note">${note}</div>` : "")
         + (SERVED ? "" : `<div class="note">Open the served dashboard (evaluator.dashboard_serve on) for the Review / Clear and per-row Implement / Reject buttons.</div>`);
+      const turn = d => () => { sugPage += d; renderSug(list, note, true); elSug.scrollIntoView({ block: "start" }); };
+      document.getElementById("sug-prev")?.addEventListener("click", turn(-1));
+      document.getElementById("sug-next")?.addEventListener("click", turn(1));
       if (SERVED) wireSugActions(list);
     }
 
@@ -907,10 +1540,13 @@
         acts.appendChild(pill);
         const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
         const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
-        setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+        setPill("warn", "⋯ Starting…");
+        // A busy server queues the job, so rapid clicks on several rows are fine.
         try { await api("/api/implement", { text, edited: edited || "", target: tgtOf(row) }) }
         catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
+        refreshQueue();
         let tries = 0;
+        const logHint = s => s.log ? " (log: " + s.log + ")" : "";
         const poll = () => setTimeout(async () => {
           let s;
           try { s = await (await fetch("/api/implement-status?text=" + encodeURIComponent(text))).json(); }
@@ -921,19 +1557,34 @@
               ? ` — <a href="${esc(ref)}" target="_blank">${esc(ref.replace(/^https?:\/\/github\.com\//, ""))}</a>`
               : (ref ? " — " + esc(ref) : "");
             const note = document.createElement("div");
-            note.className = "note ok"; note.innerHTML = "✓ Implemented" + link;
+            note.className = "note ok"; note.innerHTML = "✓ Implemented" + link + esc(logHint(s));
             elSug.querySelector(".panelhead").after(note);
             dropResolved(text);
           } else if (s.state === "already_resolved") {
             // Another machine sharing this content overlay got there first.
             dropResolved(text);
           } else if (s.state === "not_implementable") {
-            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
+            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "") + logHint(s)); buttons.forEach(x => x.style.display = "");
           } else if (s.state === "failed") {
-            setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "")); buttons.forEach(x => x.style.display = "");
-          } else if (s.state === "busy") {
-            setPill("warn", "⋯ Another job running — try again"); buttons.forEach(x => x.style.display = "");
-          } else if (++tries < 220) { poll(); }       // running / not-yet — keep polling (~11 min cap)
+            if (s.model_error) {
+              pill.className = "pill neg"; pill.textContent = "✕ Model " + (s.model || "") + " unavailable: ";
+              const a = document.createElement("a");
+              a.href = "#model-row-implement"; a.textContent = "pick another";
+              pill.append(a);
+              refreshModels();
+            } else {
+              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "") + logHint(s));
+            }
+            buttons.forEach(x => x.style.display = "");
+
+          } else if (s.state === "queued") {
+            // Queue time does not count toward the polling cap.
+            setPill("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")); poll();
+
+          } else if (++tries < 220) {                // running, not-yet, or legacy busy: keep polling (~11 min cap)
+            if (s.state === "running") setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
+            poll();
+          }
           else { setPill("warn", "… still running — check back later"); }
         }, 3000);
         poll();
@@ -960,6 +1611,7 @@
     }
 
     renderSug(sugs);
+    if (SERVED) refreshQueue();
 
     // B2 · Wins & learnings (positive mirror of struggles): strategies-learned
     // count + chips, then the 6 most-recent helped[] items (✓ + --status-pos).
@@ -978,6 +1630,7 @@
 
     // B3 · Graduation candidates (overdue strategies/playbooks → skills)
     renderGraduation();
+    renderProposals();
     renderToggles();
 
     // B4 · Back-capture backlog (pending / oldest-age-vs-ceiling / drain rate)
@@ -1118,23 +1771,21 @@
       elCount.textContent = total ? `${items.length} of ${total} page(s)` : "";
       if (!total) { elList.innerHTML = empty("No wiki pages yet."); return; }
       if (!items.length) { elList.innerHTML = empty("No matches."); return; }
-      // One section per declared knowledge variant (#234), in build order. The
-      // first group stays open; the rest follow expandAll, matching the old
-      // Topics-open / Concepts-collapsed behavior for the conventional split.
+      // One section per declared knowledge variant (#234), in build order. On load
+      // layer rows open and their groups stay collapsed. Search sets expandAll,
+      // which opens every level that holds a match.
       const groupOrder = groupLabels;
-      const groups = ls => groupOrder.map((label, i) =>
-        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label,
-                       i === 0 ? true : expandAll)).join("");
-      // Multi-layer: one collapsible section per content layer, precedence order,
-      // highest-precedence open. A single layer renders exactly as it always has —
-      // no gratuitous "Personal" wrapper around the whole tree (#142).
+      const groups = ls => groupOrder.map(label =>
+        topicGroupHTML(ls.filter(l => l.group === label), expandAll, label, expandAll)).join("");
+      // Multi-layer: one collapsible section per content layer, precedence order.
+      // A single layer renders without a layer wrapper (#142).
       const layers = W.layers || [];
       elList.classList.toggle("split", layers.length > 1);
       if (layers.length > 1) {
-        elList.innerHTML = layers.map((lab, i) => {
+        elList.innerHTML = layers.map(lab => {
           const mine = items.filter(l => l.layer === lab);
           if (!mine.length) return "";
-          const open = expandAll || i === 0;
+          const open = true;  // layers open, groups below follow expandAll
           return `<details class="wikilayer"${open ? " open" : ""}>
             <summary><span>${esc(lab)}</span><span>${mine.length}</span></summary>
             <div class="wikinest">${groups(mine)}</div></details>`;
@@ -1151,7 +1802,15 @@
     }
 
     if (elSearch) elSearch.addEventListener("input", filter);
-    // default: Topics group open, individual topics collapsed; Concepts collapsed
+    // Open a page in the overlay viewer. The nav never navigates, so its scroll
+    // and open groups stay put. A modified click still opens a new tab.
+    elList.addEventListener("click", e => {
+      const a = e.target.closest("a.wikiitem");
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      e.preventDefault();
+      openViewer(a.getAttribute("href"), { title: a.getAttribute("title") || "Wiki" });
+    });
+    // default: layers open, groups collapsed
     draw(leaves, false);
   })();
 </script>

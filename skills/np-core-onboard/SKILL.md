@@ -1,6 +1,6 @@
 ---
 name: np-core-onboard
-description: Install/onboard nervepack onto this machine for whatever agentic host you are (Claude Code, Goose, OpenHands, Cline, Continue, …) by reading the tool-neutral onboard contract, wiring the host yourself, and verifying with the doctor. Use when setting up nervepack on a new machine/host, when the user says "/np-onboard" or "onboard nervepack" / "set up nervepack here", or when np-doctor reports MUST failures.
+description: 'Install nervepack on this machine for any agent host (Claude Code, Goose, Cline, others): read the onboard contract, wire the host, verify with the doctor. Use on "/np-onboard", "set up nervepack here", a new machine, or doctor MUST failures.'
 ---
 
 # Onboard nervepack to this host
@@ -33,6 +33,8 @@ this skill is the entry point.
    anything, invoke [[np-core-layout]] to run the discovery interview and record
    `.nervepack/layout.json`. Contribution resolves paths from that manifest, so a
    layer that has not declared one refuses writes for kinds it never routed.
+   Then run `cli.py layout drift --layer <personal|team> --apply` so every
+   directory of typed pages gets a route, and the interview covers the rest.
 7. **Run the doctor until green:** `python3 engine/nervepack_engine/cli.py doctor` (exits non-zero on a MUST
    shortfall). Fix → re-run. That generate→verify→fix loop is what makes self-wiring safe.
    The `layer-layout` SHOULD row reports the result of step 6.

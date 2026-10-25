@@ -44,7 +44,7 @@ def _append(log_path, *chunks):
         pass
 
 
-def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None):
+def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None, feature=None):
     """Invoke np_model.agent() with `prompt`, `tools`, cd'd into `cwd` (defaults
     to the caller's current directory), bounded by `timeout` seconds (None = no
     bound). Returns True iff it exited 0. Raises only np_model.AuthError: auth is
@@ -59,7 +59,8 @@ def run_agent(prompt, tools, cwd=None, timeout=None, log_path=None):
     which is how ~a week of no-op memory-promote runs went unnoticed. Callers
     that own a log should pass it."""
     try:
-        returncode, out, err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
+        returncode, out, err = np_model.agent(prompt, tools, cwd=cwd, timeout=timeout,
+                                              feature=feature)
     except np_model.AuthError as exc:
         if log_path:
             _append(log_path, "", "auth failed: %s\n" % exc)

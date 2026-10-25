@@ -1,0 +1,57 @@
+name: Claude PR Review
+on:
+  pull_request:
+    types: [opened]
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: read
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Load review standards
+        id: standards
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          delim="STANDARDS_$(openssl rand -hex 16)"
+          git fetch --depth=1 origin "$BASE"
+          {
+            echo "STANDARDS<<$delim"
+            # Read from the base branch so a PR cannot rewrite its own review rules.
+            git show "FETCH_HEAD:.github/claude-review-standards.md" 2>/dev/null \
+              || echo "::warning::review standards missing on $BASE" >&2
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+      - name: Review
+        id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }} Post the result as one gh pr comment on this PR."
+          claude_args: |
+            --max-turns 15
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
+            --disallowedTools "Bash(gh pr review:*),Bash(gh pr merge:*),Bash(gh api:*),Edit,Write"
+            --append-system-prompt "${{ env.STANDARDS }}"
+      - name: Upload review transcript
+        continue-on-error: true
+        if: always() && steps.review.outputs.execution_file != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: claude-review-transcript
+          path: ${{ steps.review.outputs.execution_file }}
+          retention-days: 3

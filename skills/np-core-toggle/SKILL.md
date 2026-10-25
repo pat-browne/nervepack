@@ -1,6 +1,6 @@
 ---
 name: np-core-toggle
-description: Turn Nervepack features on/off and adjust their settings. Use when the user says "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or wants to change a param like the sync interval. Wraps the `cli.py toggle` command (engine/nervepack_engine/cli.py).
+description: Turn nervepack features on or off and change their params via cli.py toggle. Use on "toggle off X", "disable memory/lessons/the evaluator/the directive", "turn X back on", "what nervepack features are on", or a param change.
 ---
 
 # np-core-toggle
@@ -26,6 +26,12 @@ Sub-toggles like `memory.recall` inherit their family unless explicitly set.
 **Scope:** shared features commit their state to the repo and propagate on the
 next sync; `allowlist` (local) and any sub-override write to
 `~/.config/nervepack/toggles.local`.
+
+**Resolution order:** `~/.config/nervepack/toggles.local`, then
+`<content_dir>/config/toggles.conf`, then `engine/setup/toggles.conf`. The
+content file reaches every machine that syncs the content repo, so it holds
+personal preferences without touching the engine. A content row names only the
+params it changes. Shared-scope writes follow the layer once the file exists.
 
 **Sync:** primary sync runs on session exit (`SessionEnd`); the throttled
 `SessionStart` sync (default 1 day) is a backup. Change with

@@ -29,6 +29,7 @@ DEFAULT_OUT = os.path.join(HERE, "data", "metrics.js")
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "setup"))
 sys.path.insert(0, os.path.join(HERE, "..", "engine", "nervepack_engine"))
 import np_toggle  # noqa: E402
+import np_dashboard_actions  # noqa: E402
 
 
 def default_resolved():
@@ -47,6 +48,45 @@ def default_graduation():
     derive from the personal content overlay — the engine stays PII-clean). The producer
     (np_skill_maintain.py) writes it there. NP_GRADUATION_CANDIDATES env var overrides."""
     return os.path.join(_content_dir(), "dashboard", "data", "graduation-candidates.json")
+
+
+# One cap and marker for every detail body, shared with the proposal parser
+DETAIL_MAX_CHARS = np_dashboard_actions.BODY_MAX_CHARS
+TRUNCATED_MARK = np_dashboard_actions.TRUNCATED_MARK
+
+
+def attach_lesson_bodies(grad, lessons_dir):
+    """Add `body` (the lesson file text) to each candidate whose
+    <lessons_dir>/<name>.md exists. A name that is not a plain file name is
+    skipped. Fail-open: an unreadable file leaves the candidate without a body.
+    A body cut at DETAIL_MAX_CHARS ends with TRUNCATED_MARK."""
+    cands = grad.get("candidates") or []
+    if cands and not os.path.isdir(lessons_dir):
+        sys.stderr.write("build.py graduation bodies: no lessons dir at %s\n" % lessons_dir)
+        return grad
+    attached, missing = 0, []
+    for c in cands:
+        name = c.get("name") if isinstance(c, dict) else None
+        if (not isinstance(name, str) or not name or name.startswith(".")
+                or os.path.basename(name) != name):
+            continue
+        try:
+            with open(os.path.join(lessons_dir, name + ".md"), encoding="utf-8",
+                      errors="replace") as fh:
+                body = fh.read(DETAIL_MAX_CHARS)
+                if fh.read(1):
+                    body += TRUNCATED_MARK
+        except OSError as exc:
+            missing.append("%s (%s)" % (name, exc.strerror or exc))
+            continue
+        c["body"] = body
+        attached += 1
+    if missing:
+        more = " and %d more" % (len(missing) - 10) if len(missing) > 10 else ""
+        sys.stderr.write("build.py graduation bodies: %d attached, %d without text: %s%s\n"
+                         % (attached, len(missing), ", ".join(missing[:10]), more))
+    return grad
+
 
 
 def load_graduation(path):
@@ -282,14 +322,32 @@ def _safe_href(url):
     return url if _SAFE_HREF.match(url) else ""
 
 
+_MD_ANCHOR = re.compile(r'<a\s+(?:id|name)="([A-Za-z0-9_.:-]+)"\s*>\s*</a>', re.I)
+_MD_ESCAPE = re.compile(r'\\([\\`*_{}\[\]()#+\-.!|<>~"&])')
+
+
 def _render_inline(s, link_map=None, here=""):
     """Inline Markdown -> HTML on a single text run. Escapes first (so any literal
     HTML in content is inert), then applies code/bold/italic, [[wikilinks]] (resolved
     against link_map relative to `here`, dangling -> plain text), and [text](url)
     (href sanitized). All emitted text is already escaped."""
+    # Word/Pandoc exports carry empty <a id> bookmarks and backslash escapes.
+    # Park both behind sentinels so escaping and emphasis passes leave them alone.
+    anchors = []
+
+    def _park(m):
+        anchors.append(m.group(1))
+        return "\x00A%d\x00" % (len(anchors) - 1)
+    s = _MD_ANCHOR.sub(_park, s.replace("\x00", ""))   # NUL is reserved for sentinels
+    s = _MD_ESCAPE.sub(lambda m: "\x00E%d\x00" % ord(m.group(1)), s)
     s = html.escape(s)
     s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
-    s = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', s)
+    # Non-greedy: a literal `*` inside the span (COUNT(*), SELECT *) must not
+    # block the match to the real closing `**`. A `[^*]+` class rejected any
+    # inner `*`, so **COUNT(*) vs COUNT(col):** never matched as bold and the
+    # italic pass below then mispaired the leftover asterisks.
+    s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+    s = re.sub(r'__(.+?)__', r'<strong>\1</strong>', s)
     s = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', s)
 
     def _wl(m):
@@ -305,7 +363,13 @@ def _render_inline(s, link_map=None, here=""):
         text, url = m.group(1), _safe_href(m.group(2))
         return '<a href="%s">%s</a>' % (html.escape(url), text) if url else text
     s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _lk, s)
-    return s
+    s = re.sub(r'\x00E(\d+)\x00', lambda m: html.escape(chr(int(m.group(1)))), s)
+    return re.sub(r'\x00A(\d+)\x00', lambda m: '<a id="%s"></a>' % anchors[int(m.group(1))], s)
+
+
+def _md_plain(s):
+    """Excerpt text: drop bookmarks and undo backslash escapes."""
+    return _MD_ESCAPE.sub(r"\1", _MD_ANCHOR.sub("", s))
 
 
 _PAGE_CSS = (
@@ -368,17 +432,24 @@ def md_to_html(md, meta=None, link_map=None, here=""):
                 i += 1
             out.append("<blockquote><p>" + " ".join(buf) + "</p></blockquote>")
             continue
+        if re.match(r'^\s*(?:-{3,}|\*{3,}|_{3,})\s*$', ln):
+            out.append("<hr>")
+            i += 1
+            continue
         if re.match(r'\s*[-*]\s+', ln):
             buf = []
             while i < n and re.match(r'\s*[-*]\s+', lines[i]):
-                buf.append("<li>" + _render_inline(re.sub(r'\s*[-*]\s+', '', lines[i]), link_map, here) + "</li>")
+                # Anchored: an unanchored sub here strips ANY "- " or "* " in
+                # the line, not just the leading marker, so it ate the space
+                # after a closing "**" bold marker mid-line ("**word:** rest").
+                buf.append("<li>" + _render_inline(re.sub(r'^\s*[-*]\s+', '', lines[i]), link_map, here) + "</li>")
                 i += 1
             out.append("<ul>" + "".join(buf) + "</ul>")
             continue
         if re.match(r'\s*\d+\.\s+', ln):
             buf = []
             while i < n and re.match(r'\s*\d+\.\s+', lines[i]):
-                buf.append("<li>" + _render_inline(re.sub(r'\s*\d+\.\s+', '', lines[i]), link_map, here) + "</li>")
+                buf.append("<li>" + _render_inline(re.sub(r'^\s*\d+\.\s+', '', lines[i]), link_map, here) + "</li>")
                 i += 1
             out.append("<ol>" + "".join(buf) + "</ol>")
             continue
@@ -412,8 +483,11 @@ def md_to_html(md, meta=None, link_map=None, here=""):
             continue
         buf = [lines[i]]   # always consume the current line (avoids stalling on a stray '|')
         i += 1
-        # stop before a line that opens a table (has '|') so the table branch can catch it
-        while i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```")) and "|" not in lines[i]:
+        # stop before a line that opens a table (has '|') or a thematic break,
+        # so those branches catch it instead of it fusing into this paragraph
+        while (i < n and lines[i].strip() != "" and not lines[i].startswith(("#", ">", "```"))
+               and "|" not in lines[i]
+               and not re.match(r'^\s*(?:-{3,}|\*{3,}|_{3,})\s*$', lines[i])):
             buf.append(lines[i])
             i += 1
         out.append("<p>" + _render_inline(" ".join(buf), link_map, here) + "</p>")
@@ -488,8 +562,9 @@ def _parse_wiki_page(path):
         para = para.strip()
         if not para or para.startswith("#"):
             continue
-        excerpt = " ".join(para.split())
-        break
+        excerpt = " ".join(_md_plain(para).split())
+        if excerpt:
+            break
     name = fm.get("name") or os.path.basename(path)[:-3]
     return {"name": name, "kind": fm.get("kind", ""),
             "last_updated": fm.get("last_updated", ""),
@@ -506,6 +581,21 @@ def _group_label(key):
     return label if label.endswith("s") else label + "s"
 
 
+# Nav groups dropped from the wiki view, matched case-insensitively against a
+# variant's heading ("Receipts") or its container dir name ("receipts").
+WIKI_EXCLUDED_GROUPS = ("receipts", "meetings", "plans")
+
+
+def _excluded_group(key, container):
+    """True when a variant is a record stream, not wiki reading."""
+    drop = {x.lower() for x in WIKI_EXCLUDED_GROUPS}
+    return _group_label(key).lower() in drop or container.lower() in drop
+
+
+# Route kinds that hold readable pages. skill and prompt are not wiki content.
+_NAV_KINDS = ("knowledge", "reference", "roadmap")
+
+
 def _variant_plan(cd):
     """[(kind, container_subdir, group_key, folder_owning)] from the layer's declared
     knowledge/reference routes (nervepack#234).
@@ -520,25 +610,45 @@ def _variant_plan(cd):
         layout, _src = np_layout.resolve(cd)
     except Exception:
         return []
-    spec = (layout.get("routes") or {}).get("knowledge")
-    if not isinstance(spec, dict):
-        return []
-    entries = spec.get("variants") if "variants" in spec else [spec]
+    routes = layout.get("routes") or {}
     plan = []
-    for e in entries or []:
-        path = (e or {}).get("path") or ""
-        if "{" not in path:
+    owning = []                 # folder-owning knowledge containers
+    for route_kind in _NAV_KINDS:
+        if route_kind != "knowledge" and not plan:
+            # No knowledge route: keep the conventional split _scan_plan falls
+            # back to, so a reference-only layer does not lose its topics.
+            plan = [("topic", "wiki/topics", "topic", True),
+                    ("concept", "wiki/concepts", "concept", True)]
+            owning = ["wiki/topics", "wiki/concepts"]
+        spec = routes.get(route_kind)
+        if not isinstance(spec, dict):
             continue
-        head = path.split("{", 1)[0].rstrip("/")
-        if not head:
-            continue
-        kind = ((e.get("frontmatter") or {}).get("kind")
-                or e.get("name") or "").strip()
-        if not kind:
-            continue
-        folder_owning = "{topic}/{topic}" in path
-        key = e.get("name") or kind
-        plan.append((kind, head, key, folder_owning))
+        entries = spec.get("variants") if "variants" in spec else [spec]
+        for e in entries or []:
+            path = (e or {}).get("path") or ""
+            if "{" not in path:
+                continue
+            head = path.split("{", 1)[0].rstrip("/")
+            if not head:
+                continue
+            fm = e.get("frontmatter") or {}
+            kind = (fm.get("kind") or e.get("name") or "").strip()
+            if not kind and route_kind != "knowledge":
+                kind = route_kind
+            if not kind:
+                continue
+            # Co-located sources (`wiki/topics/{topic}/{name}.md`) already render
+            # as sources under the owning knowledge group. A second group would
+            # list every one of them twice.
+            if route_kind != "knowledge" and any(
+                    head == o or head.startswith(o + "/") for o in owning):
+                continue
+            if any(head == p[1] for p in plan):
+                continue
+            folder_owning = "{topic}/{topic}" in path
+            if folder_owning:
+                owning.append(head)
+            plan.append((kind, head, e.get("name") or kind, folder_owning))
     return plan
 
 
@@ -553,10 +663,13 @@ def _scan_plan(cd, groups):
                     ("concept", "wiki/concepts", "concept", True)]
     plan = []
     for kind, subdir, key, folder_owning in variants:
-        holder = groups.setdefault(key, [])
         # The rendered-page path keeps only the container's LAST segment, so
         # `wiki/topics` still renders under data/wiki/<layer>/topics/… as before.
         html_seg = subdir.rstrip("/").rsplit("/", 1)[-1]
+        if _excluded_group(key, html_seg):
+            print("[build] wiki: excluded group %r (%s)" % (key, subdir), file=sys.stderr)
+            continue
+        holder = groups.setdefault(key, [])
 
         def synth_fn(p, html, root, layer, _kind=kind):
             return {"name": p["name"], "kind": _kind, "excerpt": p["excerpt"],
@@ -779,22 +892,25 @@ def render_pages(index, out_dir):
 
     link_map = {}
     pages = []   # (name, html, kind, topic|None, last_updated, version, src, layer)
-    for t in index.get("topics", []):
-        s = t.get("synthesis")
-        if s:
-            link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "topic", t["topic"], s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
-        for it in t.get("sources", []):
-            link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", t["topic"], "", it.get("version", ""), it.get("src"), it.get("layer", "")))
-    for c in index.get("concepts", []):
-        s = c.get("synthesis")
-        if s:
-            link_map[s["name"]] = s["html"][len("data/"):]
-            pages.append((s["name"], s["html"], "concept", None, s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
-        for it in c.get("sources", []):
-            link_map[it["name"]] = it["html"][len("data/"):]
-            pages.append((it["name"], it["html"], "reference", None, "", it.get("version", ""), it.get("src"), it.get("layer", "")))
+    # Walk every nav group, not just topics/concepts: a layer's declared routes
+    # (e.g. data-model) add groups whose pages would otherwise never render.
+    if "groups" in index:
+        groups = index["groups"]
+    else:                                   # index built before #234
+        groups = [{"key": "topic", "entries": index.get("topics", [])},
+                  {"key": "concept", "entries": index.get("concepts", [])}]
+    for g in groups:
+        for e in g.get("entries", []):
+            topic = e.get("topic")
+            s = e.get("synthesis")
+            if s:
+                link_map[s["name"]] = s["html"][len("data/"):]
+                pages.append((s["name"], s["html"], s.get("kind") or g.get("key"), topic,
+                              s.get("last_updated", ""), "", s.get("src"), s.get("layer", "")))
+            for it in e.get("sources", []):
+                link_map[it["name"]] = it["html"][len("data/"):]
+                pages.append((it["name"], it["html"], "reference", topic, "",
+                              it.get("version", ""), it.get("src"), it.get("layer", "")))
 
     for name, html, kind, topic, last_updated, version, src_md, layer in pages:
         rel_html = html[len("data/"):]        # e.g. wiki/personal/topics/aws/sub/aws.html
@@ -1049,8 +1165,24 @@ def main(argv):
         render_pages(wiki_obj, os.path.dirname(os.path.abspath(out)))
     except Exception as exc:  # fail-open: never break the build over a render error
         sys.stderr.write("build.py render_pages: %s\n" % exc)
-    graduation = json.dumps(load_graduation(
-        os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())))
+    grad_path = os.environ.get("NP_GRADUATION_CANDIDATES", default_graduation())
+    dismissed_path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
+        os.path.dirname(os.path.abspath(grad_path)), "graduation-dismissed.json")
+    try:
+        lessons_dir = os.environ.get("NP_LESSONS_DIR") or os.path.join(
+            _content_dir(), "memory", "lessons")
+        graduation = json.dumps(attach_lesson_bodies(np_dashboard_actions.filter_candidates(
+            load_graduation(grad_path), np_dashboard_actions.load_dismissed(dismissed_path)),
+            lessons_dir))
+    except Exception as exc:  # fail-open, like render_pages
+        sys.stderr.write("build.py graduation: %s\n" % exc)
+        graduation = json.dumps({"candidates": []})
+    try:
+        proposals = json.dumps(np_dashboard_actions.load_proposals(
+            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")))
+    except Exception as exc:
+        sys.stderr.write("build.py proposals: %s\n" % exc)
+        proposals = "[]"
     backlog = json.dumps(backlog_metrics())
     # F5/#251: the change-keyed ledger, distinct from the session-keyed METRICS
     # above. load_records() already does exactly what's needed here (parse
@@ -1066,6 +1198,7 @@ def main(argv):
         fh.write(f"window.LEDGER = {ledger};\n")
         fh.write(f"window.WIKI = {wiki};\n")
         fh.write(f"window.GRADUATION = {graduation};\n")
+        fh.write(f"window.PROPOSALS = {proposals};\n")
         fh.write(f"window.BACKLOG = {backlog};\n")
     return 0
 

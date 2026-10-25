@@ -1,6 +1,6 @@
 ---
 name: np-core-doctor
-description: Run and interpret nervepack's health check (cli.py doctor) — when to use it, what each check means, how to fix FAIL/WARN results. Use post-install, after moving the repo, when a nervepack feature stops working, or when the user says "run the doctor" / "check nervepack health" / "/np-doctor".
+description: Run and read nervepack's health check (cli.py doctor) and fix FAIL/WARN results. Use post-install, after moving the repo, when a feature stops working, or on "run the doctor", "check nervepack health", "/np-doctor".
 ---
 
 # np-core-doctor — health check runbook
@@ -49,6 +49,7 @@ runs entirely in-process (Python, `engine/nervepack_engine/np_doctor.py`) — no
 | `session-end-capture` | Re-run `cli.py setup install-hooks` |
 | `session-end-flush` | Re-run `cli.py setup install-hooks` |
 | `scheduled-maint` | Re-run `cli.py setup install-memory-cron` (Linux), `install-memory-launchd` (macOS), or `install-memory-schtasks` (Windows) |
+| `skill-listing` | The installed skill listing passes the host budget, so some skills show with no description and never auto-trigger. Run `python3 engine/setup/np_skill_listing.py <layer>/skills` per layer and shorten the flagged descriptions, or disable unused skills and plugins. `NP_SKILL_LISTING_CONTEXT` sets the context size (default 1000000). |
 | `scheduled-auth-token` | Missing or in its rotation window: `bash engine/setup/62-install-scheduled-auth-token.sh` (`--rotate` to force). Fixes "Not logged in" failures in memory-promote/refine/compact logs — those crons run under launchd/cron, which don't inherit the interactive session's OAuth. |
 | `pii_filter_full` | `python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" setup install-pii-deps` |
 
@@ -93,8 +94,7 @@ pattern above). Rebuilding does nothing for cause (2). Tell them apart with
 
 **Doctor is all green but the dashboard shows stale or missing suggestions, or the
 content repo's commit count has diverged from origin/main.** Not yet a doctor
-check, tracked as [nervepack#329](https://github.com/pat-browne/nervepack/issues/329)
-(roadmap label). Until that lands, green does not rule this out.
+check (roadmap label). Until that lands, green does not rule this out.
 
 The `content` check only verifies `NP_CONTENT_DIR` resolves to a real dir. It
 never checks that dir is on `main`.

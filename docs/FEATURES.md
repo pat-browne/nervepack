@@ -225,6 +225,67 @@ finishes typing the "spec written, please review" message — the file pops
 open in your editor/default `.md` handler, already in focus. You read it right
 there instead of trusting a chat summary.
 
+## Post-ship capture — prompt a learning capture after a merge or deploy
+
+**Purpose.** A merge or a deploy is the moment a change's lessons are freshest
+and the moment a session is most likely to end. This hook makes capture the
+default next step instead of a thing the user has to remember to ask for.
+
+**Workflow.** A single `PostToolUse` hook, matcher `Bash`:
+`cli.py hook post-ship-capture` → `engine/nervepack_engine/hooks/post_ship_capture.py`.
+It matches the command against `SHIP_PATTERNS`: `gh pr merge`,
+`az repos pr update --status completed`, `git push` to `main`/`master`,
+`databricks bundle deploy`, `terragrunt apply`, `terraform apply`,
+`az deployment ... create`, and `npm run deploy`. It skips `--dry-run`, a
+branch-delete push, and any result showing a non-zero exit, an interrupt, or an
+`error:`/`fatal:` line. On a hit it returns `additionalContext` telling the
+session to invoke `np-core-capture-learning` before ending the turn, and writes
+a `post-ship-capture` session-signal marker.
+
+**Assets.** `engine/nervepack_engine/hooks/post_ship_capture.py`, its tests in
+`engine/setup/tests/nervepack_engine/test_post_ship_capture.py`, and a routing row
+in `engine/setup/nervepack-session-directive.md`. Toggle: `post_ship` (no params).
+
+**Situational example.** A session runs `gh pr merge 42 --squash`. The merge
+succeeds and the next model step sees the prompt. It runs
+`np-core-capture-learning`, which routes the CI gotcha it hit to nervepack.
+
+## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
+
+**Purpose.** A session loses working context on a compaction, a resume, or a
+`/clear`. The journal keeps a local record of five things.
+
+- Goal, current hypotheses, notable struggles, notable progress, and skills that
+  worked.
+- It is restored to the model after a compact or resume.
+- It records the skills that succeeded, so a captured session teaches future ones.
+
+**Workflow.**
+
+- `journal_write.py` writes an append log under `session-journal/<sid>.md`.
+- Seed runs on SessionStart from the first typed prompt, with repo metadata.
+- Checkpoint runs on PreCompact via a cheap haiku call over the transcript.
+- `np_scrub` scrubs PII before any block lands.
+- `journal_recall.py` injects on SessionStart when source is compact or resume.
+- A UserPromptSubmit fallback covers an interrupted SessionStart, keyed by
+  `.recall/` receipts, so nothing injects twice.
+- A plain startup and a `/clear` never inject.
+
+**Cleanup.**
+
+- The backcapture sweep deletes a journal after it evaluates that session.
+- A 30-day TTL in the same sweep removes any journal the cleanup missed.
+
+**The /clear case.**
+
+- Claude Code has no pre-`/clear` hook, so `/clear` cannot be blocked.
+- The existing SessionEnd path fires on the `clear` reason.
+- The backcapture sweep re-captures any prior session with no metrics record.
+
+**Assets.** `np_journal.py`, `hooks/journal_write.py`, `hooks/journal_recall.py`,
+cleanup in `backcapture_sweep.py`. Toggle `journal` (`model`, `ttl_days`,
+`recall_sources`). Governing record: `change-specs/worktree-feat+session-journal-and-clear-capture.md`.
+
 ## Spec-review gate — confirm the doc was read before implementation starts
 
 **Purpose.** "Open artifact on write" puts the spec in front of you. Nothing
@@ -289,16 +350,30 @@ topic-matched entries on a session's first prompts, framing by provenance:
 imperative "avoid X" wording for `failure`, advisory "the approach that worked is
 Y" wording for `success`.
 
+**Body format (paired rules).** Each entry is one line under an `## <objective>`
+heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
+DON'T → DO is the default; a lone DO is allowed for a win (no invented DON'T); a lone
+DON'T is a lint finding. `when` and `why` are required; budget is ≤ 2 lines / ~320
+chars. The narrative lives in `memory/episodic/<topic>.md`, one backlink away. Recall
+injects `<objective>:` plus the rule line (backlinks stripped; success objectives get
+" (worked before)"), so a rule is one cheap, untruncated line. The maintain pass lints
+changed lessons with `engine/setup/np_lesson_format.py lint` (codes `missing-when`,
+`missing-why`, `lone-dont`, `too-long`, `legacy-format`) and reverts the write if it
+can't fix a finding; it also adds a `Lessons: [[lessons/<topic>]]` backlink to the
+matching skill or wiki topic page. Legacy Symptom/Why/Do/Avoid bodies are converted by
+`np-migrate-lessons.py --bodies <content_root>` (idempotent, `enforce` kept
+byte-for-byte). Spec: `change-specs/ccr-4c5160e5-j1j5k6.md`.
+
 **Assets.** `engine/nervepack_engine/hooks/lesson_recall.py`,
 `engine/nervepack_engine/hooks/lesson_guard.py` (both Python ports via `cli.py`
-dispatcher), `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
+dispatcher), `engine/setup/np_lesson_format.py`, `agents/np-flow-episodic-maintain.md`, `memory/lessons/` (overlay).
 Toggle: `lessons` (param `lessons.enforce`, default on, disables the guard while
 advisory recall stays on).
 
 **Situational example.** You once combined `git grep` short flags (`-lin`) and got
 silently wrong results. That failure distilled into a `provenance: failure`
 `safe-git-grep` lesson with an `enforce` block; now when a prompt mentions git-grep,
-the recall hook injects "use long-form flags" *before* you make the same mistake
+the recall hook injects the rule (`DON'T combine short flags → DO use long-form flags — when …`) *before* you make the same mistake
 again, no skill invocation required. Separately, across several sessions you find
 that searching GitHub issues surfaces tool limitations faster than official docs —
 that becomes a `provenance: success` `github-issue-research` lesson with no `enforce`
@@ -328,6 +403,8 @@ source's `status: graduated`.
 a committed, content-routed `graduation-candidates.json`; `build.py` `load_graduation()`
 emits `window.GRADUATION` and `index.html` renders a Graduation-candidates panel
 (fail-open empty state). Keeps the engine PII-clean. The data lives in the overlay.
+Served, each row has **Graduate** (an agent job, see "Suggestions review") and
+**Dismiss**.
 
 **Situational example.** `security-review` reaches `seen: 30` and 8 KB. The daily
 routine flags it in the marker file **and the dashboard's Graduation panel**. You run
@@ -394,6 +471,8 @@ here so a dashboard panel reading zero isn't mistaken for a wiring gap:
 | Field | Source | Zero-bias note |
 |---|---|---|
 | `skills_invoked[]` | regex over the transcript JSONL for Skill-tool calls | Legitimately empty if no skills were invoked — not a pipeline gap |
+| `skill_tool_calls` | count of `Skill` tool_use lines in the transcript | 0 means no skill invoked. Read with `skills_available` to tell "none needed" from "available, not discovered" |
+| `skills_available` | count of `SKILL.md` dirs in the engine and `$NP_CONTENT_DIR` `skills/` | Reflects the scoring machine, not the session host. 0 if neither dir is readable |
 | `playbook_fires` | `lesson-guard` markers in the session-signals log | Genuinely sparse today — only lessons carrying an enforcing `tool_match` fire it; rises naturally as the enforcing-lesson catalog grows |
 | `playbook_heeded` | gated-command fingerprints minus fingerprints that were executed anyway | Inherits `playbook_fires` sparseness; also 0 if a gated command ran despite the guard |
 | `recall_injections` | `lesson-recall`/`episodic-recall` markers in the session-signals log | **Structural zero for back-captured sessions** — the ephemeral signal log for the original session is gone by the time the back-capture sweep re-scores it, even when recall fired live |
@@ -428,8 +507,9 @@ the reconnect loop).
 into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
 and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
 `index.html` renders it as a grouped/collapsible left sidebar (entities / concepts /
-sources-by-topic) with a client-side search filter; clicking an entry opens the
-build-rendered HTML page in a new tab; Markdown stays the source (invariant 14).
+sources-by-topic) with a client-side search filter. Clicking an entry opens the
+build-rendered HTML page in the sandboxed overlay viewer. A modified click still
+opens a new tab. Markdown stays the source (invariant 14).
 `build.py` `md_to_html`/`render_pages` writes `data/wiki/{topics,concepts}/*.html` into the
 content overlay at build time (content-resident & gitignored). Param-gated by
 `evaluator.wiki_nav` (default on); off OR no `wiki/` dir → empty index, the sidebar
@@ -465,9 +545,66 @@ dispatched as `cli.py implement-suggestion`) in an isolated git worktree off the
 committed base, in `pr` or `direct` mode; **Reject** resolves it.
 `np-core-suggestions-review` drives the same flow from any host.
 
+**Queue.** A click while a job runs joins a FIFO queue
+(`~/.cache/nervepack/implement-queue/`). The lock holder drains it before exiting.
+A second click on a queued or running row does nothing. Rows show queued (with
+position), running, then done or failed.
+
+**Paging.** The Suggestions panel shows 10 rows per page with Prev / Next and a
+page count. Review and Clear re-render from page 1.
+
+**Other agent jobs on the same queue.** The job takes `--kind=compact|graduate`.
+A kind picks its own prompt and starts in the content overlay. It skips the
+suggestion ledger.
+
+- **Compact proposals panel.** `build.py` parses `compact-proposals/<date>.md`
+  into `window.PROPOSALS`, one row per `### a vs b` entry.
+- **Apply** queues a `compact` job (`agents/np-flow-apply-compact-proposal.md`).
+- **Reject** appends a one-line note to `REJECTED.md` and drops the entry. An
+  empty file is deleted. A "keep separate" row makes Reject the primary button.
+- **Graduate** queues a `graduate` job (`agents/np-flow-graduate-candidate.md`)
+  that runs the np-core-graduate flow.
+- **Dismiss** writes `graduation-dismissed.json` next to
+  `graduation-candidates.json`. `build.py` filters dismissed rows out.
+
+**Overlay viewer.** Wiki and skill pages open in a modal iframe with
+"Open in new tab" and "Close". Esc or a backdrop click closes it, so the list
+keeps its place. Served, the settings cog opens `index.html?view=settings` in the
+same viewer.
+
+Wiki pages get `sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"`
+with no origin. Dashboard views keep the origin to call the API. Every frame sets
+`referrerpolicy="no-referrer"`.
+
 **Assets.** `np-suggestions-review.py`, `np-dashboard-server.py`,
 `np_implement_suggestion.py` (dispatched as `cli.py implement-suggestion`), `agents/np-flow-implement-suggestion.md`,
+`np_dashboard_actions.py`, `agents/np-flow-apply-compact-proposal.md`,
+`agents/np-flow-graduate-candidate.md`,
 `np-core-suggestions-review`. Toggle: `evaluator` (`implement`, `implement_mode`).
+
+## Model selection + availability probe
+
+**Purpose.** Pick the model each feature uses and find out early when an account
+cannot use one.
+
+**Workflow.** `resolve_model(tier, feature)` in `np_model.py` checks the tier env
+var (`NP_LLM_MODEL_CHEAP` or `NP_LLM_MODEL_AGENT`), then `models.<feature>`, then
+`models.<tier>`, then the built-in default. Callers pass `feature=` to `complete()`
+and `agent()`. The dashboard Models panel offers the ids in
+`engine/setup/model-inventory.json` and writes the choice to `toggles.local`.
+
+**Probe** sends a one-token prompt per model and caches available, missing, or
+error in `~/.cache/nervepack/model-probe.json`. A job the CLI rejects for its model
+fails with `model_error` and marks the model missing. A banner then links to that
+feature's row.
+
+**Assets.** `np_model.py`, `engine/setup/model-inventory.json`,
+`np-dashboard-server.py` (`/api/models`, `/api/models/probe`, `/api/models/select`),
+`dashboard/index.html`. Toggle: `models` (off hides the panel and the probe).
+
+**Situational example.** Implement jobs start failing with "issue with the selected
+model". The banner names the model and links to the implement row. You pick another
+model, probe it, and click Implement again.
 
 **Situational example.** The Suggestions panel has filled up over a dozen sessions.
 You run `/np-suggestions`, it ranks them, you pick three worth building, hit Implement,
@@ -530,6 +667,14 @@ throttled backup (`sync.interval`, default 1 day). Strict-safe: fast-forward onl
 never auto-rebase or autostash. `np-core-sync` does it on demand.
 
 **Assets.** `np_sync.py` (`cli.py sync`), `np-core-sync`. Toggle: `sync`.
+
+After the pulls, sync checks each layer for layout drift: directories of pages no
+route covers. A directory whose pages share one `type:` gets a route recorded. The
+personal overlay's manifest takes it. A team layer's additions go to a per-machine
+drift file that `np_layout.load()` replays, so sync never writes into a team repo. A mixed one
+prints a layout question. Sync never commits the manifest. Param
+`sync.layout_drift` (default on) turns it off. The dashboard wiki nav now shows
+reference and roadmap routes as their own groups too.
 
 **Situational example.** A cron pushed a new skill from your laptop overnight. You sit
 down at the desktop, start a session, and the SessionStart backup sync fast-forwards

@@ -27,6 +27,8 @@ SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py sync exit >/dev/null
 SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-dashboard >/dev/null 2>&1 &
 # --- 51: consult-nervepack directive (synchronous) ---
 SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook session-directive
+# --- 51b: stale-checkout guard (synchronous; silent when clean, no network) ---
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook checkout-guard
 # --- 52: episodic capture + recall ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture session-end &
 PreCompact||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook episodic-capture checkpoint
@@ -73,6 +75,9 @@ SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-sessio
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-recall
 # --- 63: open artifact on write (Write-scoped) ---
 PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
+# --- 63b: post-ship capture (Bash-scoped). After a successful merge or deploy,
+# injects a prompt to run np-core-capture-learning before the turn ends.
+PostToolUse|Bash|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook post-ship-capture
 # --- 64: turn-completion gate (Stop + SubagentStop; the one hook permitted to
 # block). The SubagentStop row exists because a fan-out's agents write and report
 # with no other form check; turn_gate skips the delivery checks on that event
@@ -97,3 +102,11 @@ PreToolUse|mcp__.*|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-gat
 # arrives after the reader saw the text -- this puts the contract in front of
 # the model while it drafts, so the block above stays rare.
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook form-directive
+# --- 67: session journal. recall is synchronous (must return additionalContext);
+# seed is backgrounded+redirected (no output to inject). checkpoint runs on
+# PreCompact alongside episodic-capture. recall on UserPromptSubmit is the
+# interrupted-SessionStart fallback. Cleanup rides the backcapture sweep (row 56).
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-recall
+SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-write seed >/dev/null 2>&1 &
+PreCompact||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-write checkpoint
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook journal-recall

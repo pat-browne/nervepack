@@ -94,7 +94,17 @@ class TestServer(unittest.TestCase):
             "NP_IMPLEMENT": impl, "NP_IMPLEMENT_STATUS_DIR": cls.status_dir,
             "NP_TOGGLES_LOCAL": cls.toggles_local, "NP_TOGGLES_CONF": cls.toggles_conf,
             "NP_TOGGLE_SCHEMA": cls.schema, "NP_TOGGLE_NO_COMMIT": "1",
+            "NP_MODEL_PROBE_CACHE": os.path.join(d, "model-probe.json"),
+            "NP_OWN_SESSIONS_DIR": os.path.join(d, "own-sessions"),
+            "NP_JOB_HEALTH_BACKEND": "none", "NP_JOB_HEALTH_LOG_DIR": os.path.join(d, "job-logs"),
         })
+        cls.compact_dir = os.path.join(d, "compact-proposals"); os.makedirs(cls.compact_dir)
+        cls.grad = os.path.join(d, "graduation-candidates.json")
+        cls.dismissed = os.path.join(d, "graduation-dismissed.json")
+        env.update({"NP_COMPACT_PROPOSALS_DIR": cls.compact_dir,
+                    "NP_GRADUATION_CANDIDATES": cls.grad,
+                    "NP_GRADUATION_DISMISSED": cls.dismissed})
+        cls.queue_dir = os.path.join(d, "implement-queue")
         cls.proc = subprocess.Popen(["python3", SERVER], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # wait for health
@@ -151,6 +161,24 @@ class TestServer(unittest.TestCase):
         status, body = self._get("/api/health")
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ok"])
+
+    def test_jobs_endpoint_lists_scheduled_jobs(self):
+        status, body = self._get("/api/jobs")
+        self.assertEqual(status, 200)
+        jobs = {j["name"]: j for j in json.loads(body)["jobs"]}
+        self.assertIn("compact", jobs)
+        for key in ("installed", "enabled", "last_run", "status", "exit", "overdue"):
+            self.assertIn(key, jobs["compact"])
+
+    def test_health_reports_code_fingerprint_and_pid(self):
+        # A long-lived server keeps serving its old routes after an update.
+        # The launcher compares this fingerprint to restart a stale one.
+        import sys
+        sys.path.insert(0, os.path.normpath(SETUP))
+        import np_dashboard_actions
+        h = json.loads(self._get("/api/health")[1])
+        self.assertEqual(h["code"], np_dashboard_actions.code_fingerprint())
+        self.assertEqual(h["pid"], self.proc.pid)
 
     def test_path_traversal_rejected(self):
         """Raw socket so the client can't normalize away the ../ — the server's
@@ -284,6 +312,96 @@ class TestServer(unittest.TestCase):
                 return
             time.sleep(0.05)
         self.fail("implement job was not spawned")
+
+    # ---- compact proposals + graduation candidates ----
+    PROPOSAL = ("# P\n\n### np-kb-a vs np-kb-b\n\n**Recommendation: keep separate.**\n\n"
+                "### np-kb-c vs np-kb-d\n\nRecommendation: merge.\n")
+
+    def _write_proposal(self):
+        path = os.path.join(self.compact_dir, "2026-09-30.md")
+        with open(path, "w") as fh:
+            fh.write(self.PROPOSAL)
+        return path
+
+    def _wait_sentinel(self, needle):
+        for _ in range(50):
+            if os.path.exists(self.impl_sentinel) and needle in open(self.impl_sentinel).read():
+                return open(self.impl_sentinel).read()
+            time.sleep(0.1)
+        return open(self.impl_sentinel).read() if os.path.exists(self.impl_sentinel) else ""
+
+    def test_compact_reject_removes_entry_and_notes_it(self):
+        path = self._write_proposal()
+        status, body = self._post("/api/compact/reject",
+                                  {"file": "2026-09-30.md", "title": "np-kb-a vs np-kb-b"})
+        self.assertEqual(status, 200, body)
+        self.assertNotIn("np-kb-a vs np-kb-b", open(path).read())
+        rej = open(os.path.join(self.compact_dir, "REJECTED.md")).read()
+        self.assertIn("np-kb-a vs np-kb-b", rej)
+        self._post("/api/compact/reject", {"file": "2026-09-30.md", "title": "np-kb-c vs np-kb-d"})
+        self.assertFalse(os.path.exists(path), "an emptied proposal file is deleted")
+
+    def test_compact_reject_unknown_or_traversal_is_404(self):
+        self._write_proposal()
+        for body in ({"file": "2026-09-30.md", "title": "nope"},
+                     {"file": "../2026-09-30.md", "title": "np-kb-a vs np-kb-b"},
+                     {"file": "REJECTED.md", "title": "x"}):
+            status, _ = self._post("/api/compact/reject", body)
+            self.assertEqual(status, 404, body)
+
+    def test_compact_routes_need_csrf_header(self):
+        self._write_proposal()
+        status, _ = self._post("/api/compact/reject",
+                               {"file": "2026-09-30.md", "title": "np-kb-a vs np-kb-b"},
+                               headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 403)
+
+    def test_compact_apply_spawns_a_compact_job(self):
+        self._write_proposal()
+        try: os.remove(self.impl_sentinel)
+        except FileNotFoundError: pass
+        status, body = self._post("/api/compact/apply",
+                                  {"file": "2026-09-30.md", "title": "np-kb-c vs np-kb-d"})
+        self.assertEqual(status, 200, body)
+        out = json.loads(body)
+        self.assertTrue(out["started"])
+        self.assertEqual(out["text"], "2026-09-30.md :: np-kb-c vs np-kb-d")
+        seen = self._wait_sentinel("--kind=compact")
+        self.assertIn("2026-09-30.md :: np-kb-c vs np-kb-d", seen)
+        self.assertIn("--kind=compact", seen)
+
+    def test_compact_apply_unknown_is_404(self):
+        status, _ = self._post("/api/compact/apply", {"file": "2026-01-01.md", "title": "x"})
+        self.assertEqual(status, 404)
+
+    def _write_grad(self):
+        with open(self.grad, "w") as fh:
+            json.dump({"candidates": [{"kind": "strategy", "name": "s1"}], "thresholds": {}}, fh)
+        try: os.remove(self.dismissed)
+        except FileNotFoundError: pass
+
+    def test_graduation_dismiss_persists(self):
+        self._write_grad()
+        status, body = self._post("/api/graduation/dismiss", {"kind": "strategy", "name": "s1"})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.load(open(self.dismissed)), ["strategy:s1"])
+
+    def test_graduation_unknown_candidate_is_404(self):
+        self._write_grad()
+        for route in ("/api/graduation/dismiss", "/api/graduation/graduate"):
+            status, _ = self._post(route, {"kind": "strategy", "name": "nope"})
+            self.assertEqual(status, 404, route)
+
+    def test_graduation_graduate_spawns_a_graduate_job(self):
+        self._write_grad()
+        try: os.remove(self.impl_sentinel)
+        except FileNotFoundError: pass
+        status, body = self._post("/api/graduation/graduate", {"kind": "strategy", "name": "s1"})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body)["text"], "strategy:s1")
+        seen = self._wait_sentinel("--kind=graduate")
+        self.assertIn("strategy:s1", seen)
+        self.assertIn("--kind=graduate", seen)
 
     def test_implement_missing_text_is_400(self):
         status, _ = self._post("/api/implement", {})
@@ -433,6 +551,141 @@ class TestServer(unittest.TestCase):
         from urllib.parse import quote
         _, body = self._get("/api/implement-status?text=" + quote("never ran this one"))
         self.assertEqual(json.loads(body)["state"], "none")
+
+
+    # --- implement queue -------------------------------------------------
+    def _seed_queue(self, *texts):
+        import hashlib as _h
+        os.makedirs(self.queue_dir, exist_ok=True)
+        for i, t in enumerate(texts):
+            key = _h.sha256(t.encode()).hexdigest()[:16]
+            with open(os.path.join(self.queue_dir, "%020d-%s.json" % (i + 1, key)), "w") as fh:
+                json.dump({"key": key, "text": t, "edited": "", "target": "",
+                           "enqueued_at": "2026-09-29T00:00:00Z"}, fh)
+            with open(os.path.join(self.status_dir, key + ".json"), "w") as fh:
+                json.dump({"state": "queued", "position": 99}, fh)
+
+    def _clear_queue(self):
+        import shutil
+        shutil.rmtree(self.queue_dir, ignore_errors=True)
+
+    def test_implement_queue_lists_entries_fifo(self):
+        self._seed_queue("Q one", "Q two")
+        try:
+            status, body = self._get("/api/implement-queue")
+            self.assertEqual(status, 200)
+            data = json.loads(body)
+            self.assertEqual([q["text"] for q in data["queued"]], ["Q one", "Q two"])
+            self.assertEqual(data["count"], 2)
+            self.assertIsNone(data["running"])
+        finally:
+            self._clear_queue()
+
+    def test_implement_status_reports_live_queue_position(self):
+        from urllib.parse import quote
+        self._seed_queue("P one", "P two")
+        try:
+            _, body = self._get("/api/implement-status?text=" + quote("P two"))
+            data = json.loads(body)
+            self.assertEqual((data["state"], data["position"]), ("queued", 2))
+        finally:
+            self._clear_queue()
+
+    def test_implement_click_on_queued_row_is_deduped(self):
+        self._seed_queue("Dup me")
+        try:
+            if os.path.exists(self.impl_sentinel):
+                os.remove(self.impl_sentinel)
+            status, body = self._post("/api/implement", {"text": "Dup me"})
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(body)["deduped"])
+            time.sleep(0.3)
+            self.assertFalse(os.path.exists(self.impl_sentinel), "a queued row spawned a job")
+        finally:
+            self._clear_queue()
+
+    # --- models ------------------------------------------------------------
+    def test_models_lists_inventory_features_and_effective(self):
+        status, body = self._get("/api/models")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        ids = {m["id"] for m in data["inventory"]}
+        self.assertIn("claude-sonnet-5-5", ids)
+        rows = {r["feature"]: r for r in data["features"]}
+        for f in ("implement", "episodic-maintain", "memory-promote", "skill-maintain",
+                  "evaluator", "capture", "cheap", "agent"):
+            self.assertIn(f, rows)
+        self.assertTrue(rows["implement"]["effective"])
+        self.assertIn("probe", data)
+        self.assertIn("model_errors", data)
+
+    def test_models_select_writes_local_param_and_changes_effective(self):
+        status, body = self._post("/api/models/select",
+                                  {"feature": "implement", "model": "claude-opus-5-5"})
+        self.assertEqual(status, 200, body)
+        with open(self.toggles_local) as fh:
+            self.assertIn("models.implement=claude-opus-5-5", fh.read())
+        rows = {r["feature"]: r for r in json.loads(body)["models"]["features"]}
+        self.assertEqual(rows["implement"]["effective"], "claude-opus-5-5")
+        self.assertEqual(rows["implement"]["selected"], "claude-opus-5-5")
+
+    def test_models_select_empty_clears_to_tier(self):
+        self._post("/api/models/select", {"feature": "implement", "model": "claude-opus-5-5"})
+        status, body = self._post("/api/models/select", {"feature": "implement", "model": ""})
+        self.assertEqual(status, 200)
+        rows = {r["feature"]: r for r in json.loads(body)["models"]["features"]}
+        self.assertEqual(rows["implement"]["effective"], rows["agent"]["effective"])
+
+    def test_models_select_rejects_unknown_feature_and_model(self):
+        s1, _ = self._post("/api/models/select", {"feature": "nope", "model": "claude-sonnet-5-5"})
+        s2, _ = self._post("/api/models/select", {"feature": "implement", "model": "gpt-x"})
+        self.assertEqual((s1, s2), (400, 400))
+
+    def test_models_select_without_csrf_is_forbidden(self):
+        status, _ = self._post("/api/models/select", {"feature": "implement", "model": ""},
+                               headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 403)
+
+    def test_models_probe_one_model(self):
+        status, body = self._post("/api/models/probe", {"model": "claude-haiku-4-5-20251001"})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body), {"ok": True, "started": True})
+        # The probe runs detached. Poll until the marker clears.
+        for _ in range(100):
+            data = json.loads(self._get("/api/models")[1])
+            if not data["probe_running"]:
+                break
+            time.sleep(0.1)
+        self.assertFalse(data["probe_running"])
+        self.assertEqual(data["probe"]["claude-haiku-4-5-20251001"]["status"], "available")
+
+    def test_models_probe_while_running_is_noop(self):
+        marker = os.path.join(self.tmp.name, "model-probe.json.running")
+        with open(marker, "w") as fh:
+            json.dump({"models": ["x"], "timeout": 45, "started": time.time()}, fh)
+        try:
+            self.assertTrue(json.loads(self._get("/api/models")[1])["probe_running"])
+            status, body = self._post("/api/models/probe", {})
+            self.assertEqual(status, 200, body)
+            self.assertEqual(json.loads(body), {"ok": True, "started": False, "running": True})
+        finally:
+            os.remove(marker)
+
+    def test_models_probe_rejects_unknown_model(self):
+        status, _ = self._post("/api/models/probe", {"model": "not-a-model"})
+        self.assertEqual(status, 400)
+
+    def test_models_banner_data_includes_recent_model_error(self):
+        path = os.path.join(self.status_dir, "feedfacefeedface.json")
+        with open(path, "w") as fh:
+            json.dump({"state": "failed", "ref": "rejected", "model_error": True,
+                       "model": "claude-bad-1", "ts": "2026-09-29T00:00:00Z"}, fh)
+        try:
+            _, body = self._get("/api/models")
+            errs = json.loads(body)["model_errors"]
+            self.assertIn("claude-bad-1", [e["model"] for e in errs])
+        finally:
+            os.remove(path)
 
 
 if __name__ == "__main__":

@@ -68,6 +68,45 @@ class SignalsPresentFlagTest(unittest.TestCase):
         self.assertEqual(rec["recall_injections"], 0)
 
 
+class SkillDiscoverySignalTest(unittest.TestCase):
+    """An empty skills_invoked[] is ambiguous: nothing needed vs available but
+    never discovered. skills_available + skill_tool_calls let the judge tell."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self.tmp, True)
+
+    def _run(self, transcript_lines):
+        content = os.path.join(self.tmp, "content")
+        for name in ("np-kb-a", "np-kb-b", "np-kb-c"):
+            os.makedirs(os.path.join(content, "skills", name))
+            open(os.path.join(content, "skills", name, "SKILL.md"), "w").close()
+        t = os.path.join(self.tmp, "t.jsonl")
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(transcript_lines) + "\n")
+        env = dict(os.environ)
+        env.update(NP_SIGNAL_DIR=self.tmp, NP_CONTENT_DIR=content)
+        r = subprocess.run([sys.executable, SIG, "s", t],
+                           capture_output=True, text=True, env=env)
+        return json.loads(r.stdout or "{}")
+
+    def test_skills_available_counts_overlay_skills(self):
+        rec = self._run(['{"type":"tool_use","name":"Bash"}'])
+        self.assertGreaterEqual(rec["skills_available"], 3)
+
+    def test_skill_tool_calls_counts_only_skill_tool_uses(self):
+        rec = self._run([
+            '{"type":"tool_use","name":"Bash"}',
+            '{"type":"tool_use","name":"Skill","input":{"skill":"np-kb-a"}}',
+            '{"type":"tool_use","name":"Skill","input":{"skill":"np-kb-b"}}',
+        ])
+        self.assertEqual(rec["skill_tool_calls"], 2)
+
+    def test_no_skill_calls_is_zero(self):
+        rec = self._run(['{"type":"tool_use","name":"Bash"}'])
+        self.assertEqual(rec["skill_tool_calls"], 0)
+
+
 class JudgePromptTest(unittest.TestCase):
     """The flag only matters if it reaches the judge."""
 
@@ -85,6 +124,11 @@ class JudgePromptTest(unittest.TestCase):
     def test_present_telemetry_adds_no_caveat(self):
         tail = self._tail(json.dumps({"signals_present": True, "recall_injections": 3}))
         self.assertNotIn("unavailable", tail.lower())
+
+    def test_prompt_explains_skill_discovery_signals(self):
+        tail = self._tail(json.dumps({"signals_present": True}))
+        self.assertIn("skills_available", tail)
+        self.assertIn("skill_tool_calls", tail)
 
     def test_malformed_signals_json_does_not_raise(self):
         # fail-open: the evaluator already tolerates "{}" / junk here.

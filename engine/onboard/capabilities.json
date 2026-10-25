@@ -76,6 +76,17 @@
       }
     },
     {
+      "id": "checkout-freshness",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the engine and content overlays are on main and not behind origin/main",
+      "why": "Sessions read wiki and skills from these working trees; a feature branch or a stale checkout serves outdated knowledge.",
+      "accept": "Each checkout is on main and 0 commits behind origin/main (doctor fetches first).",
+      "hints": {
+        "generic": "git -C <repo> checkout main && git -C <repo> pull --ff-only; until then read via git -C <repo> show origin/main:<path>."
+      }
+    },
+    {
       "id": "team",
       "tier": "SHOULD",
       "check": "core",
@@ -94,7 +105,18 @@
       "why": "Contribution resolves paths from the layer's own layout manifest (.nervepack/layout.json) instead of a hardcoded wiki/ tree. A layer with no manifest still works on inferred routes, but placement is only guaranteed stable once it is recorded.",
       "accept": "`cli.py layout show` reports source=manifest for every configured layer, and `cli.py layout questions` returns an empty list.",
       "hints": {
-        "generic": "run the np-core-layout skill, or `cli.py layout infer` then `cli.py layout record`."
+        "generic": "run the np-core-layout skill, or `cli.py layout infer` then `cli.py layout record`, then `cli.py layout drift --apply`."
+      }
+    },
+    {
+      "id": "skill-listing",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "every installed skill keeps its description in the host skill listing",
+      "why": "The host caps the skill listing at a share of the context window. Over the cap it drops descriptions, and a skill with no description never auto-triggers.",
+      "accept": "`cli.py doctor` reports skill-listing PASS: the installed listing fits the budget and every SKILL.md has valid frontmatter.",
+      "hints": {
+        "generic": "run `python3 engine/setup/np_skill_listing.py <layer>/skills` on each layer and shorten the flagged descriptions, or disable unused skills and plugins."
       }
     },
     {
@@ -204,6 +226,17 @@
       "accept": "For every enabled maintenance job, the newest run header in ~/.cache/nervepack/<job>.log is within its cadence plus maintain.freshness_grace_days (default 2).",
       "hints": {
         "generic": "install the OS scheduler (cli.py setup install-memory-{cron,launchd,schtasks}); if jobs are installed but stale, read the job's log \u2014 the agent's own output lands there."
+      }
+    },
+    {
+      "id": "job-health",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "every scheduled nervepack job is installed, enabled where expected, succeeding and on time",
+      "why": "maintenance-freshness only asks whether a job fired. A job can fire on time and still fail every run, or never be installed. This check reads the scheduler, the toggle, the last log block and the exit code per job.",
+      "accept": "No enabled job is missing from the scheduler, overdue, or ended its last run with an error, warning or nonzero exit.",
+      "hints": {
+        "generic": "run python3 engine/nervepack_engine/np_job_health.py for the per-job table, then read the named job's log under ~/.cache/nervepack/."
       }
     },
     {

@@ -13,6 +13,7 @@ optionally offloading them to a cloud routine.
 | Sun 09:30 | `nervepack-refine` | local cron (default-on) | `np-flow-scheduled-refine.md` | Lint frontmatter, audit cross-refs, check vendor sha. Toggle off with `maintain.refine=off`. |
 | Wed 10:00 | `nervepack-compact` | local cron (default-on) | `np-flow-weekly-compact.md` | Dedup (auto-merge ≥0.85 Jaccard; propose 0.4–0.85). Splits for >300-line skills go to `compact-proposals/`. Toggle off with `maintain.compact=off`. |
 | every 30 min | `quota-watch` | local cron + Stop hook | (plain script, no LLM) | Detect a claude.ai usage-limit hit and notify 1 min after reset so you can type "continue". See `np-flow-quota-watch`. |
+| Mon-Fri 11:00 | `nervepack-kb-promote-scan` | local cron (default-on) | `np-flow-kb-promote-scan.md` | Run data-base `harness-promote-scan`, open a data-base PR if it queued items. Never merges. Toggle off with `maintain.kb_promote_scan=off`. |
 
 Order: `memory-promote` (writes new content) → `nervepack-refine` (lints what
 just got written) → two days later, `nervepack-compact` (dedups the

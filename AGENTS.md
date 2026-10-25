@@ -81,7 +81,7 @@ These are your personal knowledge layers — **commit them to the overlay, never
 | `wiki/concepts/<concept>/<concept>.md` | Concept synthesis page (frontmatter `kind: concept`). Concepts are folders, mirroring topics. | **Yes — LLM-maintained** |
 | `wiki/concepts/<concept>/<name>.md` | Curated source co-located with a concept synthesis page (same form as topic sources). | **Yes — via ingest protocol (§ "Wiki layer")** |
 | `memory/episodic/<topic>.md` | LLM-owned episodic working memory ("what we did / decided / where we left off"), themed by topic. **Lowest-authority layer.** Auto-written by the daily `episodic-maintain` agent — the one subtree where the human-review gate is waived. | **No — agent-owned; don't hand-edit** |
-| `memory/lessons/<topic>.md` | Auto-distilled patterns from past sessions ("in situation X, do/avoid Y" or "the approach that worked is Z"), tagged `provenance: failure\|success`. Second-class (waived gate, like `memory/episodic/`); above episodic, below skills. Provenance and enforcement are independent — an entry may optionally carry an `enforce` block (tool-call gate) regardless of provenance; most carry none and stay advisory-only. | **No — agent-owned; don't hand-edit** |
+| `memory/lessons/<topic>.md` | Auto-distilled patterns from past sessions ("in situation X, do/avoid Y" or "the approach that worked is Z"), written as one-line paired rules (`## <objective>` → `- DON'T <x> → DO <y> — **when** … — **why** …. [[episodic/<topic>]]`; narrative stays in episodic), tagged `provenance: failure\|success`. Second-class (waived gate, like `memory/episodic/`); above episodic, below skills. Provenance and enforcement are independent — an entry may optionally carry an `enforce` block (tool-call gate) regardless of provenance; most carry none and stay advisory-only. | **No — agent-owned; don't hand-edit** |
 | `dashboard/data/metrics.jsonl` | Committed per-session performance time series (evaluator output; rendered by the dashboard). Append-only, agent-written. Content-relative (the dashboard loads `data/metrics.js` as a sibling of `index.html`). | **No — agent-owned** |
 | `compact-proposals/<date>.md` | Compaction proposals from `weekly-compact` awaiting human review | Read & act on; the file is the agent's queue |
 | `archive/<name>/`, `archive/MANIFEST.md` | Retired skills | **No — immutable history** |
@@ -163,7 +163,7 @@ The split mirrors the language policy:
   (`episodic-capture`, `np-evaluator`) use it. Keep raw input small (cap +
   extract — see [[np-kb-claude-headless-scripting]] §6) rather than reaching for a
   bigger model to chew through more tokens.
-- **Sonnet** (`claude-sonnet-4-6`) — only for **agentic** passes that read/edit
+- **Sonnet** (`claude-sonnet-5-5`, set per feature via `models.*` params) — only for **agentic** passes that read/edit
   files over multiple steps and need real judgment: the episodic-maintain
   distillation and memory-promote crons (dispatched via `cli.py cron`, backed by
   `np_agentic_cron.py`). They run daily but no-op (no model call) on an empty
@@ -197,8 +197,10 @@ The engine repo is public, so substantive human/agent-authored engine changes �
 code under `dashboard/`, `engine/`, and the generic `np-core-*`/`np-flow-*`
 skills shipped here — go through a **pull request that merges only on green CI**,
 never direct-to-main. Flow: branch off latest `origin/main` → push → `gh pr create`
-→ wait for the required checks (Syntax sweep, Regression suite, Secret/PII guard;
-Dashboard e2e is informational) → if the branch is behind, `gh pr update-branch`
+→ wait for every check to pass (not only the required Syntax sweep, Regression suite,
+Secret/PII guard; Dashboard e2e is informational). A failing Spec guard or Tier gate
+means `change-specs/<branch-slug>.md` is missing or misses a touched path: fix it
+per `change-specs/TEMPLATE.md` unprompted, never merge past it → if the branch is behind, `gh pr update-branch`
 and re-wait → `gh pr merge --squash --delete-branch` once green. Keep engine commit
 messages and PR bodies **company-neutral** (feature + tech only).
 
@@ -254,7 +256,7 @@ carries a `provenance` tag (`failure` or `success`) that shapes its recall frami
 and *independently* may carry an optional `enforce` block: unlike episodic
 narrative, an entry with `enforce` is **enforced at runtime** (`warn` injects at the
 tool call; `ask` gates execution), regardless of which provenance it carries. Most
-entries carry no `enforce` block and stay advisory-only. A proven lesson is
+entries carry no `enforce` block and stay advisory-only. Entry bodies are paired rules (DON'T → DO, required **when**/**why**, ≤ ~320 chars; lone DO allowed, lone DON'T is a lint finding), checked by `engine/setup/np_lesson_format.py`. A proven lesson is
 promoted to a `skills/np-kb-*` rule via the human-reviewed `np-core-contribute`
 gate, then marked `promoted`/archived. This is the validation gate; candidate
 lessons stay low-authority and reversible.

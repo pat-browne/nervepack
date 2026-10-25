@@ -339,7 +339,8 @@ class TestBuild(unittest.TestCase):
             json.dump(fixture, gf)
             grad = gf.name
         try:
-            js = run_build("", NP_GRADUATION_CANDIDATES=grad)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad,
+                           NP_LESSONS_DIR="/nonexistent/lessons")
         finally:
             os.unlink(grad)
         m = re.search(r"window\.GRADUATION = (\{.*?\});", js, re.S)
@@ -370,6 +371,40 @@ class TestBuild(unittest.TestCase):
         self.assertTrue(m, "window.GRADUATION missing")
         grad_out = json.loads(m.group(1))
         self.assertEqual(grad_out["candidates"], [])
+
+    def test_graduation_dismissed_candidates_are_filtered(self):
+        """A dismissal stored next to graduation-candidates.json hides that candidate."""
+        with tempfile.TemporaryDirectory() as d:
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "strategy", "name": "s1"},
+                                          {"kind": "playbook", "name": "p1"}],
+                           "thresholds": {}}, fh)
+            with open(os.path.join(d, "graduation-dismissed.json"), "w") as fh:
+                json.dump(["strategy:s1"], fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});", js, re.S)
+        names = [c["name"] for c in json.loads(m.group(1))["candidates"]]
+        self.assertEqual(names, ["p1"])
+
+    def test_proposals_emitted(self):
+        """build.py emits window.PROPOSALS, one entry per `### a vs b` heading."""
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "2026-09-30.md"), "w") as fh:
+                fh.write("# P\n\n### a vs b\n\n**Recommendation: keep separate.**\n")
+            with open(os.path.join(d, "REJECTED.md"), "w") as fh:
+                fh.write("- old\n")
+            js = run_build("", NP_COMPACT_PROPOSALS_DIR=d)
+        m = re.search(r"window\.PROPOSALS = (\[.*?\]);\n", js, re.S)
+        self.assertTrue(m, "window.PROPOSALS missing")
+        out = json.loads(m.group(1))
+        self.assertEqual(out[0]["file"], "2026-09-30.md")
+        self.assertEqual(out[0]["proposals"][0]["title"], "a vs b")
+        self.assertTrue(out[0]["proposals"][0]["keep_separate"])
+
+    def test_proposals_missing_dir_is_empty(self):
+        js = run_build("", NP_COMPACT_PROPOSALS_DIR="/nonexistent/compact")
+        self.assertIn("window.PROPOSALS = [];", js)
 
     def test_ledger_emitted_from_fixture(self):
         """build.py emits window.LEDGER from a committed ledger.jsonl (written by
@@ -1254,6 +1289,43 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         widgets = next(e for e in entries if e["name"] == "widgets")
         self.assertEqual(widgets["sources"], [])
 
+    def test_reference_and_roadmap_routes_get_nav_groups(self):
+        # Only the knowledge route fed the nav, so solutions/runbooks/proposals
+        # (reference + roadmap routes) never showed.
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "notes/{name}.md"},
+                    "reference": {"variants": [
+                        {"name": "solution", "path": "docs/solutions/{name}.md"}]},
+                    "roadmap": {"path": "docs/proposals/{name}.md"},
+                    "skill": {"path": "skills/{name}/SKILL.md"}}},
+                {"docs/solutions/fix-a.md": "---\ntitle: a\n---\n\nFix A.\n",
+                 "docs/proposals/idea-b.md": "---\ntitle: b\n---\n\nIdea B.\n",
+                 "skills/s/SKILL.md": "---\nname: s\n---\n\nSkill.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki["groups"]}
+        self.assertEqual(by_key.get("solution"), ["fix-a"], wiki)
+        self.assertEqual(by_key.get("roadmap"), ["idea-b"], wiki)
+        self.assertNotIn("skill", by_key, wiki)
+
+    def test_colocated_reference_route_forms_no_duplicate_group(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {
+                    "knowledge": {"path": "wiki/topics/{topic}/{topic}.md",
+                                  "frontmatter": {"kind": "topic"}},
+                    "reference": {"path": "wiki/topics/{topic}/{name}.md",
+                                  "frontmatter": {"kind": "reference"}}}},
+                {"wiki/topics/rust/rust.md": "---\nname: rust\nkind: topic\n---\n\nRust.\n",
+                 "wiki/topics/rust/book.md": "---\nname: book\nkind: reference\n---\n\nBook.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        self.assertEqual([g["key"] for g in wiki["groups"]], ["topic"], wiki)
+        names = [s["name"] for g in wiki["groups"] for e in g["entries"] for s in e["sources"]]
+        self.assertEqual(names, ["book"], wiki)
+
     def test_flat_route_does_not_swallow_a_nested_route(self):
         # A layer may nest one declared route inside another's container:
         # `.claude/references/{name}.md` (convention) contains
@@ -1273,6 +1345,36 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         by_key = {g["key"]: [e["name"] for e in g["entries"]] for g in wiki.get("groups", [])}
         self.assertEqual(by_key.get("convention"), ["team"], wiki)
         self.assertEqual(sorted(by_key.get("data-model", [])), ["camper", "session"], wiki)
+
+    def test_nonstandard_route_pages_are_rendered(self):
+        # Pages from a declared route outside topics/concepts showed in the nav but
+        # never rendered, so every click 404'd (data-base data-model: 64 pages).
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = self._layer(
+                tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "data-model", "path": "refs/data-model/{name}.md"}]}}},
+                {"refs/data-model/camper.md": "---\ntitle: camper\n---\n\nCamper table.\n"})
+            out_dir, js = TestRenderPages._run(self, cd, NP_ENGINE_DIR=os.path.join(tmp, "e"),
+                                               NP_TEAM_DIR=os.path.join(tmp, "t"))
+            wiki = _parse_wiki(js)
+            html = next(e["synthesis"]["html"] for g in wiki["groups"] for e in g["entries"])
+            self.assertTrue(os.path.isfile(os.path.join(out_dir, html[len("data/"):])), html)
+
+    def test_render_pages_falls_back_to_topics_without_groups(self):
+        # An index built before groups existed carries only topics/concepts.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("np_build_fallback", BUILD)
+        b = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(b)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "rust.md")
+            with open(src, "w") as fh:
+                fh.write("# Rust\n")
+            html = "data/wiki/personal/topics/rust/rust.html"
+            b.render_pages({"topics": [{"topic": "rust", "sources": [], "synthesis":
+                            {"name": "rust", "html": html, "src": src}}]}, tmp)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, html[len("data/"):])))
 
     def test_folder_owning_nonstandard_tree_keeps_its_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1310,6 +1412,117 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
             wiki = _parse_wiki(run_build_wiki(cd))
         self.assertEqual([t["topic"] for t in wiki["topics"]], ["rust"])
         self.assertEqual([c["name"] for c in wiki["concepts"]], ["borrow"])
+
+
+class TestWikiExcludedGroups(unittest.TestCase):
+    """Receipts, meetings, and plans are layer records, not wiki reading. The
+    build drops them by group key or container name, case-insensitively."""
+
+    def test_excluded_groups_are_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cd = TestWikiNavFollowsLayerLayout._layer(
+                self, tmp,
+                {"schema": 1, "routes": {"knowledge": {"variants": [
+                    {"name": "note", "path": "notes/{name}.md"},
+                    {"name": "receipt", "path": "docs/receipts/{name}.md"},
+                    {"name": "meeting", "path": "docs/meetings/{name}.md"},
+                    {"name": "plan", "path": "docs/plans/{name}.md"},
+                    {"name": "doc", "path": "docs/Plans/{name}.md"},
+                    {"name": "misc", "path": "docs/Plans2/{name}.md"}]}}},
+                {"notes/keep.md": "---\ntitle: keep\n---\n\nKeep.\n",
+                 "docs/receipts/r1.md": "---\ntitle: r1\n---\n\nR.\n",
+                 "docs/meetings/m1.md": "---\ntitle: m1\n---\n\nM.\n",
+                 "docs/plans/p1.md": "---\ntitle: p1\n---\n\nP.\n",
+                 "docs/Plans/p2.md": "---\ntitle: p2\n---\n\nP.\n",
+                 "docs/Plans2/x.md": "---\ntitle: x\n---\n\nX.\n"})
+            wiki = _parse_wiki(run_build_wiki(cd))
+        keys = {g["key"] for g in wiki.get("groups", [])}
+        self.assertIn("note", keys, wiki)
+        self.assertIn("misc", keys, wiki)        # a near-miss name still shows
+        for bad in ("receipt", "meeting", "plan", "doc"):
+            self.assertNotIn(bad, keys, wiki)
+
+    def test_exclusion_is_one_named_constant(self):
+        b = _load_build_direct()
+        self.assertEqual({x.lower() for x in b.WIKI_EXCLUDED_GROUPS},
+                         {"receipts", "meetings", "plans"})
+
+
+class TestWikiLayersStartExpanded(unittest.TestCase):
+    """On load layer rows open and their groups stay collapsed. Search
+    (expandAll) still opens every group that holds a match."""
+
+    def test_layers_and_groups_follow_expand_all(self):
+        index = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "..", "dashboard", "index.html"))
+        with open(index, encoding="utf-8") as fh:
+            html_text = fh.read()
+        self.assertNotIn("expandAll || i === 0", html_text)
+        self.assertNotIn("expandAll, label, true)", html_text)
+        self.assertNotIn("const open = expandAll;", html_text)
+        self.assertIn("const open = true;", html_text)
+        self.assertIn("expandAll, label, expandAll)", html_text)
+
+
+class TestDetailBodies(unittest.TestCase):
+    """Graduation candidates and compact proposals carry their full text."""
+
+    def test_graduation_candidate_carries_lesson_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(lessons, "s1.md"), "w") as fh:
+                fh.write("---\nname: s1\n---\nDo the thing first.\n")
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "success", "name": "s1"},
+                                          {"kind": "failure", "name": "gone"}],
+                           "thresholds": {}}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        cands = {c["name"]: c for c in json.loads(m.group(1))["candidates"]}
+        self.assertIn("Do the thing first.", cands["s1"]["body"])
+        self.assertNotIn("body", cands["gone"])
+
+    def test_long_lesson_body_is_marked_truncated(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(lessons, "big.md"), "w") as fh:
+                fh.write("x" * 25000)
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "x", "name": "big"}]}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        body = json.loads(m.group(1))["candidates"][0]["body"]
+        self.assertTrue(body.endswith("open the file for the full text]"))
+        self.assertLess(len(body), 20100)
+
+    def test_graduation_name_cannot_escape_lessons_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            lessons = os.path.join(d, "lessons")
+            os.makedirs(lessons)
+            with open(os.path.join(d, "secret.md"), "w") as fh:
+                fh.write("nope\n")
+            grad = os.path.join(d, "graduation-candidates.json")
+            with open(grad, "w") as fh:
+                json.dump({"candidates": [{"kind": "x", "name": "../secret"}]}, fh)
+            js = run_build("", NP_GRADUATION_CANDIDATES=grad, NP_LESSONS_DIR=lessons)
+        m = re.search(r"window\.GRADUATION = (\{.*?\});\n", js, re.S)
+        self.assertNotIn("body", json.loads(m.group(1))["candidates"][0])
+
+    def test_proposal_carries_section_body(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "2026-09-30.md"), "w") as fh:
+                fh.write("# P\n\n### a vs b\n\nOverlap is large.\n\n"
+                         "**Recommendation: merge.**\n\n### c vs d\n\nOther.\n")
+            js = run_build("", NP_COMPACT_PROPOSALS_DIR=d)
+        m = re.search(r"window\.PROPOSALS = (\[.*?\]);\n", js, re.S)
+        props = json.loads(m.group(1))[0]["proposals"]
+        self.assertIn("Overlap is large.", props[0]["body"])
+        self.assertIn("Recommendation: merge.", props[0]["body"])
+        self.assertNotIn("Other.", props[0]["body"])
 
 
 if __name__ == "__main__":

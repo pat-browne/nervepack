@@ -34,18 +34,22 @@ for _p in (_HERE, _ENGINE_DIR, _ENGINE_SETUP):
 
 import np_dirs
 from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
+from nervepack_engine.hooks import checkout_guard  # noqa: E402
 from nervepack_engine.hooks import drift_guard  # noqa: E402
 from nervepack_engine.hooks import episodic_capture  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
 from nervepack_engine.hooks import evaluator  # noqa: E402
 from nervepack_engine.hooks import form_directive  # noqa: E402
 from nervepack_engine.hooks import form_gate  # noqa: E402
+from nervepack_engine.hooks import journal_recall  # noqa: E402
+from nervepack_engine.hooks import journal_write  # noqa: E402
 from nervepack_engine.hooks import lesson_guard  # noqa: E402
 from nervepack_engine.hooks import lesson_recall  # noqa: E402
 from nervepack_engine.hooks import open_artifact  # noqa: E402
 from nervepack_engine.hooks import open_dashboard  # noqa: E402
 from nervepack_engine.hooks import quota_detect  # noqa: E402
 from nervepack_engine.hooks import quota_notify  # noqa: E402
+from nervepack_engine.hooks import post_ship_capture  # noqa: E402
 from nervepack_engine.hooks import resume_recall  # noqa: E402
 from nervepack_engine.hooks import resume_sessionstart  # noqa: E402
 from nervepack_engine.hooks import resume_write  # noqa: E402
@@ -80,18 +84,22 @@ import np_toggle  # noqa: E402
 
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
+    "checkout-guard": checkout_guard.run,
     "drift-guard": drift_guard.run,
     "episodic-capture": episodic_capture.run,
     "episodic-recall": episodic_recall.run,
     "evaluator": evaluator.run,
     "form-directive": form_directive.run,
     "form-gate": form_gate.run,
+    "journal-recall": journal_recall.run,
+    "journal-write": journal_write.run,
     "lesson-guard": lesson_guard.run,
     "lesson-recall": lesson_recall.run,
     "open-artifact": open_artifact.run,
     "open-dashboard": open_dashboard.run,
     "quota-detect": quota_detect.run,
     "quota-notify": quota_notify.run,
+    "post-ship-capture": post_ship_capture.run,
     "resume-recall": resume_recall.run,
     "resume-sessionstart": resume_sessionstart.run,
     "session-directive": session_directive.run,
@@ -111,6 +119,7 @@ _CRONS = {
     "refine": np_agentic_cron.refine,
     "compact": np_agentic_cron.compact,
     "quota-watch": np_quota_watch.cron_scan,
+    "kb-promote-scan": np_agentic_cron.kb_promote_scan,
 }
 
 _SETUP = {
@@ -337,13 +346,16 @@ def main(argv=None):
         # --target=<t> is the evaluator's layer classification, which picks the
         # repo to try first. It is a flag, not a 3rd positional, so the optional
         # Modify rewrite never has to be padded with an empty slot.
-        rest = [a for a in argv[1:] if not a.startswith("--target=")]
+        # --kind=compact|graduate runs a dashboard compact-apply or graduate job
+        # through the same queue. The job allowlists it.
+        rest = [a for a in argv[1:] if not a.startswith(("--target=", "--kind="))]
         target = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--target=")), None)
+        kind = next((a.split("=", 1)[1] for a in argv[1:] if a.startswith("--kind=")), None)
         text = rest[0] if rest else ""
         try:
             # rest[1], when present, is the dashboard Modify box's rewrite of the text.
             return np_implement_suggestion.implement(
-                text, rest[1] if len(rest) > 1 else None, target=target)
+                text, rest[1] if len(rest) > 1 else None, target=target, kind=kind)
         except Exception as exc:
             _bail("implement-suggestion", "unhandled exception: %r" % exc)
             return 0

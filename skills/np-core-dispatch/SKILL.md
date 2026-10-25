@@ -1,6 +1,6 @@
 ---
 name: np-core-dispatch
-description: Send a task or a handoff to a fresh agent and supervise it. Use when you want another agent to carry out work — executing a [[np-core-handoff]] doc, running a long/risky job, or parallelizing — especially when you tried to "continue" a previously spawned agent and the SendMessage capability isn't available in this environment. Covers the spawn-fresh-with-context fallback, scoping, stop-points, and verification. The dispatch half of the continuity pair with [[np-core-handoff]] (handoff writes the doc; dispatch sends it).
+description: 'Send a task or [[np-core-handoff]] doc to a fresh agent and supervise it: scope, stop-points, verification. Use for long or risky jobs, parallel work, or when SendMessage is unavailable to continue a spawned agent.'
 ---
 
 # dispatch — send work to a fresh agent
@@ -32,9 +32,9 @@ continuation channel that isn't there.
    (pull fresh via [[np-env-secrets-refresh]] — never inline them). Tell it to STOP and
    report on a dirty/diverged tree rather than force anything.
 4. **Pick the lane.** Foreground when you want to review + relay the result this turn;
-   background for long autonomous jobs that should notify on completion. **Tier the model
-   to the phase:** strongest for spec/design authorship, smaller (Sonnet, or Haiku for
-   mechanical steps) once the plan is approved and the work is execution or testing.
+   background for long autonomous jobs that should notify on completion. **Always set the
+   model:** a dispatched agent never inherits yours. The rule and tiers are in
+   [[np-flow-orchestrate]] § Worker models.
 5. **Verify the result yourself.** Treat the agent's report as a claim — independently
    re-check the key invariants (tree clean, tests/doctor green, nothing pushed public)
    before you trust "done."
@@ -70,22 +70,23 @@ use uniquely-named ledger/brief files, never mass-write the shared ones. See
 ## Isolate with a worktree when the tree is shared
 
 Dispatch repo-editing agents with **`isolation: "worktree"`** whenever an auto-committing
-cron or another session may be active in that tree (nervepack's own metrics/maintain crons
-are). A concurrent committer can otherwise **sweep the agent's staged work** into its own
-commit (and push it) — a worktree off the committed base is immune — and two agents editing
-the **same files** in parallel land on separate branches instead of colliding (resolve the
-overlap by **combining** both, not picking a side). After it reports, verify on its branch
-(tree clean, tests green, nothing on `main`), then you merge — FF or cherry-pick — keeping
-the agent off `main`. See [[using-git-worktrees]].
+cron or another session may be active in that tree. A worktree off the committed base
+prevents staged-work sweeps; parallel edits land on separate branches (combine both, don't
+pick a side). After it reports, verify on its branch, then merge — keeping the agent off
+`main`. See [[using-git-worktrees]].
+Tasks that are independent by file list can share ONE worktree: rules in
+references/parallel-one-worktree.md.
 
-**Trust git ground truth, not the agent's report — it can edit the wrong checkout.** Even
-when told to work in a given worktree, a dispatched agent may edit the *main* checkout or
-commit to `main`/an off-branch orphan while reporting "DONE, committed" with a plausible
-SHA. After each agent, confirm where the change actually landed (`git log --oneline`,
-`git show <sha> --stat`, `git merge-base --is-ancestor <sha> HEAD`) — never accept the
-self-reported location. Wrong place? Reconcile, don't re-run — tag-backup / cherry-pick /
-verify-identity / reset recipe: references/recovery.md. Pin the worktree path in the
-dispatch and have the agent echo `git rev-parse --show-toplevel` before its first edit.
+**Trust git ground truth, not the agent's report — it can edit the wrong checkout.**
+After each agent, confirm where the change actually landed (`git log --oneline`, `git show
+<sha> --stat`). Wrong place? Tag-backup / cherry-pick / reset: references/recovery.md.
+Pin the worktree path in the dispatch; have the agent echo `git rev-parse --show-toplevel`
+before its first edit.
+
+**When worktrees are impractical:** share one safely with disjoint file lists — give each
+agent an explicit, non-overlapping set of files, forbid `git add` inside tasks, and put
+every cross-task contract in the plan up front. Full recipe + sweep mechanics:
+references/worktree-isolation.md
 
 ## Verify the whole plan, not just each task
 

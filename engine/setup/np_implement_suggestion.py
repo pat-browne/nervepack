@@ -52,6 +52,7 @@ import time
 
 import np_bashlib
 import np_content
+import np_dashboard_actions
 import np_model
 import np_suggestion_resolve
 import np_toggle
@@ -61,6 +62,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))  # engine/setup -> engine -> repo root
 
 _AGENT_TOOLS = "Read Edit Write Bash Grep Glob"
+# Kind jobs (compact/graduate) read untrusted proposal and lesson text, so they
+# get no shell. The harness makes their commit and always lands them as a PR.
+_KIND_TOOLS = "Read Edit Write Grep Glob"
 
 
 def _agent_timeout():
@@ -89,11 +93,14 @@ def _log(log_path, msg):
         pass
 
 
-def _write_status(status_dir, key, state, ref=""):
+def _write_status(status_dir, key, state, ref="", **extra):
+    """`extra` carries optional fields: position, model_error, model, log."""
+    rec = {"state": state, "ref": ref, "ts": _now()}
+    rec.update(extra)
     try:
         os.makedirs(status_dir, exist_ok=True)
         with open(os.path.join(status_dir, key + ".json"), "w", encoding="utf-8") as fh:
-            json.dump({"state": state, "ref": ref, "ts": _now()}, fh)
+            json.dump(rec, fh)
     except OSError:
         pass
 
@@ -281,6 +288,31 @@ _TARGET_ORDER = {
 }
 _DEFAULT_ORDER = ("engine", "content")
 
+# Non-suggestion jobs the dashboard queues through this same machinery.
+# Each kind has its own agent prompt, starts in the content overlay, and
+# skips the suggestion ledger (nothing to resolve there).
+_KIND_PROMPTS = {
+    "compact": "np-flow-apply-compact-proposal.md",
+    "graduate": "np-flow-graduate-candidate.md",
+}
+
+
+# Kind jobs act on overlay content only: compact proposals, lessons, and
+# np-kb-*/np-env-* skills. The engine is never tried, so a dead end can't read
+# "engine: wrong repo". The overlay has no PR gate, so a kind job lands direct
+# on the overlay's origin default branch.
+_KIND_REPOS = ("content",)
+
+
+def _kind_repos(kind):
+    """Repos a kind job may run in, or None for a plain suggestion."""
+    return _KIND_REPOS if _normalize_kind(kind) else None
+
+
+def _normalize_kind(kind):
+    k = (kind or "").strip().lower()
+    return k if k in _KIND_PROMPTS else ""
+
 
 def _normalize_target(target):
     """The evaluator's target if we know it, else "" (never the raw value)."""
@@ -348,7 +380,7 @@ class _Attempt:
         self.agent_sha = ""
 
 
-def _agent_call(prompt, cwd, agent_fn, log_path):
+def _agent_call(prompt, cwd, agent_fn, log_path, tools=_AGENT_TOOLS):
     """Run the agentic pass; fail-open on a timeout (mirrors bash's `timeout 600`
     + `|| true`: a hung agent must not wedge the job). Returns (output, failure)
     -- `failure` is a short reason string when the pass did not complete, which
@@ -356,8 +388,7 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
     than a bare "no commit"."""
     timeout = _agent_timeout()
     try:
-        returncode, out, err = agent_fn(prompt, _AGENT_TOOLS, cwd, timeout)
-        return (out or "") + (err or ""), ""
+        returncode, out, err = agent_fn(prompt, tools, cwd, timeout)
     except subprocess.TimeoutExpired:
         reason = "agent pass timed out after %ss" % timeout
         _log(log_path, reason)
@@ -372,6 +403,14 @@ def _agent_call(prompt, cwd, agent_fn, log_path):
         reason = "agent pass raised: %s: %s" % (type(exc).__name__, exc)
         _log(log_path, reason)
         return "", reason
+    text = (out or "") + (err or "")
+    line = np_model.model_error_line(text)
+    if line:
+        model = _implement_model()
+        np_model.record_probe(model, "missing", line)
+        _log(log_path, "model %s rejected: %s" % (model, line))
+        raise ModelRejected(model, line)
+    return text, ""
 
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -400,15 +439,40 @@ def _agent_commit(repo, wt, base_sha):
     return end_sha
 
 
-def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
+def _origin_base(repo, log_path=None):
+    """(branch, sha) of origin's default branch after a fetch, else ("", "").
+    A failed fetch is logged and the last fetched refs (or local branches) are used."""
+    if _git(repo, "remote", "get-url", "origin").returncode != 0:
+        return "", ""
+    fetch = _git(repo, "fetch", "-q", "origin")
+    if fetch.returncode != 0 and log_path:
+        _log(log_path, "fetch origin failed, using last fetched or local refs: %s"
+             % (fetch.stderr or "").strip()[:160])
+    head = (_git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
+    for name in ([head.split("/", 1)[1]] if "/" in head else []) + ["main", "master"]:
+        r = _git(repo, "rev-parse", "--verify", "-q", "refs/remotes/origin/%s" % name)
+        sha = (r.stdout or "").strip()
+        if r.returncode == 0 and _SHA_RE.match(sha):
+            return name, sha
+    return "", ""
+
+
+def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
+                  tools=_AGENT_TOOLS, commit_msg=None, from_origin=False, apply_fn=None):
     """Isolate the agent in a throwaway git WORKTREE off the committed base tip
     of `repo`. The agent never sees (and can never commit) the caller's
     uncommitted work; the worktree lives OUTSIDE the repo (a temp dir, always
     removed here) so it never pollutes the main tree's `git status`."""
     a = _Attempt()
-    base = (_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() or "main"
-    base_sha_r = _git(repo, "rev-parse", "HEAD")
-    base_sha = (base_sha_r.stdout or "").strip() if base_sha_r.returncode == 0 else ""
+    # from_origin: a kind job bases on the overlay's origin default branch, so a
+    # checkout drifted onto a feature branch can't capture or block it.
+    base, base_sha = _origin_base(repo, log_path) if from_origin else ("", "")
+    if from_origin and not base_sha:
+        _log(log_path, "%s repo: no origin default branch, basing on local HEAD" % label)
+    if not base_sha:
+        base = (_git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() or "main"
+        base_sha_r = _git(repo, "rev-parse", "HEAD")
+        base_sha = (base_sha_r.stdout or "").strip() if base_sha_r.returncode == 0 else ""
     if not base_sha:
         a.state = "worktree_failed"
         a.detail = "%s repo: no base commit" % label
@@ -441,7 +505,22 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
         return a
 
     try:
-        out, failure = _agent_call(prompt, wt, agent_fn, log_path)
+        # apply_fn: a deterministic edit that needs no agent pass. It returns
+        # True when it handled the job.
+        try:
+            handled = apply_fn is not None and apply_fn(wt)
+        except Exception as exc:
+            # The worktree is thrown away, so a half-applied edit never lands.
+            a.state = "no_commit"
+            full = ("%s repo: deterministic apply raised: %s: %s"
+                    % (label, type(exc).__name__, exc))
+            a.detail = full[:200]
+            _log(log_path, full)
+            return a
+        if handled:
+            out, failure = "", ""
+        else:
+            out, failure = _agent_call(prompt, wt, agent_fn, log_path, tools)
 
         if "NOT_IMPLEMENTABLE" in out:
             a.state = "not_implementable"
@@ -449,6 +528,17 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path):
             a.detail = (m.group(0)[:160] if m else "") or ("%s repo: not a code change" % label)
             return a
 
+        if commit_msg:
+            # No shell for the agent, so the harness commits. The worktree is
+            # isolated, so staging everything in it touches only this job.
+            for args in (("add", "-A"), ("commit", "-q", "-m", commit_msg)):
+                r = _git(wt, *args)
+                # "nothing to commit" is the no-change case _agent_commit reports.
+                if r.returncode != 0 and "nothing" not in (r.stdout or "") + (r.stderr or ""):
+                    a.state = "no_commit"
+                    a.detail = "%s repo: git %s failed: %s" % (
+                        label, args[0], ((r.stderr or r.stdout or "").strip())[:160])
+                    return a
         end_sha = _agent_commit(repo, wt, base_sha)
         if not end_sha:
             a.state = "no_commit"
@@ -493,30 +583,218 @@ def _default_agent_fn(prompt, tools, cwd, timeout):
                                     input=prompt, cwd=cwd, timeout=timeout)
         np_model.check_auth(r.stdout)   # override bypasses agent(), so guard here too
         return r.returncode, r.stdout, r.stderr
-    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout)
+    # A tool list without Bash marks a kind job. Run it restricted: no shell, no bypass.
+    restricted = "Bash" not in tools.split()
+    return np_model.agent(prompt, tools, cwd=cwd, timeout=timeout, feature="implement",
+                          restricted=restricted)
+
+
+class ModelRejected(Exception):
+    """The CLI refused the configured model. Every repo fails the same way."""
+
+    def __init__(self, model, line):
+        super().__init__(line)
+        self.model = model
+        self.line = line
+
+
+def _implement_model():
+    return np_model.resolve_model("agent", "implement")
+
+
+# --- queue -----------------------------------------------------------------
+# One JSON file per waiting job, named <ns-timestamp>-<key>.json so a sort is FIFO.
+# running.json names the job the lock holder is on right now.
+_ENTRY_RE = re.compile(r"^\d{20}-[0-9a-f]{16}\.json$")
+_RUNNING = "running.json"
+
+
+def queue_dir(status_dir):
+    """IMPLEMENT_QUEUE_DIR, else a sibling of the status dir."""
+    return os.environ.get("IMPLEMENT_QUEUE_DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(status_dir)), "implement-queue")
+
+
+def queue_entries(qdir):
+    """[(path, entry)] oldest first. Unreadable files are skipped."""
+    try:
+        names = sorted(n for n in os.listdir(qdir) if _ENTRY_RE.match(n))
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        path = os.path.join(qdir, n)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                out.append((path, json.load(fh)))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+def queue_position(qdir, key):
+    """1-based position of `key` in the queue, 0 when absent."""
+    for i, (_, e) in enumerate(queue_entries(qdir), 1):
+        if e.get("key") == key:
+            return i
+    return 0
+
+
+def running_job(qdir):
+    """The live lock holder's current job, or None. Stale markers are ignored."""
+    try:
+        with open(os.path.join(qdir, _RUNNING), encoding="utf-8") as fh:
+            job = json.load(fh)
+        pid = int(job.get("pid") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    return job if pid and _pid_alive(pid) else None
+
+
+def _set_running(qdir, key, text):
+    try:
+        os.makedirs(qdir, exist_ok=True)
+        with open(os.path.join(qdir, _RUNNING), "w", encoding="utf-8") as fh:
+            json.dump({"key": key, "text": text, "pid": os.getpid(), "started_at": _now()}, fh)
+    except OSError:
+        pass
+
+
+def _clear_running(qdir):
+    try:
+        os.remove(os.path.join(qdir, _RUNNING))
+    except OSError:
+        pass
+
+
+def enqueue(qdir, status_dir, text, edited=None, target=None, kind=None):
+    """Add a job unless the same suggestion is queued or running. True if added."""
+    key = _status_key(text)
+    if queue_position(qdir, key):
+        return False
+    running = running_job(qdir)
+    if running and running.get("key") == key:
+        return False
+    entry = {"key": key, "text": text, "edited": edited or "", "target": target or "",
+             "kind": _normalize_kind(kind), "enqueued_at": _now()}
+    try:
+        os.makedirs(qdir, exist_ok=True)
+        name = "%020d-%s.json" % (time.time_ns(), key)
+        tmp = os.path.join(qdir, "." + name + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(entry, fh)
+        os.replace(tmp, os.path.join(qdir, name))
+    except OSError:
+        return False
+    _write_status(status_dir, key, "queued", position=queue_position(qdir, key))
+    return True
+
+
+def _drop_queued(qdir, key):
+    for path, e in queue_entries(qdir):
+        if e.get("key") == key:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def _pop(qdir):
+    """Remove and return the oldest entry, or None."""
+    for path, e in queue_entries(qdir):
+        try:
+            os.remove(path)
+        except OSError:
+            continue                          # another holder took it
+        return e
+    return None
+
+
+def _ttl_days():
+    try:
+        return float(np_toggle.param("evaluator.implement_status_ttl_days", "30"))
+    except (TypeError, ValueError):
+        return 30.0
+
+
+def prune(status_dir, qdir, ttl_days=None, now=None):
+    """Delete status files and queue entries older than the TTL (by mtime).
+    Keeps status files in state queued or running, and running.json while its
+    pid is alive. ttl_days <= 0 disables. Returns the number of files removed."""
+    ttl = _ttl_days() if ttl_days is None else ttl_days
+    if ttl <= 0:
+        return 0
+    cutoff = (time.time() if now is None else now) - ttl * 86400
+    removed = 0
+
+    def old(path):
+        try:
+            return os.path.getmtime(path) < cutoff
+        except OSError:
+            return False
+
+    def rm(path):
+        try:
+            os.remove(path)
+            return 1
+        except OSError:
+            return 0
+
+    try:
+        names = os.listdir(status_dir)
+    except OSError:
+        names = []
+    for n in names:
+        path = os.path.join(status_dir, n)
+        if not n.endswith(".json") or not old(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                state = (json.load(fh) or {}).get("state")
+        except (OSError, ValueError, AttributeError):
+            state = None
+        if state in ("queued", "running"):
+            continue
+        removed += rm(path)
+
+    try:
+        names = os.listdir(qdir)
+    except OSError:
+        names = []
+    for n in names:
+        path = os.path.join(qdir, n)
+        if n == _RUNNING:
+            if old(path) and running_job(qdir) is None:
+                removed += rm(path)
+        elif _ENTRY_RE.match(n) and old(path):
+            removed += rm(path)
+    return removed
 
 
 def implement(text, edited=None, target=None, repo=None, log_path=None, lock_path=None,
               status_dir=None, prompt_file=None, resolve_fn=None, agent_fn=None,
-              gh_pr_create_fn=None):
-    """Implement ONE suggestion. Returns 0 always (fail-open) -- callers never
-    need a nonzero exit, since state travels via the status file and the log.
+              gh_pr_create_fn=None, kind=None):
+    """Implement ONE suggestion, or queue it behind the running job. Returns 0.
+    State travels via the status file and the log (fail-open).
 
-    `text` is the evaluator's original suggestion. It keys the status file the
-    dashboard polls and it is what gets resolved off the ledger. `edited` is the
-    dashboard Modify box's rewrite -- when present it is what the agent actually
-    receives, and it is recorded next to the original in the ledger. `target` is
-    the evaluator's own layer classification, which picks the repo to try first.
+    `text` keys the status file and is what gets resolved. `edited` is the
+    Modify-box rewrite the agent receives instead. `target` is the evaluator's
+    layer tag, which picks the repo to try first.
     """
     if os.environ.get("NERVEPACK_AGENT"):
         return 0  # never recurse if already inside an agent
-    repo = repo or os.environ.get("IMPLEMENT_REPO") or _NP
-    log_path = log_path or os.environ.get("IMPLEMENT_LOG") or np_dirs.cache_path("implement.log")
+    ctx = {
+        "repo": repo or os.environ.get("IMPLEMENT_REPO") or _NP,
+        "log_path": log_path or os.environ.get("IMPLEMENT_LOG") or np_dirs.cache_path("implement.log"),
+        "status_dir": status_dir or os.environ.get("IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status"),
+        "prompt_file": prompt_file or os.environ.get("IMPLEMENT_PROMPT") or os.path.join(_NP, "agents", "np-flow-implement-suggestion.md"),
+        "agent_fn": agent_fn or _default_agent_fn,
+        "resolve_fn": resolve_fn or _default_resolve,
+        "gh_pr_create_fn": gh_pr_create_fn,
+    }
     lock_path = lock_path or os.environ.get("IMPLEMENT_LOCK") or np_dirs.cache_path("implement.lock")
-    status_dir = status_dir or os.environ.get("IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status")
-    prompt_file = prompt_file or os.environ.get("IMPLEMENT_PROMPT") or os.path.join(_NP, "agents", "np-flow-implement-suggestion.md")
-    agent_fn = agent_fn or _default_agent_fn
-    resolve_fn = resolve_fn or _default_resolve
+    log_path = ctx["log_path"]
+    qdir = queue_dir(ctx["status_dir"])
 
     if np_toggle.param("evaluator.implement", "on") != "on":
         return 0
@@ -524,89 +802,167 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
         _log(log_path, "no suggestion text given")
         return 0
 
+    try:
+        n = prune(ctx["status_dir"], qdir)
+        if n:
+            _log(log_path, "pruned %d stale implement cache file(s)" % n)
+    except Exception as exc:
+        _log(log_path, "prune failed: %s" % exc)
+
+    first = {"text": text, "edited": edited or "", "target": target or "",
+             "kind": _normalize_kind(kind)}
+    if not _acquire_lock(lock_path):
+        if enqueue(qdir, ctx["status_dir"], text, edited, target, kind):
+            _log(log_path, "queued behind the running job: %r" % text)
+        else:
+            _log(log_path, "already queued or running; ignoring %r" % text)
+        # The holder may have released between our failed claim and the enqueue.
+        if not _acquire_lock(lock_path):
+            return 0
+        first = None                          # our entry is in the queue now
+    _drain(first, lock_path, qdir, ctx)
+    return 0
+
+
+def _drain(job, lock_path, qdir, ctx):
+    """Run `job`, then every queued entry, holding the lock. After the release,
+    re-acquire and repeat while entries remain, so none is stranded."""
+    while True:
+        try:
+            while True:
+                if job is None:
+                    job = _pop(qdir)
+                    if job is None:
+                        break
+                _run_guarded(job, qdir, ctx)
+                job = None
+        finally:
+            _clear_running(qdir)
+            shutil.rmtree(lock_path, ignore_errors=True)
+        if not queue_entries(qdir) or not _acquire_lock(lock_path):
+            return
+
+
+def _run_guarded(job, qdir, ctx):
+    """One job. A crash marks that row failed and the drain goes on."""
+    text = job.get("text") or ""
+    if not text:
+        return
+    key = _status_key(text)
+    _drop_queued(qdir, key)
+    _set_running(qdir, key, text)
+    try:
+        kind = {"kind": job["kind"]} if job.get("kind") else {}
+        _run_one(text, job.get("edited") or None, job.get("target") or None, ctx, **kind)
+    except Exception as exc:
+        reason = ("job raised: %s: %s" % (type(exc).__name__, exc))[:300]
+        _write_status(ctx["status_dir"], key, "failed", reason, log=ctx["log_path"])
+        _log(ctx["log_path"], "implement failed, left unresolved: %r (%s)" % (text, reason))
+
+
+def _run_one(text, edited, target, ctx, kind=None):
+    repo, log_path, status_dir = ctx["repo"], ctx["log_path"], ctx["status_dir"]
     key = _status_key(text)
     task = (edited or "").strip() or text
+    kind = _normalize_kind(kind)
+    if kind:
+        # A compact/graduate job: its own prompt, overlay first, no ledger.
+        ctx = dict(ctx, prompt_file=os.path.join(_NP, "agents", _KIND_PROMPTS[kind]),
+                   resolve_fn=lambda t, note="": None)
+        target = "skills"
 
-    # Several machines share one content overlay, so the ledger is the only place
-    # they can see each other's work. If this suggestion came back resolved on the
-    # last sync, another machine already did it -- don't spend a second agent pass.
-    if np_suggestion_resolve.is_resolved(text):
+    # Machines share one content overlay, so the ledger shows each other's work.
+    # A suggestion resolved on the last sync needs no second agent pass.
+    if not kind and np_suggestion_resolve.is_resolved(text):
         _write_status(status_dir, key, "already_resolved", "resolved elsewhere; nothing to do")
         _log(log_path, "already resolved (another machine or an earlier run); skipping %r" % text)
-        return 0
+        return
 
-    if not _acquire_lock(lock_path):
-        _write_status(status_dir, key, "busy")
-        _log(log_path, "busy: another implement is running; skipping %r" % text)
-        return 0
+    _write_status(status_dir, key, "running")
 
+    if not shutil.which("git"):
+        _log(log_path, "git not found")
+        return
+
+    mode = np_toggle.param("evaluator.implement_mode", "pr")
+    # Mode only affects engine landings. Kind jobs run in the overlay, which
+    # always lands direct (see _land), so implement_mode cannot block them.
+    tools = _KIND_TOOLS if kind else _AGENT_TOOLS
+    commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
+    content_repo = _resolve_content_repo(repo)
+    slug = _slug(task)
+    branch = "np-suggest/%s" % slug
+
+    # Best repo first, per the evaluator's target. Absent repos drop out.
+    # A kind job runs in the overlay only.
+    repos = {"engine": repo, "content": content_repo}
+    labels = {"engine": "engine", "content": "content overlay"}
+    order = _kind_repos(kind) or _attempt_order(target)
+    planned = [r for r in order if repos.get(r)]
+    if kind and not planned:
+        reason = "no content overlay configured; %s jobs act on overlay content only" % kind
+        _write_status(status_dir, key, "failed", reason, log=log_path)
+        _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
+        return
+    apply_fn = _keep_separate_fn(task) if kind == "compact" else None
+
+    land_repo = land_label = base = base_sha = agent_sha = ""
+    tried = []
+
+    # An auth or model failure fails every repo identically, so stop at the first (#211).
     try:
-        _write_status(status_dir, key, "running")
+        for index, r in enumerate(planned, 1):
+            prompt = _build_prompt(ctx["prompt_file"], task, labels[r], index, len(planned), target)
+            attempt = _attempt_repo(repos[r], labels[r], branch, prompt, ctx["agent_fn"], log_path,
+                                    tools=tools, commit_msg=commit_msg, from_origin=bool(kind),
+                                    apply_fn=apply_fn)
+            tried.append((labels[r], attempt))
+            if attempt.state == "implemented":
+                land_repo, land_label = repos[r], r
+                base, base_sha, agent_sha = attempt.base, attempt.base_sha, attempt.agent_sha
+                break
+    except np_model.AuthError as exc:
+        reason = ("backend auth failed (%s) -- re-login with `claude setup-token`, "
+                  "or refresh the scheduled-auth token, then retry" % exc)[:300]
+        _write_status(status_dir, key, "failed", reason, log=log_path)
+        _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
+        return
+    except ModelRejected as exc:
+        reason = ("model %s rejected by the CLI: %s -- pick another in the dashboard "
+                  "Models panel" % (exc.model, exc.line))[:300]
+        _write_status(status_dir, key, "failed", reason, model_error=True, model=exc.model, log=log_path)
+        _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
+        return
 
-        if not shutil.which("git"):
-            _log(log_path, "git not found")
-            return 0
+    if not land_repo:
+        # Name EVERY repo tried, never just the first (the reported bug).
+        reason = "; ".join("%s: %s" % (label, a.detail or a.state) for label, a in tried)
+        if "content" not in planned and not kind:
+            reason = "%s (no content overlay configured to retry against)" % reason
+        reason = reason[:300]
+        all_not_implementable = bool(tried) and all(
+            a.state == "not_implementable" for _, a in tried)
+        if all_not_implementable:
+            _write_status(status_dir, key, "not_implementable", reason, log=log_path)
+            _log(log_path, "not a code change, left unresolved: %r (%s)" % (text, reason))
+        else:
+            _write_status(status_dir, key, "failed", reason, log=log_path)
+            _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
+        return
 
-        mode = np_toggle.param("evaluator.implement_mode", "pr")
-        content_repo = _resolve_content_repo(repo)
-        slug = _slug(task)
-        branch = "np-suggest/%s" % slug
+    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"])
+    if kind == "graduate":
+        _dismiss_graduated(task, log_path)
 
-        # Best repo first, per the evaluator's target. Absent repos drop out.
-        repos = {"engine": repo, "content": content_repo}
-        labels = {"engine": "engine", "content": "content overlay"}
-        planned = [kind for kind in _attempt_order(target) if repos.get(kind)]
+    note = ("implemented as: %s" % task) if task != text else ""
+    try:
+        ctx["resolve_fn"](text, note)
+    except Exception as exc:
+        _log(log_path, "resolve step failed for %r: %r" % (text, exc))
 
-        land_repo = land_label = base = base_sha = agent_sha = ""
-        tried = []
-
-        # An auth failure fails every repo identically, so stop at the first (#211).
-        try:
-            for index, kind in enumerate(planned, 1):
-                prompt = _build_prompt(prompt_file, task, labels[kind], index, len(planned), target)
-                attempt = _attempt_repo(repos[kind], labels[kind], branch, prompt, agent_fn, log_path)
-                tried.append((labels[kind], attempt))
-                if attempt.state == "implemented":
-                    land_repo, land_label = repos[kind], kind
-                    base, base_sha, agent_sha = attempt.base, attempt.base_sha, attempt.agent_sha
-                    break
-        except np_model.AuthError as exc:
-            reason = ("backend auth failed (%s) -- re-login with `claude setup-token`, "
-                      "or refresh the scheduled-auth token, then retry" % exc)[:300]
-            _write_status(status_dir, key, "failed", reason)
-            _log(log_path, "implement aborted, left unresolved: %r (%s)" % (text, reason))
-            return 0
-
-        if not land_repo:
-            # Name EVERY repo tried, never just the first (the reported bug).
-            reason = "; ".join("%s: %s" % (label, a.detail or a.state) for label, a in tried)
-            if "content" not in planned:
-                reason = "%s (no content overlay configured to retry against)" % reason
-            reason = reason[:300]
-            all_not_implementable = bool(tried) and all(
-                a.state == "not_implementable" for _, a in tried)
-            if all_not_implementable:
-                _write_status(status_dir, key, "not_implementable", reason)
-                _log(log_path, "not a code change, left unresolved: %r (%s)" % (text, reason))
-            else:
-                _write_status(status_dir, key, "failed", reason)
-                _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
-            return 0
-
-        ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn)
-
-        note = ("implemented as: %s" % task) if task != text else ""
-        try:
-            resolve_fn(text, note)
-        except Exception as exc:
-            _log(log_path, "resolve step failed for %r: %r" % (text, exc))
-
-        _write_status(status_dir, key, "done", ref)
-        _log(log_path, "implemented %r%s -> %s (%s repo)"
-             % (text, (" as %r" % task) if task != text else "", ref, land_label))
-        return 0
-    finally:
-        shutil.rmtree(lock_path, ignore_errors=True)
+    _write_status(status_dir, key, "done", ref, log=log_path)
+    _log(log_path, "implemented %r%s -> %s (%s repo)"
+         % (text, (" as %r" % task) if task != text else "", ref, land_label))
 
 
 def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn):
@@ -647,15 +1003,57 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
     else:
         _log(log_path, "no origin remote; change is local on %s (%s repo)" % (branch, land_label))
 
-    # Advance the LOCAL base too -- only when clean, so we never clobber
-    # uncommitted work. If dirty, the commit stays on `branch`.
+    # Advance the LOCAL base too -- only when it is checked out and clean, so we
+    # never clobber uncommitted work or move some other branch. A checkout that
+    # drifted onto a feature branch stays as it is. It picks the commit up from
+    # origin on its next merge. Else the commit stays on `branch`.
+    current = (_git(land_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
     dirty = bool((_git(land_repo, "status", "--porcelain").stdout or "").strip())
-    if not dirty and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0:
+    if (current == base and not dirty
+            and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0):
         _git(land_repo, "branch", "-D", branch)
     else:
         _log(log_path, "local %s not advanced (dirty or non-ff, %s repo); commit on %s" % (base, land_label, branch))
         ref = branch
     return ref
+
+
+def _split_proposal(task):
+    """("<file>", "<title>") from "<file> :: <title>", else ("", "")."""
+    fname, sep, title = (task or "").partition(" :: ")
+    fname = os.path.basename(fname.strip())
+    return (fname, title.strip()) if sep else ("", "")
+
+
+def _keep_separate_fn(task):
+    """apply_fn for a compact job: a "keep separate" proposal is applied as
+    written. Record the pair in REJECTED.md and drop the entry, no agent pass.
+    Any other recommendation returns False and goes to the agent."""
+    fname, title = _split_proposal(task)
+
+    def apply(wt):
+        pdir = os.path.join(wt, "compact-proposals")
+        prop = np_dashboard_actions.find_proposal(pdir, fname, title)
+        if not prop or not prop.get("keep_separate"):
+            return False
+        if not np_dashboard_actions.reject_proposal(pdir, fname, title, action="kept separate"):
+            raise RuntimeError("keep-separate entry vanished mid-apply: %s :: %s" % (fname, title))
+        return True
+    return apply
+
+
+def _dismiss_graduated(task, log_path):
+    """Drop a graduated candidate from the dashboard now. The next scan also
+    skips it, since the lesson is marked promoted."""
+    kind, _, name = (task or "").partition(":")
+    if not (kind and name):
+        return
+    path = os.environ.get("NP_GRADUATION_DISMISSED") or os.path.join(
+        np_content.content_dir(), "dashboard", "data", "graduation-dismissed.json")
+    try:
+        np_dashboard_actions.dismiss(path, kind.strip(), name.strip())
+    except OSError as exc:
+        _log(log_path, "graduation dismiss failed for %r: %s" % (task, exc))
 
 
 def _default_gh_pr_create(repo, branch, base):
