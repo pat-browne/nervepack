@@ -19,8 +19,8 @@ One integration branch pays those costs once.
 2. **Branch.** `git switch -c integrate/<date> origin/<default>`.
 3. **Merge in order.** `git merge --no-ff origin/<branch>` for each PR. Put
    infra PRs first and PRs that touch the same files next to each other.
-   Resolve each text conflict keeping both sides' intent, and note the
-   resolution. A semantic conflict (incompatible changes to the same thing)
+   Resolve each text conflict keeping both sides' intent, and record each
+   resolution for the PR body (step 6). A semantic conflict (incompatible changes to the same thing)
    means abort the integration and merge those PRs serially.
 4. **Gate locally.** Run the repo's full test suite by the command in its CLAUDE.md or
    AGENTS.md, and keep the output. For infra, run validate
