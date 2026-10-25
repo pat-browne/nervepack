@@ -73,7 +73,9 @@ def _notify(message):
     """Best-effort desktop notification. Never raises."""
     candidates = (
         ["notify-send", "-u", "critical", "nervepack: quota reset", message],
-        ["osascript", "-e", 'display notification "%s" with title "nervepack: quota reset"' % message],
+        # The message goes in as an argument, never into the script text, so quotes in it cannot break the script.
+        ["osascript", "-e", "on run argv", "-e", 'display notification (item 1 of argv) with title "nervepack: quota reset"',
+         "-e", "end run", message],
     )
     for cmd in candidates:
         if shutil.which(cmd[0]):
