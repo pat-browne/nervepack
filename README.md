@@ -88,7 +88,8 @@ example of each flow) see [`docs/FEATURES.md`](docs/FEATURES.md).
 ## Layout
 
 ```
-CLAUDE.md          # Agent manual. Read this if you're an AI session.
+AGENTS.md          # Tool-neutral agent manual. Read this if you're an AI session.
+CLAUDE.md          # Claude Code wiring; imports AGENTS.md.
 README.md          # You are here.
 INDEX.md           # Auto-generated skill index. Read before adding a skill.
 docs/
@@ -105,6 +106,8 @@ engine/
   onboard/         # Host-neutral onboarding contract (works beyond Claude Code).
   bin/             # The MCP launcher.
 agents/            # Prompts for /schedule, /loop, and the cron agents.
+archive/           # Retired skills (immutable history) + MANIFEST.md.
+change-specs/      # Per-branch engine change specs enforced by spec-guard CI.
 dashboard/         # The performance dashboard (code).
 publish/           # The secret/PII guard that keeps personal data out of the engine.
 .claude-plugin/    # Plugin manifest for `claude plugin install`.
