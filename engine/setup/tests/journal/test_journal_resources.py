@@ -150,6 +150,23 @@ class TestRestoreBounded(JournalBase):
         self.assertNotIn("goal-4", out)
 
 
+class TestBounds(JournalBase):
+    def test_seed_survives_the_restore_cap(self):
+        np_journal.append_block("sid-1", "SessionStart", {"goal": "SEED-GOAL"})
+        for i in range(4):
+            np_journal.append_block("sid-1", "PreCompact", {"goal": "g%d" % i, "decisions": "d " * 200})
+        big = np_journal._RESTORE_CAP
+        with mock.patch.object(np_journal, "_RESTORE_CAP", 1500):
+            out = np_journal._restore_view(self._read())
+        self.assertIn("SEED-GOAL", out)
+        self.assertLessEqual(len(out), 1500)
+        self.assertGreater(big, 1500)
+
+    def test_text_never_exceeds_cap(self):
+        self.assertEqual(len(np_journal._text("x" * 1000)), np_journal._FIELD_CAP)
+        self.assertEqual(np_journal._text("x" * 400), "x" * 400)
+
+
 class TestCrawl(JournalBase):
     def _seed_journal(self):
         np_journal.append_block("sid-1", "SessionStart", {"goal": "fix sync"},
@@ -210,6 +227,32 @@ class TestCrawl(JournalBase):
         self.assertFalse(os.path.exists(path))
         self.assertEqual(len(self._inbox("EPISODIC_INBOX")), 1)
         self.assertEqual(len(self._inbox("NP_RESOURCES_INBOX")), 1)
+
+    def test_ttl_keeps_journal_when_crawl_fails_until_double_ttl(self):
+        self._seed_journal()
+        path = np_journal.journal_path("sid-1")
+        past = time.time() - 40 * 86400
+        os.utime(path, (past, past))
+        with mock.patch.object(np_journal, "crawl", return_value=False):
+            np_journal.ttl_sweep()
+            self.assertTrue(os.path.exists(path))
+            past = time.time() - 65 * 86400
+            os.utime(path, (past, past))
+            np_journal.ttl_sweep()
+        self.assertFalse(os.path.exists(path))
+
+    def test_resources_stage_failure_keeps_journal(self):
+        self._seed_journal()
+        with mock.patch.object(np_journal.np_resources, "stage", return_value=-1):
+            np_journal.crawl_and_cleanup("sid-1")
+        self.assertTrue(os.path.exists(np_journal.journal_path("sid-1")))
+        self.assertEqual(self._inbox("EPISODIC_INBOX"), [])
+
+    def test_stage_oserror_returns_minus_one(self):
+        with mock.patch.dict(os.environ, {"NP_RESOURCES_INBOX": os.path.join(self.tmp, "epi-inbox-file")}):
+            open(os.environ["NP_RESOURCES_INBOX"], "w").close()
+            n = np_resources.stage([{"id": "api.example.com", "type": "hostname"}], "s", "r")
+        self.assertEqual(n, -1)
 
     def test_crawl_param_off_skips_analysis_but_cleanup_still_runs(self):
         with open(self.toggles_conf, "w") as fh:

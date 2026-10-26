@@ -135,7 +135,10 @@ def _now():
 
 
 def stage(items, session, repo):
-    """Append resource records to the local inbox. Returns the count staged."""
+    """Append resource records to the local inbox.
+
+    Returns the count staged, or -1 when the inbox write failed.
+    """
     lines = []
     for it in items or []:
         ident = (it.get("id") or "").strip()
@@ -153,8 +156,9 @@ def stage(items, session, repo):
         day = time.strftime("%Y-%m-%d", time.gmtime())
         with open(os.path.join(inbox_dir(), day + ".jsonl"), "a", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
-    except OSError:
-        return 0
+    except OSError as exc:
+        _log("stage: write to %s failed: %s" % (inbox_dir(), exc))
+        return -1
     return len(lines)
 
 
@@ -300,5 +304,6 @@ def drain():
         for f in files:
             os.remove(os.path.join(idir, f))
         return merged
-    except Exception:
+    except Exception as exc:
+        _log("drain: failed, inbox kept: %r" % (exc,))
         return 0

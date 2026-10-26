@@ -321,9 +321,11 @@ def episodic_maintain():
                 and np_toggle.param("journal.crawl", "on") != "off"
                 and np_content.content_is_explicit()):
             import np_resources
-            np_resources.drain()
-    except Exception:
-        pass
+            merged = np_resources.drain()
+            if merged:
+                _log(_EPISODIC_MAINTAIN, "resources: merged %d record(s)" % merged)
+    except Exception as exc:
+        _log(_EPISODIC_MAINTAIN, "resources drain raised: %r" % (exc,))
     return _run(_EPISODIC_MAINTAIN)
 
 

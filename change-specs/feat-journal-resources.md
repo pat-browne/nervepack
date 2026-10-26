@@ -56,7 +56,7 @@ It cannot add an id.
 
 Before the sweep or the TTL deletes a journal, `np_journal.crawl` sends struggles
 and wins to the episodic inbox and resources to a resources inbox. A failed
-crawl keeps the journal. A receipt prevents a second crawl.
+crawl keeps the journal. The TTL path retries until the file is twice the TTL old, then deletes it. A receipt prevents a second crawl.
 
 `episodic_maintain()` drains the resources inbox in Python into
 `memory/resources/<YYYY-MM>.jsonl` and rewrites `memory/resources/INDEX.md`.

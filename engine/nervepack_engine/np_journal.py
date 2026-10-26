@@ -57,6 +57,7 @@ _FIELD_CAP = 400
 _RES_LINES = 25
 _RESTORE_BLOCKS = 3
 _RESTORE_CAP = 12000
+_RESTORE_SEED_CAP = 3000
 _EMPTY = ("", "none", "none yet", "tbd", "n/a")
 
 
@@ -69,7 +70,7 @@ def _text(val):
     if isinstance(val, (list, tuple)):
         val = ", ".join(str(v) for v in val)
     val = " ".join(str(val or "").split())
-    return val[:_FIELD_CAP] + ("..." if len(val) > _FIELD_CAP else "")
+    return val if len(val) <= _FIELD_CAP else val[:_FIELD_CAP - 3] + "..."
 
 
 def _resource_lines(items):
@@ -313,8 +314,11 @@ def _restore_view(body):
     blocks = [b for b in re.split(r"(?m)^(?=## )", body) if b.strip()]
     if len(blocks) > _RESTORE_BLOCKS + 1:
         blocks = blocks[:1] + blocks[-_RESTORE_BLOCKS:]
-    out = "".join(blocks)
-    return out[-_RESTORE_CAP:] if len(out) > _RESTORE_CAP else out
+    if len(blocks) < 2:
+        return "".join(blocks)[-_RESTORE_CAP:]
+    seed = blocks[0][:_RESTORE_SEED_CAP]
+    rest = "".join(blocks[1:])
+    return seed + rest[-(_RESTORE_CAP - len(seed)):]
 
 
 def recall_sessionstart(payload):
@@ -439,16 +443,19 @@ def crawl(sid, cwd=""):
     try:
         blocks = _parse_blocks(body)
         repo = next((b["repo"].split(" @ ")[0] for b in blocks if b.get("repo")), "")
-        rec = _episodic_record(sid, cwd, blocks)
-        if rec and not np_capture.append_note(rec):
-            return False
         merged = {}
         for b in blocks:
             for it in b["resources"]:
                 if it["id"] not in merged or (it["purpose"] and not merged[it["id"]]["purpose"]):
                     merged[it["id"]] = it
-        if merged:
-            np_resources.stage(list(merged.values()), sid, repo or os.path.basename(cwd or ""))
+        if merged and np_resources.stage(list(merged.values()), sid,
+                                         repo or os.path.basename(cwd or "")) < 0:
+            _log("crawl: resources stage failed for %s" % sid)
+            return False
+        rec = _episodic_record(sid, cwd, blocks)
+        if rec and not np_capture.append_note(rec):
+            _log("crawl: episodic append failed for %s" % sid)
+            return False
         _touch(_receipt(sid, "crawled"))
         return True
     except Exception:
@@ -482,7 +489,9 @@ def _remove(path):
 def ttl_sweep(days=None):
     """Delete journals and stale receipts older than journal.ttl_days. Fail-open.
 
-    Each expiring journal is crawled first, so the TTL never drops analysis.
+    Each expiring journal is crawled first. A failed crawl keeps the journal for
+    a retry until it is twice the TTL old. Then it goes, so a crawl that can never
+    succeed does not pin files forever.
     """
     if days is None:
         try:
@@ -503,12 +512,13 @@ def ttl_sweep(days=None):
             try:
                 if os.path.getmtime(path) < cutoff:
                     if root == _dir() and name.endswith(".md"):
-                        # Best-effort: unlike crawl_and_cleanup, a failed crawl
-                        # does not keep the journal; the TTL is a safety net.
                         try:
-                            crawl(name[:-3])
+                            ok = crawl(name[:-3])
                         except Exception:
-                            pass
+                            ok = False
+                        if not ok and os.path.getmtime(path) >= cutoff - days * 86400:
+                            _log("ttl: crawl failed for %s, keeping until 2x TTL" % name)
+                            continue
                         _remove(_receipt(name[:-3], "crawled"))
                     os.remove(path)
                     removed += 1

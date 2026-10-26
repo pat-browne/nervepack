@@ -306,7 +306,7 @@ succeeds and the next model step sees the prompt. It runs
   `first_seen`, `last_seen`, `session`, `repo`, `purpose`, and a seen count.
 - It rewrites `memory/resources/INDEX.md`, grouped by type, and the agent
   commits both.
-- A failed crawl keeps the journal. Param `journal.crawl=off` skips the crawl and
+- A failed crawl keeps the journal. The TTL retries until the file is twice the TTL old. Param `journal.crawl=off` skips the crawl and
   the drain, and deletion still runs.
 
 **The /clear case.**
