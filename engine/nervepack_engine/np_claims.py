@@ -298,7 +298,9 @@ def render(pos):
             lines.append("Paths overlap with %s: %s. Say so before planning." % (
                 _id8(o), _paths_text(_overlap(mine, o))))
         for o in (pos.get("same_worktree") or [])[:10]:
-            lines.append("STOP: %s is on your worktree or branch. Ask the user." % _id8(o))
+            lines.append("STOP: %s is on your worktree or branch. Ask the user. "
+                         "If that session is gone, run: cli.py claim release --session %s" % (
+                             _id8(o), _clean(o.get("session_id"), 64)))
         lines.append("</nervepack-claims>")
         return "\n".join(lines)
     except Exception as exc:

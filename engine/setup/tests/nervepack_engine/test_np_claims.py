@@ -274,7 +274,9 @@ class PositionTests(ClaimsCase):
     def test_render_same_worktree_stop(self):
         np_claims.write("cccccccc-3", self.repo, force=True)
         text = np_claims.render(np_claims.position("cccccccc-3", self.repo))
-        self.assertIn("STOP: aaaaaaaa is on your worktree or branch. Ask the user.", text.split("\n"))
+        self.assertIn("STOP: aaaaaaaa is on your worktree or branch. Ask the user. "
+                      "If that session is gone, run: cli.py claim release --session aaaaaaaa-1",
+                      text.split("\n"))
 
     def test_render_empty_when_alone(self):
         np_claims.release("bbbbbbbb-2", self.wt)
