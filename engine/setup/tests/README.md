@@ -43,6 +43,12 @@ Windows Git-bash / MSYS. The recurring gotchas (each has bitten a real PR):
   `RUNNER~1`), corrupting emitted text and breaking full-path assertions. Disable
   it per-invocation with `MSYS_NO_PATHCONV=1 jq …`, and in tests assert on a
   stable path **suffix** (`.../foo`), not a full absolute path.
+- **`open()` defaults to cp1252 on Windows, not UTF-8.** A Python test that writes
+  a fixture holding `→`, `—` or curly quotes with a bare `open(path, "w")` passes
+  on Linux/macOS and raises `UnicodeEncodeError` on the Windows runner. Pass
+  `encoding="utf-8"` on every open that reads or writes non-ASCII text.
+  `python3 -X warn_default_encoding <test>` flags each bare open locally, so the
+  Windows-only failure is visible before you push.
 - **General rule:** any test or hook that touches the exec bit, hard-codes an
   absolute path, or passes a path-like value to a native binary must be
   MSYS-aware. Use `date +%s` (identical everywhere) and the `np_mtime` helper
