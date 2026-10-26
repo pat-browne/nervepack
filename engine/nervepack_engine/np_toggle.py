@@ -459,36 +459,55 @@ def _repo_root_for(path):
 
 
 def commit_shared(message, np_root=None):
-    """Path-limited commit+push of toggles.conf (issue-#11 discipline: never a bare
-    `git commit` that would sweep a concurrent session's staged index). Best-effort,
-    each step swallowed; a no-op when NP_TOGGLE_NO_COMMIT=1. git is routed through
-    np_bashlib.argv() for the Windows Git-bash lane."""
+    """Path-limited commit and push of toggles.conf. Best-effort.
+
+    No-op when NP_TOGGLE_NO_COMMIT=1. Never a bare `git commit`, which would
+    sweep a concurrent session's staged index (issue #11).
+
+    Off main, the edit is replayed as a patch in the cron worktree at
+    origin/main (np_git_publish.write_root) and committed there. The live file
+    keeps its edit, so the toggle still applies on this machine.
+    """
     if os.environ.get("NP_TOGGLE_NO_COMMIT") == "1":
         return
     import np_bashlib
     conf = _write_conf_path()
-    # Commit in the repo that OWNS the file. Once writes land in the content
-    # overlay, committing from the engine root would stage nothing and push an
-    # unrelated branch. Ask git for the root rather than assuming the file's
-    # parent is one: a nested path would still work by git's upward search, but
-    # a conf outside any repo would silently commit into whatever repo encloses
-    # the process instead.
+    # Commit in the repo that owns the file, not the engine root. Ask git for
+    # that root. A conf outside any repo must not commit into an enclosing one.
     np = np_root or _repo_root_for(conf)
     if not np:
         return
 
-    def _git(args):
+    def _git(repo, args, data=None):
         try:
-            return subprocess.run(np_bashlib.argv(["git", "-C", np] + args),
-                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL)
+            return subprocess.run(np_bashlib.argv(["git", "-C", repo] + args),
+                                  input=data, text=True,
+                                  stdin=None if data is not None else subprocess.DEVNULL,
+                                  capture_output=True)
         except OSError:
             return None
 
-    _git(["add", conf])
-    r = _git(["commit", "-q", "-m", message, "--", conf])
+    root, note = np_git_publish.write_root(np, "np-toggle")
+    if root is None:
+        print("np-toggle: not committed (%s)" % note, file=sys.stderr)
+        return
+    target = conf
+    if root != np:
+        rel = os.path.relpath(os.path.realpath(conf), os.path.realpath(np))
+        diff = _git(np, ["diff", "--no-color", "--", rel])
+        if diff is None or diff.returncode != 0 or not diff.stdout:
+            return
+        applied = _git(root, ["apply", "--3way", "-"], data=diff.stdout)
+        if applied is None or applied.returncode != 0:
+            print("np-toggle: could not replay the edit at origin/main; "
+                  "left uncommitted in %s" % np, file=sys.stderr)
+            return
+        target = os.path.join(root, rel)
+        np = root
+    _git(np, ["add", target])
+    r = _git(np, ["commit", "-q", "-m", message, "--", target])
     if r is not None and r.returncode == 0:
-        ok, why = np_git_publish.push_to_main(np)
+        ok, why = np_git_publish.publish(np)
         if not ok:
             print("np-toggle: %s" % why, file=sys.stderr)
 
@@ -590,6 +609,15 @@ def managed(feat, state):
     install_permissions() never blocks the local-state write. Mirrors _managed."""
     if os.environ.get("NP_TOGGLE_NO_MANAGED") == "1":
         set_local(feat, state)
+        return
+    if feat == "global-config":
+        # State first: apply() reads the toggle it was just flipped by.
+        set_local(feat, state)
+        try:
+            import np_global_config
+            np_global_config.apply()
+        except Exception:
+            pass
         return
     try:
         if state == "on":

@@ -213,6 +213,9 @@
   "allowlist": {
     "description": "Managed permission allowlist for common read-only tool calls."
   },
+  "global-config": {
+    "description": "Project the overlay's config/global-rules.md and config/host-settings.json onto each host at install-hooks and sync time. Off removes what it wrote."
+  },
   "evaluator": {
     "description": "Per-session performance scoring, the dashboard, and the suggestion review/implement pipeline."
   },

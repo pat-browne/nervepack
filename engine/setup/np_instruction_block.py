@@ -79,6 +79,83 @@ def install(file_path, directive_path=None):
         fh.write(END + "\n")
 
 
+# Tagged blocks carry a body inline instead of an @import. They use their own
+# markers, so they never collide with the directive block above.
+def _tag_markers(tag):
+    return ("<!-- nervepack:%s:begin (managed, do not edit, synced from the content overlay) -->" % tag,
+            "<!-- nervepack:%s:end -->" % tag)
+
+
+def _split_tagged(lines, tag):
+    """(before, body_lines, after) around the tagged block, or None when absent."""
+    begin, end = _tag_markers(tag)
+    if begin not in lines:
+        return None
+    i = lines.index(begin)
+    if end not in lines[i + 1:]:
+        return None
+    j = lines.index(end, i + 1)
+    return lines[:i], lines[i + 1:j], lines[j + 1:]
+
+
+def _read_lines(file_path):
+    if not os.path.isfile(file_path):
+        return []
+    with open(file_path, "r", encoding="utf-8") as fh:
+        return fh.read().splitlines()
+
+
+def _write_lines(file_path, lines):
+    os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+    with open(file_path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(lines) + ("\n" if lines else ""))
+
+
+def read_tagged(file_path, tag):
+    """The body of the tagged block, or None when the file has no such block."""
+    parts = _split_tagged(_read_lines(file_path), tag)
+    return None if parts is None else "\n".join(parts[1])
+
+
+def sync_tagged(file_path, tag, body):
+    """Make the tagged block hold `body`. Returns created, updated or unchanged.
+
+    Replaces in place, so a repeat run rewrites nothing. Text outside the
+    markers is never touched.
+    """
+    if not file_path or not tag:
+        raise ValueError("no file or tag given")
+    begin, end = _tag_markers(tag)
+    want = body.strip("\n").split("\n")
+    lines = _read_lines(file_path)
+    parts = _split_tagged(lines, tag)
+    if parts is None:
+        out = list(lines)
+        if out and out[-1].strip():
+            out.append("")
+        out += [begin] + want + [end]
+        _write_lines(file_path, out)
+        return "created"
+    before, current, after = parts
+    if current == want:
+        return "unchanged"
+    _write_lines(file_path, before + [begin] + want + [end] + after)
+    return "updated"
+
+
+def remove_tagged(file_path, tag):
+    """Drop the tagged block and the blank line before it. True when removed."""
+    lines = _read_lines(file_path)
+    parts = _split_tagged(lines, tag)
+    if parts is None:
+        return False
+    before, _, after = parts
+    if before and not before[-1].strip():
+        before = before[:-1]
+    _write_lines(file_path, before + after)
+    return True
+
+
 if __name__ == "__main__":
     import sys
     action = sys.argv[1] if len(sys.argv) > 1 else ""
