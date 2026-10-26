@@ -61,6 +61,14 @@ class ClaimsCase(unittest.TestCase):
 
 
 class WriteTests(ClaimsCase):
+    def test_non_git_cwd_does_not_log(self):
+        plain = os.path.join(self.tmp, "plain2")
+        os.makedirs(plain)
+        log = np_claims.np_dirs.cache_path("claims.log")
+        np_claims.write("s1", plain)
+        np_claims.list_live(plain)
+        self.assertFalse(os.path.exists(log))
+
     def test_non_git_cwd_returns_nothing(self):
         plain = os.path.join(self.tmp, "plain")
         os.makedirs(plain)

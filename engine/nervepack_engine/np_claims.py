@@ -64,13 +64,15 @@ def _ctx(cwd):
              "--abbrev-ref", "HEAD"], capture_output=True, text=True, timeout=5)
         lines = r.stdout.splitlines()
         if len(lines) < 2 or not lines[0].strip() or not lines[1].strip():
-            _bail("ctx: malformed git output for %s: %r" % (cwd, r.stdout[:200]))
+            if r.returncode != 0:
+                return None  # not a git checkout: a normal outcome, not a fault
+            _bail("ctx: malformed git output: returncode=%d lines=%d" % (r.returncode, len(lines)))
             return None
         branch = lines[2].strip() if len(lines) > 2 else ""
         return {"common": os.path.abspath(os.path.join(cwd, lines[0].strip())),
                 "top": lines[1].strip(), "branch": branch}
     except (OSError, subprocess.TimeoutExpired) as exc:
-        _bail("ctx: %r" % exc)
+        _bail("ctx: %s" % type(exc).__name__)
         return None
 
 
