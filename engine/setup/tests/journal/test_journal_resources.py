@@ -110,6 +110,13 @@ class TestCheckpointFields(JournalBase):
         self.assertIn("- api.example.com | hostname | public api", body)
         self.assertIn("RESOURCES SEEN", self.prompt)
 
+    def test_extraction_failure_does_not_lose_the_checkpoint(self):
+        self._write_transcript("call api.example.com")
+        with mock.patch.object(np_journal.np_resources, "extract", side_effect=RuntimeError("boom")):
+            np_journal.checkpoint(self._payload(), complete_fn=self._complete)
+        self.assertIn("**Wins:** W", self._read())
+        self.assertNotIn("**Resources:**", self._read())
+
     def test_model_cannot_add_identifiers(self):
         self._write_transcript("call api.example.com")
         np_journal.checkpoint(self._payload(), complete_fn=self._complete)

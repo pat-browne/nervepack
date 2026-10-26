@@ -269,7 +269,7 @@ succeeds and the next model step sees the prompt. It runs
 - Wins, decisions with their reason, open questions, the next step, and files
   touched. Empty fields are omitted and each is capped at 400 characters.
 - Resources: identifiers the session touched, one `id | type | purpose` line each,
-  at most 25 per block.
+  at most 40 per block.
 - It is restored to the model after a compact or resume. Restore shows the seed
   block plus the newest three, capped at 12000 characters.
 - It records the skills that succeeded, so a captured session teaches future ones.

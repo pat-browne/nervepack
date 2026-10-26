@@ -54,7 +54,7 @@ _BASE_FIELDS = ("goal", "hypotheses", "struggles", "progress", "skills")
 _EXTRA_FIELDS = ("wins", "decisions", "open_questions", "next_step", "files_touched")
 _FIELDS = _BASE_FIELDS + _EXTRA_FIELDS
 _FIELD_CAP = 400
-_RES_LINES = 25
+_RES_LINES = np_resources.MAX_PER_SESSION
 _RESTORE_BLOCKS = 3
 _RESTORE_CAP = 12000
 _RESTORE_SEED_CAP = 3000
@@ -239,7 +239,11 @@ def checkpoint(payload, complete_fn=None):
     if not convo.strip():
         return ""
     complete_fn = complete_fn or np_model.complete
-    cands = np_resources.extract(convo)
+    try:
+        cands = np_resources.extract(convo)
+    except Exception as exc:
+        _log("checkpoint: resource extraction failed for %s: %r" % (sid, exc))
+        cands = []
     seen_txt = ""
     if cands:
         seen_txt = "\nRESOURCES SEEN (identifier | type):\n" + "\n".join(
@@ -310,7 +314,11 @@ def _read_journal(sid):
 
 
 def _restore_view(body):
-    """Seed block plus the newest checkpoints, capped. Keeps restored context bounded."""
+    """Seed block plus the newest checkpoints, capped. Keeps restored context bounded.
+
+    The seed is kept whole up to 3000 characters. On a long session with large
+    checkpoints the newest blocks are trimmed from their start to fit the cap.
+    """
     blocks = [b for b in re.split(r"(?m)^(?=## )", body) if b.strip()]
     if len(blocks) > _RESTORE_BLOCKS + 1:
         blocks = blocks[:1] + blocks[-_RESTORE_BLOCKS:]
@@ -442,6 +450,8 @@ def crawl(sid, cwd=""):
         return True
     try:
         blocks = _parse_blocks(body)
+        if not any(len(b) > 1 or b["resources"] for b in blocks):
+            _log("crawl: no parseable fields in journal for %s" % sid)
         repo = next((b["repo"].split(" @ ")[0] for b in blocks if b.get("repo")), "")
         merged = {}
         for b in blocks:
