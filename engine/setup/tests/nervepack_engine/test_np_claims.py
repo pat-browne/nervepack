@@ -75,7 +75,8 @@ class WriteTests(ClaimsCase):
         self.assertEqual(np_claims.claims_dir(self.repo),
                          os.path.join(self.repo, ".git", "nervepack", "claims"))
         self.assertEqual(rec["branch"], "main")
-        self.assertEqual(rec["worktree"], self.repo)
+        # git prints forward slashes even on Windows
+        self.assertEqual(rec["worktree"], self.repo.replace("\\", "/"))
         self.assertEqual(rec["base"], "origin/main")
         self.assertEqual(rec["schema_version"], np_claims.SCHEMA_VERSION)
         for key in ("pid", "host", "started", "heartbeat"):
@@ -245,7 +246,7 @@ class PositionTests(ClaimsCase):
         text = np_claims.render(np_claims.position("aaaaaaaa-1", self.repo))
         lines = text.split("\n")
         self.assertTrue(lines[0].startswith("<nervepack-claims note="))
-        self.assertEqual(lines[1], "Live now: session bbbbbbbb on other in %s, phase plan, paths ./src/a.py." % self.wt)
+        self.assertEqual(lines[1], "Live now: session bbbbbbbb on other in %s, phase plan, paths ./src/a.py." % self.wt.replace("\\", "/"))
         self.assertEqual(lines[2], "You are first in. Keep your claim's paths current.")
         self.assertEqual(lines[3], "Paths overlap with bbbbbbbb: ./src/a.py. Say so before planning.")
         self.assertEqual(lines[-1], "</nervepack-claims>")
@@ -277,7 +278,7 @@ class PositionTests(ClaimsCase):
     def test_render_follower(self):
         text = np_claims.render(np_claims.position("bbbbbbbb-2", self.wt))
         lines = text.split("\n")
-        self.assertEqual(lines[1], "Live now: session aaaaaaaa on main in %s, phase build, paths src/." % self.repo)
+        self.assertEqual(lines[1], "Live now: session aaaaaaaa on main in %s, phase build, paths src/." % self.repo.replace("\\", "/"))
         self.assertEqual(lines[2], "You are 2 in. Branch from origin/main and own the merge: "
                                    "run merge-wait before pushing.")
         self.assertEqual(lines[3], "Paths overlap with aaaaaaaa: src/. Say so before planning.")
