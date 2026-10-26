@@ -10,14 +10,18 @@ The lead does not run them. The worker does.
 ## Prime block (first 2 minutes, before reading code)
 
 ```text
-Before you design or edit, load related nervepack context. Budget: 5 tool
+Before you design or edit, load related nervepack context. Budget: 6 tool
 calls, then move on.
 1. Recall: call the nervepack_recall MCP tool with 3-6 keywords from the
    task (kinds: episodic, lesson). No MCP tool? Run /np-core-recall <keywords>.
 2. Skills: grep INDEX.md in ~/Code/nervepack and the content overlay for the
    same keywords. Invoke only a skill whose description matches the task.
-3. Read at most 3 hits. A hit that conflicts with the repo's CLAUDE.md loses.
-4. Start your first report line with "Nervepack context:" and name what you
+3. Wiki: for each tech stack the task touches, read its synthesis page,
+   wiki/topics/<stack>/<stack>.md, if one exists. nervepack_recall does not
+   search the wiki, so grep wiki/ and memory/stack-facts/ in the content overlay.
+4. Read at most 3 hits besides the wiki page. A hit that conflicts with the
+   repo's CLAUDE.md loses.
+5. Start your first report line with "Nervepack context:" and name what you
    loaded, or "none found".
 ```
 
@@ -36,8 +40,14 @@ Capture as you go with /np-core-capture-learning. Run it at each of these:
 - a failure taught you something (root cause found, wrong assumption fixed)
 - the PR opens, and again when it merges or deploys
 - the task is done, blocked, or about to be handed back
-Each run covers only what is new since the last. A learning already saved is
-not saved twice. End your final report with "Captured: <paths>" or
+
+Each run covers only what is new since the last.
+
+Before the final report, run the stack sweep. See np-core-capture-learning,
+references/stack-wiki.md. Name each tech stack you touched. Save the facts you
+verified about it to its wiki topic.
+
+End your final report with "Captured: <paths>", wiki pages included, or
 "Captured: nothing new, because <reason>".
 ```
 
@@ -52,6 +62,7 @@ stall, `/exit`. Anything captured at a milestone survives. Anything held for
 | Milestone capture (above) | Deliberate learnings, saved while the agent is alive | Only what the agent chose to save |
 | SessionEnd `episodic-capture` + `session-flush` | Narrative of the session | Best-effort. `/exit` fires no SessionEnd, and slow hooks get killed |
 | SessionStart `backcapture-sweep` | Re-captures the previous session from its on-disk transcript | Runs at the next session start, and only for sessions with their own transcript |
+| Capture hook `stack_facts[]`, then `episodic-maintain` §5c | Stack facts from any session, staged in `memory/stack-facts/` | Not in the wiki until a human promotes them |
 | `post-ship-capture` hook | Prompts a capture after a merge or deploy command | Fires only on a matching Bash command |
 
 ## Subagents and child sessions
