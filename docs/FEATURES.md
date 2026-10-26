@@ -192,6 +192,16 @@ writer. Resume from the SDD ledger (.superpowers/sdd/progress.md) / plan
 resume-pointer / the branch, or start fresh."* You say "resume" and are back on
 the exact branch, head, and task — no re-deriving state from a stale summary.
 
+## Session claims: who else is live in this repo ("you are 2 in, so wait")
+
+**Purpose.** Two nervepack sessions in one repo, each in its own worktree, cannot see each other until the merge. A session claim tells each live session about the others at its first prompt, so a second agent learns its duty before it branches. Claims inform and never block.
+
+**Workflow.** Every prompt in a git repo writes this session's claim file (`UserPromptSubmit`, `cli.py hook claim-hook prompt`), and `SessionEnd` releases it (`cli.py hook claim-hook end`). The reader gets its FIFO rank by started time, and the hook surfaces the other live claims once per session. The first in keeps its declared paths current with `cli.py claim update --paths`. A follower branches from `origin/main`, owns the merge, and runs `merge-wait` before it pushes (`np-flow-merge-gate`). A claim on the same worktree or branch is a STOP that asks the user.
+
+**Assets.** `engine/nervepack_engine/np_claims.py` (store, rank, overlap, render, one JSON file per session under `<git-common-dir>/nervepack/claims/`), `engine/nervepack_engine/hooks/claim_hook.py` (`cli.py hook claim-hook`), the `cli.py claim` subcommands (`start`, `update`, `release`, `list`, `status`), registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Toggle: `claims` (params: `stale_days=7`, `heartbeat_s=60`). Pruning is by `stale_days` only (default 7). A claim with an older heartbeat is removed on read. `SessionEnd` releases the claim. The stored pid is informational.
+
+**Worked example.** Session A starts on `feat/a` in worktree `wt-a` and claims `engine/a/`. Session B then sends its first prompt in `wt-b` on `feat/b`. Its hook shows one line for A, `Live now: session a1b2c3d4 on feat/a in wt-a, paths engine/a/.`, then the duty line `You are 2 in. Branch from origin/main and own the merge: run merge-wait before pushing.` B branches from `origin/main`, does its work, and runs `merge-wait` before it pushes.
+
 ## Open artifact on write — auto-open a spec/plan doc so a human reads it
 
 **Purpose.** `superpowers:brainstorming` writes specs to

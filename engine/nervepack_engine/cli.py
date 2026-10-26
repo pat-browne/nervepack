@@ -35,6 +35,7 @@ for _p in (_HERE, _ENGINE_DIR, _ENGINE_SETUP):
 import np_dirs
 from nervepack_engine.hooks import backcapture_sweep  # noqa: E402
 from nervepack_engine.hooks import checkout_guard  # noqa: E402
+from nervepack_engine.hooks import claim_hook  # noqa: E402
 from nervepack_engine.hooks import drift_guard  # noqa: E402
 from nervepack_engine.hooks import episodic_capture  # noqa: E402
 from nervepack_engine.hooks import episodic_recall  # noqa: E402
@@ -60,6 +61,7 @@ from nervepack_engine.hooks import spec_review  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 from nervepack_engine.hooks import turn_gate  # noqa: E402
 import np_aggregate  # noqa: E402
+import np_claims  # noqa: E402
 import np_agentic_cron  # noqa: E402
 import np_bootstrap  # noqa: E402
 import np_dashboard  # noqa: E402
@@ -84,6 +86,7 @@ import np_toggle  # noqa: E402
 _HOOKS = {
     "backcapture-sweep": backcapture_sweep.run,
     "checkout-guard": checkout_guard.run,
+    "claim-hook": claim_hook.run,
     "drift-guard": drift_guard.run,
     "episodic-capture": episodic_capture.run,
     "episodic-recall": episodic_recall.run,
@@ -159,6 +162,56 @@ def _parse_resume_write_args(argv):
     return kwargs
 
 
+def _parse_claim_args(argv):
+    opts = {"json": False}
+    flags = {"--session": "session", "--cwd": "cwd", "--intent": "intent",
+             "--paths": "paths", "--phase": "phase"}
+    i = 0
+    while i < len(argv):
+        if argv[i] in flags and i + 1 < len(argv):
+            opts[flags[argv[i]]] = argv[i + 1]; i += 2
+        elif argv[i] == "--json":
+            opts["json"] = True; i += 1
+        else:
+            i += 1
+    if opts.get("paths") is not None:
+        opts["paths"] = [p for p in opts["paths"].split(",") if p]
+    opts.setdefault("cwd", os.getcwd())
+    return opts
+
+
+def _claim(argv):
+    """cli.py claim start|update|release|list|status. Always exits 0."""
+    import json
+    sub = argv[0] if argv else ""
+    o = _parse_claim_args(argv[1:])
+    cwd = o["cwd"]
+    if sub == "list":
+        claims = np_claims.list_live(cwd)
+        if o["json"]:
+            sys.stdout.write(json.dumps(claims) + "\n")
+        for c in [] if o["json"] else claims:
+            sys.stdout.write("%s %s %s %s %s\n" % (
+                c.get("session_id", "")[:8], c.get("branch", ""), c.get("worktree", ""),
+                c.get("phase") or "-", ",".join(c.get("paths") or [])))
+        return
+    sid = np_claims.resolve_session(cwd, o.get("session"))
+    if not sid and sub in ("start", "update", "release"):
+        sys.stdout.write("claim: no session id (pass --session or set CLAUDE_SESSION_ID)\n")
+        return
+    if sub in ("start", "update"):
+        np_claims.write(sid, cwd, intent=o.get("intent"), paths=o.get("paths"),
+                        phase=o.get("phase"), force=True)
+    elif sub == "release":
+        np_claims.release(sid, cwd)
+    elif sub == "status":
+        text = np_claims.render(np_claims.position(sid, cwd)) if sid else ""
+        if text:
+            sys.stdout.write(text + "\n")
+    else:
+        _bail("claim", "unknown subcommand: %s" % sub)
+
+
 def _parse_merge_wait_args(argv):
     kwargs = {}
     i = 0
@@ -180,7 +233,7 @@ def _parse_merge_wait_args(argv):
 _COMMANDS = (
     "resume-write", "cron", "setup", "layout", "onboard", "implement-suggestion",
     "merge-wait", "suggestion-resolve", "suggestion-unresolve", "toggle", "doctor",
-    "instruction-block", "sync", "open-dashboard", "hook",
+    "instruction-block", "sync", "open-dashboard", "claim", "hook",
 )
 
 
@@ -267,6 +320,13 @@ def main(argv=None):
             resume_write.write(**kwargs)
         except Exception as exc:
             _bail("resume-write", "unhandled exception: %r" % exc)
+        return 0
+
+    if argv[0] == "claim":
+        try:
+            _claim(argv[1:])
+        except Exception as exc:
+            _bail("claim", "unhandled exception: %r" % exc)
         return 0
 
     if argv[0] == "cron":
