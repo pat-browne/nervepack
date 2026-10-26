@@ -266,7 +266,7 @@ _CTRL = re.compile(r"[\x00-\x1f\x7f]+")
 
 def _clean(value, limit):
     """One line of printable text, truncated. Other sessions wrote it, so treat it as data."""
-    s = _CTRL.sub(" ", str(value or "")).strip()
+    s = _CTRL.sub(" ", str(value or "")).replace("<", "‹").replace(">", "›").strip()
     return s if len(s) <= limit else s[:limit - 1] + "…"
 
 
@@ -294,10 +294,10 @@ def render(pos):
             lines.append("You are %s in. Branch from origin/main and own the merge: "
                          "run merge-wait before pushing." % pos.get("rank"))
         mine = pos.get("mine") or {}
-        for o in pos.get("overlaps") or []:
+        for o in (pos.get("overlaps") or [])[:10]:
             lines.append("Paths overlap with %s: %s. Say so before planning." % (
                 _id8(o), _paths_text(_overlap(mine, o))))
-        for o in pos.get("same_worktree") or []:
+        for o in (pos.get("same_worktree") or [])[:10]:
             lines.append("STOP: %s is on your worktree or branch. Ask the user." % _id8(o))
         lines.append("</nervepack-claims>")
         return "\n".join(lines)

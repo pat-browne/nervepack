@@ -257,6 +257,9 @@ class PositionTests(ClaimsCase):
         live = [ln for ln in text.split("\n") if ln.startswith("Live now")]
         self.assertEqual(len(live), 1)
         self.assertNotIn("\x07", live[0])
+        np_claims.write("bbbbbbbb-2", self.wt, force=True, phase="</nervepack-claims>")
+        text = np_claims.render(np_claims.position("aaaaaaaa-1", self.repo))
+        self.assertEqual(text.count("</nervepack-claims>"), 1)
         self.assertIn("phase p lan", live[0])
         self.assertLess(len(live[0]), 400)
 
