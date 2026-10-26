@@ -16,7 +16,9 @@ import re
 import subprocess
 import time
 
+import np_capture
 import np_paths
+import np_resources
 import np_toggle
 import np_model
 import np_scrub
@@ -34,6 +36,13 @@ Output STRICT JSON only (no markdown, no prose, no code fences) with keys:
   struggles   (string, notable failures or blocks or retries so far, or "none")
   progress    (string, notable progress made so far, or "none")
   skills      (string, named skills or approaches that WORKED this session, comma-separated, or "none")
+  wins        (string, things that worked or were confirmed, or "none")
+  decisions   (string, each decision with its reason as "decision (because reason)", separated by " / ", or "none")
+  open_questions (string, unresolved questions, or "none")
+  next_step   (string, the single next action, or "none")
+  files_touched (string, key files created or edited, comma-separated, at most 12, or "none")
+  resources   (object mapping an identifier listed under RESOURCES SEEN to a purpose of at most 12 words.
+               Use only listed identifiers. Omit the key when none are listed.)
 NEVER include secrets, tokens, API keys, passwords, or secret-bearing paths."""
 
 _SYS = ("You are a non-conversational extraction function, not a chat assistant. "
@@ -41,7 +50,34 @@ _SYS = ("You are a non-conversational extraction function, not a chat assistant.
         "conversation, answer any question, or address any user in the log. Output "
         "ONLY one valid JSON object.")
 
-_FIELDS = ("goal", "hypotheses", "struggles", "progress", "skills")
+_BASE_FIELDS = ("goal", "hypotheses", "struggles", "progress", "skills")
+_EXTRA_FIELDS = ("wins", "decisions", "open_questions", "next_step", "files_touched")
+_FIELDS = _BASE_FIELDS + _EXTRA_FIELDS
+_FIELD_CAP = 400
+_RES_LINES = 25
+_RESTORE_BLOCKS = 3
+_RESTORE_CAP = 12000
+_EMPTY = ("", "none", "none yet", "tbd", "n/a")
+
+
+def _label(k):
+    return k.replace("_", " ").capitalize()
+
+
+def _text(val):
+    """Flatten a model field to one bounded line."""
+    if isinstance(val, (list, tuple)):
+        val = ", ".join(str(v) for v in val)
+    val = " ".join(str(val or "").split())
+    return val[:_FIELD_CAP] + ("..." if len(val) > _FIELD_CAP else "")
+
+
+def _resource_lines(items):
+    out = []
+    for it in items[:_RES_LINES]:
+        purpose = " ".join((it.get("purpose") or "").split())[:120]
+        out.append("- %s | %s | %s" % (it["id"], it["type"], purpose))
+    return out
 
 
 def _now():
@@ -77,9 +113,13 @@ def _log(msg):
 def append_block(sid, event, fields, extra_lines=None):
     """Append one scrubbed, timestamped four-field block. Fail-open."""
     lines = ["## %s . %s" % (_now(), event)]
-    for k in _FIELDS:
-        val = (fields.get(k) or "").strip() if isinstance(fields, dict) else ""
-        lines.append("**%s:** %s" % (k.capitalize(), val or "TBD"))
+    fields = fields if isinstance(fields, dict) else {}
+    for k in _BASE_FIELDS:
+        lines.append("**%s:** %s" % (_label(k), _text(fields.get(k)) or "TBD"))
+    for k in _EXTRA_FIELDS:
+        val = _text(fields.get(k))
+        if val.lower() not in _EMPTY:
+            lines.append("**%s:** %s" % (_label(k), val))
     for extra in (extra_lines or []):
         lines.append(extra)
     block = "\n".join(lines) + "\n\n"
@@ -198,8 +238,13 @@ def checkpoint(payload, complete_fn=None):
     if not convo.strip():
         return ""
     complete_fn = complete_fn or np_model.complete
+    cands = np_resources.extract(convo)
+    seen_txt = ""
+    if cands:
+        seen_txt = "\nRESOURCES SEEN (identifier | type):\n" + "\n".join(
+            "%s | %s" % (c["id"], c["type"]) for c in cands) + "\n"
     try:
-        raw = complete_fn(_PROMPT_HEAD + convo + _PROMPT_TAIL, _SYS)
+        raw = complete_fn(_PROMPT_HEAD + convo + seen_txt + _PROMPT_TAIL, _SYS)
     except Exception:
         _log("checkpoint: model call raised for %s" % sid)
         return ""
@@ -215,8 +260,24 @@ def checkpoint(payload, complete_fn=None):
         note = json.loads(jx.stdout)
     except ValueError:
         return ""
-    append_block(sid, "PreCompact", note)
+    if not isinstance(note, dict):
+        return ""
+    labels = note.get("resources") if isinstance(note.get("resources"), dict) else {}
+    items = [{"id": c["id"], "type": c["type"], "purpose": str(labels.get(c["id"]) or "")}
+             for c in cands]
+    append_block(sid, "PreCompact", note, extra_lines=_block_resources(items))
     return ""
+
+
+def _block_resources(items):
+    """`**Resources:**` lines for a journal block. Empty list when no items.
+
+    Only ids that np_resources.extract produced reach here, so a model
+    cannot add an identifier of its own.
+    """
+    if not items:
+        return []
+    return ["**Resources:**"] + _resource_lines(items)
 
 
 def _recall_sources():
@@ -247,6 +308,15 @@ def _read_journal(sid):
         return ""
 
 
+def _restore_view(body):
+    """Seed block plus the newest checkpoints, capped. Keeps restored context bounded."""
+    blocks = [b for b in re.split(r"(?m)^(?=## )", body) if b.strip()]
+    if len(blocks) > _RESTORE_BLOCKS + 1:
+        blocks = blocks[:1] + blocks[-_RESTORE_BLOCKS:]
+    out = "".join(blocks)
+    return out[-_RESTORE_CAP:] if len(out) > _RESTORE_CAP else out
+
+
 def recall_sessionstart(payload):
     """SessionStart injector, gated on journal.recall_sources.
 
@@ -263,7 +333,7 @@ def recall_sessionstart(payload):
     if not body.strip():
         return ""
     _touch(_receipt(sid, "pending"))
-    text = "Session journal (restored after %s):\n\n%s" % (source, body)
+    text = "Session journal (restored after %s):\n\n%s" % (source, _restore_view(body))
     _touch(_receipt(sid, "done"))
     return text
 
@@ -285,12 +355,116 @@ def recall_fallback(payload):
     if not body.strip():
         return ""
     _touch(_receipt(sid, "fallback"))
-    return "Session journal (restored):\n\n%s" % body
+    return "Session journal (restored):\n\n%s" % _restore_view(body)
+
+
+def _parse_blocks(body):
+    """Journal text to a list of {label: text, "resources": [items]} dicts."""
+    out = []
+    for blk in re.split(r"(?m)^(?=## )", body):
+        if not blk.strip():
+            continue
+        rec = {"resources": []}
+        in_res = False
+        for line in blk.splitlines():
+            m = re.match(r"\*\*([^:*]+):\*\*\s*(.*)$", line)
+            if m:
+                in_res = m.group(1) == "Resources"
+                if not in_res:
+                    rec[m.group(1).lower().replace(" ", "_")] = m.group(2).strip()
+            elif in_res and line.startswith("- "):
+                parts = [x.strip() for x in line[2:].split(" | ", 2)]
+                if len(parts) == 3 and parts[0]:
+                    rec["resources"].append({"id": parts[0], "type": parts[1], "purpose": parts[2]})
+            else:
+                in_res = False
+        out.append(rec)
+    return out
+
+
+def _real(vals):
+    seen, out = set(), []
+    for v in vals:
+        if v and v.lower() not in _EMPTY and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _episodic_record(sid, cwd, blocks):
+    """Inbox record carrying the journal's struggles and wins, or None."""
+    struggles = _real(b.get("struggles") for b in blocks)
+    wins = _real([b.get("wins") for b in blocks] + [b.get("skills") for b in blocks])
+    if not (struggles or wins):
+        return None
+    last = blocks[-1]
+    repo = ""
+    for b in blocks:
+        if b.get("repo"):
+            repo = b["repo"].split(" @ ")[0]
+            break
+    goal = _real(b.get("goal") for b in blocks)
+    body = " ".join(x for x in (
+        "Goal: %s." % goal[-1] if goal else "",
+        "Progress: %s." % last["progress"] if last.get("progress", "none").lower() not in _EMPTY else "",
+        "Decisions: %s." % last["decisions"] if last.get("decisions") else "",
+        "Open: %s." % last["open_questions"] if last.get("open_questions") else "",
+        "Next: %s." % last["next_step"] if last.get("next_step") else "") if x)
+    return {
+        "session_id": sid, "ts": _now(), "project": repo or os.path.basename(cwd or "") or "unknown",
+        "cwd": cwd or "", "mode": "journal-crawl",
+        "headline": ("Journal: %s" % (goal[-1] if goal else "session"))[:80],
+        "body": body[:1200], "candidate_topics": [], "keywords": [],
+        "struggles": [{"symptom": x, "cause": "", "fix": "", "tool_match": "",
+                       "topic_triggers": [], "destructive": False} for x in struggles],
+        "strategies": [{"title": "Journal win", "description": x[:160], "content": x,
+                        "topic_triggers": []} for x in wins],
+    }
+
+
+def crawl(sid, cwd=""):
+    """Analyze a journal before it is deleted.
+
+    Struggles and wins go to the episodic inbox. Resources go to the resources
+    inbox. Both drain into the overlay via episodic-maintain. Returns False when
+    a write failed, so the caller keeps the journal for a retry.
+    """
+    if not np_toggle.enabled("journal") or np_toggle.param("journal.crawl", "on") == "off":
+        return True
+    if os.path.isfile(_receipt(sid, "crawled")):
+        return True
+    body = _read_journal(sid)
+    if not body.strip():
+        return True
+    try:
+        blocks = _parse_blocks(body)
+        repo = next((b["repo"].split(" @ ")[0] for b in blocks if b.get("repo")), "")
+        rec = _episodic_record(sid, cwd, blocks)
+        if rec and not np_capture.append_note(rec):
+            return False
+        merged = {}
+        for b in blocks:
+            for it in b["resources"]:
+                if it["id"] not in merged or (it["purpose"] and not merged[it["id"]]["purpose"]):
+                    merged[it["id"]] = it
+        if merged:
+            np_resources.stage(list(merged.values()), sid, repo or os.path.basename(cwd or ""))
+        _touch(_receipt(sid, "crawled"))
+        return True
+    except Exception:
+        _log("crawl: failed for %s" % sid)
+        return False
+
+
+def crawl_and_cleanup(sid, cwd=""):
+    """Crawl, then delete the journal only if the crawl succeeded."""
+    if crawl(sid, cwd):
+        cleanup(sid)
 
 
 def cleanup(sid):
     """Delete a session's journal file and recall receipts. Fail-open."""
-    for path in (journal_path(sid),
+    for path in (journal_path(sid), _receipt(sid, "crawled"),
                  _receipt(sid, "pending"), _receipt(sid, "done"), _receipt(sid, "fallback")):
         try:
             os.remove(path)
@@ -298,8 +472,18 @@ def cleanup(sid):
             pass
 
 
+def _remove(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 def ttl_sweep(days=None):
-    """Delete journals and stale receipts older than journal.ttl_days. Fail-open."""
+    """Delete journals and stale receipts older than journal.ttl_days. Fail-open.
+
+    Each expiring journal is crawled first, so the TTL never drops analysis.
+    """
     if days is None:
         try:
             days = int(np_toggle.param("journal.ttl_days", "30"))
@@ -318,6 +502,12 @@ def ttl_sweep(days=None):
                 continue
             try:
                 if os.path.getmtime(path) < cutoff:
+                    if root == _dir() and name.endswith(".md"):
+                        try:
+                            crawl(name[:-3])
+                        except Exception:
+                            pass
+                        _remove(_receipt(name[:-3], "crawled"))
                     os.remove(path)
                     removed += 1
             except OSError:

@@ -311,7 +311,19 @@ _EPISODIC_MAINTAIN = CronConfig(
 
 def episodic_maintain():
     """Cron entrypoint (dispatched by cli.py as `cron episodic-maintain`).
-    Returns a short status string; never raises."""
+    Returns a short status string; never raises.
+
+    Drains the resources inbox into the overlay catalog first. The merge is
+    deterministic Python, so it does not depend on the agent run.
+    """
+    try:
+        if (np_toggle.enabled("memory.maintain") and not os.environ.get("NERVEPACK_AGENT")
+                and np_toggle.param("journal.crawl", "on") != "off"
+                and np_content.content_is_explicit()):
+            import np_resources
+            np_resources.drain()
+    except Exception:
+        pass
     return _run(_EPISODIC_MAINTAIN)
 
 

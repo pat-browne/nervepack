@@ -361,8 +361,8 @@ def _process(queue_dir, seen_dir, metrics_path, max_per_sweep, capture_fn, evalu
             _clear_attempts(seen_dir, sid)
             processed += 1
             _log("back-captured %s (project %s)" % (sid, os.path.basename(cwd)))
-            try:                       # journal is consumed once the session is evaluated
-                np_journal.cleanup(sid)
+            try:                       # crawl for lessons and resources, then delete
+                np_journal.crawl_and_cleanup(sid, cwd)
             except Exception:
                 pass
         elif _bump_attempts(seen_dir, sid) >= _MAX_ATTEMPTS:

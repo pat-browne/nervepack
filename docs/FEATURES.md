@@ -260,14 +260,18 @@ in `engine/setup/nervepack-session-directive.md`. Toggle: `post_ship` (no params
 succeeds and the next model step sees the prompt. It runs
 `np-core-capture-learning`, which routes the CI gotcha it hit to nervepack.
 
-## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
+## Session journal — live goal, decisions, wins, resources, restored after compact/resume
 
 **Purpose.** A session loses working context on a compaction, a resume, or a
-`/clear`. The journal keeps a local record of five things.
+`/clear`. The journal keeps a local record of each checkpoint.
 
-- Goal, current hypotheses, notable struggles, notable progress, and skills that
-  worked.
-- It is restored to the model after a compact or resume.
+- Goal, hypotheses, struggles, progress, and skills that worked.
+- Wins, decisions with their reason, open questions, the next step, and files
+  touched. Empty fields are omitted and each is capped at 400 characters.
+- Resources: identifiers the session touched, one `id | type | purpose` line each,
+  at most 25 per block.
+- It is restored to the model after a compact or resume. Restore shows the seed
+  block plus the newest three, capped at 12000 characters.
 - It records the skills that succeeded, so a captured session teaches future ones.
 
 **Workflow.**
@@ -281,10 +285,29 @@ succeeds and the next model step sees the prompt. It runs
   `.recall/` receipts, so nothing injects twice.
 - A plain startup and a `/clear` never inject.
 
-**Cleanup.**
+**Resources.**
 
-- The backcapture sweep deletes a journal after it evaluates that session.
-- A 30-day TTL in the same sweep removes any journal the cleanup missed.
+- `np_resources.extract` finds DNS names, URLs, cloud and Azure resource IDs,
+  ARNs, IPs, CIDRs, ports, DB objects, repos, pipeline IDs, and Key Vault secret
+  names by regex.
+- Secret values never enter. Text is redacted first, userinfo URLs and query
+  strings are dropped, and any candidate that still looks like a credential is
+  discarded.
+- Haiku only labels the purpose of ids the regex found. It cannot add one.
+
+**Crawl before cleanup.**
+
+- Before the backcapture sweep or the 30-day TTL deletes a journal,
+  `np_journal.crawl` reads it.
+- Struggles and wins go to the episodic inbox, so lessons distill them.
+- Resources go to `~/.cache/nervepack/resources-inbox/`.
+- `episodic-maintain` drains that inbox in Python into the overlay catalog
+  `memory/resources/<YYYY-MM>.jsonl`, deduped by identifier. Each row carries
+  `first_seen`, `last_seen`, `session`, `repo`, `purpose`, and a seen count.
+- It rewrites `memory/resources/INDEX.md`, grouped by type, and the agent
+  commits both.
+- A failed crawl keeps the journal. Param `journal.crawl=off` skips the crawl and
+  the drain, and deletion still runs.
 
 **The /clear case.**
 
@@ -293,8 +316,10 @@ succeeds and the next model step sees the prompt. It runs
 - The backcapture sweep re-captures any prior session with no metrics record.
 
 **Assets.** `np_journal.py`, `hooks/journal_write.py`, `hooks/journal_recall.py`,
-cleanup in `backcapture_sweep.py`. Toggle `journal` (`model`, `ttl_days`,
-`recall_sources`). Governing record: `change-specs/worktree-feat+session-journal-and-clear-capture.md`.
+`np_resources.py`, crawl in `backcapture_sweep.py`, drain in `np_agentic_cron.py`.
+Toggle `journal` (`model`, `ttl_days`, `recall_sources`, `crawl`). Governing
+records: `change-specs/worktree-feat+session-journal-and-clear-capture.md`,
+`change-specs/feat-journal-resources.md`.
 
 ## Spec-review gate — confirm the doc was read before implementation starts
 
