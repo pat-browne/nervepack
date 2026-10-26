@@ -30,7 +30,8 @@ def _prune_markers(state_dir):
         try:
             if name.startswith("surfaced_") and os.path.getmtime(path) < cutoff:
                 os.remove(path)
-        except OSError:
+        except OSError as exc:
+            _bail("delete stale marker: %s: %r" % (path, exc))
             continue
 
 

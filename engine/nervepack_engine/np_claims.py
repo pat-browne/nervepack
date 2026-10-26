@@ -64,11 +64,13 @@ def _ctx(cwd):
              "--abbrev-ref", "HEAD"], capture_output=True, text=True, timeout=5)
         lines = r.stdout.splitlines()
         if len(lines) < 2 or not lines[0].strip() or not lines[1].strip():
+            _bail("ctx: malformed git output for %s: %r" % (cwd, r.stdout[:200]))
             return None
         branch = lines[2].strip() if len(lines) > 2 else ""
         return {"common": os.path.abspath(os.path.join(cwd, lines[0].strip())),
                 "top": lines[1].strip(), "branch": branch}
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        _bail("ctx: %r" % exc)
         return None
 
 
@@ -187,8 +189,8 @@ def _list_dir(d, exclude=None):
             if now - rec["heartbeat"] > max_age:
                 try:
                     os.remove(path)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    _bail("delete stale claim: %s: %r" % (path, exc))
                 continue
             if rec.get("session_id") != exclude:
                 live.append(rec)

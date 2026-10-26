@@ -210,6 +210,7 @@ def _claim(argv):
             sys.stdout.write(text + "\n")
     else:
         _bail("claim", "unknown subcommand: %s" % sub)
+        sys.stdout.write("claim: unknown subcommand %r (use start, update, release, status, list)\n" % sub)
 
 
 def _parse_merge_wait_args(argv):

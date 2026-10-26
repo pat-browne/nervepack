@@ -376,7 +376,7 @@ class TestClaimCommand(unittest.TestCase):
         self.assertIn("claim: no session id", out)
 
     def test_unknown_subcommand_and_bare_claim_exit_zero(self):
-        self.run_claim("bogus", "--cwd", self.repo)
+        self.assertIn("unknown subcommand", self.run_claim("bogus", "--cwd", self.repo))
         self.run_claim()
 
     def test_non_git_cwd_exits_zero(self):
