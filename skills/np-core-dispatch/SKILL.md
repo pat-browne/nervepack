@@ -43,6 +43,8 @@ continuation channel that isn't there.
    it? Capture silent mid-run corrections (a wrong guessed path, a stale checkout, a bad
    sample) via [[np-core-contribute]], not just things that visibly broke — those are
    exactly as valuable and easier to lose once the session ends.
+7. **Close out a separate session.** Once its goal is met and it sits idle, have it
+   capture, then archive it. The steps are in [[np-flow-orchestrate]] § Close-out.
 
 ## When a dispatched agent stalls — salvage, don't re-dispatch
 
