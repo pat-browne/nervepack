@@ -346,7 +346,8 @@ def _cron_branch_check(np):
     try:
         sys.path.insert(0, os.path.join(np, "engine", "setup"))
         import np_git_publish
-        repos = [np] + [r for r in np_content.content_layers() if r and r != np]
+        content = np_content.content_dir()
+        repos = [np] + ([content] if content and content != np else [])
         off = []
         for r in repos:
             head = np_git_publish.off_main(r)

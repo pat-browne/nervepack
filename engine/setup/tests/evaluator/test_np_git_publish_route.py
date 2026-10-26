@@ -105,6 +105,25 @@ class WriteRoot(Base):
         self.assertTrue(os.path.exists(os.path.join(wt2, "h.txt")))
         self.assertFalse(os.path.exists(os.path.join(wt2, "junk.txt")))
 
+    def test_conflicting_stranded_commit_is_parked_not_wedged(self):
+        _git(self.local, "switch", "-q", "-c", "feat")
+        wt, _ = np_git_publish.write_root(self.local, "t")
+        with open(os.path.join(wt, "f.txt"), "w") as fh:
+            fh.write("cron\n")
+        _git(wt, "commit", "-q", "-am", "stranded")
+        other = os.path.join(self.root, "other")
+        subprocess.run(["git", "clone", "-q", self.bare, other], check=True)
+        with open(os.path.join(other, "f.txt"), "w") as fh:
+            fh.write("remote\n")
+        _git(other, "commit", "-q", "-am", "remote")
+        _git(other, "push", "-q", "origin", "HEAD:main")
+        wt2, _ = np_git_publish.write_root(self.local, "t")
+        self.assertEqual(wt2, wt)
+        self.assertEqual(_git(wt, "rev-parse", "HEAD"),
+                         _git(self.local, "rev-parse", "origin/main"))
+        self.assertIn("refs/nervepack/stranded/",
+                      _git(self.local, "for-each-ref", "refs/nervepack"))
+
     def test_failure_returns_none_never_raises(self):
         _git(self.local, "switch", "-q", "-c", "feat")
         with mock.patch.object(np_git_publish, "cron_worktree",

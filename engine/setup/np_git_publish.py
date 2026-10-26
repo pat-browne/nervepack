@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 
 _MAX_DETAIL = 300
@@ -60,7 +61,8 @@ def _git(repo, *args):
     """git -C <repo>. Returns (rc, stdout, stderr). Never raises."""
     try:
         r = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
-                           text=True, stdin=subprocess.DEVNULL)
+                           text=True, encoding="utf-8", errors="replace",
+                           stdin=subprocess.DEVNULL)
     except OSError as exc:
         return 1, "", str(exc)
     return r.returncode, r.stdout.strip(), r.stderr
@@ -100,8 +102,8 @@ def worktree_root():
 
 
 def _is_cron_worktree(path):
-    root = os.path.realpath(worktree_root())
-    return os.path.realpath(path).startswith(root + os.sep)
+    root = os.path.normcase(os.path.realpath(worktree_root()))
+    return os.path.normcase(os.path.realpath(path)).startswith(root + os.sep)
 
 
 def cron_worktree(repo, branch="main"):
@@ -124,7 +126,10 @@ def cron_worktree(repo, branch="main"):
             and _git(wt, "rev-parse", "--git-dir")[0] == 0):
         # Missing or broken. The dir is ours, so clear it and add it again.
         if os.path.exists(wt):
-            shutil.rmtree(wt, ignore_errors=True)
+            try:
+                shutil.rmtree(wt)
+            except OSError as exc:
+                return None, "cannot clear broken cron worktree %s: %s" % (wt, exc)
         _git(top, "worktree", "prune")
         try:
             os.makedirs(os.path.dirname(wt), exist_ok=True)
@@ -141,9 +146,13 @@ def cron_worktree(repo, branch="main"):
     if _git(wt, "merge", "-q", "--ff-only", base)[0] != 0:
         rc, _, err = _git(wt, "rebase", "-q", base)
         if rc != 0:
+            # Park the stranded commit on a ref and reset, so the cron never wedges.
             _git(wt, "rebase", "--abort")
-            return None, "cron worktree %s cannot reach %s: %s" % (
-                wt, base, _one_line(err))
+            ref = "refs/nervepack/stranded/%d" % int(time.time())
+            _git(wt, "update-ref", ref, "HEAD")
+            _git(wt, "reset", "-q", "--hard", base)
+            print("cron worktree %s could not rebase onto %s (%s). Saved the old "
+                  "commit as %s." % (wt, base, _one_line(err), ref), file=sys.stderr)
     return wt, ""
 
 

@@ -88,8 +88,16 @@ def _prune_resolved(path, retain_days):
             fh.writelines(kept)
 
 
+def _remove_inbox(inbox, files):
+    for fname in files:
+        try:
+            os.remove(os.path.join(inbox, fname))
+        except OSError:
+            pass
+
+
 def _rebase_path(path, old_root, new_root):
-    """Move a path under old_root to the same spot under new_root."""
+    """Return the matching path under new_root. Touches no file."""
     rel = os.path.relpath(path, old_root)
     if rel.startswith(os.pardir):
         return path
@@ -108,12 +116,14 @@ def aggregate():
     resolved = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
         content, "dashboard", "data", "resolved-suggestions.txt")
     route_note = ""
+    routed = False
     if os.environ.get("NP_AGG_NO_COMMIT") != "1" and np_content.content_is_explicit():
         # Off main, write in the cron worktree. Do not drain into a branch.
         root, route_note = np_git_publish.write_root(content, "np-aggregate")
         if root is None:
             return "skipped: %s" % route_note
         if root != content:
+            routed = True
             metrics = _rebase_path(metrics, content, root)
             resolved = _rebase_path(resolved, content, root)
             content = root
@@ -133,11 +143,9 @@ def aggregate():
             with open(metrics, "a", encoding="utf-8") as fh:
                 fh.writelines(lines)
             n = len(lines)
-            for fname in files:
-                try:
-                    os.remove(os.path.join(inbox, fname))
-                except OSError:
-                    pass
+            # A cron worktree resets uncommitted work, so keep the inbox until the commit.
+            if not routed:
+                _remove_inbox(inbox, files)
         except OSError:
             n = 0
 
@@ -207,6 +215,8 @@ def aggregate():
         # NP_AGG_NO_PUSH mirrors SKILL_MAINTAIN_NO_PUSH: commit locally, publish
         # never. Tests that assert commit behaviour set it, so a sandbox with no
         # reachable origin does not report a publish failure it never wanted.
+        if commit.returncode == 0 and routed:
+            _remove_inbox(inbox, files)
         if commit.returncode == 0 and os.environ.get("NP_AGG_NO_PUSH") != "1":
             ok, why = np_git_publish.publish(content)
             if not ok:

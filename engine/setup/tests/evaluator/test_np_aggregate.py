@@ -239,6 +239,7 @@ class TestAggregateOffMain(TestNpAggregate):
         log = subprocess.run(["git", "-C", bare, "log", "-1", "--format=%s", "main"],
                              capture_output=True, text=True).stdout
         self.assertIn("evaluator(metrics): daily batch", log)
+        self.assertFalse(os.listdir(self.inbox))
 
 
 if __name__ == "__main__":
