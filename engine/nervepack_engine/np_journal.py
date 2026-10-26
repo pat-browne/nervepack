@@ -468,8 +468,8 @@ def crawl(sid, cwd=""):
             return False
         _touch(_receipt(sid, "crawled"))
         return True
-    except Exception:
-        _log("crawl: failed for %s" % sid)
+    except Exception as exc:
+        _log("crawl: failed for %s: %r" % (sid, exc))
         return False
 
 
@@ -529,6 +529,8 @@ def ttl_sweep(days=None):
                         if not ok and os.path.getmtime(path) >= cutoff - days * 86400:
                             _log("ttl: crawl failed for %s, keeping until 2x TTL" % name)
                             continue
+                        if not ok:
+                            _log("ttl: deleting %s past 2x TTL after failed crawl" % name)
                         _remove(_receipt(name[:-3], "crawled"))
                     os.remove(path)
                     removed += 1
