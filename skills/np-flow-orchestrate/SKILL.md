@@ -23,7 +23,10 @@ Then, for each chosen ticket:
 1. Call `start_session` once. The brief names the ticket.
 2. The brief tells the child to run the repo's plan/work entry point in its own
    worktree: [[np-flow-develop]], or the repo's own factory when it has one.
-3. Talk to children with the session tools (`send_message`, `get_session`,
+3. Paste the prime and capture blocks from `np-core-dispatch`
+   references/nervepack-context.md into every brief. Each child recalls related
+   nervepack context first and captures at each milestone.
+4. Talk to children with the session tools (`send_message`, `get_session`,
    `list_sessions`).
 
 ## The prompt
@@ -47,6 +50,10 @@ worktree.
 
 - Keep a ledger in memory (paused, waiting on me, done) so state survives
   compaction.
+
+- Every brief tells the child to recall nervepack context before it designs,
+  and to run /np-core-capture-learning at each milestone. A child is not done
+  until its final report has a "Captured:" line.
 
 - Small calls are yours, but tell me after you make them. Scope, security, or
   anything customers see comes to me.
@@ -72,6 +79,7 @@ Handle these yourself:
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
 | Stuck or silent | Read its transcript and PR before you call it blocked. |
+| Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
 Several decisions pending? Ask the most blocking one. Keep the rest in the
 ledger as `waiting on me`.
@@ -79,10 +87,15 @@ ledger as `waiting on me`.
 ## The ledger
 
 Keep one memory file with a row per ticket. Columns: ticket, child session,
-worktree, PR, state, next action.
+worktree, PR, state, captured, next action.
 
 States: `paused`, `waiting on me`, `in progress`, `done`. Update the row on every
 state change. After a compaction, read the ledger before anything else.
+
+`captured` holds the paths from the child's `Captured:` line, or `no`. A row
+cannot move to `done` while it says `no`. Check it before you report a ticket
+finished, and again when you close out the whole run, because a child can end
+without warning.
 
 ## Every update to the user
 
