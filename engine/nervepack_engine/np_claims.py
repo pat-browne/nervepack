@@ -30,12 +30,8 @@ def _bail(msg):
         pass
 
 
-def _on():
-    return np_toggle.enabled("claims")
-
-
 def enabled():
-    return _on()
+    return np_toggle.enabled("claims")
 
 
 def _int_param(key, default):
@@ -92,7 +88,7 @@ def _claims_dir(ctx):
 def claims_dir(cwd):
     """Absolute claims directory for cwd's repo, or None outside a git work tree."""
     try:
-        if not _on():
+        if not enabled():
             return None
         return _claims_dir(_ctx(cwd))
     except Exception as exc:
@@ -112,7 +108,7 @@ def _read(path):
 def write(session_id, cwd, intent=None, paths=None, phase=None, after=None, force=False):
     """Upsert this session's claim, throttled to one write per heartbeat_s."""
     try:
-        if not _on() or not _valid_sid(session_id):
+        if not enabled() or not _valid_sid(session_id):
             return None
         ctx = _ctx(cwd)
         d = _claims_dir(ctx)
@@ -158,7 +154,7 @@ def write(session_id, cwd, intent=None, paths=None, phase=None, after=None, forc
 
 def release(session_id, cwd):
     try:
-        if not _on() or not _valid_sid(session_id):
+        if not enabled() or not _valid_sid(session_id):
             return False
         d = claims_dir(cwd)
         if not d:
@@ -204,7 +200,7 @@ def _list_dir(d, exclude=None):
 def list_live(cwd, exclude=None):
     """Claims by started ascending, pruning heartbeats older than stale_days."""
     try:
-        if not _on():
+        if not enabled():
             return []
         d = claims_dir(cwd)
         return _list_dir(d, exclude) if d else []
@@ -242,7 +238,7 @@ def position(session_id, cwd):
     """FIFO rank among live claims plus overlap and same-worktree matches."""
     empty = {"rank": 1, "leader": True, "others": [], "overlaps": [], "same_worktree": []}
     try:
-        if not _on():
+        if not enabled() or not _valid_sid(session_id):
             return empty
         ctx = _ctx(cwd)
         d = _claims_dir(ctx)
@@ -312,7 +308,7 @@ def render(pos):
 
 def resolve_session(cwd, explicit=None):
     try:
-        if not _on():
+        if not enabled():
             return None
         if explicit:
             return explicit if _valid_sid(explicit) else None
