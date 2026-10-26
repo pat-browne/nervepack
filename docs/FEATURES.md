@@ -513,6 +513,14 @@ open-dashboard` SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard
 backed by `engine/nervepack_engine/np_dashboard.py`) opens it once per boot (guarded against
 the reconnect loop).
 
+**Off-main checkout.** The aggregator never commits onto a feature branch. Off main,
+`np_git_publish.write_root()` gives it a private worktree at origin/main. The batch
+commits and pushes from there, and stderr names the branch.
+
+The agentic crons and the skill-maintain split refuse with a `REFUSED` log line. The
+doctor `cron-branch` check shows the same state. Example: a checkout left on `feat/x`
+gets no cron commits, and origin/main still gets the metrics.
+
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
 into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
 and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).

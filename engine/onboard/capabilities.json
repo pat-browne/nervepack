@@ -131,6 +131,17 @@
       }
     },
     {
+      "id": "cron-branch",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the engine and content checkouts sit on main, where the crons commit",
+      "why": "Scheduled writers commit into the live checkout. Off main, the deterministic ones divert to a cron worktree and the agentic ones refuse to run, so their output stalls until the checkout returns to main.",
+      "accept": "Every git checkout among the engine and content layers has main checked out, or has no main branch.",
+      "hints": {
+        "generic": "git -C <repo> switch main. Do branch work in a git worktree, not the live checkout."
+      }
+    },
+    {
       "id": "hook-scripts",
       "tier": "SHOULD",
       "check": "core",
