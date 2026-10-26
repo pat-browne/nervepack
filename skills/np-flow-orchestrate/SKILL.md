@@ -96,7 +96,8 @@ out, never left open.
    exists and the capture location.
 
 A child that ends its turn on a gate or a question, with no capture report,
-stays open as `waiting on me`.
+stays open as `waiting on me`. Archiving can remove the child's folder. Never
+archive a child whose folder another live session uses.
 
 ## The loop
 
