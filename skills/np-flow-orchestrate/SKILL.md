@@ -86,14 +86,17 @@ out, never left open.
 1. Confirm the goal is met from evidence: merged PR, pushed commit, or report
    verified. A child still owed a step (live checks, a merge, an answer) stays
    open.
-2. Send it [[np-core-capture-learning]] as one message. Ask it to stop after.
+2. Send it [[np-core-capture-learning]] as one message. Tell it to take no new
+   work after the capture.
 3. Wait for its capture report. Check where the capture landed: a commit, a
    branch, or memory.
-4. Archive the child. Mark its ledger row `done`, with the PR and the capture
-   location.
+4. Run `git -C <child worktree> status -sb`. Archive only when the tree is clean
+   and the branch is not ahead of its remote.
+5. Archive the child. Mark its row in § The ledger `done`, with the PR if one
+   exists and the capture location.
 
-A capture that stalls on a gate or a question stays open as `waiting on me`.
-Never archive a child that holds uncommitted work.
+A child that ends its turn on a gate or a question, with no capture report,
+stays open as `waiting on me`.
 
 ## The loop
 
