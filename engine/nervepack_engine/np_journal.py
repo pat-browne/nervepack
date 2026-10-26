@@ -320,13 +320,17 @@ def _restore_view(body):
     checkpoints the newest blocks are trimmed from their start to fit the cap.
     """
     blocks = [b for b in re.split(r"(?m)^(?=## )", body) if b.strip()]
-    if len(blocks) > _RESTORE_BLOCKS + 1:
+    total = len(blocks)
+    if total > _RESTORE_BLOCKS + 1:
         blocks = blocks[:1] + blocks[-_RESTORE_BLOCKS:]
     if len(blocks) < 2:
         return "".join(blocks)[:_RESTORE_CAP]
     seed = blocks[0][:_RESTORE_SEED_CAP]
     rest = "".join(blocks[1:])
-    return seed + rest[-(_RESTORE_CAP - len(seed)):]
+    note = ""
+    if total > len(blocks):
+        note = "\n(%d older checkpoint(s) omitted from this restore.)\n\n" % (total - len(blocks))
+    return seed + note + rest[-(_RESTORE_CAP - len(seed) - len(note)):]
 
 
 def recall_sessionstart(payload):

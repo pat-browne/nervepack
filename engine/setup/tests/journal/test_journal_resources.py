@@ -155,6 +155,7 @@ class TestRestoreBounded(JournalBase):
         self.assertIn("goal-0", out)
         self.assertIn("goal-9", out)
         self.assertNotIn("goal-4", out)
+        self.assertIn("6 older checkpoint(s) omitted", out)
 
 
 class TestBounds(JournalBase):
