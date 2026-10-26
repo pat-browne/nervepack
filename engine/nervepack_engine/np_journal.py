@@ -503,6 +503,8 @@ def ttl_sweep(days=None):
             try:
                 if os.path.getmtime(path) < cutoff:
                     if root == _dir() and name.endswith(".md"):
+                        # Best-effort: unlike crawl_and_cleanup, a failed crawl
+                        # does not keep the journal; the TTL is a safety net.
                         try:
                             crawl(name[:-3])
                         except Exception:
