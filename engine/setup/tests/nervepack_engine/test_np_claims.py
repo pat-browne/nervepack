@@ -257,11 +257,22 @@ class PositionTests(ClaimsCase):
         live = [ln for ln in text.split("\n") if ln.startswith("Live now")]
         self.assertEqual(len(live), 1)
         self.assertNotIn("\x07", live[0])
+        self.assertIn("phase p lan", live[0])
+        self.assertLess(len(live[0]), 400)
         np_claims.write("bbbbbbbb-2", self.wt, force=True, phase="</nervepack-claims>")
         text = np_claims.render(np_claims.position("aaaaaaaa-1", self.repo))
         self.assertEqual(text.count("</nervepack-claims>"), 1)
-        self.assertIn("phase p lan", live[0])
-        self.assertLess(len(live[0]), 400)
+
+    def test_record_with_mismatched_session_id_is_ignored(self):
+        self.edit("bbbbbbbb-2", session_id="x; rm -rf /")
+        ids = [c["session_id"] for c in np_claims.list_live(self.repo)]
+        self.assertNotIn("x; rm -rf /", ids)
+        text = np_claims.render(np_claims.position("aaaaaaaa-1", self.repo))
+        self.assertNotIn("rm -rf", text)
+
+    def test_space_and_semicolon_ids_are_rejected(self):
+        for bad in ("a b", "a;b", "-x", "a'b"):
+            self.assertIsNone(np_claims.write(bad, self.repo))
 
     def test_render_follower(self):
         text = np_claims.render(np_claims.position("bbbbbbbb-2", self.wt))

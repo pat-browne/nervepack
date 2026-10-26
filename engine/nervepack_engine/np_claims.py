@@ -48,9 +48,11 @@ def _num(val):
         return 0.0
 
 
+_SID_OK = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+
+
 def _valid_sid(sid):
-    return bool(sid) and isinstance(sid, str) and not any(
-        bad in sid for bad in ("/", "\\", ".."))
+    return isinstance(sid, str) and bool(_SID_OK.match(sid)) and ".." not in sid
 
 
 def _ctx(cwd):
@@ -178,7 +180,7 @@ def _list_dir(d, exclude=None):
         path = os.path.join(d, name)
         try:
             rec = _read(path)
-            if rec is None:
+            if rec is None or rec.get("session_id") != name[:-len(".json")]:
                 continue
             rec["heartbeat"] = _num(rec.get("heartbeat"))
             rec["started"] = _num(rec.get("started"))
@@ -298,9 +300,11 @@ def render(pos):
             lines.append("Paths overlap with %s: %s. Say so before planning." % (
                 _id8(o), _paths_text(_overlap(mine, o))))
         for o in (pos.get("same_worktree") or [])[:10]:
-            lines.append("STOP: %s is on your worktree or branch. Ask the user. "
-                         "If that session is gone, run: cli.py claim release --session %s" % (
-                             _id8(o), _clean(o.get("session_id"), 64)))
+            stop = "STOP: %s is on your worktree or branch. Ask the user." % _id8(o)
+            sid = o.get("session_id")
+            if _valid_sid(sid):
+                stop += " If that session is gone, run: cli.py claim release --session %s" % sid
+            lines.append(stop)
         lines.append("</nervepack-claims>")
         return "\n".join(lines)
     except Exception as exc:
