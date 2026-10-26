@@ -90,9 +90,11 @@ out, never left open.
    work after the capture.
 3. Wait for its capture report. Check where the capture landed: a commit, a
    branch, or memory.
-4. Run `git -C "$worktree" status -sb`. Archive only when the tree is clean and
-   the branch is not ahead of its remote. Otherwise ask the child to commit and
-   push, or leave it open as `waiting on me`.
+4. Run `git -C "$worktree" status -sb`, where `$worktree` is the child's
+   working directory. Archive only when the tree is clean and the branch is not
+   ahead of its remote. Otherwise, or if the command fails (missing worktree,
+   git error), ask the child to commit and push, or leave it open as
+   `waiting on me`.
 5. Archive the child. Mark its row in § The ledger `done`, with the PR if one
    exists and the capture location.
 
