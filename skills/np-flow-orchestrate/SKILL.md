@@ -77,6 +77,24 @@ itself. This section owns the rule for every coordinator, including
 - A worker sends a hard call back as a decision request: the options and its
   pick. You decide, tell the worker, and record the call in the ledger.
 
+## Close-out: capture, then archive
+
+This section owns the rule for every coordinator, including [[np-core-dispatch]]
+and [[np-flow-speed]]. A child that met its stated goal and sits idle gets closed
+out, never left open.
+
+1. Confirm the goal is met from evidence: merged PR, pushed commit, or report
+   verified. A child still owed a step (live checks, a merge, an answer) stays
+   open.
+2. Send it [[np-core-capture-learning]] as one message. Ask it to stop after.
+3. Wait for its capture report. Check where the capture landed: a commit, a
+   branch, or memory.
+4. Archive the child. Mark its ledger row `done`, with the PR and the capture
+   location.
+
+A capture that stalls on a gate or a question stays open as `waiting on me`.
+Never archive a child that holds uncommitted work.
+
 ## The loop
 
 Bring these to the user:
