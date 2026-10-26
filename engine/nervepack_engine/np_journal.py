@@ -323,7 +323,7 @@ def _restore_view(body):
     if len(blocks) > _RESTORE_BLOCKS + 1:
         blocks = blocks[:1] + blocks[-_RESTORE_BLOCKS:]
     if len(blocks) < 2:
-        return "".join(blocks)[-_RESTORE_CAP:]
+        return "".join(blocks)[:_RESTORE_CAP]
     seed = blocks[0][:_RESTORE_SEED_CAP]
     rest = "".join(blocks[1:])
     return seed + rest[-(_RESTORE_CAP - len(seed)):]

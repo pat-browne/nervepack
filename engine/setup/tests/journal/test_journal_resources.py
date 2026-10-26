@@ -169,6 +169,13 @@ class TestBounds(JournalBase):
         self.assertLessEqual(len(out), 1500)
         self.assertGreater(big, 1500)
 
+    def test_single_block_keeps_its_start(self):
+        np_journal.append_block("sid-1", "SessionStart", {"goal": "START-" + "x" * 500})
+        with mock.patch.object(np_journal, "_RESTORE_CAP", 100):
+            out = np_journal._restore_view(self._read())
+        self.assertTrue(out.startswith("## "))
+        self.assertEqual(len(out), 100)
+
     def test_text_never_exceeds_cap(self):
         self.assertEqual(len(np_journal._text("x" * 1000)), np_journal._FIELD_CAP)
         self.assertEqual(np_journal._text("x" * 400), "x" * 400)
