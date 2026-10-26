@@ -190,10 +190,11 @@ def _claim(argv):
         claims = np_claims.list_live(cwd)
         if o["json"]:
             sys.stdout.write(json.dumps(claims) + "\n")
-        for c in [] if o["json"] else claims:
-            sys.stdout.write("%s %s %s %s %s\n" % (
-                c.get("session_id", "")[:8], c.get("branch", ""), c.get("worktree", ""),
-                c.get("phase") or "-", ",".join(c.get("paths") or [])))
+        else:
+            for c in claims:
+                sys.stdout.write("%s %s %s %s %s\n" % (
+                    c.get("session_id", "")[:8], c.get("branch", ""), c.get("worktree", ""),
+                    c.get("phase") or "-", ",".join(c.get("paths") or [])))
         return
     sid = np_claims.resolve_session(cwd, o.get("session"))
     if not sid and sub in ("start", "update", "release"):
@@ -209,7 +210,6 @@ def _claim(argv):
         if text:
             sys.stdout.write(text + "\n")
     else:
-        _bail("claim", "unknown subcommand: %s" % sub)
         sys.stdout.write("claim: unknown subcommand %r (use start, update, release, status, list)\n" % sub)
 
 
