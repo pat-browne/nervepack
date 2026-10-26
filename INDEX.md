@@ -8,7 +8,7 @@ extend rather than create overlapping duplicates.
 
 | Skill | Lines | Description |
 |---|---:|---|
-| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 106 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
+| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 122 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
 | [np-core-contribute](skills/np-core-contribute/SKILL.md) | 144 | Save a durable learning (rule, preference, plugin choice, env quirk, useful command) to the right nervepack file. Use on "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or any fact worth keeping. |
 | [np-core-dashboard](skills/np-core-dashboard/SKILL.md) | 95 | Open the nervepack performance dashboard and explain its SessionStart auto-open, served vs static modes, and dashboard_* toggles. Use on "open the dashboard", "show me the metrics", "/np-dashboard", or "why didn't the dashboard open". |
 | [np-core-dispatch](skills/np-core-dispatch/SKILL.md) | 124 | Send a task or [[np-core-handoff]] doc to a fresh agent and supervise it: scope, stop-points, verification. Use for long or risky jobs, parallel work, or when SendMessage is unavailable to continue a spawned agent. |

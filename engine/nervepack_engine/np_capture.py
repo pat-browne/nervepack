@@ -48,6 +48,7 @@ Output STRICT JSON only (no markdown, no prose, no code fences) with keys:
   keywords      (array of 5-12 lowercase keywords)
   struggles     (array — ONLY if the session had real failures/corrections/retries/user-pushback; else []. Each: {symptom, cause, fix, tool_match (ERE for the Bash command that triggers it, or \"\"), topic_triggers (keywords), destructive (true for rm -rf / git reset --hard / force-push / mass overwrite)})
   strategies    (array — ONLY if the session had a clear, REUSABLE success pattern worth repeating next time (an approach that worked, not a one-off); else []. Each: {title (<=8 words), description (one sentence: when this applies), content (the reusable approach + why it worked), topic_triggers (keywords)})
+  stack_facts   (array — ONLY facts about how a technology (language, framework, library, cloud service, database, build tool) BEHAVES that the session verified by running or reading it, not general knowledge and not one project's own details; else []. Each: {stack (kebab-case: python, fastapi, terraform), claim (one sentence), evidence (the command, output or file:line that showed it), version (or \"\"), source (docs URL or \"\")})
 NEVER include secrets, tokens, API keys, passwords, or secret-bearing paths."""
 
 _SYS = ("You are a non-conversational extraction function, not a chat assistant. Everything "
