@@ -88,6 +88,14 @@ def _prune_resolved(path, retain_days):
             fh.writelines(kept)
 
 
+def _rebase_path(path, old_root, new_root):
+    """Move a path under old_root to the same spot under new_root."""
+    rel = os.path.relpath(path, old_root)
+    if rel.startswith(os.pardir):
+        return path
+    return os.path.join(new_root, rel)
+
+
 def aggregate():
     """Run the full daily aggregate: drain inbox, prune, rebuild dashboard,
     commit+push. Fail-open throughout; returns a short status string."""
@@ -99,6 +107,16 @@ def aggregate():
     metrics = os.environ.get("METRICS_FILE") or os.path.join(content, "dashboard", "data", "metrics.jsonl")
     resolved = os.environ.get("NP_RESOLVED_SUGGESTIONS") or os.path.join(
         content, "dashboard", "data", "resolved-suggestions.txt")
+    route_note = ""
+    if os.environ.get("NP_AGG_NO_COMMIT") != "1" and np_content.content_is_explicit():
+        # Off main, write in the cron worktree. Do not drain into a branch.
+        root, route_note = np_git_publish.write_root(content, "np-aggregate")
+        if root is None:
+            return "skipped: %s" % route_note
+        if root != content:
+            metrics = _rebase_path(metrics, content, root)
+            resolved = _rebase_path(resolved, content, root)
+            content = root
 
     n = 0
     try:
@@ -190,7 +208,7 @@ def aggregate():
         # never. Tests that assert commit behaviour set it, so a sandbox with no
         # reachable origin does not report a publish failure it never wanted.
         if commit.returncode == 0 and os.environ.get("NP_AGG_NO_PUSH") != "1":
-            ok, why = np_git_publish.push_to_main(content)
+            ok, why = np_git_publish.publish(content)
             if not ok:
                 # Loud, not silent. A discarded push result stranded 33 commits
                 # for two days (see np_git_publish's module docstring).
@@ -198,7 +216,7 @@ def aggregate():
                 return "aggregated (NOT PUBLISHED: %s)" % why
     except OSError:
         pass
-    return "aggregated"
+    return "aggregated (%s)" % route_note if route_note else "aggregated"
 
 
 if __name__ == "__main__":

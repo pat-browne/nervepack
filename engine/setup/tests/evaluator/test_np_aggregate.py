@@ -215,5 +215,31 @@ class TestNpAggregate(unittest.TestCase):
         self.assertNotIn("other.txt", log)
 
 
+class TestAggregateOffMain(TestNpAggregate):
+    """Live checkout on a feature branch: the batch reaches origin/main only."""
+
+    def test_off_main_commits_via_cron_worktree(self):
+        g = lambda *a: subprocess.run(["git", "-C", self.repo] + list(a), check=True,
+                                      capture_output=True, text=True).stdout.strip()
+        bare = os.path.join(self.tmp, "origin.git")
+        subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
+        g("branch", "-M", "main")
+        g("remote", "add", "origin", bare)
+        g("push", "-q", "origin", "main")
+        g("switch", "-q", "-c", "feat")
+        feat = g("rev-parse", "feat")
+        self._write_inbox_record()
+        with mock.patch.dict(os.environ, {
+                "NP_CRON_WORKTREES": os.path.join(self.tmp, "wts"),
+                "NP_AGG_NO_PUSH": "0"}):
+            status = np_aggregate.aggregate()
+        self.assertIn("cron worktree", status)
+        self.assertEqual(g("rev-parse", "feat"), feat)
+        self.assertFalse(os.path.exists(self.metrics))
+        log = subprocess.run(["git", "-C", bare, "log", "-1", "--format=%s", "main"],
+                             capture_output=True, text=True).stdout
+        self.assertIn("evaluator(metrics): daily batch", log)
+
+
 if __name__ == "__main__":
     unittest.main()

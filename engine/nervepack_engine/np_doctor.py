@@ -113,6 +113,8 @@ def _core_check(cap_id, np):
         return "PASS (inferred: %d layer(s), %d open question(s))" % (inferred, pending)
     if cap_id == "skill-listing":
         return _skill_listing_check()
+    if cap_id == "cron-branch":
+        return _cron_branch_check(np)
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call
@@ -337,6 +339,24 @@ def _core_check(cap_id, np):
         return ("WARN (resume-pointer hooks not registered in %s — run: "
                 "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
     return "SKIP"
+
+
+def _cron_branch_check(np):
+    """SHOULD: WARN per checkout the crons commit into that is off main."""
+    try:
+        sys.path.insert(0, os.path.join(np, "engine", "setup"))
+        import np_git_publish
+        repos = [np] + [r for r in np_content.content_layers() if r and r != np]
+        off = []
+        for r in repos:
+            head = np_git_publish.off_main(r)
+            if head is not None:
+                off.append("%s on '%s'" % (r, head))
+    except Exception:
+        return "PASS (could not inspect)"
+    if not off:
+        return "PASS"
+    return "WARN (off main, crons divert or refuse: %s)" % "; ".join(off)
 
 
 def _skill_listing_check():

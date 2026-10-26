@@ -213,6 +213,13 @@ def _split_one(skill, roots, base_prompt, split_kb):
     md = os.path.join(skill_dir, "SKILL.md")
     if not os.path.isfile(md):
         return None
+    head = np_git_publish.off_main(repo_root)
+    if head is not None:
+        # The agent edits in place, so it cannot move to a cron worktree. Refuse.
+        msg = np_git_publish.off_main_message("skill-maintain", repo_root, head)
+        _log("REFUSED split of %s: %s" % (skill, msg))
+        print("np-skill-maintain: %s" % msg, file=sys.stderr)
+        return None
     orig = _snapshot(repo_root, skill, md)
     try:
         prompt = ("%s\n\nTARGET SKILL DIRECTORY: skills/%s\n"
