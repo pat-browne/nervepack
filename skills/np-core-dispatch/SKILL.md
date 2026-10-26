@@ -31,13 +31,17 @@ continuation channel that isn't there.
    the repo's configured git identity (never a bot) with **no LLM-attribution trailer**, validate-don't-assume, redact secrets
    (pull fresh via [[np-env-secrets-refresh]] — never inline them). Tell it to STOP and
    report on a dirty/diverged tree rather than force anything.
+   **Paste the prime and capture blocks** from references/nervepack-context.md into
+   every brief: the agent recalls related nervepack context first, and saves
+   learnings at each milestone, so a stall or exit loses nothing.
 4. **Pick the lane.** Foreground when you want to review + relay the result this turn;
    background for long autonomous jobs that should notify on completion. **Always set the
    model:** a dispatched agent never inherits yours. The rule and tiers are in
    [[np-flow-orchestrate]] § Worker models.
 5. **Verify the result yourself.** Treat the agent's report as a claim — independently
    re-check the key invariants (tree clean, tests/doctor green, nothing pushed public)
-   before you trust "done."
+   before you trust "done." No `Captured:` line in the report means the agent never
+   captured: run `/np-core-capture-learning` from its report before you move on.
 6. **Run a retrospective before calling it done.** After verification, ask: what did the
    dispatched agent (or you, supervising) assume that turned out wrong, and what corrected
    it? Capture silent mid-run corrections (a wrong guessed path, a stale checkout, a bad
