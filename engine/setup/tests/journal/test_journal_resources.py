@@ -235,7 +235,13 @@ class TestDrain(JournalBase):
         for f in sorted(os.listdir(cdir)):
             if f.endswith(".jsonl"):
                 with open(os.path.join(cdir, f), encoding="utf-8") as fh:
-                    out += [json.loads(x) for x in fh]
+                    for x in fh:
+                        try:
+                            r = json.loads(x)
+                        except ValueError:
+                            continue
+                        if isinstance(r, dict) and isinstance(r.get("id"), str):
+                            out.append(r)
         return out
 
     def test_drain_writes_month_file_and_index(self):
@@ -248,7 +254,7 @@ class TestDrain(JournalBase):
             idx = fh.read()
         self.assertIn("## hostname", idx)
         self.assertIn("## ip", idx)
-        self.assertIn("`api.example.com` | public api | repo-a", idx)
+        self.assertIn("| api.example.com | public api | repo-a", idx)
         self.assertEqual(os.listdir(os.environ["NP_RESOURCES_INBOX"]), [])
 
     def test_dedup_updates_last_seen_and_keeps_first(self):
@@ -286,6 +292,49 @@ class TestDrain(JournalBase):
             fh.write(json.dumps({"id": GHP_TOKEN, "type": "url"}) + "\n")
         np_resources.drain()
         self.assertEqual(self._catalog(), [])
+
+    def test_malformed_catalog_rows_are_skipped_not_fatal(self):
+        cdir = np_resources.catalog_dir()
+        os.makedirs(cdir)
+        good = {"id": "keep.example.com", "type": "hostname", "purpose": "", "first_seen": "2020-01-01T00:00:00Z",
+                "last_seen": "2020-01-01T00:00:00Z", "session": "o", "repo": "r", "seen": 1}
+        bad = [
+            "not json at all",
+            json.dumps({"id": "no-first-seen.example.com", "type": "hostname", "seen": "x"}),
+            json.dumps({"id": GHP_TOKEN, "type": "url"}),
+            json.dumps([1, 2]),
+            json.dumps({"id": 5}),
+        ]
+        with open(os.path.join(cdir, "2020-01.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(bad + [json.dumps(good)]) + "\n")
+        self._stage("new.example.com")
+        with mock.patch.dict(os.environ, {"NP_RESOURCES_LOG": os.path.join(self.tmp, "r.log")}):
+            self.assertEqual(np_resources.drain(), 1)
+        got = set(np_resources._load_catalog(np_resources.catalog_dir()))
+        self.assertEqual(got, {"keep.example.com", "new.example.com"})
+        with open(os.path.join(self.tmp, "r.log"), encoding="utf-8") as fh:
+            self.assertIn("skipped 5 malformed", fh.read())
+
+    def test_row_missing_first_seen_does_not_abort_merge(self):
+        cdir = np_resources.catalog_dir()
+        os.makedirs(cdir)
+        with open(os.path.join(cdir, "2020-01.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"id": "old.example.com", "type": "hostname"}) + "\n")
+        self._stage("new.example.com")
+        self.assertEqual(np_resources.drain(), 1)
+        self.assertEqual(len(self._catalog()), 2)
+
+    def test_index_escapes_pipes_backticks_and_markdown(self):
+        self._stage("api.example.com", purpose="a|b `code` *bold* [x](y) <b>\nline2")
+        np_resources.drain()
+        with open(os.path.join(np_resources.catalog_dir(), "INDEX.md"), encoding="utf-8") as fh:
+            idx = fh.read()
+        row = [ln for ln in idx.splitlines() if ln.startswith("| api.example.com")][0]
+        self.assertIn("a\\|b \\`code\\`", row)
+        self.assertNotIn("`code`", row.replace("\\`", ""))
+        self.assertIn("\\*bold\\*", row)
+        self.assertIn("\\<b\\>", row)
+        self.assertEqual(len(row.split(" | ")), 4)
 
     def test_drain_with_empty_inbox_is_noop(self):
         self.assertEqual(np_resources.drain(), 0)

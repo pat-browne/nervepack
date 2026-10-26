@@ -164,8 +164,32 @@ def catalog_dir():
     return os.path.join(root, "memory", "resources") if root else ""
 
 
+def _valid_record(r):
+    """Same safety check as new records, plus shape. Coerces fields to text."""
+    if not isinstance(r, dict) or not isinstance(r.get("id"), str) or not _safe(r["id"]):
+        return False
+    for k in ("type", "purpose", "repo", "first_seen", "last_seen", "session"):
+        if not isinstance(r.get(k, ""), str):
+            return False
+    if not isinstance(r.get("seen", 1), int) or isinstance(r.get("seen", 1), bool):
+        return False
+    purpose = r.get("purpose") or ""
+    return not purpose or (len(purpose) <= MAX_ID and _safe(purpose))
+
+
+def _log(msg):
+    try:
+        path = os.environ.get("NP_RESOURCES_LOG") or np_dirs.cache_path("resources-drain.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s resources: %s\n" % (_now(), msg))
+    except OSError:
+        pass
+
+
 def _load_catalog(cdir):
-    recs = {}
+    """Return {id: (filename, record)}. Malformed or unsafe rows are skipped and counted."""
+    recs, skipped = {}, 0
     try:
         names = sorted(n for n in os.listdir(cdir) if re.fullmatch(r"\d{4}-\d{2}\.jsonl", n))
     except OSError:
@@ -174,14 +198,21 @@ def _load_catalog(cdir):
         try:
             with open(os.path.join(cdir, name), encoding="utf-8") as fh:
                 for line in fh:
+                    if not line.strip():
+                        continue
                     try:
                         r = json.loads(line)
                     except ValueError:
+                        skipped += 1
                         continue
-                    if isinstance(r, dict) and r.get("id"):
+                    if _valid_record(r):
                         recs[r["id"]] = (name, r)
-        except OSError:
-            continue
+                    else:
+                        skipped += 1
+        except (OSError, UnicodeDecodeError):
+            skipped += 1
+    if skipped:
+        _log("skipped %d malformed catalog row(s) in %s" % (skipped, cdir))
     return recs
 
 
@@ -192,8 +223,12 @@ def _write_atomic(path, text):
     os.replace(tmp, path)
 
 
+_MD_SPECIAL = re.compile(r"([\\`|*_<>\[\]#~!])")
+
+
 def _cell(s):
-    return (s or "").replace("|", "\\|").replace("\n", " ")
+    """Escape markdown control characters so a value cannot break the table."""
+    return _MD_SPECIAL.sub(r"\\\1", " ".join(str(s or "").split()))
 
 
 def render_index(records):
@@ -204,8 +239,8 @@ def render_index(records):
            "Identifiers seen in sessions. Names and addresses only, never secret values.", ""]
     for typ in sorted(by_type):
         out += ["## %s" % typ, "", "| identifier | purpose | repo | last seen |", "|---|---|---|---|"]
-        for r in sorted(by_type[typ], key=lambda x: x["id"]):
-            out.append("| `%s` | %s | %s | %s |" % (_cell(r["id"]), _cell(r.get("purpose")),
+        for r in sorted(by_type[typ], key=lambda x: x.get("id", "")):
+            out.append("| %s | %s | %s | %s |" % (_cell(r["id"]), _cell(r.get("purpose")),
                                                     _cell(r.get("repo")), (r.get("last_seen") or "")[:10]))
         out.append("")
     return "\n".join(out) + "\n"
@@ -246,7 +281,7 @@ def drain():
                     if ident in recs:
                         fname, r = recs[ident]
                         r["last_seen"] = max(r.get("last_seen") or "", ts)
-                        r["seen"] = int(r.get("seen") or 1) + 1
+                        r["seen"] = r.get("seen", 1) + 1
                         if not r.get("purpose") and n.get("purpose"):
                             r["purpose"] = n["purpose"]
                     else:
@@ -257,7 +292,7 @@ def drain():
                                                "repo": n.get("repo") or "", "seen": 1})
                     dirty.add(fname)
         for fname in dirty:
-            rows = sorted((r for fn, r in recs.values() if fn == fname), key=lambda r: r["first_seen"])
+            rows = sorted((r for fn, r in recs.values() if fn == fname), key=lambda r: r.get("first_seen", ""))
             _write_atomic(os.path.join(cdir, fname),
                           "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n"
                                   for r in rows))
