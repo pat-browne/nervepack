@@ -60,6 +60,8 @@ PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-revie
 PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-review
 # --- 54: performance evaluator ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook evaluator &
+# --- 62b: session claims release (before the flush row, which stays last) ---
+SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook claim-hook end
 # --- 55: promotion flush (LAST SessionEnd row -- see header) ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook session-flush
 # --- 56: back-capture sweep (reliable capture path) ---
@@ -73,6 +75,8 @@ UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook security-
 # --- 61: resume pointer ---
 SessionStart||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-sessionstart &
 UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook resume-recall
+# --- 62: session claims (prompt surfaces who else is live) ---
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook claim-hook prompt
 # --- 63: open artifact on write (Write-scoped) ---
 PostToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook open-artifact
 # --- 63b: post-ship capture (Bash-scoped). After a successful merge or deploy,

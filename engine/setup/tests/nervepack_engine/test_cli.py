@@ -317,6 +317,72 @@ class TestBackcaptureSweepEndToEnd(unittest.TestCase):
             self.assertIn(sid, lines[0])
 
 
+class TestClaimCommand(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = os.path.realpath(tmp.name)
+        env = mock.patch.dict(os.environ, {
+            "HOME": self.tmp, "XDG_CACHE_HOME": os.path.join(self.tmp, "cache"),
+            "NP_TOGGLES_LOCAL": os.path.join(self.tmp, "toggles.local"),
+            "NERVEPACK_CLI_LOG": os.path.join(self.tmp, "cli.log")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.makedirs(self.repo)
+        subprocess.run(["git", "-C", self.repo, "init", "-q"], check=True, capture_output=True)
+
+    def run_claim(self, *args):
+        from nervepack_engine import cli
+        out = io.StringIO()
+        with mock.patch.object(sys, "stdout", out):
+            rc = cli.main(["claim"] + list(args))
+        self.assertEqual(rc, 0)
+        return out.getvalue()
+
+    def test_start_update_list_status_release_round_trip(self):
+        base = ["--session", "abcd1234-x", "--cwd", self.repo]
+        self.run_claim("start", "--intent", "build it", *base)
+        self.run_claim("update", "--paths", "src/,docs/", "--phase", "build", *base)
+        claims = json.loads(self.run_claim("list", "--json", "--cwd", self.repo))
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["intent"], "build it")
+        self.assertEqual(claims[0]["paths"], ["src/", "docs/"])
+        self.assertEqual(claims[0]["phase"], "build")
+        line = self.run_claim("list", "--cwd", self.repo)
+        self.assertTrue(line.startswith("abcd1234 "))
+        self.assertIn("src/,docs/", line)
+        self.assertEqual(self.run_claim("status", *base), "")
+        self.run_claim("release", *base)
+        self.assertEqual(json.loads(self.run_claim("list", "--json", "--cwd", self.repo)), [])
+
+    def test_status_with_another_claim_shows_rank(self):
+        self.run_claim("start", "--session", "first-1", "--cwd", self.repo)
+        for path in os.listdir(os.path.join(self.repo, ".git", "nervepack", "claims")):
+            full = os.path.join(self.repo, ".git", "nervepack", "claims", path)
+            with open(full, encoding="utf-8") as fh:
+                rec = json.load(fh)
+            rec["started"] = 1
+            with open(full, "w", encoding="utf-8") as fh:
+                json.dump(rec, fh)
+        self.run_claim("start", "--session", "second-2", "--cwd", self.repo)
+        out = self.run_claim("status", "--session", "second-2", "--cwd", self.repo)
+        self.assertIn("You are 2 in", out)
+
+    def test_no_session_id_prints_notice(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("CLAUDE_SESSION_ID", None)
+            out = self.run_claim("start", "--cwd", self.repo)
+        self.assertIn("claim: no session id", out)
+
+    def test_unknown_subcommand_and_bare_claim_exit_zero(self):
+        self.assertIn("unknown subcommand", self.run_claim("bogus", "--cwd", self.repo))
+        self.run_claim()
+
+    def test_non_git_cwd_exits_zero(self):
+        self.assertEqual(self.run_claim("list", "--cwd", self.tmp), "")
+
+
 class TestCronDispatch(unittest.TestCase):
     def test_unknown_cron_name_fails_open(self):
         from nervepack_engine import cli
