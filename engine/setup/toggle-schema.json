@@ -185,6 +185,16 @@
     "min": 1,
     "description": "Seconds of recent activity considered \"active\" when deciding whether to write a fresh resume note."
   },
+  "claims.stale_days": {
+    "type": "number",
+    "min": 1,
+    "description": "Days of heartbeat silence after which another session's claim is pruned."
+  },
+  "claims.heartbeat_s": {
+    "type": "number",
+    "min": 1,
+    "description": "Minimum seconds between claim heartbeat writes per session."
+  },
   "memory": {
     "description": "Episodic working-memory capture, the back-capture sweep, and local promotion into memory/episodic/."
   },
@@ -255,6 +265,9 @@
   },
   "resume": {
     "description": "Deterministic \"where we left off\" pointer \u2014 writes and recalls a resume note across sessions."
+  },
+  "claims": {
+    "description": "Session claims: one file per live session in the repo's shared metadata dir, so concurrent agents see each other's worktree, branch and paths."
   },
   "turn_gate.ui": {
     "type": "enum",
