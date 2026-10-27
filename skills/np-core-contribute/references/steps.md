@@ -59,18 +59,17 @@
    set to that worktree's own path, they rewrite the primary checkout
    with no warning.
 
-   To check, run `git -C "$REPO" status --short` after any regen, where
-   `$REPO` is the primary checkout, never the worktree (see the `$REPO`
-   note in `SKILL.md`).
+   First confirm `$REPO`'s value with `echo "$REPO"`. A subdirectory's
+   relative path can otherwise mislead. `$REPO` is the primary checkout,
+   never the worktree (see the `$REPO` note in `SKILL.md`).
+
+   To check, run `git -C "$REPO" status --short` after any regen.
 
    Also run `ls -l ~/.claude/skills/`. Confirm every symlink still points
    into `$REPO`, not the worktree.
 
    `INDEX.md` alone changing, with every symlink still pointing at `$REPO`,
    is the known failure.
-
-   First confirm `$REPO`'s value with `echo "$REPO"`. A subdirectory's
-   relative path can otherwise mislead.
 
    Revert it, in the primary checkout and never the worktree, with
    `git -C "$REPO" checkout -- INDEX.md` (this discards any uncommitted
