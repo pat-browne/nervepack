@@ -67,9 +67,14 @@
    into `$REPO`, not the worktree.
 
    `INDEX.md` alone changing, with every symlink still pointing at `$REPO`,
-   is the known failure. Revert it, in the primary checkout and never the
-   worktree, with `git -C "$REPO" checkout -- INDEX.md` (this discards any
-   uncommitted changes to that file).
+   is the known failure.
+
+   First confirm `$REPO`'s value with `echo "$REPO"`. A subdirectory's
+   relative path can otherwise mislead.
+
+   Revert it, in the primary checkout and never the worktree, with
+   `git -C "$REPO" checkout -- INDEX.md` (this discards any uncommitted
+   changes to that file).
 
    Anything beyond that is not this known case. That includes another file
    changed, or a symlink now pointing at the worktree.
