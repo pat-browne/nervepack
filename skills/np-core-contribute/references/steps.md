@@ -53,7 +53,8 @@
    A separate risk applies to any isolated contribution worktree. The raw
    `np_generate_index.py` and `np_link_skills.py` scripts, and `cli.py setup
    link-skills` itself, locate the repo from an argument, then `NP_DIR`,
-   then `NERVEPACK`, then the script file's own location. Never cwd.
+   then `NERVEPACK`, then the script file's own location. The current
+   working directory is never consulted.
 
    If you run these scripts from a worktree with none of those variables
    set to that worktree's own path, they rewrite the primary checkout
@@ -81,6 +82,9 @@
    For any of those, stop before reverting. Escalate to the user, naming
    the affected paths or symlinks and that the regen ran from a worktree.
    Include `git log --oneline -5` and the `git status --short` output.
+
+   Running unattended, with no user to escalate to: log the same line and
+   exit non-zero instead, per step 9's cron/backgrounded-hook pattern.
 
    From a worktree, set `NP_DIR` to that worktree's own absolute path
    first. For example: `NP_DIR=/path/to/worktree python3
