@@ -1,6 +1,6 @@
 ---
 name: np-flow-merge-gate
-description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet".
+description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a claims STOP on your branch at task start.
 ---
 
 # Merge gate — wait out concurrency, then merge on a clean diff
@@ -19,6 +19,19 @@ quiet, then gate on the diff**. It is the operational front-end to the
 - The git log/worktree changed under you mid-task (a ref moved, a commit vanished).
 - The user says "wait for the other branch to finish, then merge."
 - `cli.py claim status` says you are not first in, or lists another live claim.
+
+## A claims STOP at task start (not a merge)
+
+`np_claims.py` can flag a STOP before you've branched or committed anything:
+another live session already holds your worktree or branch, in any repo.
+This is a different moment than the waiter below.
+
+Default: start a new branch and worktree off the remote default branch.
+Don't ask first and don't work on the contested branch. Ask only if you
+can't tell the STOP's named session apart from stale state.
+
+When the spun-up work ships, remove that worktree and delete its branch
+if merged.
 
 ## The waiter
 
