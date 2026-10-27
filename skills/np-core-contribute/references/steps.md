@@ -55,24 +55,26 @@
    link-skills` itself, locate the repo from an argument, then `NP_DIR`,
    then `NERVEPACK`, then the script file's own location. Never cwd.
 
-   Run these scripts from a worktree with none of those variables set to
-   that worktree's own path. They then rewrite the primary checkout, with
-   no warning.
+   If you run these scripts from a worktree with none of those variables
+   set to that worktree's own path, they rewrite the primary checkout
+   with no warning.
 
-   To check, run `git -C "$REPO" status --short` after any regen. `$REPO`
-   is the primary checkout, per the `$REPO` note in `SKILL.md`.
+   To check, run `git -C "$REPO" status --short` after any regen, where
+   `$REPO` is the primary checkout, never the worktree (see the `$REPO`
+   note in `SKILL.md`).
 
    Also run `ls -l ~/.claude/skills/`. Confirm every symlink still points
    into `$REPO`, not the worktree.
 
    `INDEX.md` alone changing, with every symlink still pointing at `$REPO`,
    is the known failure. Revert it, in the primary checkout and never the
-   worktree, with `git -C "$REPO" checkout -- INDEX.md`.
+   worktree, with `git -C "$REPO" checkout -- INDEX.md` (this discards any
+   uncommitted changes to that file).
 
    Anything beyond that is not this known case. That includes another file
    changed, or a symlink now pointing at the worktree.
 
-   For any of those, stop before reverting. Escalate to a human, naming
+   For any of those, stop before reverting. Escalate to the user, naming
    the affected paths or symlinks and that the regen ran from a worktree.
 
    From a worktree, set `NP_DIR` to that worktree's own absolute path
