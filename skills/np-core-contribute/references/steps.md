@@ -50,17 +50,25 @@
    with the file (observed: a trim to get under budget landed after the regen, and the
    commit carried a stale count). Run it in the **primary checkout, never an engine
    worktree** — it would repoint every host skill symlink into the worktree.
-   A separate risk applies to any isolated contribution worktree. The raw
+   A separate risk applies to any isolated contribution worktree: the raw
    `np_generate_index.py` and `np_link_skills.py` scripts, and `cli.py setup
    link-skills` itself, locate the repo from an argument, then `NP_DIR`, then
-   `NERVEPACK`, then the script file's own location. They never use cwd. Run
-   from a worktree with none of those pointing at it, they rewrite the primary
-   checkout with no warning. To check, run `git -C ~/Code/nervepack status
-   --short` after any regen. Only `INDEX.md` (and host skill symlinks, outside
-   the repo) can change. Revert in the primary checkout, not the worktree:
-   `git -C ~/Code/nervepack checkout -- INDEX.md`. From a worktree, either set
-   `NP_DIR` to the worktree for `generate-index` only, or hand-edit the new
-   skill's row. Rows sit in alphabetical order in a pipe table:
+   `NERVEPACK`, then the script file's own location, never cwd. Run from a
+   worktree with none of those pointing at it, and they rewrite the primary
+   checkout with no warning.
+
+   To check, run `git -C "$REPO" status --short` after any regen. Only
+   `INDEX.md` and host skill symlinks outside the repo should show changed.
+   Anything else means abort and escalate, the worktree may have overwritten
+   files beyond `INDEX.md`.
+
+   Revert in the primary checkout, not the worktree, with
+   `git -C "$REPO" checkout -- INDEX.md`.
+
+   From a worktree, set `NP_DIR` to the worktree's full path first, for
+   example `NP_DIR=$WORKTREE python3 engine/nervepack_engine/cli.py setup
+   generate-index`, or hand-edit the new skill's row instead. Rows sit in
+   alphabetical order:
    `| [<name>](skills/<name>/SKILL.md) | <wc -l count> | <frontmatter description> |`.
    It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
    uncommitted edits, check `git -C "$REPO" diff -- INDEX.md` and expect only your own
