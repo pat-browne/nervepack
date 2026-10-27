@@ -1,6 +1,6 @@
 ---
 name: np-flow-merge-gate
-description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a claims STOP on your branch at task start.
+description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a `claim status` STOP at task start, when another live session already holds your branch or worktree.
 ---
 
 # Merge gate — wait out concurrency, then merge on a clean diff
@@ -26,12 +26,14 @@ quiet, then gate on the diff**. It is the operational front-end to the
 another live session already holds your worktree or branch, in any repo.
 This is a different moment than the waiter below.
 
-Default: start a new branch and worktree off the remote default branch.
-Don't ask first and don't work on the contested branch. Ask only if you
-can't tell the STOP's named session apart from stale state.
+Default: without asking, start a new branch and worktree off the remote
+default branch, and don't work on the contested branch. Prompt the user only
+if you can't tell whether the session the STOP names is live or stale (check
+that its claim is recent and its worktree still exists).
 
-When the spun-up work ships, remove that worktree and delete its branch
-if merged.
+When the spun-up work ships, remove that worktree and delete its branch once
+it is merged. If the branch isn't merged yet, leave both in place; if
+removal fails, report it rather than forcing.
 
 ## The waiter
 
