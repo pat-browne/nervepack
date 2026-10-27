@@ -40,6 +40,11 @@ identical samples count as quiet. Run it **after** you've finished your own comm
 Run it in the background and let the host re-invoke you on exit — a 30-minute block
 shouldn't hold the foreground.
 
+In Claude Code, pass the Bash tool's own `run_in_background: true` on this
+bare command instead of self-backgrounding. A `nohup ... &` wrapper finishes
+the launcher right away, so the harness reports completion on the wrapper,
+not on the real `merge-wait` process, and the log comes back empty.
+
 ## Exit codes → what you do
 
 | Exit | Meaning | Action |
