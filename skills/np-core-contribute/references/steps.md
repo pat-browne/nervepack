@@ -81,13 +81,14 @@
 
    For any of those, stop before reverting. Escalate to the user, naming
    the affected paths or symlinks and that the regen ran from a worktree.
+   Include `git log --oneline -5` and the `git status --short` output.
 
    From a worktree, set `NP_DIR` to that worktree's own absolute path
    first. For example: `NP_DIR=/path/to/worktree python3
    engine/nervepack_engine/cli.py setup generate-index`.
 
-   Or hand-edit the new skill's row instead. Rows sit in alphabetical
-   order:
+   If you're adding a new skill, hand-edit its row instead. Rows sit in
+   alphabetical order:
    `| [<name>](skills/<name>/SKILL.md) | <line-count> | <frontmatter description> |`.
    `<line-count>` is the output of `wc -l` on that skill's `SKILL.md`.
    It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
