@@ -83,8 +83,9 @@
    the affected paths or symlinks and that the regen ran from a worktree.
    Include `git log --oneline -5` and the `git status --short` output.
 
-   Running unattended, with no user to escalate to: log the same line and
-   exit non-zero instead, per step 9's cron/backgrounded-hook pattern.
+   Running unattended, with no user to escalate to: log the affected paths
+   or symlinks and the regen-from-a-worktree cause to the job's log, then
+   exit non-zero so the job is marked failed.
 
    From a worktree, set `NP_DIR` to that worktree's own absolute path
    first. For example: `NP_DIR=/path/to/worktree python3
