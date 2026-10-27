@@ -50,6 +50,13 @@
    with the file (observed: a trim to get under budget landed after the regen, and the
    commit carried a stale count). Run it in the **primary checkout, never an engine
    worktree** — it would repoint every host skill symlink into the worktree.
+   This also holds for any isolated contribution worktree: the raw
+   `np_generate_index.py` and `np_link_skills.py` scripts, and `cli.py setup
+   link-skills` itself, hardcode the live `~/Code` checkouts and ignore cwd,
+   so running them there silently rewrites the primary checkout instead
+   (revert cleanly with `git checkout -- INDEX.md`). From a worktree,
+   hand-edit the new skill's `INDEX.md` row instead, matching the existing
+   columns: name, path, `wc -l` line count, frontmatter description.
    It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
    uncommitted edits, check `git -C "$REPO" diff -- INDEX.md` and expect only your own
    rows to move. If it carries someone else's, leave `INDEX.md` unstaged and say so.
