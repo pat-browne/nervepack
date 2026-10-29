@@ -34,6 +34,16 @@ class TestScrubCredentials(unittest.TestCase):
     def test_basic_auth_header(self):
         self.assertNotIn("Ym9iOmh1bnRlcjI", s("Authorization: Basic Ym9iOmh1bnRlcjI="))
 
+    def test_basic_prose_untouched(self):
+        for text in ("basic configuration", "Basic understanding of auth"):
+            self.assertEqual(s(text), text)
+        self.assertNotIn("Ym9iOmh1bnRlcjI", s("curl -H 'Authorization: Basic Ym9iOmh1bnRlcjI=' x"))
+
+    def test_quoted_value_with_space(self):
+        out = s('x --token "abc def" y')
+        self.assertNotIn("def", out)
+        self.assertTrue(out.endswith(" y"))
+
     def test_existing_rules_still_apply(self):
         self.assertIn("REDACTED", s("token=abcdefghijk"))
 

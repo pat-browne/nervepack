@@ -47,11 +47,12 @@ _RULES = [
     # --password hunter2, --password=hunter2, --token "abc def". Longer flag names such as
     # --token-file and --password-stdin do not match: the name must end at = or space.
     (rb'(--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret))'
-     rb'(=|\s+)["\']?[^\s"\']+["\']?', rb'\1\2[REDACTED-SECRET]'),
+     rb'(=|\s+)(?:"[^"]*"|\'[^\']*\'|[^\s"\']+)', rb'\1\2[REDACTED-SECRET]'),
     # curl -u user:pw, --user user:pw
     (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:\S+', rb'\1[REDACTED-SECRET]'),
-    # Authorization: Basic <base64>
-    (rb'[Bb]asic\s+[A-Za-z0-9+/]{8,}={0,2}', rb'Basic [REDACTED-SECRET]'),
+    # Authorization: Basic <base64> (anchored so prose like "basic configuration" is untouched)
+    (rb'([Aa]uthorization["\']?\s*[:=]\s*["\']?)[Bb]asic\s+[A-Za-z0-9+/]{8,}={0,2}',
+     rb'\1Basic [REDACTED-SECRET]'),
 ]
 _COMPILED = [(re.compile(p), r) for p, r in _RULES]
 
