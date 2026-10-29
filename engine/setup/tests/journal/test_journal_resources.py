@@ -387,6 +387,7 @@ class TestCrawlTrust(JournalBase):
     def test_write_guard_covers_crawl_items(self):
         self._crawl("sid-a", wins="backoff fixed the sync loop")
         rec = self._crawl("sid-b", wins="backoff fixed the sync loop")
+        # The same win from sid-a is already in the undrained inbox, so the guard drops it.
         self.assertEqual(rec["crawl_strategies"], [])
 
 

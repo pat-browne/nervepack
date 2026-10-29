@@ -500,6 +500,7 @@ def _episodic_record(sid, cwd, blocks):
             n_dropped, "y" if n_dropped == 1 else "ies", _safe(sid),
             ", ".join("%s=%d" % kv for kv in sorted(drops.items()))))
     if not (struggles or wins):
+        _log("crawl: no safe struggles or wins to stage for %s" % _safe(sid))
         return None
     repo = ""
     for b in blocks:
