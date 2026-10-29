@@ -82,7 +82,8 @@ def was_captured(payload):
 
 
 _JUNK = {"", "n a", "na", "none", "null", "todo", "tbd", "unknown"}  # normalized form
-_CORE = {"struggles": ("symptom", "fix"), "strategies": ("title", "content")}
+_CORE = {"struggles": ("symptom", "fix"), "strategies": ("title", "content"),
+         "crawl_struggles": ("symptom", "fix"), "crawl_strategies": ("title", "content")}
 _MIN_CHARS = 20
 _MAX_CHARS = 2000
 

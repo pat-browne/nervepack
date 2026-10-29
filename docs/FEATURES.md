@@ -299,7 +299,13 @@ succeeds and the next model step sees the prompt. It runs
 
 - Before the backcapture sweep or the 30-day TTL deletes a journal,
   `np_journal.crawl` reads it.
-- Struggles and wins go to the episodic inbox, so lessons distill them.
+- Struggles and wins go to the episodic inbox as `mode: journal-crawl` records.
+- Their items sit under `crawl_struggles` and `crawl_strategies`, never `struggles`.
+- The crawl treats journal text as untrusted. It keeps 5 items per kind at 200 chars each.
+- It drops entries with a URL, code, a command, hidden characters, or an agent-directed
+  instruction, and logs the count.
+- `episodic-maintain` uses them as corroboration only. They never create a lesson
+  alone and never feed `enforce`.
 - Resources go to `~/.cache/nervepack/resources-inbox/`.
 - `episodic-maintain` drains that inbox in Python into the overlay catalog
   `memory/resources/<YYYY-MM>.jsonl`, deduped by identifier. Each row carries
@@ -319,7 +325,7 @@ succeeds and the next model step sees the prompt. It runs
 `np_resources.py`, crawl in `backcapture_sweep.py`, drain in `np_agentic_cron.py`.
 Toggle `journal` (`model`, `ttl_days`, `recall_sources`, `crawl`). Governing
 records: `change-specs/worktree-feat+session-journal-and-clear-capture.md`,
-`change-specs/feat-journal-resources.md`.
+`change-specs/feat-journal-resources.md`, `change-specs/fix-journal-crawl-trust.md`.
 
 ## Spec-review gate — confirm the doc was read before implementation starts
 
