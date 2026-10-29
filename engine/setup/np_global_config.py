@@ -191,6 +191,19 @@ def _canon(value):
     return json.dumps(value, sort_keys=True)
 
 
+def _source_problem(entry):
+    """Why a marketplace entry has no usable source, for the doctor line."""
+    src = entry.get("source") if isinstance(entry, dict) else None
+    if not isinstance(src, dict):
+        return "no source object"
+    if not isinstance(src.get("source"), str) or not src.get("source"):
+        return "source.source (the kind) is missing or not a string"
+    where = [k for k in ("repo", "url", "path") if k in src]
+    if len(where) != 1:
+        return "needs exactly one of repo, url, path, found %s" % (where or "none")
+    return "%s is empty or not a string" % where[0]
+
+
 def _source_line(entry):
     """Trust line: kind:value for a plain source, else canonical JSON. "" if unusable."""
     src = entry.get("source") if isinstance(entry, dict) else None
@@ -240,7 +253,7 @@ def _apply_trust(allowed, current):
             lines_for[name] = line
             if not line:
                 skipped.append(("marketplace %s" % name,
-                                "rejected: ambiguous or unexpected source keys"))
+                                "rejected: %s" % _source_problem(entry)))
             elif name in local and _canon(local[name]) == _canon(entry):
                 ok[name] = entry
             elif line in lines:
