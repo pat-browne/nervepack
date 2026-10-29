@@ -184,23 +184,25 @@ def _trusted_lines():
     return {r for r in rows if r and not r.startswith("#")}
 
 
-def _source_parts(entry):
-    """(kind, value) of a marketplace entry's source, or ("", "")."""
-    src = entry.get("source") if isinstance(entry, dict) else None
-    if not isinstance(src, dict):
-        return "", ""
-    value = src.get("repo") or src.get("url") or src.get("path") or ""
-    kind = src.get("source") or ""
-    return (kind, value) if isinstance(kind, str) and isinstance(value, str) else ("", "")
+def _canon(value):
+    return json.dumps(value, sort_keys=True)
 
 
 def _source_line(entry):
-    """The line to add to the trust file for this marketplace entry."""
-    kind, value = _source_parts(entry)
-    if kind and value:
+    """Trust line: kind:value for a plain source, else canonical JSON. "" if unusable."""
+    src = entry.get("source") if isinstance(entry, dict) else None
+    if not isinstance(src, dict):
+        return ""
+    kind = src.get("source")
+    where = [k for k in ("repo", "url", "path") if k in src]
+    if not isinstance(kind, str) or not kind or len(where) != 1:
+        return ""
+    value = src[where[0]]
+    if not isinstance(value, str) or not value:
+        return ""
+    if set(src) == {"source", where[0]}:
         return "%s:%s" % (kind, value)
-    return json.dumps(entry.get("source") if isinstance(entry, dict) else entry,
-                      sort_keys=True)
+    return _canon(src)
 
 
 def _known_marketplace_names():
@@ -216,32 +218,33 @@ def _known_marketplace_names():
 
 
 def _apply_trust(allowed, current):
-    """Split the overlay settings into (kept, skipped).
-
-    Marketplaces and plugins load code, so they pass only when trusted. A
-    marketplace is trusted when this machine already has it with the same
-    source, or its source or name is a line in the trust file. A plugin is
-    trusted when its @marketplace is. Each skipped item is (label, line).
-    """
+    """Return (kept, skipped). Skipped is (label, advice). Never trusts by name."""
     lines = _trusted_lines()
     local = current.get("extraKnownMarketplaces")
     local = local if isinstance(local, dict) else {}
-    names = set(local) | _known_marketplace_names() | lines
+    names = set(local) | _known_marketplace_names()
     kept, skipped = dict(allowed), []
     markets = allowed.get("extraKnownMarketplaces")
     if markets is not None and not isinstance(markets, dict):
         kept.pop("extraKnownMarketplaces")
         markets = None
+    lines_for = {}
     if markets is not None:
         ok = {}
         for name, entry in markets.items():
-            _, value = _source_parts(entry)
-            same = name in local and _source_line(local[name]) == _source_line(entry)
-            if same or {name, value, _source_line(entry)} & lines:
+            line = _source_line(entry)
+            lines_for[name] = line
+            if not line:
+                skipped.append(("marketplace %s" % name,
+                                "rejected: ambiguous or unexpected source keys"))
+            elif name in local and _canon(local[name]) == _canon(entry):
+                ok[name] = entry
+            elif line in lines:
                 ok[name] = entry
                 names.add(name)
             else:
-                skipped.append(("marketplace %s" % name, _source_line(entry)))
+                skipped.append(("marketplace %s" % name,
+                                "untrusted: add '%s' to %s" % (line, trust_file())))
         if ok:
             kept["extraKnownMarketplaces"] = ok
         else:
@@ -256,10 +259,12 @@ def _apply_trust(allowed, current):
             market = key.rsplit("@", 1)[1] if "@" in key else ""
             if market and market in names:
                 ok[key] = flag
+            elif lines_for.get(market):
+                skipped.append(("plugin %s" % key, "untrusted: add '%s' to %s"
+                                % (lines_for[market], trust_file())))
             else:
-                entry = (markets or {}).get(market)
-                line = _source_line(entry) if entry else (market or key)
-                skipped.append(("plugin %s" % key, line))
+                skipped.append(("plugin %s" % key, "marketplace %s is not "
+                                "trusted or defined on this machine" % (market or "?")))
         if ok:
             kept["enabledPlugins"] = ok
         else:
@@ -330,8 +335,8 @@ def _sync_settings(state):
         _err("settings %s unreadable, left untouched: %s" % (path, exc))
         return []
     allowed, skipped = _apply_trust(allowed, current)
-    for label, line in skipped:
-        _err("skipped %s: untrusted. Add '%s' to %s" % (label, line, trust_file()))
+    for label, advice in skipped:
+        _err("skipped %s: %s" % (label, advice))
     if not allowed:
         return []
     applied = dict(state.get("settings") or {})
@@ -422,8 +427,8 @@ def drift():
         except (OSError, ValueError):
             return found + ["settings.json unreadable"]
         allowed, skipped = _apply_trust(allowed, current)
-        for label, line in skipped:
-            found.append("%s untrusted: add '%s' to %s" % (label, line, trust_file()))
+        for label, advice in skipped:
+            found.append("%s %s" % (label, advice))
         for key, value in allowed.items():
             if key not in current or _merge(current[key], value) != current[key]:
                 found.append("setting %s differs" % key)

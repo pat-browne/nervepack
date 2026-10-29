@@ -50,7 +50,7 @@ the base keys plus the file's own `allowlist`, and the overlay wins on those key
 Marketplaces and plugins load code, so they apply only when trusted.
 
 A marketplace is trusted when the machine already has it with the same source.
-It is also trusted when its source or name is a line in the per-machine,
+It is also trusted when its source line is in the per-machine,
 never-synced `~/.config/nervepack/trusted-marketplaces`. A plugin is trusted
 when its `@marketplace` is. The doctor lists each skipped item with the line to add.
 

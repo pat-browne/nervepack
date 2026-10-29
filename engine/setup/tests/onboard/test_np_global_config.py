@@ -72,6 +72,8 @@ class Base(unittest.TestCase):
         return out.getvalue(), err.getvalue()
 
     def host_settings(self):
+        if not os.path.exists(self.settings):
+            return {}
         return json.loads(_read(self.settings))
 
 
@@ -121,8 +123,8 @@ class Settings(Base):
         _write(self.settings, json.dumps({
             "hooks": {"Stop": []}, "permissions": {"allow": ["Bash(ls)"]},
             "env": {"A": "1"}, "model": "x", "theme": "light",
-            "enabledPlugins": {"local@m": True}}))
-        _write(os.environ["NP_TRUSTED_MARKETPLACES"], "m\n")
+            "enabledPlugins": {"local@m": True},
+            "extraKnownMarketplaces": {"m": {"source": {"source": "github", "repo": "a/m"}}}}))
         self.cfg(rules=None, settings={
             "theme": "dark", "skipWorkflowUsageWarning": True,
             "enabledPlugins": {"p@m": True}})
@@ -190,7 +192,7 @@ class Trust(Base):
             "enabledPlugins": {"p@mk": True}})
         _, err = self.apply()
         self.assertEqual(self.host_settings(), {"theme": "dark"})
-        self.assertIn("Add '%s'" % LINE, err)
+        self.assertIn("add '%s'" % LINE, err)
         self.assertIn("plugin p@mk", err)
 
     def test_trusted_source_line_applies_marketplace_and_plugin(self):
@@ -202,11 +204,45 @@ class Trust(Base):
         self.assertEqual(s["extraKnownMarketplaces"], MARKET)
         self.assertEqual(s["enabledPlugins"], {"p@mk": True})
 
-    def test_bare_repo_line_also_trusts(self):
-        self.trust("acme/market\n")
+    def test_bare_value_or_name_does_not_trust(self):
+        self.trust("acme/market\nmk\n")
         self.cfg(rules=None, settings={"extraKnownMarketplaces": MARKET})
         self.apply()
-        self.assertEqual(self.host_settings()["extraKnownMarketplaces"], MARKET)
+        self.assertNotIn("extraKnownMarketplaces", self.host_settings())
+
+    def test_same_value_with_a_different_kind_is_skipped(self):
+        self.trust(LINE + "\n")
+        other = {"mk": {"source": {"source": "url", "url": "acme/market"}}}
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": other})
+        self.apply()
+        self.assertNotIn("extraKnownMarketplaces", self.host_settings())
+
+    def test_same_name_with_a_different_repo_is_skipped(self):
+        self.trust(LINE + "\n")
+        other = {"mk": {"source": {"source": "github", "repo": "evil/market"}}}
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": other})
+        self.apply()
+        self.assertNotIn("extraKnownMarketplaces", self.host_settings())
+
+    def test_extra_field_source_needs_the_full_json_line(self):
+        src = {"source": "github", "repo": "acme/market", "ref": "evil"}
+        entry = {"mk": {"source": src}}
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": entry})
+        self.trust(LINE + "\n")
+        self.apply()
+        self.assertNotIn("extraKnownMarketplaces", self.host_settings())
+        self.trust(json.dumps(src, sort_keys=True) + "\n")
+        self.apply()
+        self.assertEqual(self.host_settings()["extraKnownMarketplaces"], entry)
+
+    def test_repo_and_url_together_is_rejected_and_reported(self):
+        src = {"source": "github", "repo": "acme/market", "url": "https://x/y"}
+        self.trust(LINE + "\n" + json.dumps(src, sort_keys=True) + "\n")
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": {"mk": {"source": src}}})
+        _, err = self.apply()
+        self.assertNotIn("extraKnownMarketplaces", self.host_settings())
+        self.assertIn("rejected", err)
+        self.assertIn("rejected", gc.doctor_status())
 
     def test_plugin_from_untrusted_marketplace_skipped_when_another_is_trusted(self):
         self.trust(LINE + "\n")
