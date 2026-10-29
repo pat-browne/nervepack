@@ -175,6 +175,87 @@ class NpSync(unittest.TestCase):
         self.assertNotIn("is not a git repo", out)
         self.assertIn("up to date", out)
 
+    # --- generated INDEX.md: sync discards regenerated rows, asks on anything else ---
+
+    _INDEX = ("# Index\n\n| Skill | Lines |\n|---|---|\n"
+              "| [a](a.md) | 10 |\n| [b](b.md) | 20 |\n")
+
+    def _seed_index(self, seed, clone):
+        """Commit a tracked INDEX.md on the remote and pull it into the clone."""
+        with open(os.path.join(seed, "INDEX.md"), "w") as fh:
+            fh.write(self._INDEX)
+        _git(seed, "add", "INDEX.md")
+        _git(seed, "commit", "-q", "-m", "index")
+        _git(seed, "push", "-q", "origin", "main")
+        _git(clone, "pull", "-q", "--ff-only")
+
+    def _edit_index(self, repo, old, new):
+        path = os.path.join(repo, "INDEX.md")
+        with open(path) as fh:
+            text = fh.read()
+        self.assertIn(old, text, "test setup bug: nothing to edit")
+        with open(path, "w") as fh:
+            fh.write(text.replace(old, new))
+
+    def _index_text(self, repo):
+        with open(os.path.join(repo, "INDEX.md")) as fh:
+            return fh.read()
+
+    def test_engine_behind_with_only_regenerated_index_rows_fast_forwards(self):
+        self._seed_index(self.seed, self.target)
+        self._edit_index(self.target, "| 10 |", "| 12 |")
+        self._advance_remote()
+        out = self._run("exit")
+        self.assertIn("fast-forwarded", out)
+        self.assertEqual(_git(self.target, "rev-parse", "HEAD").stdout.strip(),
+                         _git(self.target, "rev-parse", "origin/main").stdout.strip())
+        self.assertEqual(self._index_text(self.target), self._INDEX)
+
+    def test_engine_behind_with_index_prose_edit_is_skipped_and_kept(self):
+        self._seed_index(self.seed, self.target)
+        self._edit_index(self.target, "# Index", "# My Index")
+        self._advance_remote()
+        out = self._run("exit")
+        self.assertIn("SKIPPED (working tree dirty", out)
+        self.assertIn("INDEX.md", out)
+        self.assertIn("# My Index", self._index_text(self.target))
+
+    def test_engine_behind_with_index_rows_and_other_dirt_is_skipped_and_kept(self):
+        self._seed_index(self.seed, self.target)
+        self._edit_index(self.target, "| 10 |", "| 12 |")
+        with open(os.path.join(self.target, "dirty.txt"), "w") as fh:
+            fh.write("x")
+        self._advance_remote()
+        out = self._run("exit")
+        self.assertIn("SKIPPED (working tree dirty", out)
+        self.assertIn("| 12 |", self._index_text(self.target))
+
+    def test_engine_level_with_dirty_index_is_left_alone(self):
+        self._seed_index(self.seed, self.target)
+        self._edit_index(self.target, "| 10 |", "| 12 |")
+        out = self._run("exit")
+        self.assertIn("up to date with origin", out)
+        self.assertIn("| 12 |", self._index_text(self.target))
+
+    def test_content_behind_with_only_regenerated_index_rows_fast_forwards(self):
+        self._seed_index(self.content_seed, self.content_dir)
+        self._edit_index(self.content_dir, "| 20 |", "| 25 |")
+        self._advance_content_remote()
+        remote_tip = _git(self.content_seed, "rev-parse", "HEAD").stdout.strip()
+        self._run("exit", content_dir=self.content_dir)
+        self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), remote_tip)
+        self.assertEqual(self._index_text(self.content_dir), self._INDEX)
+
+    def test_content_behind_with_index_prose_edit_is_skipped_and_named(self):
+        self._seed_index(self.content_seed, self.content_dir)
+        self._edit_index(self.content_dir, "# Index", "# My Index")
+        self._advance_content_remote()
+        before = _git(self.content_dir, "rev-parse", "HEAD").stdout.strip()
+        _, err = self._run_full("exit", content_dir=self.content_dir)
+        self.assertIn("INDEX.md", err)
+        self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), before)
+        self.assertIn("# My Index", self._index_text(self.content_dir))
+
     def test_up_to_date_dirty(self):
         with open(os.path.join(self.target, "dirty.txt"), "w") as fh:
             fh.write("x")

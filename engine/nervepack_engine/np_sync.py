@@ -98,6 +98,29 @@ def _is_dirty(target):
     return tracked_dirty or bool(untracked)
 
 
+def _only_index_dirty(path):
+    """True when a tracked, modified INDEX.md is the repo's only local change."""
+    lines = _git(path, "status", "--porcelain").stdout.splitlines()
+    return len(lines) == 1 and lines[0][:2] == " M" and lines[0][3:] == "INDEX.md"
+
+
+def _index_is_regenerated_rows(path):
+    """True when INDEX.md is the only dirty file and its diff touches table rows only.
+
+    `link-skills` rewrites INDEX.md after every pull and nothing commits it, so the
+    file sits dirty and blocks the next pull. A changed row is regenerated output
+    and safe to drop. A changed heading or prose line is not: that may be a hand
+    edit, and which copy is current is for the user to decide."""
+    if not _only_index_dirty(path):
+        return False
+    for ln in _git(path, "diff", "-U0", "--", "INDEX.md").stdout.splitlines():
+        if ln.startswith(("--- a/", "+++ b/", "@@", "diff ", "index ")):
+            continue
+        if ln[:1] in ("+", "-") and not ln[1:].startswith("|"):
+            return False
+    return True
+
+
 def _ff_only_layer_sync(path, kind):
     """Strict-safe ff-only sync for one layer dir (a team root, or the personal
     content overlay): skip if dirty; otherwise fetch, then ff-merge ONLY when
@@ -114,13 +137,23 @@ def _ff_only_layer_sync(path, kind):
     Returns True only when this call actually moved HEAD, so the caller can
     relink once for the layers that gained files (#284). "Already level" is
     False: nothing arrived, so there is nothing new to link."""
+    index_only = False
     if _git(path, "status", "--porcelain").stdout.strip() != "":
-        sys.stderr.write("np-core-sync: %s %s has local edits — skipping pull\n" % (kind, path))
-        return False
+        if not _index_is_regenerated_rows(path):
+            detail = (" (INDEX.md has changes beyond regenerated rows; keep or discard it)"
+                      if _only_index_dirty(path) else "")
+            sys.stderr.write("np-core-sync: %s %s has local edits%s — skipping pull\n"
+                             % (kind, path, detail))
+            return False
+        index_only = True
     before = _git(path, "rev-parse", "HEAD").stdout.strip()
     ok = _git(path, "fetch", "--quiet", "origin").returncode == 0
     if ok:
         behind_or_equal = _is_ancestor(path, "HEAD", "@{u}")
+        # Drop regenerated INDEX rows only when there is a pull to unblock.
+        if (index_only and behind_or_equal
+                and before != _git(path, "rev-parse", "@{u}").stdout.strip()):
+            _git(path, "checkout", "--", "INDEX.md")
         ok = behind_or_equal and _git(path, "merge", "--ff-only", "--quiet", "@{u}").returncode == 0
     if not ok:
         sys.stderr.write("np-core-sync: %s %s not fast-forwarded "
@@ -324,9 +357,15 @@ def _engine_sync(target, status_file):
             return write_status("np-core-sync: %s — up to date (%s)" % (_now(), sh))
         return write_status("np-core-sync: %s — up to date with origin (%d uncommitted change(s) in working tree)"
                             % (_now(), _porcelain_count(target)))
+    if dirty and _is_ancestor(target, local, remote) and _index_is_regenerated_rows(target):
+        _git(target, "checkout", "--", "INDEX.md")         # regenerated rows only: drop, then pull
+        dirty = _is_dirty(target)
     if dirty:                                              # dirty + behind -> never touch
+        hint = (" INDEX.md has changes beyond regenerated rows: keep or discard it."
+                if _only_index_dirty(target) else "")
         return write_status("np-core-sync: %s — SKIPPED (working tree dirty: %d files; %s remote commits waiting). "
-                            "Commit/stash, then re-run /np-core-sync." % (_now(), _porcelain_count(target), _count(target, "HEAD..origin/main")))
+                            "Commit/stash, then re-run /np-core-sync.%s"
+                            % (_now(), _porcelain_count(target), _count(target, "HEAD..origin/main"), hint))
     if _is_ancestor(target, remote, local):                # local ahead
         return write_status("np-core-sync: %s — local is %s commit(s) ahead of origin/main. Push when ready."
                             % (_now(), _count(target, "origin/main..HEAD")))
