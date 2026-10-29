@@ -95,6 +95,16 @@ Text outside the markers is never touched.
 `enabledPlugins`, `extraKnownMarketplaces`, `theme` and `skipWorkflowUsageWarning`.
 Add more names under a top-level `"allowlist"` array.
 
+**Trust.** `theme` and `skipWorkflowUsageWarning` apply on their own. Marketplaces
+and plugins load code, so they apply only on a machine that trusts them.
+
+A marketplace applies when this machine already has it with the same source. It also
+applies when its source or name is a line in `~/.config/nervepack/trusted-marketplaces`.
+That file is per machine and never synced.
+
+A plugin applies when its `@marketplace` passes the same rule. The sync skips the rest.
+The doctor names each skipped item with the line to add, such as `github:owner/repo`.
+
 Dicts merge, so local-only sub-keys survive. `hooks`, `permissions` and `env` are
 never touched. A key whose name matches token, key, secret or password is refused at
 any depth.

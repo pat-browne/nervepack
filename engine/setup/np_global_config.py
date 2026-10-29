@@ -26,6 +26,8 @@ TAG = "global-rules"
 BASE_KEYS = ("enabledPlugins", "extraKnownMarketplaces", "theme",
              "skipWorkflowUsageWarning")
 NEVER_KEYS = ("hooks", "permissions", "env")
+CODE_KEYS = ("extraKnownMarketplaces", "enabledPlugins")
+TRUST_FILE = "trusted-marketplaces"
 _SECRET = re.compile(r"token|secret|passw|api[-_]?key|private[-_]?key|credential", re.I)
 _WORDS = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])")
 
@@ -168,6 +170,103 @@ def _load_overlay_settings():
     return allowed, notes
 
 
+def trust_file():
+    """Per-machine list of trusted marketplace sources. Never synced."""
+    return os.environ.get("NP_TRUSTED_MARKETPLACES") or np_dirs.config_path(TRUST_FILE)
+
+
+def _trusted_lines():
+    try:
+        with open(trust_file(), encoding="utf-8") as fh:
+            rows = [ln.strip() for ln in fh]
+    except OSError:
+        return set()
+    return {r for r in rows if r and not r.startswith("#")}
+
+
+def _source_parts(entry):
+    """(kind, value) of a marketplace entry's source, or ("", "")."""
+    src = entry.get("source") if isinstance(entry, dict) else None
+    if not isinstance(src, dict):
+        return "", ""
+    value = src.get("repo") or src.get("url") or src.get("path") or ""
+    kind = src.get("source") or ""
+    return (kind, value) if isinstance(kind, str) and isinstance(value, str) else ("", "")
+
+
+def _source_line(entry):
+    """The line to add to the trust file for this marketplace entry."""
+    kind, value = _source_parts(entry)
+    if kind and value:
+        return "%s:%s" % (kind, value)
+    return json.dumps(entry.get("source") if isinstance(entry, dict) else entry,
+                      sort_keys=True)
+
+
+def _known_marketplace_names():
+    """Marketplace names the host already knows from its own plugin store."""
+    path = os.path.join(os.path.dirname(np_host.settings_path()), "plugins",
+                        "known_marketplaces.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return set()
+    return set(data) if isinstance(data, dict) else set()
+
+
+def _apply_trust(allowed, current):
+    """Split the overlay settings into (kept, skipped).
+
+    Marketplaces and plugins load code, so they pass only when trusted. A
+    marketplace is trusted when this machine already has it with the same
+    source, or its source or name is a line in the trust file. A plugin is
+    trusted when its @marketplace is. Each skipped item is (label, line).
+    """
+    lines = _trusted_lines()
+    local = current.get("extraKnownMarketplaces")
+    local = local if isinstance(local, dict) else {}
+    names = set(local) | _known_marketplace_names() | lines
+    kept, skipped = dict(allowed), []
+    markets = allowed.get("extraKnownMarketplaces")
+    if markets is not None and not isinstance(markets, dict):
+        kept.pop("extraKnownMarketplaces")
+        markets = None
+    if markets is not None:
+        ok = {}
+        for name, entry in markets.items():
+            _, value = _source_parts(entry)
+            same = name in local and _source_line(local[name]) == _source_line(entry)
+            if same or {name, value, _source_line(entry)} & lines:
+                ok[name] = entry
+                names.add(name)
+            else:
+                skipped.append(("marketplace %s" % name, _source_line(entry)))
+        if ok:
+            kept["extraKnownMarketplaces"] = ok
+        else:
+            kept.pop("extraKnownMarketplaces")
+    plugins = allowed.get("enabledPlugins")
+    if plugins is not None and not isinstance(plugins, dict):
+        kept.pop("enabledPlugins")
+        plugins = None
+    if plugins is not None:
+        ok = {}
+        for key, flag in plugins.items():
+            market = key.rsplit("@", 1)[1] if "@" in key else ""
+            if market and market in names:
+                ok[key] = flag
+            else:
+                entry = (markets or {}).get(market)
+                line = _source_line(entry) if entry else (market or key)
+                skipped.append(("plugin %s" % key, line))
+        if ok:
+            kept["enabledPlugins"] = ok
+        else:
+            kept.pop("enabledPlugins")
+    return kept, skipped
+
+
 def _merge(base, over):
     """Deep merge where over wins. Dicts merge, everything else is replaced."""
     if isinstance(base, dict) and isinstance(over, dict):
@@ -194,8 +293,8 @@ def _save_state(state):
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(state, fh, indent=2, sort_keys=True)
             fh.write("\n")
-    except OSError:
-        pass
+    except OSError as exc:
+        _err("state not saved to %s: %s" % (path, exc))
 
 
 def _err(msg):
@@ -230,6 +329,11 @@ def _sync_settings(state):
     except (OSError, ValueError) as exc:
         _err("settings %s unreadable, left untouched: %s" % (path, exc))
         return []
+    allowed, skipped = _apply_trust(allowed, current)
+    for label, line in skipped:
+        _err("skipped %s: untrusted. Add '%s' to %s" % (label, line, trust_file()))
+    if not allowed:
+        return []
     applied = dict(state.get("settings") or {})
     changed = []
     for key, value in allowed.items():
@@ -254,13 +358,18 @@ def apply(out=None):
         if not np_toggle.enabled(FEATURE):
             return remove(out)
         state = _load_state()
-        lines = _sync_rules(state) + _sync_settings(state)
+        lines = []
+        for phase, step in (("rules", _sync_rules), ("settings", _sync_settings)):
+            try:
+                lines += step(state)
+            except Exception as exc:  # one phase must not stop the other
+                _err("%s sync failed: %r" % (phase, exc))
         if lines:
             _save_state(state)
         for line in lines:
             out.write("np-global-config: %s\n" % line)
     except Exception as exc:  # a sync must never break the caller
-        _err("failed: %r" % exc)
+        _err("apply failed: %r" % exc)
     return 0
 
 
@@ -312,6 +421,9 @@ def drift():
             current = np_hook._load(np_host.settings_path())
         except (OSError, ValueError):
             return found + ["settings.json unreadable"]
+        allowed, skipped = _apply_trust(allowed, current)
+        for label, line in skipped:
+            found.append("%s untrusted: add '%s' to %s" % (label, line, trust_file()))
         for key, value in allowed.items():
             if key not in current or _merge(current[key], value) != current[key]:
                 found.append("setting %s differs" % key)

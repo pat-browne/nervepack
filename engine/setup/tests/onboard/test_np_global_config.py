@@ -51,6 +51,7 @@ class Base(unittest.TestCase):
             "NP_TOGGLES_LOCAL": os.path.join(d, "toggles.local"),
             "NP_TOGGLES_CONTENT": "",
             "NP_ADAPTER": os.path.join(d, "no-adapter.json"),
+            "NP_TRUSTED_MARKETPLACES": os.path.join(d, "config", "trusted-marketplaces"),
         }
         p = mock.patch.dict(os.environ, env)
         p.start()
@@ -121,6 +122,7 @@ class Settings(Base):
             "hooks": {"Stop": []}, "permissions": {"allow": ["Bash(ls)"]},
             "env": {"A": "1"}, "model": "x", "theme": "light",
             "enabledPlugins": {"local@m": True}}))
+        _write(os.environ["NP_TRUSTED_MARKETPLACES"], "m\n")
         self.cfg(rules=None, settings={
             "theme": "dark", "skipWorkflowUsageWarning": True,
             "enabledPlugins": {"p@m": True}})
@@ -172,6 +174,75 @@ class Settings(Base):
             self.assertTrue(gc.is_secret_name(bad), bad)
         for ok in ("enabledPlugins", "monkey-tools@m", "theme", "keyboard"):
             self.assertFalse(gc.is_secret_name(ok), ok)
+
+
+MARKET = {"mk": {"source": {"source": "github", "repo": "acme/market"}}}
+LINE = "github:acme/market"
+
+
+class Trust(Base):
+    def trust(self, text):
+        _write(os.environ["NP_TRUSTED_MARKETPLACES"], text)
+
+    def test_untrusted_marketplace_and_plugin_skipped_theme_kept(self):
+        self.cfg(rules=None, settings={
+            "theme": "dark", "extraKnownMarketplaces": MARKET,
+            "enabledPlugins": {"p@mk": True}})
+        _, err = self.apply()
+        self.assertEqual(self.host_settings(), {"theme": "dark"})
+        self.assertIn("Add '%s'" % LINE, err)
+        self.assertIn("plugin p@mk", err)
+
+    def test_trusted_source_line_applies_marketplace_and_plugin(self):
+        self.trust("# mine\n%s\n" % LINE)
+        self.cfg(rules=None, settings={
+            "extraKnownMarketplaces": MARKET, "enabledPlugins": {"p@mk": True}})
+        self.apply()
+        s = self.host_settings()
+        self.assertEqual(s["extraKnownMarketplaces"], MARKET)
+        self.assertEqual(s["enabledPlugins"], {"p@mk": True})
+
+    def test_bare_repo_line_also_trusts(self):
+        self.trust("acme/market\n")
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": MARKET})
+        self.apply()
+        self.assertEqual(self.host_settings()["extraKnownMarketplaces"], MARKET)
+
+    def test_plugin_from_untrusted_marketplace_skipped_when_another_is_trusted(self):
+        self.trust(LINE + "\n")
+        other = {"source": {"source": "github", "repo": "evil/market"}}
+        self.cfg(rules=None, settings={
+            "extraKnownMarketplaces": dict(MARKET, bad=other),
+            "enabledPlugins": {"p@mk": True, "q@bad": True}})
+        _, err = self.apply()
+        s = self.host_settings()
+        self.assertEqual(list(s["extraKnownMarketplaces"]), ["mk"])
+        self.assertEqual(s["enabledPlugins"], {"p@mk": True})
+        self.assertIn("github:evil/market", err)
+
+    def test_local_marketplace_with_same_source_is_trusted(self):
+        _write(self.settings, json.dumps({"extraKnownMarketplaces": MARKET}))
+        self.cfg(rules=None, settings={"enabledPlugins": {"p@mk": True}})
+        self.apply()
+        self.assertEqual(self.host_settings()["enabledPlugins"], {"p@mk": True})
+
+    def test_overlay_cannot_swap_the_source_of_a_local_marketplace(self):
+        _write(self.settings, json.dumps({"extraKnownMarketplaces": MARKET}))
+        swapped = {"mk": {"source": {"source": "github", "repo": "evil/market"}}}
+        self.cfg(rules=None, settings={"extraKnownMarketplaces": swapped})
+        self.apply()
+        self.assertEqual(self.host_settings()["extraKnownMarketplaces"], MARKET)
+
+    def test_doctor_reports_each_skip_with_the_line_to_add(self):
+        self.cfg(rules=None, settings={
+            "extraKnownMarketplaces": MARKET, "enabledPlugins": {"p@mk": True}})
+        status = gc.doctor_status()
+        self.assertTrue(status.startswith("WARN"))
+        self.assertIn("marketplace mk untrusted: add '%s'" % LINE, status)
+        self.assertIn("plugin p@mk untrusted: add '%s'" % LINE, status)
+        self.trust(LINE + "\n")
+        self.apply()
+        self.assertEqual(gc.doctor_status(), "PASS")
 
 
 class RemoveAndDrift(Base):

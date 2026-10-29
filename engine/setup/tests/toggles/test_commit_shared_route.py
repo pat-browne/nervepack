@@ -48,7 +48,7 @@ class CommitSharedRoute(unittest.TestCase):
 
     def _flip(self):
         np_toggle.set_conf_state("memory", "off")
-        np_toggle.commit_shared("toggle(memory): off")
+        np_toggle.commit_shared("toggle(memory): off", replay=("state", "memory", "off"))
 
     def _origin_conf(self):
         return _git(self.bare, "show", "main:toggles.conf")
@@ -86,6 +86,41 @@ class CommitSharedRoute(unittest.TestCase):
         merged = self._origin_conf()
         self.assertIn("added|shared|runtime|on|", merged)
         self.assertIn("memory|shared|runtime|off|", merged)
+
+    def _dirty(self):
+        with open(self.conf, "a") as fh:
+            fh.write("private|shared|runtime|on|secret=1\n")
+
+    def test_off_main_unrelated_dirty_edit_never_reaches_origin(self):
+        _git(self.repo, "switch", "-q", "-c", "feat")
+        self._dirty()
+        self._flip()
+        merged = self._origin_conf()
+        self.assertIn("memory|shared|runtime|off|", merged)
+        self.assertNotIn("private", merged)
+        with open(self.conf) as fh:
+            self.assertIn("private|shared", fh.read())
+
+    def test_on_main_unrelated_dirty_edit_is_refused(self):
+        self._dirty()
+        self._flip()
+        self.assertNotIn("memory|shared|runtime|off|", self._origin_conf())
+        self.assertEqual(_git(self.repo, "log", "-1", "--format=%s"), "init")
+
+    def test_param_flip_replays_one_row(self):
+        _git(self.repo, "switch", "-q", "-c", "feat")
+        self._dirty()
+        np_toggle.set_conf_param("memory.promote", "off")
+        np_toggle.commit_shared("toggle(memory.promote): off",
+                                replay=("param", "memory.promote", "off"))
+        merged = self._origin_conf()
+        self.assertIn("promote=off", merged)
+        self.assertNotIn("private", merged)
+
+    def test_missing_replay_commits_nothing(self):
+        np_toggle.set_conf_state("memory", "off")
+        np_toggle.commit_shared("toggle(memory): off")
+        self.assertEqual(_git(self.repo, "log", "-1", "--format=%s"), "init")
 
     def test_no_commit_env_is_a_noop(self):
         with mock.patch.dict(os.environ, {"NP_TOGGLE_NO_COMMIT": "1"}):

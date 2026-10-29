@@ -374,13 +374,13 @@ def _atomic_write(path, text):
         raise
 
 
-def set_conf_state(feature, state):
+def set_conf_state(feature, state, path=None):
     """Rewrite column $4 (state) of the matching toggles.conf row. Mirrors
     _set_conf_state: comment rows verbatim; a row whose col1 == feature has its
     4th field replaced (OFS='|'); every other row is preserved byte-for-byte.
 
     Writes land in the content layer once one exists -- see _write_conf_path."""
-    path = _write_conf_path()
+    path = path or _write_conf_path()
     if not os.path.isfile(path):
         return
     out = []
@@ -402,7 +402,7 @@ def set_conf_state(feature, state):
     _atomic_write(path, "".join(out))
 
 
-def set_conf_param(key, value):
+def set_conf_param(key, value, path=None):
     """In the row for `feat` (before the first dot), replace param `k`'s value in
     column $5, or append `k=value`. Mirrors _set_conf_param: params are the
     space/comma-separated k=v tokens of column 5, re-joined with single spaces."""
@@ -410,7 +410,7 @@ def set_conf_param(key, value):
         feat, pkey = key.split(".", 1)
     else:
         feat = pkey = key
-    path = _write_conf_path()
+    path = path or _write_conf_path()
     if not os.path.isfile(path):
         return
     out = []
@@ -458,32 +458,50 @@ def _repo_root_for(path):
     return root if proc.returncode == 0 and root else ""
 
 
-def commit_shared(message, np_root=None):
-    """Path-limited commit and push of toggles.conf. Best-effort.
+def _apply_flip(replay, path):
+    kind, key, value = replay
+    if kind == "state":
+        set_conf_state(key, value, path=path)
+    else:
+        set_conf_param(key, value, path=path)
 
-    No-op when NP_TOGGLE_NO_COMMIT=1. Never a bare `git commit`, which would
-    sweep a concurrent session's staged index (issue #11).
 
-    Off main, the edit is replayed as a patch in the cron worktree at
-    origin/main (np_git_publish.write_root) and committed there. The live file
-    keeps its edit, so the toggle still applies on this machine.
+def _only_the_row(repo, rel, feature):
+    """True when the diff of `rel` is one changed line, in `feature`'s row."""
+    r = subprocess.run(["git", "-C", repo, "diff", "-U0", "--no-color", "--", rel],
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if r.returncode != 0:
+        print("np-toggle: git diff failed in %s: %s"
+              % (repo, (r.stderr or "unknown error").strip()), file=sys.stderr)
+        return False
+    lines = r.stdout.splitlines()
+    gone = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")]
+    came = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
+    return (len(gone) == 1 and len(came) == 1
+            and gone[0].split("|")[0] == feature and came[0].split("|")[0] == feature)
+
+
+def commit_shared(message, np_root=None, replay=None):
+    """Commit and push one toggles.conf row flip. Best-effort.
+
+    `replay` is ("state", feature, state) or ("param", "feat.key", value).
+    Off main it re-runs in the origin/main worktree. Only that row may differ.
     """
     if os.environ.get("NP_TOGGLE_NO_COMMIT") == "1":
         return
     import np_bashlib
     conf = _write_conf_path()
-    # Commit in the repo that owns the file, not the engine root. Ask git for
-    # that root. A conf outside any repo must not commit into an enclosing one.
     np = np_root or _repo_root_for(conf)
     if not np:
         return
+    if replay is None:
+        print("np-toggle: not committed (no flip to replay)", file=sys.stderr)
+        return
 
-    def _git(repo, args, data=None):
+    def _git(repo, args):
         try:
             return subprocess.run(np_bashlib.argv(["git", "-C", repo] + args),
-                                  input=data, text=True,
-                                  stdin=None if data is not None else subprocess.DEVNULL,
-                                  capture_output=True)
+                                  stdin=subprocess.DEVNULL, capture_output=True, text=True)
         except OSError:
             return None
 
@@ -491,23 +509,27 @@ def commit_shared(message, np_root=None):
     if root is None:
         print("np-toggle: not committed (%s)" % note, file=sys.stderr)
         return
-    target = conf
-    if root != np:
-        rel = os.path.relpath(os.path.realpath(conf), os.path.realpath(np))
-        diff = _git(np, ["diff", "--no-color", "--", rel])
-        if diff is None or diff.returncode != 0 or not diff.stdout:
-            return
-        applied = _git(root, ["apply", "--3way", "-"], data=diff.stdout)
-        if applied is None or applied.returncode != 0:
-            print("np-toggle: could not replay the edit at origin/main; "
-                  "left uncommitted in %s" % np, file=sys.stderr)
-            return
-        target = os.path.join(root, rel)
-        np = root
-    _git(np, ["add", target])
-    r = _git(np, ["commit", "-q", "-m", message, "--", target])
+    rel = os.path.relpath(os.path.realpath(conf), os.path.realpath(np))
+    target = os.path.join(root, rel)
+    feature = replay[1].split(".", 1)[0]
+    off_main = root != np
+    if off_main:
+        # The live checkout is on a branch. Re-run only this flip on a clean
+        # origin/main copy, so branch work and unrelated edits stay out.
+        _git(root, ["checkout", "-q", "--", rel])
+        _apply_flip(replay, target)
+    if not _only_the_row(root, rel, feature):
+        changed = _git(root, ["diff", "--quiet", "--", rel])
+        if off_main:
+            _git(root, ["checkout", "-q", "--", rel])
+        if changed is not None and changed.returncode != 0:
+            print("np-toggle: refused to commit. %s has edits beyond the %s row"
+                  % (rel, feature), file=sys.stderr)
+        return
+    _git(root, ["add", target])
+    r = _git(root, ["commit", "-q", "-m", message, "--", target])
     if r is not None and r.returncode == 0:
-        ok, why = np_git_publish.publish(np)
+        ok, why = np_git_publish.publish(root)
         if not ok:
             print("np-toggle: %s" % why, file=sys.stderr)
 
@@ -647,7 +669,8 @@ def flip(feat, state):
             set_local(feat, state)
         else:
             set_conf_state(feat, state)
-            commit_shared("toggle(%s): %s" % (feat, state))
+            commit_shared("toggle(%s): %s" % (feat, state),
+                          replay=("state", feat, state))
     return "%s -> %s" % (feat, state)
 
 
@@ -705,7 +728,8 @@ def cli(argv):
         value = argv[2] if len(argv) > 2 else ""
         if scope(key.split(".", 1)[0]) == "shared":
             set_conf_param(key, value)
-            commit_shared("toggle(%s): %s" % (key, value))
+            commit_shared("toggle(%s): %s" % (key, value),
+                          replay=("param", key, value))
         else:
             set_local(key, value)
         sys.stdout.write("%s = %s\n" % (key, value))

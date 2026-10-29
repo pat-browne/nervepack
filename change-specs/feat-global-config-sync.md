@@ -1,5 +1,5 @@
 ---
-id: 0100
+id: 0101
 status: accepted
 date: 2026-10-26
 tier: high
@@ -13,6 +13,7 @@ blast_radius:
   - engine/nervepack_engine/np_sync.py
   - engine/nervepack_engine/np_doctor.py
   - engine/nervepack_engine/cli.py
+  - engine/setup/np-mcp-server.py
   - engine/onboard/capabilities.json
   - engine/setup/tests/**
   - docs/ARCHITECTURE.md
@@ -20,7 +21,7 @@ blast_radius:
   - change-specs/feat-global-config-sync.md
 ---
 
-# 0100: Global host config sync, toggle commit routing, index help flag
+# 0101: Global host config sync, toggle commit routing, index help flag
 
 ## Context and problem statement
 
@@ -46,6 +47,13 @@ We will add the `global-config` feature (local scope, managed, default on).
 Rules go inside a tagged managed block with its own markers. Settings merge only
 the base keys plus the file's own `allowlist`, and the overlay wins on those keys.
 
+Marketplaces and plugins load code, so they apply only when trusted.
+
+A marketplace is trusted when the machine already has it with the same source.
+It is also trusted when its source or name is a line in the per-machine,
+never-synced `~/.config/nervepack/trusted-marketplaces`. A plugin is trusted
+when its `@marketplace` is. The doctor lists each skipped item with the line to add.
+
 The sync never touches `hooks`, `permissions` or `env`. It refuses any key named
 like a secret, at any depth.
 
@@ -56,8 +64,8 @@ Turning the toggle off removes the blocks and the settings keys the sync wrote.
 A key goes only while its value is unchanged.
 
 We will route `np_toggle.commit_shared` through `np_git_publish.write_root` and
-`publish`. Off main, the flip replays as a patch in the cron worktree at
-origin/main.
+`publish`. Off main, the flip is re-run in the cron worktree at origin/main.
+The diff must change exactly that feature's row, else nothing is committed.
 
 We will make `np_generate_index.py -h` and `--help` print usage and exit 0
 without writing.
@@ -73,7 +81,8 @@ additive and reversible.
 
 ## Cross-cutting concerns
 
-- Security: secret-like key names are refused. Rules text is not scanned.
+- Security: secret-like key names are refused. Untrusted marketplaces and
+  plugins are skipped. A toggle commit holds one row only. Rules text is not scanned.
 - Privacy: company-neutral wording, no instance data.
 - Observability: refusals go to stderr. The doctor reports drift.
 
@@ -101,4 +110,7 @@ routing and the help flag revert on their own.
 
 - 2026-10-26: added `engine/setup/toggle-schema.json` to the blast radius. A new
   toggle needs a description there, and a test enforces it.
+- 2026-10-29: added `engine/setup/np-mcp-server.py` to the blast radius. Its
+  dotted-key toggle call now passes the flip to `commit_shared`. The patch
+  replay became a row re-run after a Windows failure and a review finding.
 
