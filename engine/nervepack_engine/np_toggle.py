@@ -516,7 +516,11 @@ def commit_shared(message, np_root=None, replay=None):
     if off_main:
         # The live checkout is on a branch. Re-run only this flip on a clean
         # origin/main copy, so branch work and unrelated edits stay out.
-        _git(root, ["checkout", "-q", "--", rel])
+        reset = _git(root, ["checkout", "-q", "--", rel])
+        if reset is None or reset.returncode != 0:
+            print("np-toggle: not committed (could not reset %s in %s)" % (rel, root),
+                  file=sys.stderr)
+            return
         _apply_flip(replay, target)
     if not _only_the_row(root, rel, feature):
         changed = _git(root, ["diff", "--quiet", "--", rel])

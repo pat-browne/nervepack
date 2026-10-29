@@ -179,7 +179,10 @@ def _trusted_lines():
     try:
         with open(trust_file(), encoding="utf-8") as fh:
             rows = [ln.strip() for ln in fh]
-    except OSError:
+    except FileNotFoundError:
+        return set()
+    except OSError as exc:
+        _err("trust file %s unreadable, nothing is trusted: %s" % (trust_file(), exc))
         return set()
     return {r for r in rows if r and not r.startswith("#")}
 
