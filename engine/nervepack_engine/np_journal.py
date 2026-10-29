@@ -107,7 +107,7 @@ def _log(msg):
     try:
         os.makedirs(os.path.dirname(log), exist_ok=True)
         with open(log, "a", encoding="utf-8") as fh:
-            fh.write("%s journal: %s\n" % (_now(), msg))
+            fh.write("%s journal: %s\n" % (_now(), re.sub(r"[^\x20-\x7e]", "?", str(msg))))
     except OSError:
         pass
 
@@ -497,7 +497,7 @@ def _episodic_record(sid, cwd, blocks):
     n_dropped = sum(drops.values())
     if n_dropped:
         _log("crawl: dropped %d unsafe journal entr%s for %s (%s)" % (
-            n_dropped, "y" if n_dropped == 1 else "ies", sid,
+            n_dropped, "y" if n_dropped == 1 else "ies", _safe(sid),
             ", ".join("%s=%d" % kv for kv in sorted(drops.items()))))
     if not (struggles or wins):
         return None
