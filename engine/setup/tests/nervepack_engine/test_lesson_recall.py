@@ -292,5 +292,48 @@ class TestLessonRecall(unittest.TestCase):
             os.path.join(self.tmp, "state", "s15-guarded-write-gate-armed")))
 
 
+    # --- recall gate: whole-word match, ranked, capped ---
+    def _lesson(self, topic):
+        self._write(topic + ".md", "---\nprovenance: failure\n---\n**Do:** %s-body\n" % topic)
+
+    def test_recall_gate_substring_does_not_match(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| ci-timeouts |  |  | ci |\n")
+        self._lesson("ci-timeouts")
+        self.assertEqual(self._run("g1", "record the decision in the spec"), "")
+        self.assertIn("ci-timeouts-body", self._run("g2", "the ci job hung"))
+
+    def test_recall_gate_hyphenated_trigger_matches_spaced_prompt(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| gha |  |  | github-actions |\n")
+        self._lesson("gha")
+        self.assertIn("gha-body", self._run("g3", "fix the github actions workflow"))
+
+    def test_recall_gate_caps_at_top_n_preferring_more_and_rarer_hits(self):
+        rows = "".join("| t%d |  |  | merge |\n" % n for n in range(5))
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            + rows + "| squash |  |  | merge, squash |\n")
+        for n in range(5):
+            self._lesson("t%d" % n)
+        self._lesson("squash")
+        ctx = json.loads(self._run("g4", "squash merge this"))["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("squash-body", ctx)
+        self.assertEqual(sum(("t%d-body" % n) in ctx for n in range(5)), 2)
+
+
+    def test_recall_gate_arms_tool_gate_beyond_the_cap(self):
+        rows = "".join("| t%d |  |  | merge |\n" % n for n in range(4))
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n" + rows)
+        for n in range(4):
+            self._lesson("t%d" % n)
+        self._write("t3.md", "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** t3-body\n")
+        self._run("g5", "merge it")
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "state", "g5-t3-gate-armed")))
+
+
 if __name__ == "__main__":
     unittest.main()

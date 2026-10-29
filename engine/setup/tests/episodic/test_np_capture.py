@@ -179,5 +179,62 @@ class TestNpCapture(unittest.TestCase):
         self.assertTrue(os.path.isfile(blocker))
 
 
+    # --- write guard: dedup, length and junk checks before an item reaches the inbox ---
+    def _struggle(self, symptom, fix="add a stdin=DEVNULL guard to every subprocess call"):
+        return {"symptom": symptom, "cause": "c", "fix": fix, "tool_match": "",
+                "topic_triggers": ["x"], "destructive": False}
+
+    def _records(self):
+        inbox = os.environ["EPISODIC_INBOX"]
+        out = []
+        for f in sorted(os.listdir(inbox)):
+            with open(os.path.join(inbox, f), encoding="utf-8") as fh:
+                out += [json.loads(l) for l in fh if l.strip()]
+        return out
+
+    def test_guard_drops_junk_short_and_overlong_items(self):
+        rec = {"session_id": "s", "struggles": [
+            self._struggle("n/a", fix="none"),
+            self._struggle("ok"  , fix="ok"),
+            self._struggle("x" * 3000),
+            self._struggle("CI job hung for six hours with no timeout set"),
+        ], "strategies": [{"title": "", "content": "todo"}]}
+        self.assertTrue(np_capture.append_note(rec))
+        r = self._records()[0]
+        self.assertEqual([s["symptom"] for s in r["struggles"]],
+                         ["CI job hung for six hours with no timeout set"])
+        self.assertEqual(r["strategies"], [])
+        self.assertEqual(sorted(d["reason"] for d in r["guard"]["dropped"]),
+                         ["junk", "junk", "too-long", "too-short"])
+
+    def test_guard_dedups_within_note_and_against_inbox(self):
+        s = self._struggle("CI job hung for six hours with no timeout set")
+        np_capture.append_note({"session_id": "a", "struggles": [s, dict(s)]})
+        np_capture.append_note({"session_id": "b", "struggles": [dict(s, symptom="CI  job hung for SIX hours with no timeout set.")]})
+        recs = self._records()
+        self.assertEqual(len(recs[0]["struggles"]), 1)
+        self.assertEqual(recs[1]["struggles"], [])
+        self.assertEqual(recs[1]["guard"]["dropped"][0]["reason"], "duplicate")
+
+    def test_guard_off_passes_items_through(self):
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("memory|shared|runtime|on|write_guard=off\n")
+        np_capture.append_note({"session_id": "s", "struggles": [self._struggle("n/a", fix="none")]})
+        r = self._records()[0]
+        self.assertEqual(len(r["struggles"]), 1)
+        self.assertNotIn("guard", r)
+
+
+    def test_guard_catches_uppercase_na_and_survives_bad_inbox_lines(self):
+        inbox = os.environ["EPISODIC_INBOX"]
+        os.makedirs(inbox, exist_ok=True)
+        with open(os.path.join(inbox, "old.jsonl"), "w") as fh:
+            fh.write('7\n{"struggles": "x"}\n')
+        self.assertTrue(np_capture.append_note({"session_id": "s", "struggles": [
+            self._struggle("N/A", fix="restart the runner and retry the build")]}))
+        r = [x for x in self._records() if isinstance(x, dict) and x.get("session_id") == "s"][0]
+        self.assertEqual(r["struggles"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

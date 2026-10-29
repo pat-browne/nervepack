@@ -81,6 +81,89 @@ def was_captured(payload):
         return False
 
 
+_JUNK = {"", "n a", "na", "none", "null", "todo", "tbd", "unknown"}  # normalized form
+_CORE = {"struggles": ("symptom", "fix"), "strategies": ("title", "content")}
+_MIN_CHARS = 20
+_MAX_CHARS = 2000
+
+
+def _norm_text(text):
+    return re.sub(r'[^a-z0-9]+', ' ', str(text or "").lower()).strip()
+
+
+def _key(text):
+    # Scrub first, so a new item matches its scrubbed copy already in the inbox.
+    try:
+        text = np_scrub.scrub(text.encode("utf-8")).decode("utf-8", "replace")
+    except Exception:
+        pass
+    return _norm_text(text)
+
+
+def _inbox_keys(inbox):
+    """Normalized core text of every struggle/strategy already in the inbox."""
+    keys = set()
+    try:
+        names = os.listdir(inbox)
+    except OSError:
+        return keys
+    for name in names:
+        try:
+            with open(os.path.join(inbox, name), encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    for kind, fields in _CORE.items():
+                        items = rec.get(kind)
+                        for item in items if isinstance(items, list) else []:
+                            if isinstance(item, dict):
+                                keys.add(_norm_text(" ".join(str(item.get(f, "")) for f in fields)))
+        except OSError:
+            continue
+    return keys
+
+
+def guard(record, inbox):
+    """Write guard: drop struggle/strategy items that are junk, too short, too long,
+    or already in the undrained inbox. No model call. Dropped items are audited in record["guard"]."""
+    if np_toggle.param("memory.write_guard", "on") != "on":
+        return record
+    seen = _inbox_keys(inbox)
+    dropped = []
+    for kind, fields in _CORE.items():
+        items = record.get(kind)
+        if not isinstance(items, list):
+            continue
+        kept = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            core = [str(item.get(f, "")).strip() for f in fields]
+            text = " ".join(core)
+            key = _key(text)
+            if any(_norm_text(c) in _JUNK for c in core):
+                reason = "junk"
+            elif len(key) < _MIN_CHARS:
+                reason = "too-short"
+            elif len(text) > _MAX_CHARS:
+                reason = "too-long"
+            elif key in seen:
+                reason = "duplicate"
+            else:
+                seen.add(key)
+                kept.append(item)
+                continue
+            dropped.append({"kind": kind, "reason": reason, "text": text[:80]})
+        record[kind] = kept
+    if dropped:
+        record["guard"] = {"dropped": dropped}
+    return record
+
+
 def append_note(record):
     """Append an already-built episodic-inbox record to today's inbox file,
     scrubbed the same way capture() scrubs its own note. Shared write path so
@@ -90,6 +173,7 @@ def append_note(record):
     the same JSON+scrub steps. Fail-open: any OSError returns False and writes
     nothing; never raises."""
     inbox = os.environ.get("EPISODIC_INBOX") or np_dirs.cache_path("episodic-inbox")
+    record = guard(record, inbox)
     line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
     scrubbed = np_scrub.scrub(line.encode("utf-8") + b"\n")
     try:

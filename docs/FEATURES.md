@@ -358,7 +358,16 @@ advisory entries regardless of provenance.
 the merge of the former `playbook-recall.sh` + `strategy-recall.sh`) injects
 topic-matched entries on a session's first prompts, framing by provenance:
 imperative "avoid X" wording for `failure`, advisory "the approach that worked is
-Y" wording for `success`.
+Y" wording for `success`. A trigger matches only as a whole word, so `ci` no longer
+fires on "decision". Matches rank by hit count, then by rarer triggers, and only the
+top `lessons.recall_top` (default 3) inject. A topic needs `lessons.recall_min_hits`
+(default 1) hits. Spec: `change-specs/feat-memory-guard-recall-gate.md`.
+
+**Write guard.** `np_capture.append_note()` checks every `struggles[]`/`strategies[]`
+item before it reaches the inbox, with no model call. It drops junk (`n/a`, `none`,
+empty), items under 20 or over 2000 characters, and duplicates of any item already in
+the inbox. Dropped items are listed in the record's `guard.dropped`. Param
+`memory.write_guard` (default on).
 
 **Body format (paired rules).** Each entry is one line under an `## <objective>`
 heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
