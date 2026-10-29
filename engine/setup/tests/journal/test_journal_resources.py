@@ -188,7 +188,7 @@ class TestCrawl(JournalBase):
                                 extra_lines=["**Repo:** data-base @ main (abc, clean) [checkout: /x]"])
         np_journal.append_block(
             "sid-1", "PreCompact",
-            {"goal": "fix sync", "struggles": "retry loop on 429", "wins": "backoff fixed it",
+            {"goal": "fix sync", "struggles": "retry loop on 429 from the sync API", "wins": "exponential backoff fixed the sync retry loop",
              "decisions": "use jitter (because thundering herd)", "next_step": "deploy"},
             extra_lines=np_journal._block_resources(
                 [{"id": "api.example.com", "type": "hostname", "purpose": "sync target"}]))
@@ -207,8 +207,8 @@ class TestCrawl(JournalBase):
         epi = self._inbox("EPISODIC_INBOX")
         self.assertEqual(len(epi), 1)
         self.assertEqual(epi[0]["project"], "data-base")
-        self.assertEqual(epi[0]["struggles"][0]["symptom"], "retry loop on 429")
-        self.assertEqual(epi[0]["strategies"][0]["content"], "backoff fixed it")
+        self.assertEqual(epi[0]["struggles"][0]["symptom"], "retry loop on 429 from the sync API")
+        self.assertEqual(epi[0]["strategies"][0]["content"], "exponential backoff fixed the sync retry loop")
         self.assertIn("use jitter (because thundering herd)", epi[0]["body"])
         res = self._inbox("NP_RESOURCES_INBOX")
         self.assertEqual(res[0]["id"], "api.example.com")

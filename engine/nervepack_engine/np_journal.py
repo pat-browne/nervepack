@@ -431,7 +431,9 @@ def _episodic_record(sid, cwd, blocks):
         "cwd": cwd or "", "mode": "journal-crawl",
         "headline": ("Journal: %s" % (goal[-1] if goal else "session"))[:80],
         "body": body[:1200], "candidate_topics": [], "keywords": [],
-        "struggles": [{"symptom": x, "cause": "", "fix": "", "tool_match": "",
+        # The journal records no fix. The capture write guard drops an empty fix as junk,
+        # so state that plainly instead.
+        "struggles": [{"symptom": x, "cause": "", "fix": "not recorded in the journal", "tool_match": "",
                        "topic_triggers": [], "destructive": False} for x in struggles],
         "strategies": [{"title": "Journal win", "description": x[:160], "content": x,
                         "topic_triggers": []} for x in wins],
