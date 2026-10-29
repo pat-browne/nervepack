@@ -91,13 +91,16 @@ def _norm_text(text):
     return re.sub(r'[^a-z0-9]+', ' ', str(text or "").lower()).strip()
 
 
+def _scrubbed(text):
+    try:
+        return np_scrub.scrub(text.encode("utf-8")).decode("utf-8", "replace")
+    except Exception:
+        return text
+
+
 def _key(text):
     # Scrub first, so a new item matches its scrubbed copy already in the inbox.
-    try:
-        text = np_scrub.scrub(text.encode("utf-8")).decode("utf-8", "replace")
-    except Exception:
-        pass
-    return _norm_text(text)
+    return _norm_text(_scrubbed(text))
 
 
 def _inbox_keys(inbox):
@@ -157,7 +160,7 @@ def guard(record, inbox):
                 seen.add(key)
                 kept.append(item)
                 continue
-            dropped.append({"kind": kind, "reason": reason, "text": text[:80]})
+            dropped.append({"kind": kind, "reason": reason, "text": _scrubbed(text)[:80]})
         record[kind] = kept
     if dropped:
         record["guard"] = {"dropped": dropped}
