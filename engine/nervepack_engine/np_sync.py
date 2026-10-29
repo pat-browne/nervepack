@@ -121,6 +121,15 @@ def _index_is_regenerated_rows(path):
     return True
 
 
+def _drop_regenerated_index(path, label):
+    """Discard the regenerated INDEX.md and say so on stderr, the audit trail."""
+    r = _git(path, "checkout", "--", "INDEX.md")
+    if r.returncode == 0:
+        sys.stderr.write("np-core-sync: %s dropped regenerated INDEX.md rows before pulling\n" % label)
+    else:
+        sys.stderr.write("np-core-sync: %s could not drop INDEX.md: %s\n" % (label, r.stderr.strip()))
+
+
 def _ff_only_layer_sync(path, kind):
     """Strict-safe ff-only sync for one layer dir (a team root, or the personal
     content overlay): skip if dirty; otherwise fetch, then ff-merge ONLY when
@@ -153,7 +162,7 @@ def _ff_only_layer_sync(path, kind):
         # Drop regenerated INDEX rows only when there is a pull to unblock.
         if (index_only and behind_or_equal
                 and before != _git(path, "rev-parse", "@{u}").stdout.strip()):
-            _git(path, "checkout", "--", "INDEX.md")
+            _drop_regenerated_index(path, kind)
         ok = behind_or_equal and _git(path, "merge", "--ff-only", "--quiet", "@{u}").returncode == 0
     if not ok:
         sys.stderr.write("np-core-sync: %s %s not fast-forwarded "
@@ -358,7 +367,7 @@ def _engine_sync(target, status_file):
         return write_status("np-core-sync: %s — up to date with origin (%d uncommitted change(s) in working tree)"
                             % (_now(), _porcelain_count(target)))
     if dirty and _is_ancestor(target, local, remote) and _index_is_regenerated_rows(target):
-        _git(target, "checkout", "--", "INDEX.md")         # regenerated rows only: drop, then pull
+        _drop_regenerated_index(target, "engine")          # regenerated rows only: drop, then pull
         dirty = _is_dirty(target)
     if dirty:                                              # dirty + behind -> never touch
         hint = (" INDEX.md has changes beyond regenerated rows: keep or discard it."

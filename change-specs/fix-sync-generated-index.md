@@ -51,7 +51,7 @@ When the heading or prose changed, sync skips the pull. It names `INDEX.md` in t
 
 - Privacy: none.
 
-- Observability: the engine status line gains an `INDEX.md` hint on a skip. The layer note names `INDEX.md` too.
+- Observability: the engine status line gains an `INDEX.md` hint on a skip. The layer note names `INDEX.md` too. Each drop writes one stderr line, and a failed drop writes another.
 
 ## Consequences
 

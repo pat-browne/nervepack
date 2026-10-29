@@ -205,8 +205,9 @@ class NpSync(unittest.TestCase):
         self._seed_index(self.seed, self.target)
         self._edit_index(self.target, "| 10 |", "| 12 |")
         self._advance_remote()
-        out = self._run("exit")
+        out, err = self._run_full("exit")
         self.assertIn("fast-forwarded", out)
+        self.assertIn("dropped regenerated INDEX.md", err)
         self.assertEqual(_git(self.target, "rev-parse", "HEAD").stdout.strip(),
                          _git(self.target, "rev-parse", "origin/main").stdout.strip())
         self.assertEqual(self._index_text(self.target), self._INDEX)
@@ -242,9 +243,10 @@ class NpSync(unittest.TestCase):
         self._edit_index(self.content_dir, "| 20 |", "| 25 |")
         self._advance_content_remote()
         remote_tip = _git(self.content_seed, "rev-parse", "HEAD").stdout.strip()
-        self._run("exit", content_dir=self.content_dir)
+        _, err = self._run_full("exit", content_dir=self.content_dir)
         self.assertEqual(_git(self.content_dir, "rev-parse", "HEAD").stdout.strip(), remote_tip)
         self.assertEqual(self._index_text(self.content_dir), self._INDEX)
+        self.assertIn("dropped regenerated INDEX.md", err)
 
     def test_content_behind_with_index_prose_edit_is_skipped_and_named(self):
         self._seed_index(self.content_seed, self.content_dir)
