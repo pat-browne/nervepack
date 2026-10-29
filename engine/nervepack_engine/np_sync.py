@@ -389,6 +389,10 @@ def sync(mode="backup", verbose=False):
     # until the engine happened to move too, which is unrelated timing (#284).
     if team_moved or content_moved:
         _relink_skills(target)
+    if content_moved:
+        # The overlay's global rules and settings may have changed with it. An
+        # engine pull already got this through install-hooks.
+        _setup_step(target, "sync-global-config")
     _layout_validity_check()
     _layout_drift_pass()
     return outcome

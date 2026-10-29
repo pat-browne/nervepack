@@ -142,6 +142,17 @@
       }
     },
     {
+      "id": "global-config",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the overlay's global rules and host settings match this machine",
+      "why": "The content overlay's config/global-rules.md and config/host-settings.json are projected onto each host at install-hooks and sync time. A machine that missed a sync runs different global rules than the overlay says.",
+      "accept": "With the global-config toggle on and overlay files present, every rules block equals global-rules.md and every allowed settings key already holds the overlay value. Reports PASS when the toggle is off or the overlay has no config.",
+      "hints": {
+        "generic": "run python3 engine/nervepack_engine/cli.py setup sync-global-config. It is idempotent and never touches hooks, permissions or env."
+      }
+    },
+    {
       "id": "hook-scripts",
       "tier": "SHOULD",
       "check": "core",

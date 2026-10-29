@@ -311,7 +311,8 @@ class NpSync(unittest.TestCase):
         self._advance_content_remote()
         out, _ = self._run_full("exit", content_dir=self.content_dir)
         self.assertIn("up to date", out)          # the ENGINE did not move
-        self.assertEqual(self._setup_calls(marker), ["setup link-skills"])
+        self.assertEqual(self._setup_calls(marker),
+                         ["setup link-skills", "setup sync-global-config"])
 
     def test_content_layer_already_level_does_not_relink(self):
         """Nothing arrived, so there is nothing new to link."""

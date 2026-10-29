@@ -115,6 +115,12 @@ def _core_check(cap_id, np):
         return _skill_listing_check()
     if cap_id == "cron-branch":
         return _cron_branch_check(np)
+    if cap_id == "global-config":
+        try:
+            import np_global_config
+            return np_global_config.doctor_status()
+        except Exception as exc:
+            return "WARN (global-config check failed: %s)" % type(exc).__name__
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call
