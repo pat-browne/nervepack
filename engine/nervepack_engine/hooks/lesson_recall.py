@@ -151,7 +151,9 @@ def _arm_if_gated(f, state_dir, sid, topic):
         return
     try:
         os.makedirs(state_dir, exist_ok=True)
-        with open(os.path.join(state_dir, "%s-%s-gate-armed" % (sid.replace("/", "_"), topic)),
+        # Slashes become "_" in both ids, so an INDEX topic like "../x" stays in state_dir.
+        with open(os.path.join(state_dir, "%s-%s-gate-armed" % (
+                sid.replace("/", "_"), topic.replace("/", "_"))),
                   "a", encoding="utf-8"):
             pass
     except OSError:
@@ -201,7 +203,7 @@ def run(payload_text, pii_filter_fn=None):
     fail_ctx = ""
     success_ctx = ""
     norm_prompt = _norm(prompt)
-    candidates = []  # (score, specificity, order, topic, file)
+    candidates = []  # (hit_count, specificity, order, topic, file)
     rows = []
     for d in ls_roots:
         index_path = os.path.join(d, "INDEX.md")

@@ -455,5 +455,14 @@ class TestLessonRecall(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g16-t3-gate-armed")))
 
 
+    def test_recall_gate_marker_for_a_traversal_topic_stays_in_state_dir(self):
+        os.makedirs(os.path.join(self.lessons, "sub"), exist_ok=True)
+        self._index("| sub/evil |  |  | merge |\n")
+        self._write("sub/evil.md", "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** b\n")
+        self._run("g21", "merge it")
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "state", "g21-sub_evil-gate-armed")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g21-sub")))
+
+
 if __name__ == "__main__":
     unittest.main()

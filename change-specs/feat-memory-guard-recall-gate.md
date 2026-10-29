@@ -5,6 +5,7 @@ date: 2026-10-29
 tier: high
 blast_radius:
   - engine/nervepack_engine/hooks/lesson_recall.py
+  - engine/nervepack_engine/hooks/lesson_guard.py
   - engine/nervepack_engine/np_capture.py
   - engine/setup/toggles.conf
   - engine/setup/toggle-schema.json

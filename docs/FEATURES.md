@@ -365,8 +365,8 @@ top `lessons.recall_top` (default 3) inject. A topic needs `lessons.recall_min_h
 
 **Write guard.** `np_capture.append_note()` checks every `struggles[]`/`strategies[]`
 item before it reaches the inbox, with no model call. It drops junk (`n/a`, `none`,
-empty), items under 20 or over 2000 characters, and duplicates of any item already in
-the inbox. Dropped items are listed in the record's `guard.dropped`. Param
+empty), items whose normalized text is under 20 characters, items whose raw text is
+over 2000 characters, and duplicates of any item still in the undrained inbox. Dropped items are listed in the record's `guard.dropped`. Param
 `memory.write_guard` (default on).
 
 **Body format (paired rules).** Each entry is one line under an `## <objective>`
