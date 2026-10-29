@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import time
+import unicodedata
 
 import np_capture
 import np_paths
@@ -106,7 +107,7 @@ def _log(msg):
     try:
         os.makedirs(os.path.dirname(log), exist_ok=True)
         with open(log, "a", encoding="utf-8") as fh:
-            fh.write("%s journal: %s\n" % (_now(), msg))
+            fh.write("%s journal: %s\n" % (_now(), re.sub(r"[^\x20-\x7e]", "?", str(msg))))
     except OSError:
         pass
 
@@ -407,36 +408,121 @@ def _real(vals):
     return out
 
 
+# Journal text is a Haiku summary of a transcript, so it can carry text a session read
+# (a web page, a file, tool output). The crawl treats it as untrusted: it drops entries
+# that look like links, commands, or instructions aimed at an agent, and caps the rest.
+CRAWL_MODE = "journal-crawl"
+CRAWL_MAX_PER_KIND = 5
+CRAWL_FIELD_CAP = 200
+_HIDDEN = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\U000e0000-\U000e007f"
+                     "\x00-\x08\x0b-\x1f\x7f]")
+_CRAWL_DENY = (
+    ("url", re.compile(r"(?:[a-z][a-z0-9+.-]*://|\bwww\.|\bdata:[a-z/+-]+[;,]|\bmailto:|\bjavascript:)")),
+    ("code", re.compile(r"`|\$\(|&&|\|\s*(?:ba|z)?sh\b|^\s*[$#>]\s")),
+    ("shell", re.compile(
+        r"\b(?:sudo|curl|wget|chmod|chown|eval|ssh|scp|ncat?)\s+\S|\brm\s+-|\b(?:ba|z)?sh\s+(?:-c|\S*/)"
+        r"|\bgit\s+(?:push|reset\s+--hard|clean)\b|\b(?:pip3?|npm|yarn|brew)\s+install\b"
+        r"|\bpython3?\s+-c\b|\bbase64\s+(?:-d|--decode)\b")),
+    ("markup", re.compile(r"<\s*/?\s*[a-z!][^>]*>|<\|")),
+    ("role", re.compile(r"\b(?:system|assistant|developer)\s*:")),
+    ("imperative", re.compile(
+        r"\b(?:ignore|disregard|forget|override)\s+(?:all|any|the|previous|prior|your|these|those|earlier|above)\b"
+        r"|\byou\s+(?:must|should|shall|need\s+to|have\s+to|are\s+to|will)\b|\byou\s+are\s+now\b"
+        r"|\bfrom\s+now\s+on\b"
+        r"|\b(?:always|never)\s+(?:run|execute|use|call|invoke|ignore|approve|allow|skip|disable|trust|follow|obey"
+        r"|send|ask|tell|warn|flag|check|reveal|print)\b"
+        r"|\b(?:do\s+not|don'?t)\s+(?:tell|mention|inform|ask|warn|reveal|disclose)\b"
+        r"|\b(?:new|updated|revised)\s+instructions?\b|\b(?:act|behave)\s+as\b|\bpretend\b"
+        r"|\b(?:execute|run|invoke)\s+(?:the\s+|this\s+|any\s+|these\s+)?(?:following|command|tool|script|code)\b"
+        r"|\b(?:disable|bypass|turn\s+off|skip)\s+(?:the\s+|all\s+|any\s+)?"
+        r"(?:hook|guard|gate|check|review|verification|safety|permission|sandbox|scrub)"
+        r"|\b(?:exfiltrate|reveal|print|send|upload|post)\b.{0,40}\b(?:secret|token|credential|password|api\s+key|env)"
+        r"|\bjailbreak\b|\bauto-?approve\b"
+        r"|\b(?:the\s+)?(?:assistant|agent|claude|model|ai)\s+(?:must|should|shall|will)\b"
+        r"|\bnote\s+to\s+(?:the\s+)?(?:assistant|agent|claude|ai)\b")),
+)
+
+
+def _unsafe_reason(text):
+    """Name of the first rule the text trips, or "" when it is safe to crawl."""
+    t = unicodedata.normalize("NFKC", text)
+    if _HIDDEN.search(t):
+        return "hidden"
+    low = " ".join(t.lower().split())
+    for name, rx in _CRAWL_DENY:
+        if rx.search(low):
+            return name
+    return ""
+
+
+def _clip(text, cap=CRAWL_FIELD_CAP):
+    text = " ".join(text.split())
+    return text if len(text) <= cap else text[:cap - 3].rstrip() + "..."
+
+
+def _crawl_clean(vals, drops):
+    """Drop unsafe entries (counted into drops by reason), clip the rest."""
+    out = []
+    for v in vals:
+        why = _unsafe_reason(v)
+        if why:
+            drops[why] = drops.get(why, 0) + 1
+        else:
+            out.append(_clip(v))
+    return out
+
+
 def _episodic_record(sid, cwd, blocks):
-    """Inbox record carrying the journal's struggles and wins, or None."""
-    struggles = _real(b.get("struggles") for b in blocks)
-    wins = _real([b.get("wins") for b in blocks] + [b.get("skills") for b in blocks])
-    if not (struggles or wins):
-        return None
+    """Inbox record carrying the journal's struggles and wins, or None.
+
+    Items go under crawl_struggles / crawl_strategies, never struggles / strategies, and
+    carry no tool_match, topic_triggers or destructive flag. Episodic-maintain reads
+    those keys as corroboration only, so a crawl record cannot create a lesson or an
+    enforce block by itself.
+    """
+    drops = {}
+    struggles = _crawl_clean(_real(b.get("struggles") for b in blocks), drops)[-CRAWL_MAX_PER_KIND:]
+    wins = _crawl_clean(_real([b.get("wins") for b in blocks] + [b.get("skills") for b in blocks]),
+                        drops)[-CRAWL_MAX_PER_KIND:]
     last = blocks[-1]
+    goal = _crawl_clean(_real(b.get("goal") for b in blocks), drops)
+
+    def part(label, val):
+        val = (val or "").strip()
+        if not val or val.lower() in _EMPTY:
+            return ""
+        kept = _crawl_clean([val], drops)
+        return "%s: %s." % (label, kept[0]) if kept else ""
+
+    n_dropped = sum(drops.values())
+    if n_dropped:
+        _log("crawl: dropped %d unsafe journal entr%s for %s (%s)" % (
+            n_dropped, "y" if n_dropped == 1 else "ies", _safe(sid),
+            ", ".join("%s=%d" % kv for kv in sorted(drops.items()))))
+    if not (struggles or wins):
+        _log("crawl: no safe struggles or wins to stage for %s" % _safe(sid))
+        return None
     repo = ""
     for b in blocks:
         if b.get("repo"):
             repo = b["repo"].split(" @ ")[0]
             break
-    goal = _real(b.get("goal") for b in blocks)
     body = " ".join(x for x in (
         "Goal: %s." % goal[-1] if goal else "",
-        "Progress: %s." % last["progress"] if last.get("progress", "none").lower() not in _EMPTY else "",
-        "Decisions: %s." % last["decisions"] if last.get("decisions") else "",
-        "Open: %s." % last["open_questions"] if last.get("open_questions") else "",
-        "Next: %s." % last["next_step"] if last.get("next_step") else "") if x)
+        part("Progress", last.get("progress")), part("Decisions", last.get("decisions")),
+        part("Open", last.get("open_questions")), part("Next", last.get("next_step"))) if x)
     return {
         "session_id": sid, "ts": _now(), "project": repo or os.path.basename(cwd or "") or "unknown",
-        "cwd": cwd or "", "mode": "journal-crawl",
+        "cwd": cwd or "", "mode": CRAWL_MODE,
         "headline": ("Journal: %s" % (goal[-1] if goal else "session"))[:80],
         "body": body[:1200], "candidate_topics": [], "keywords": [],
+        "crawl_sanitize": {"dropped": n_dropped, "reasons": drops},
         # The journal records no fix. The capture write guard drops an empty fix as junk,
         # so state that plainly instead.
-        "struggles": [{"symptom": x, "cause": "", "fix": "not recorded in the journal", "tool_match": "",
-                       "topic_triggers": [], "destructive": False} for x in struggles],
-        "strategies": [{"title": "Journal win", "description": x[:160], "content": x,
-                        "topic_triggers": []} for x in wins],
+        "crawl_struggles": [{"symptom": x, "cause": "", "fix": "not recorded in the journal",
+                             "source": CRAWL_MODE} for x in struggles],
+        "crawl_strategies": [{"title": "Journal win", "description": x[:160], "content": x,
+                              "source": CRAWL_MODE} for x in wins],
     }
 
 
