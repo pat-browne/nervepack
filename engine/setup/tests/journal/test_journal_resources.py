@@ -394,6 +394,40 @@ class TestDrain(JournalBase):
         self.assertIn("\\<b\\>", row)
         self.assertEqual(len(row.split(" | ")), 4)
 
+    def test_concurrent_drain_is_serialized_by_lock(self):
+        cdir = np_resources.catalog_dir()
+        os.makedirs(cdir)
+        open(os.path.join(cdir, ".drain.lock"), "w").close()
+        self._stage("api.example.com")
+        with mock.patch.dict(os.environ, {"NP_RESOURCES_LOG": os.path.join(self.tmp, "r.log")}):
+            self.assertEqual(np_resources.drain(), 0)
+        self.assertEqual(len(os.listdir(os.environ["NP_RESOURCES_INBOX"])), 1)
+        self.assertEqual(self._catalog(), [])
+
+    def test_stale_lock_is_reclaimed_and_released(self):
+        cdir = np_resources.catalog_dir()
+        os.makedirs(cdir)
+        lock = os.path.join(cdir, ".drain.lock")
+        open(lock, "w").close()
+        old = time.time() - 3600
+        os.utime(lock, (old, old))
+        self._stage("api.example.com")
+        self.assertEqual(np_resources.drain(), 1)
+        self.assertFalse(os.path.exists(lock))
+
+    def test_no_secret_value_reaches_catalog_files(self):
+        items = np_resources.extract(SECRET_TEXT)
+        np_resources.stage(items, "s1", "repo-a")
+        np_resources.stage([{"id": "api.example.com", "type": "hostname",
+                             "purpose": "token=Sup3rS3cretValue"}], "s1", "repo-a")
+        np_resources.drain()
+        blob = ""
+        for name in os.listdir(np_resources.catalog_dir()):
+            with open(os.path.join(np_resources.catalog_dir(), name), encoding="utf-8") as fh:
+                blob += fh.read()
+        for secret in ("Sup3rS3cretValue", "hunter2pass", "abcDEF123456", "abcdefghijklmnop1234"):
+            self.assertNotIn(secret, blob)
+
     def test_drain_with_empty_inbox_is_noop(self):
         self.assertEqual(np_resources.drain(), 0)
         self.assertFalse(os.path.exists(np_resources.catalog_dir()))

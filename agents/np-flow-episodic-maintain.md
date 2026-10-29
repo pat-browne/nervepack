@@ -193,8 +193,8 @@ git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
 _paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources"
-# Plus each skill/wiki page that got a `Lessons: [[lessons/<topic>]]` backlink in 5b —
-# append those paths explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
+# Only if step 5b ran: also add each skill/wiki page that got a `Lessons: [[lessons/<topic>]]`
+# backlink, explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
 git add $_paths
 git commit -m "episodic(maintain): weekly drain ($(date -u +%F))" \
   -m "Themes touched: <list>. Notes merged: <N>. Compacted: <list or none>." \

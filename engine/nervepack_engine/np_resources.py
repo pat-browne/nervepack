@@ -220,6 +220,27 @@ def _load_catalog(cdir):
     return recs
 
 
+_LOCK_STALE = 600
+
+
+def _acquire(cdir):
+    """Take the catalog lock. Returns the lock path, or None when another drain holds it."""
+    path = os.path.join(cdir, ".drain.lock")
+    for _ in range(2):
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return path
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(path) > _LOCK_STALE:
+                    os.remove(path)
+                    continue
+            except OSError:
+                pass
+            return None
+    return None
+
+
 def _write_atomic(path, text):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
@@ -250,10 +271,51 @@ def render_index(records):
     return "\n".join(out) + "\n"
 
 
+def _merge(idir, files, cdir):
+    recs = _load_catalog(cdir)
+    month = time.strftime("%Y-%m", time.gmtime()) + ".jsonl"
+    dirty, merged = set(), 0
+    for f in files:
+        with open(os.path.join(idir, f), encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    n = json.loads(line)
+                except ValueError:
+                    continue
+                ident = n.get("id") if isinstance(n, dict) else None
+                if not _safe(ident or ""):
+                    continue
+                ts = n.get("ts") or _now()
+                merged += 1
+                if ident in recs:
+                    fname, r = recs[ident]
+                    r["last_seen"] = max(r.get("last_seen") or "", ts)
+                    r["seen"] = r.get("seen", 1) + 1
+                    if not r.get("purpose") and n.get("purpose"):
+                        r["purpose"] = n["purpose"]
+                else:
+                    fname = month
+                    recs[ident] = (fname, {"id": ident, "type": n.get("type") or "other",
+                                           "purpose": n.get("purpose") or "", "first_seen": ts,
+                                           "last_seen": ts, "session": n.get("session") or "",
+                                           "repo": n.get("repo") or "", "seen": 1})
+                dirty.add(fname)
+    for fname in dirty:
+        rows = sorted((r for fn, r in recs.values() if fn == fname), key=lambda r: r.get("first_seen", ""))
+        _write_atomic(os.path.join(cdir, fname),
+                      "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n"
+                              for r in rows))
+    _write_atomic(os.path.join(cdir, "INDEX.md"), render_index([r for _, r in recs.values()]))
+    for f in files:
+        os.remove(os.path.join(idir, f))
+    return merged
+
+
 def drain():
     """Merge the inbox into the overlay catalog and rewrite INDEX.md.
 
-    Returns the number of inbox records merged. Never raises.
+    Returns the number of inbox records merged. Never raises. A lock file
+    serializes concurrent drains; the loser keeps its inbox for the next run.
     """
     try:
         idir = inbox_dir()
@@ -267,43 +329,17 @@ def drain():
         if not cdir:
             return 0
         os.makedirs(cdir, exist_ok=True)
-        recs = _load_catalog(cdir)
-        month = time.strftime("%Y-%m", time.gmtime()) + ".jsonl"
-        dirty, merged = set(), 0
-        for f in files:
-            with open(os.path.join(idir, f), encoding="utf-8") as fh:
-                for line in fh:
-                    try:
-                        n = json.loads(line)
-                    except ValueError:
-                        continue
-                    ident = n.get("id") if isinstance(n, dict) else None
-                    if not _safe(ident or ""):
-                        continue
-                    ts = n.get("ts") or _now()
-                    merged += 1
-                    if ident in recs:
-                        fname, r = recs[ident]
-                        r["last_seen"] = max(r.get("last_seen") or "", ts)
-                        r["seen"] = r.get("seen", 1) + 1
-                        if not r.get("purpose") and n.get("purpose"):
-                            r["purpose"] = n["purpose"]
-                    else:
-                        fname = month
-                        recs[ident] = (fname, {"id": ident, "type": n.get("type") or "other",
-                                               "purpose": n.get("purpose") or "", "first_seen": ts,
-                                               "last_seen": ts, "session": n.get("session") or "",
-                                               "repo": n.get("repo") or "", "seen": 1})
-                    dirty.add(fname)
-        for fname in dirty:
-            rows = sorted((r for fn, r in recs.values() if fn == fname), key=lambda r: r.get("first_seen", ""))
-            _write_atomic(os.path.join(cdir, fname),
-                          "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n"
-                                  for r in rows))
-        _write_atomic(os.path.join(cdir, "INDEX.md"), render_index([r for _, r in recs.values()]))
-        for f in files:
-            os.remove(os.path.join(idir, f))
-        return merged
+        lock = _acquire(cdir)
+        if not lock:
+            _log("drain: another drain holds the lock, inbox kept")
+            return 0
+        try:
+            return _merge(idir, files, cdir)
+        finally:
+            try:
+                os.remove(lock)
+            except OSError:
+                pass
     except Exception as exc:
         _log("drain: failed, inbox kept: %r" % (exc,))
         return 0
