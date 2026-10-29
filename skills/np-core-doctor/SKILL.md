@@ -73,6 +73,13 @@ outcomes. Read `~/.cache/nervepack/backcapture.log` (the reliable capture path) 
 `session-flush.log`. Every bail/success string is decoded in
 references/log-patterns.md.
 
+No way of ending a session makes the direct SessionEnd hook fire reliably.
+Claude Code kills slow SessionEnd hooks, and `/exit` skips SessionEnd
+entirely, so the sweep is the intended path, not a workaround. To capture a
+just-ended session now, run the sweep by hand instead of waiting for the next
+`SessionStart`:
+`python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" hook backcapture-sweep`.
+
 **`backcapture-enabled` WARN, or real metrics/episodic records stop appearing
 for weeks with every other check green.** `memory.backcapture` gates the
 SessionStart backstop for the SessionEnd evaluator hook, which is unreliable
@@ -80,7 +87,9 @@ on its own (Claude Code kills slow SessionEnd hooks, and `/exit` skips
 SessionEnd entirely). With the toggle off, sessions the evaluator misses are
 never recovered, and `evaluator(metrics)` cron commits correctly report "0
 record(s)" because the inbox really is empty. The bug is upstream, not in the
-aggregator. Fix: `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on`, then re-run the
+aggregator.
+
+Fix: `python3 engine/nervepack_engine/cli.py toggle memory.backcapture on`, then re-run the
 doctor. Only new sessions pick this up; a session already running waits for
 its next `SessionStart`. Deeper root-cause trace, for the one time this
 shipped without the check yet: `references/backcapture-toggle-incident.md`.

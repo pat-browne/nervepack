@@ -50,6 +50,51 @@
    with the file (observed: a trim to get under budget landed after the regen, and the
    commit carried a stale count). Run it in the **primary checkout, never an engine
    worktree** — it would repoint every host skill symlink into the worktree.
+   A separate risk applies to any isolated contribution worktree. The raw
+   `np_generate_index.py` and `np_link_skills.py` scripts, and `cli.py setup
+   link-skills` itself, locate the repo from an argument, then `NP_DIR`,
+   then `NERVEPACK`, then the script file's own location. The current
+   working directory is never consulted.
+
+   If you run these scripts from a worktree with none of those variables
+   set to that worktree's own path, they rewrite the primary checkout
+   with no warning.
+
+   First confirm `$REPO`'s value with `echo "$REPO"`. A subdirectory's
+   relative path can otherwise mislead. `$REPO` is the primary checkout,
+   never the worktree (see the `$REPO` note in `SKILL.md`).
+
+   To check, run `git -C "$REPO" status --short` after any regen.
+
+   Also run `ls -l ~/.claude/skills/`. Confirm every symlink still points
+   into `$REPO`, not the worktree.
+
+   `INDEX.md` alone changing, with every symlink still pointing at `$REPO`,
+   is the known failure.
+
+   Revert it, in the primary checkout and never the worktree, with
+   `git -C "$REPO" checkout -- INDEX.md` (this discards any uncommitted
+   changes to that file).
+
+   Anything beyond that is not this known case. That includes another file
+   changed, or a symlink now pointing at the worktree.
+
+   For any of those, stop before reverting. Escalate to the user, naming
+   the affected paths or symlinks and that the regen ran from a worktree.
+   Include `git log --oneline -5` and the `git status --short` output.
+
+   Running unattended, with no user to escalate to: log the affected paths
+   or symlinks and the regen-from-a-worktree cause to the job's log, then
+   exit non-zero so the job is marked failed.
+
+   From a worktree, set `NP_DIR` to that worktree's own absolute path
+   first. For example: `NP_DIR=/path/to/worktree python3
+   engine/nervepack_engine/cli.py setup generate-index`.
+
+   If you're adding a new skill, hand-edit its row instead. Rows sit in
+   alphabetical order:
+   `| [<name>](skills/<name>/SKILL.md) | <line-count> | <frontmatter description> |`.
+   `<line-count>` is the output of `wc -l` on that skill's `SKILL.md`.
    It regenerates `INDEX.md` from *every* skill in the tree, so if another writer has
    uncommitted edits, check `git -C "$REPO" diff -- INDEX.md` and expect only your own
    rows to move. If it carries someone else's, leave `INDEX.md` unstaged and say so.
