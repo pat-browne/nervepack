@@ -67,6 +67,7 @@ import np_bootstrap  # noqa: E402
 import np_dashboard  # noqa: E402
 import np_doctor  # noqa: E402
 import np_generate_index  # noqa: E402
+import np_global_config  # noqa: E402
 import np_hook  # noqa: E402
 import np_implement_suggestion  # noqa: E402
 import np_instruction_block  # noqa: E402
@@ -124,11 +125,20 @@ _CRONS = {
     "kb-promote-scan": np_agentic_cron.kb_promote_scan,
 }
 
+def _install_hooks_and_config():
+    """Register hooks, then project the overlay's global config. The sync is
+    fail-open, so it never changes the hook installer's exit code."""
+    rc = np_hook.install_hooks()
+    np_global_config.apply()
+    return rc
+
+
 _SETUP = {
     "install-memory-cron": np_scheduler_install.install_cron,
     "install-memory-launchd": np_scheduler_install.install_launchd,
     "install-memory-schtasks": np_scheduler_install.install_schtasks,
-    "install-hooks": np_hook.install_hooks,
+    "install-hooks": _install_hooks_and_config,
+    "sync-global-config": np_global_config.apply,
     "link-skills": np_link_skills.link,
     "generate-index": np_generate_index.generate,
     "link-dashboard-data": np_link_dashboard_data.link,
