@@ -18,6 +18,20 @@
     "type": "bool",
     "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
   },
+  "lessons.recall_min_hits": {
+    "type": "number",
+    "min": 1,
+    "description": "Whole-word trigger hits a lesson topic needs before recall can inject it."
+  },
+  "lessons.recall_top": {
+    "type": "number",
+    "min": 1,
+    "description": "Most lesson topics injected per prompt, ranked by hits then trigger rarity."
+  },
+  "memory.write_guard": {
+    "type": "bool",
+    "description": "Drop junk, too-short, too-long and duplicate struggles and strategies before they reach the inbox."
+  },
   "sync.interval": {
     "type": "number",
     "min": 60,
