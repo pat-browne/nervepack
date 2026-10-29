@@ -202,7 +202,9 @@ Process the `stack_facts[]` arrays across the inbox into `memory/stack-facts/`.
 This is the staging layer. You never write to `wiki/`: that tree is
 human-reviewed.
 
-1. Group items by `stack`. For each stack, create or refresh
+1. Group items by `stack`. Skip any item whose `stack` is not a plain slug
+   (`[a-z0-9-]`, 40 chars max). The path must be exactly
+   `memory/stack-facts/<slug>.md`. For each stack, create or refresh
    `memory/stack-facts/<stack>.md` with frontmatter `kind: stack-fact`,
    `stack: <stack>` and `seen: <n>`.
 2. One entry per claim, in this shape:

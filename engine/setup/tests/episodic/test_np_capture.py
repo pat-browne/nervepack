@@ -176,6 +176,38 @@ class TestNpCapture(unittest.TestCase):
         self.assertNotIn("ghp_ABCDEFG", line)
         self.assertIn("REDACTED", line)
 
+    def test_8c_stack_facts_are_sanitized(self):
+        # `stack` becomes memory/stack-facts/<stack>.md, so a model-supplied
+        # traversal string must never reach the inbox. evidence and source are
+        # constrained too.
+        good = {"stack": "fastapi", "claim": "c", "version": "1",
+                "evidence": "curl https://user:pw@host/x " + "e" * 400,
+                "source": "https://docs.example.com/a"}
+        note = json.dumps({
+            "headline": "h", "body": "b", "candidate_topics": ["t"], "keywords": ["k"],
+            "stack_facts": [
+                good,
+                {"stack": "../../skills/np-core-recall/SKILL", "claim": "c", "evidence": "e"},
+                {"stack": "..", "claim": "c", "evidence": "e"},
+                {"stack": "Py Thon", "claim": "c", "evidence": "e"},
+                {"stack": "", "claim": "c", "evidence": "e"},
+                {"stack": 7, "claim": "c", "evidence": "e"},
+                "not-a-dict",
+                {"stack": "rust", "claim": "c", "evidence": "e",
+                 "source": "https://u:p@evil.example/x"},
+                {"stack": "go", "claim": "c", "evidence": "e", "source": "file:///etc/passwd"},
+            ],
+        })
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        facts = json.loads(self._inbox_line())["stack_facts"]
+        self.assertEqual([f["stack"] for f in facts], ["fastapi", "rust", "go"])
+        self.assertNotIn("user:pw", facts[0]["evidence"])
+        self.assertLessEqual(len(facts[0]["evidence"]), 300)
+        self.assertEqual(facts[0]["source"], "https://docs.example.com/a")
+        self.assertEqual(facts[1]["source"], "")
+        self.assertEqual(facts[2]["source"], "")
+
     def test_9_bail_never_raises_when_log_dir_unwritable(self):
         # Ported from the retiring tests/toggles/test_hook_bail_unwritable_log.sh --
         # invariant 1 (fail-open): a bail() call must never raise even when its own

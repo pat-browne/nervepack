@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import urlparse
 
 import np_paths
 import np_toggle
@@ -63,6 +64,50 @@ def _home():
 
 def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+_STACK_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+_URL_USERINFO = re.compile(r"(?i)([a-z][a-z0-9+.-]*://)[^/@\s]+@")
+_EVIDENCE_MAX = 300
+
+
+def _safe_https_url(value):
+    """The URL if it is https with a host and no userinfo, else ""."""
+    if not isinstance(value, str):
+        return ""
+    try:
+        parts = urlparse(value)
+    except ValueError:
+        return ""
+    ok = parts.scheme == "https" and parts.hostname and not parts.username and not parts.password
+    return value if ok else ""
+
+
+def _sanitize_stack_facts(note):
+    """Constrain stack_facts[] in place. `stack` becomes a filename in
+    memory/stack-facts/, so it must be a plain slug. `evidence` is capped and
+    stripped of URL userinfo. `source` must be an https URL with no userinfo.
+    Items that fail are dropped. Never raises."""
+    facts = note.get("stack_facts")
+    if facts is None:
+        return
+    if not isinstance(facts, list):
+        note["stack_facts"] = []
+        return
+    clean = []
+    for item in facts:
+        if not isinstance(item, dict):
+            continue
+        stack = item.get("stack")
+        if not (isinstance(stack, str) and _STACK_SLUG.fullmatch(stack)):
+            continue
+        out = dict(item)
+        evidence = out.get("evidence")
+        out["evidence"] = _URL_USERINFO.sub(r"\1[REDACTED]@", evidence)[:_EVIDENCE_MAX] \
+            if isinstance(evidence, str) else ""
+        out["source"] = _safe_https_url(out.get("source"))
+        clean.append(out)
+    note["stack_facts"] = clean
 
 
 def was_captured(payload):
@@ -252,8 +297,10 @@ def capture(payload, mode="session-end"):
         note = json.loads(jx.stdout)
     except ValueError:
         return "captured"
+    if isinstance(note, dict):
+        _sanitize_stack_facts(note)
 
-    envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
+    envelope ={"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note
     if not append_note(envelope):
         return "captured"
