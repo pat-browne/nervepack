@@ -271,6 +271,27 @@ def render_index(records):
     return "\n".join(out) + "\n"
 
 
+_DRAINING = ".draining"
+
+
+def _claim(idir, files):
+    """Rename each live inbox file so appends during the merge land in a fresh file.
+
+    Files already claimed by an interrupted drain are picked up as they are.
+    """
+    out = []
+    for f in files:
+        if f.endswith(_DRAINING):
+            out.append(f)
+            continue
+        try:
+            os.replace(os.path.join(idir, f), os.path.join(idir, f + _DRAINING))
+            out.append(f + _DRAINING)
+        except OSError:
+            pass
+    return out
+
+
 def _merge(idir, files, cdir):
     """Merge inbox records into the catalog, deduping by id. Returns the count merged.
 
@@ -325,7 +346,7 @@ def drain():
     """
     try:
         idir = inbox_dir()
-        files = sorted(f for f in os.listdir(idir) if f.endswith(".jsonl"))
+        files = sorted(f for f in os.listdir(idir) if f.endswith((".jsonl", _DRAINING)))
     except OSError:
         return 0
     if not files:
@@ -340,7 +361,7 @@ def drain():
             _log("drain: another drain holds the lock, inbox kept")
             return 0
         try:
-            return _merge(idir, files, cdir)
+            return _merge(idir, _claim(idir, files), cdir)
         finally:
             try:
                 os.remove(lock)

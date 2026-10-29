@@ -428,6 +428,26 @@ class TestDrain(JournalBase):
         for secret in ("Sup3rS3cretValue", "hunter2pass", "abcDEF123456", "abcdefghijklmnop1234"):
             self.assertNotIn(secret, blob)
 
+    def test_interrupted_drain_claim_is_recovered(self):
+        self._stage("api.example.com")
+        idir = os.environ["NP_RESOURCES_INBOX"]
+        for f in os.listdir(idir):
+            os.rename(os.path.join(idir, f), os.path.join(idir, f + ".draining"))
+        self.assertEqual(np_resources.drain(), 1)
+        self.assertEqual(os.listdir(idir), [])
+
+    def test_append_after_claim_survives_for_next_drain(self):
+        self._stage("api.example.com")
+        real = np_resources._merge
+
+        def merge_then_append(idir, files, cdir):
+            self._stage("late.example.com")
+            return real(idir, files, cdir)
+        with mock.patch.object(np_resources, "_merge", merge_then_append):
+            self.assertEqual(np_resources.drain(), 1)
+        self.assertEqual(np_resources.drain(), 1)
+        self.assertEqual({r["id"] for r in self._catalog()}, {"api.example.com", "late.example.com"})
+
     def test_drain_with_empty_inbox_is_noop(self):
         self.assertEqual(np_resources.drain(), 0)
         self.assertFalse(os.path.exists(np_resources.catalog_dir()))

@@ -513,6 +513,7 @@ def ttl_sweep(days=None):
         except ValueError:
             days = 30
     cutoff = time.time() - days * 86400
+    double_ttl_cutoff = cutoff - days * 86400  # past this age a failed crawl no longer keeps the file
     removed = 0
     for root in (_dir(), _recall_dir()):
         try:
@@ -530,7 +531,7 @@ def ttl_sweep(days=None):
                             ok = crawl(name[:-3])
                         except Exception:
                             ok = False
-                        if not ok and os.path.getmtime(path) >= cutoff - days * 86400:
+                        if not ok and os.path.getmtime(path) >= double_ttl_cutoff:
                             _log("ttl: crawl failed for %s, keeping until 2x TTL" % name)
                             continue
                         if not ok:
