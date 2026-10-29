@@ -525,7 +525,9 @@ def commit_shared(message, np_root=None, replay=None):
     if not _only_the_row(root, rel, feature):
         changed = _git(root, ["diff", "--quiet", "--", rel])
         if off_main:
-            _git(root, ["checkout", "-q", "--", rel])
+            undo = _git(root, ["checkout", "-q", "--", rel])
+            if undo is None or undo.returncode != 0:
+                print("np-toggle: could not reset %s in %s" % (rel, root), file=sys.stderr)
         if changed is not None and changed.returncode != 0:
             print("np-toggle: refused to commit. %s has edits beyond the %s row"
                   % (rel, feature), file=sys.stderr)

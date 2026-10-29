@@ -294,6 +294,23 @@ class RemoveAndDrift(Base):
         self.assertEqual(_read(self.agents_md), "# Other\n")
         self.assertIsNone(ib.read_tagged(self.claude_md, gc.TAG))
 
+    def test_toggle_flip_off_removes_at_once(self):
+        import np_toggle
+        self.cfg(rules=RULES, settings={"theme": "dark"})
+        self.apply()
+        self.assertIsNotNone(ib.read_tagged(self.claude_md, gc.TAG))
+        np_toggle.flip("global-config", "off")
+        self.assertIsNone(ib.read_tagged(self.claude_md, gc.TAG))
+        self.assertNotIn("theme", self.host_settings())
+        np_toggle.flip("global-config", "on")
+        self.assertIsNotNone(ib.read_tagged(self.claude_md, gc.TAG))
+
+    def test_non_object_marketplaces_and_plugins_are_reported(self):
+        self.cfg(rules=None, settings={"enabledPlugins": ["x"], "extraKnownMarketplaces": 3})
+        _, err = self.apply()
+        self.assertIn("enabledPlugins", err)
+        self.assertIn("extraKnownMarketplaces", err)
+
     def test_remove_keeps_a_key_the_user_changed_since(self):
         self.cfg(rules=None, settings={"theme": "dark"})
         self.apply()

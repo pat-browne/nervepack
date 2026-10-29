@@ -230,6 +230,7 @@ def _apply_trust(allowed, current):
     markets = allowed.get("extraKnownMarketplaces")
     if markets is not None and not isinstance(markets, dict):
         kept.pop("extraKnownMarketplaces")
+        skipped.append(("extraKnownMarketplaces", "rejected: value is not an object"))
         markets = None
     lines_for = {}
     if markets is not None:
@@ -255,6 +256,7 @@ def _apply_trust(allowed, current):
     plugins = allowed.get("enabledPlugins")
     if plugins is not None and not isinstance(plugins, dict):
         kept.pop("enabledPlugins")
+        skipped.append(("enabledPlugins", "rejected: value is not an object"))
         plugins = None
     if plugins is not None:
         ok = {}
