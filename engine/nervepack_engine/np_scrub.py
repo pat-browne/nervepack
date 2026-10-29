@@ -41,6 +41,17 @@ _RULES = [
      rb'\1\2[REDACTED-SECRET]'),
     (rb'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}', rb'[REDACTED-JWT]'),
     (rb'-----BEGIN[ A-Z]*PRIVATE KEY-----', rb'[REDACTED-KEY]'),
+    # Credentials in command lines and URLs (security review of stack_facts[].evidence).
+    # URL userinfo: https://user:pw@host or https://TOKEN@host.
+    (rb'([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@', rb'\1[REDACTED-SECRET]@'),
+    # --password hunter2, --password=hunter2, --token "abc def". Longer flag names such as
+    # --token-file and --password-stdin do not match: the name must end at = or space.
+    (rb'(--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret))'
+     rb'(=|\s+)["\']?[^\s"\']+["\']?', rb'\1\2[REDACTED-SECRET]'),
+    # curl -u user:pw, --user user:pw
+    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:\S+', rb'\1[REDACTED-SECRET]'),
+    # Authorization: Basic <base64>
+    (rb'[Bb]asic\s+[A-Za-z0-9+/]{8,}={0,2}', rb'Basic [REDACTED-SECRET]'),
 ]
 _COMPILED = [(re.compile(p), r) for p, r in _RULES]
 
