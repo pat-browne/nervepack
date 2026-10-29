@@ -44,8 +44,11 @@ Capture as you go with /np-core-capture-learning. Run it at each of these:
 Each run covers only what is new since the last.
 
 Before the final report, run the stack sweep. See np-core-capture-learning,
-references/stack-wiki.md. Name each tech stack you touched. Save the facts you
-verified about it to its wiki topic.
+references/stack-wiki.md. Name each tech stack you touched and the facts you
+verified about it. Write them to the wiki only if a human is attending this
+session. A dispatched worker or child session is unattended: list the facts
+under "Stack facts:" in the report and leave the wiki write to the lead or a
+human. The capture hook stages them in memory/stack-facts/ either way.
 
 End your final report with "Captured: <paths>", wiki pages included, or
 "Captured: nothing new, because <reason>".
