@@ -301,8 +301,8 @@ def _touch(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(_now())
-    except OSError:
-        pass
+    except OSError as exc:
+        _log("receipt write failed for %s: %r" % (path, exc))
 
 
 def _read_journal(sid):

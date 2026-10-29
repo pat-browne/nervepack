@@ -272,6 +272,12 @@ def render_index(records):
 
 
 def _merge(idir, files, cdir):
+    """Merge inbox records into the catalog, deduping by id. Returns the count merged.
+
+    An existing id gets a newer last_seen, a higher seen count, and a purpose when it
+    had none. A new id goes to the current month file. Rewrites the touched month
+    files and INDEX.md, then deletes the inbox files. Caller holds the drain lock.
+    """
     recs = _load_catalog(cdir)
     month = time.strftime("%Y-%m", time.gmtime()) + ".jsonl"
     dirty, merged = set(), 0
