@@ -1,5 +1,5 @@
 ---
-id: 0101
+id: 0103
 status: accepted
 date: 2026-10-26
 tier: high
@@ -21,7 +21,7 @@ blast_radius:
   - change-specs/feat-global-config-sync.md
 ---
 
-# 0101: Global host config sync, toggle commit routing, index help flag
+# 0103: Global host config sync, toggle commit routing, index help flag
 
 ## Context and problem statement
 
