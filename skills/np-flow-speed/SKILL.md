@@ -25,6 +25,14 @@ Announce: "Using np-flow-speed."
 - Speed is not done at merge. It runs the finish line below until the change
   is deployed and verified live.
 
+## Working rules
+
+[[np-flow-develop]] references/working-rules.md applies. Speed mode changes three of them:
+
+- **Queue.** Work the queue to empty without check-ins. A user message mid-run joins the end, unless it blocks the current item.
+- **MVP.** You cannot ask before widening scope, so you never widen it. Log each scope idea under "Scope suggestions" in the decisions log.
+- **No apologies.** A mistake gets a decisions-log line naming the instruction gap and the fix.
+
 ## Model tiering: cheapest model that fits
 
 Speed mode delegates hands-on work to subagents. Each one runs on the cheapest
@@ -34,6 +42,7 @@ model that can do its job. The session default is never a worker's model.
 |---|---|
 | Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps | Haiku |
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
+| Fresh-eyes review of each change set (gets only the diff and the goal) | Haiku |
 | Coordination, hard calls, final verification | Coordinator (the session model) |
 
 - Pass a model on every subagent spawn and every separate session. An unset model silently inherits the coordinator's model and costs the most. The coordinator rule is in [[np-flow-orchestrate]] § Worker models.
@@ -127,6 +136,9 @@ Decisions
 
 Stopped at limits
 - <action> -- <which limit> -- <your recommendation>
+
+Scope suggestions
+- <idea> -- <how it helps the end goal>
 ```
 
 The final report also gives the PR link, merge state, CI result, the worker
