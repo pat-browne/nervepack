@@ -179,5 +179,144 @@ class TestNpCapture(unittest.TestCase):
         self.assertTrue(os.path.isfile(blocker))
 
 
+    # --- write guard: dedup, length and junk checks before an item reaches the inbox ---
+    def _struggle(self, symptom, fix="add a stdin=DEVNULL guard to every subprocess call"):
+        return {"symptom": symptom, "cause": "c", "fix": fix, "tool_match": "",
+                "topic_triggers": ["x"], "destructive": False}
+
+    def _records(self):
+        inbox = os.environ["EPISODIC_INBOX"]
+        out = []
+        for f in sorted(os.listdir(inbox)):
+            with open(os.path.join(inbox, f), encoding="utf-8") as fh:
+                out += [json.loads(l) for l in fh if l.strip()]
+        return out
+
+    def test_guard_drops_junk_short_and_overlong_items(self):
+        rec = {"session_id": "s", "struggles": [
+            self._struggle("n/a", fix="none"),
+            self._struggle("ok"  , fix="ok"),
+            self._struggle("x" * 3000),
+            self._struggle("CI job hung for six hours with no timeout set"),
+        ], "strategies": [{"title": "", "content": "todo"}]}
+        self.assertTrue(np_capture.append_note(rec))
+        r = self._records()[0]
+        self.assertEqual([s["symptom"] for s in r["struggles"]],
+                         ["CI job hung for six hours with no timeout set"])
+        self.assertEqual(r["strategies"], [])
+        self.assertEqual(sorted(d["reason"] for d in r["guard"]["dropped"]),
+                         ["junk", "junk", "too-long", "too-short"])
+
+    def test_guard_dedups_within_note_and_against_inbox(self):
+        s = self._struggle("CI job hung for six hours with no timeout set")
+        np_capture.append_note({"session_id": "a", "struggles": [s, dict(s)]})
+        np_capture.append_note({"session_id": "b", "struggles": [dict(s, symptom="CI  job hung for SIX hours with no timeout set.")]})
+        recs = self._records()
+        self.assertEqual(len(recs[0]["struggles"]), 1)
+        self.assertEqual(recs[1]["struggles"], [])
+        self.assertEqual(recs[1]["guard"]["dropped"][0]["reason"], "duplicate")
+
+    def test_guard_off_passes_items_through(self):
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("memory|shared|runtime|on|write_guard=off\n")
+        np_capture.append_note({"session_id": "s", "struggles": [self._struggle("n/a", fix="none")]})
+        r = self._records()[0]
+        self.assertEqual(len(r["struggles"]), 1)
+        self.assertNotIn("guard", r)
+
+
+    def test_guard_catches_uppercase_na_and_survives_bad_inbox_lines(self):
+        inbox = os.environ["EPISODIC_INBOX"]
+        os.makedirs(inbox, exist_ok=True)
+        with open(os.path.join(inbox, "old.jsonl"), "w") as fh:
+            fh.write('7\n{"struggles": "x"}\n')
+        self.assertTrue(np_capture.append_note({"session_id": "s", "struggles": [
+            self._struggle("N/A", fix="restart the runner and retry the build")]}))
+        r = [x for x in self._records() if isinstance(x, dict) and x.get("session_id") == "s"][0]
+        self.assertEqual(r["struggles"], [])
+
+
+    def _strategy(self, title, content="split the change so each unit plans against fresh state"):
+        return {"title": title, "description": "d", "content": content, "topic_triggers": ["x"]}
+
+    def test_guard_length_boundaries(self):
+        ok_long = "a " * 999 + "b"           # 1999 chars of symptom
+        rec = {"struggles": [
+            self._struggle(ok_long, fix="z"),             # 2001 chars with the fix, too long
+            self._struggle(ok_long[:-2], fix="z"),        # 1999 chars with the fix, kept
+            self._struggle("c " * 998 + "cc", fix="z"),   # exactly 2000 chars, kept
+            self._struggle("abcdefghi", fix="jklmnopqr"),  # normalized key 19 chars, too short
+            self._struggle("abcdefghi", fix="jklmnopqrs"), # 20 chars, kept
+        ]}
+        np_capture.append_note(rec)
+        r = self._records()[0]
+        self.assertEqual(len(r["struggles"]), 3)
+        self.assertEqual(sorted(d["reason"] for d in r["guard"]["dropped"]), ["too-long", "too-short"])
+
+    def test_guard_applies_to_strategies_and_keeps_kept_items_whole(self):
+        good = self._strategy("Split the change by plan unit")
+        np_capture.append_note({"strategies": [good, dict(good), self._strategy("TBD", content="tbd")]})
+        r = self._records()[0]
+        self.assertEqual(r["strategies"], [good])
+        self.assertEqual(sorted(d["reason"] for d in r["guard"]["dropped"]), ["duplicate", "junk"])
+
+    def test_guard_dedups_a_secret_bearing_item_against_its_scrubbed_copy(self):
+        s = self._struggle("leaked token ghp_ABCDEFGHIJKLMNOPQRSTU in a log line")
+        np_capture.append_note({"session_id": "a", "struggles": [s]})
+        np_capture.append_note({"session_id": "b", "struggles": [dict(s)]})
+        recs = self._records()
+        self.assertEqual(len(recs[0]["struggles"]), 1)
+        self.assertEqual(recs[1]["struggles"], [])
+
+    def test_guard_dropped_text_is_truncated_and_scrubbed(self):
+        junk = self._struggle("none", fix="token ghp_ABCDEFGHIJKLMNOPQRSTU " + "y" * 200)
+        np_capture.append_note({"struggles": [junk]})
+        inbox = os.environ["EPISODIC_INBOX"]
+        with open(os.path.join(inbox, os.listdir(inbox)[0]), encoding="utf-8") as fh:
+            raw = fh.read()
+        self.assertNotIn("ghp_ABCDEFG", raw)
+        self.assertLessEqual(len(self._records()[0]["guard"]["dropped"][0]["text"]), 80)
+
+    def test_guard_tolerates_odd_shapes(self):
+        rec = {"session_id": "s", "struggles": "not a list", "strategies": [7, None, "x"]}
+        self.assertTrue(np_capture.append_note(rec))
+        r = self._records()[0]
+        self.assertEqual(r["struggles"], "not a list")
+        self.assertEqual(r["strategies"], [])
+
+    def test_guard_leaves_a_record_without_items_untouched(self):
+        np_capture.append_note({"session_id": "s", "headline": "h"})
+        self.assertEqual(self._records()[0], {"session_id": "s", "headline": "h"})
+
+    def test_guard_runs_inside_capture_end_to_end(self):
+        note = json.dumps({"headline": "h", "body": "b", "candidate_topics": [], "keywords": [],
+                           "struggles": [self._struggle("n/a", fix="none"),
+                                         self._struggle("CI job hung for six hours with no timeout set")],
+                           "strategies": []})
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        r = self._records()[0]
+        self.assertEqual(len(r["struggles"]), 1)
+        self.assertEqual(r["guard"]["dropped"][0]["reason"], "junk")
+        self.assertTrue(os.listdir(os.environ["EPISODIC_SEEN_DIR"]))
+
+
+    def test_guard_scrubs_a_secret_that_straddles_the_audit_cut(self):
+        junk = self._struggle("none", fix="y" * 66 + " ghp_ABCDEFGHIJKLMNOPQRSTU tail")
+        np_capture.append_note({"struggles": [junk]})
+        inbox = os.environ["EPISODIC_INBOX"]
+        with open(os.path.join(inbox, os.listdir(inbox)[0]), encoding="utf-8") as fh:
+            raw = fh.read()
+        self.assertNotIn("ghp_", raw)
+
+    def test_guard_junk_in_any_core_field_drops_the_item(self):
+        # A struggle with a real symptom but no fix teaches nothing, so it is dropped.
+        np_capture.append_note({"struggles": [
+            self._struggle("CI job hung for six hours with no timeout set", fix="none")]})
+        r = self._records()[0]
+        self.assertEqual(r["struggles"], [])
+        self.assertEqual(r["guard"]["dropped"][0]["reason"], "junk")
+
+
 if __name__ == "__main__":
     unittest.main()
