@@ -181,7 +181,8 @@ def run(payload_text):
             except re.error:
                 continue
             topic = name[:-3]
-            armed = os.path.join(state_dir, "%s-%s-gate-armed" % (sid.replace("/", "_"), topic))
+            armed = os.path.join(state_dir, "%s-%s-gate-armed" % (
+                sid.replace("/", "_"), topic.replace("/", "_")))  # mirrors lesson_recall
             if not os.path.exists(armed):
                 continue
             try:
