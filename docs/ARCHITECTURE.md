@@ -169,7 +169,7 @@ PERFORMANCE
 ```
 
 Record shapes (keep these stable; readers depend on them):
-- **episodic inbox**: `{session_id, ts, project, cwd, mode} + {headline, body, candidate_topics[], keywords[], struggles[]}` (`session_id` lets the evaluator count this session's `struggles[]` cross-pipeline)
+- **episodic inbox**: `{session_id, ts, project, cwd, mode} + {headline, body, candidate_topics[], keywords[], struggles[], strategies[], stack_facts[]}` (`session_id` lets the evaluator count this session's `struggles[]` cross-pipeline). `stack_facts[]` is staged by `agents/np-flow-episodic-maintain.md` §5c into `memory/stack-facts/<stack>.md` (never straight to `wiki/`), then promoted by a human through `np-core-contribute`.
 - **metrics**: `{session_id, ts, project, signals{skills_invoked[], skill_tool_calls, skills_available, playbook_fires, playbook_heeded, recall_injections, directive_present, directive_tokens, struggles, tool_calls, tokens{…}}, contribution_score, helped[], shortfalls[], suggestions[], assets_used[]}` (field-by-field source + zero-bias notes: `docs/FEATURES.md` "Performance evaluator + signals")
 
 ## Design invariants — the proven choices. Don't relitigate these silently.
