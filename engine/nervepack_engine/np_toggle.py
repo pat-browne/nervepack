@@ -468,8 +468,12 @@ def _apply_flip(replay, path):
 
 def _only_the_row(repo, rel, feature):
     """True when the diff of `rel` is one changed line, in `feature`'s row."""
-    r = subprocess.run(["git", "-C", repo, "diff", "-U0", "--no-color", "--", rel],
-                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    try:
+        r = subprocess.run(["git", "-C", repo, "diff", "-U0", "--no-color", "--", rel],
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except OSError as exc:
+        print("np-toggle: git diff could not run: %s" % exc, file=sys.stderr)
+        return False
     if r.returncode != 0:
         print("np-toggle: git diff failed in %s: %s"
               % (repo, (r.stderr or "unknown error").strip()), file=sys.stderr)
@@ -521,7 +525,12 @@ def commit_shared(message, np_root=None, replay=None):
             print("np-toggle: not committed (could not reset %s in %s)" % (rel, root),
                   file=sys.stderr)
             return
-        _apply_flip(replay, target)
+        try:
+            _apply_flip(replay, target)
+        except (OSError, ValueError) as exc:
+            print("np-toggle: not committed (flip failed: %s)" % exc, file=sys.stderr)
+            _git(root, ["checkout", "-q", "--", rel])
+            return
     if not _only_the_row(root, rel, feature):
         changed = _git(root, ["diff", "--quiet", "--", rel])
         if off_main:
@@ -644,8 +653,8 @@ def managed(feat, state):
         try:
             import np_global_config
             np_global_config.apply()
-        except Exception:
-            pass
+        except Exception as exc:
+            print("np-toggle: global-config apply failed: %r" % exc, file=sys.stderr)
         return
     try:
         if state == "on":
