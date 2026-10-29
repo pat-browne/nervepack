@@ -438,6 +438,10 @@
     "min": 1,
     "description": "Delete journals and stale recall receipts older than this many days."
   },
+  "journal.crawl": {
+    "type": "bool",
+    "description": "Before a journal is deleted, send its struggles and wins to the episodic inbox and its resources to the resources catalog."
+  },
   "journal.recall_sources": {
     "type": "string",
     "description": "Which session starts re-inject the journal, joined with + (for example compact+resume)."

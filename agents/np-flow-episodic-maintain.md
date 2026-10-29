@@ -46,7 +46,10 @@ INBOX="$HOME/.cache/nervepack/episodic-inbox"
 ls "$INBOX"/*.jsonl 2>/dev/null
 ```
 
-If there are no inbox files, exit silently — nothing to do, no empty commit.
+If there are no inbox files, skip steps 3-5b. Still run step 6 when
+`git status --porcelain memory/resources` is non-empty: the cron has already merged
+the resources inbox into `memory/resources/` (deterministic, no action from you).
+With neither, exit silently — no empty commit.
 
 Each line is one note: `{ts, project, cwd, mode, headline, body,
 candidate_topics[], keywords[]}`.
@@ -175,7 +178,7 @@ enforcement gates the tool call — the two are decoupled).
 
 ### 6. Commit, push, clear inbox
 
-If `memory/episodic/` changed — commit + push **the cwd repo** (the content repo; do NOT
+If `memory/episodic/` or `memory/resources/` changed — commit + push **the cwd repo** (the content repo; do NOT
 `cd` away):
 
 ```bash
@@ -189,9 +192,9 @@ git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
-_paths="memory/episodic archive/episodic memory/lessons archive/lessons"
-# Plus each skill/wiki page that got a `Lessons: [[lessons/<topic>]]` backlink in 5b —
-# append those paths explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
+_paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources"
+# Only if step 5b ran: also add each skill/wiki page that got a `Lessons: [[lessons/<topic>]]`
+# backlink, explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
 git add $_paths
 git commit -m "episodic(maintain): weekly drain ($(date -u +%F))" \
   -m "Themes touched: <list>. Notes merged: <N>. Compacted: <list or none>." \
