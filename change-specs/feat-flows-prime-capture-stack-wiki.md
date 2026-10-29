@@ -14,7 +14,7 @@ blast_radius:
   - engine/setup/tests/episodic/test_np_capture.py
   - docs/ARCHITECTURE.md
   - INDEX.md
-  - change-specs/feat-flows-prime-and-capture.md
+  - change-specs/feat-flows-prime-capture-stack-wiki.md
 ---
 
 # 0094: Subagents prime from nervepack and capture stack facts
