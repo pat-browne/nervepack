@@ -32,6 +32,12 @@ keeps today's passive report-only behavior for engine, team, and content
 layers alike.
 
 ### `SKIPPED (dirty)`
+Sync drops a dirty `INDEX.md` by itself when it is the only change and its diff
+touches table rows only. `link-skills` regenerates those rows after every pull.
+A changed heading or prose line may be a hand edit, so sync skips and the status
+line names `INDEX.md`. Ask the user which copy is current: keep it (commit it) or
+discard it with `git checkout -- INDEX.md`.
+
 Run `git -C "${NP_DIR:-$HOME/Code/nervepack}" status --short`. Show the user. Suggest the right next
 step based on intent:
 - "I'm done with these changes" → invoke [[np-core-contribute]] to commit + push
