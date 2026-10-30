@@ -48,8 +48,11 @@ _RULES = [
     (rb'(?i)(authorization\s*:\s*)(?:(?:bearer|basic|token|digest|negotiate)\s+)?[^\s"\']+',
      rb'\1[REDACTED-SECRET]'),
     (rb'(?i)(://)[^/\s@:]+(?::[^/\s@]*)?@', rb'\1[REDACTED-CRED]@'),
-    (rb'(?i)((?:[a-z0-9]+[_-])?(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)'
+    (rb'(?i)((?:password|passwd|secret|token|api[_-]?key|access[_-]?key)'
      rb'["\']?\s*[:=]\s*)(?:"[^"]*"|\'[^\']*\'|[^\s"\',;&]+)', rb'\1[REDACTED-SECRET]'),
+    # Provider keys with dashes (sk-proj-, sk-ant-api03-) and bearer tokens of any length.
+    (rb'sk-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    (rb'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+', rb'Bearer [REDACTED-SECRET]'),
 ]
 _COMPILED = [(re.compile(p), r) for p, r in _RULES]
 

@@ -224,6 +224,9 @@ def find_candidate(path, kind, name):
 # Text that leaves the process goes through redact().
 # It uses the engine's shared secret patterns in np_scrub.
 # The full text stays only in the local job log.
+_LINE_CAP = 4096
+
+
 def _scrub(text):
     import sys
     engine = os.path.join(_HERE, "..", "nervepack_engine")
@@ -239,6 +242,7 @@ def redact(text, limit=240):
     Fails closed: if the scrubber cannot run, the details are withheld.
     """
     s = "" if text is None else str(text)
+    s = "\n".join(ln[:_LINE_CAP] for ln in s.split("\n"))
     try:
         s = _scrub(s)
     except Exception:

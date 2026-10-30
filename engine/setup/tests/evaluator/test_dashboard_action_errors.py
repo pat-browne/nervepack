@@ -357,6 +357,22 @@ class TestRedactionPatterns(unittest.TestCase):
         self.gone("token='zq81 xk'", "zq81", "xk'")
         self.gone('{"api_key": "zq81xk"}', "zq81xk")
 
+    def test_provider_keys_with_dashes(self):
+        for tok in ("sk-proj-" + "Ab12" * 8, "sk-ant-api03-" + "Zy98" * 8):
+            self.gone("key " + tok, tok)
+
+    def test_bearer_any_case_and_short(self):
+        self.gone("BEARER zq81xk", "zq81xk")
+        self.gone("bearer ab", " ab")
+        self.gone("Bearer " + "q" * 30, "q" * 30)
+
+    def test_a_huge_underscore_line_is_fast(self):
+        import time
+        t = time.time()
+        out = self.r("a_" * 50000)
+        self.assertLess(time.time() - t, 0.1)
+        self.assertLessEqual(len(out), 240)
+
     def test_authorization_header_one_token(self):
         self.gone("Authorization: zq81xk", "zq81xk")
 
