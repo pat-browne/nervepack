@@ -15,6 +15,9 @@ import sys
 import tempfile
 import unittest
 
+# Never read or write the real per-machine applied marker.
+os.environ["NP_COMPACT_APPLIED"] = os.path.join(tempfile.mkdtemp(), "applied.json")
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:

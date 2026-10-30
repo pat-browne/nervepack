@@ -220,6 +220,34 @@ def find_candidate(path, kind, name):
     return None
 
 
+# ---- redaction ------------------------------------------------------------
+# Text that leaves the process (HTTP bodies, status files, self-check rows)
+# goes through redact(). The full text stays only in the local job log.
+_URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s@]+@")
+_TOKEN_RES = (
+    re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"),
+)
+_KEYVAL_RE = re.compile(
+    r"(?i)\b((?:access[_-]?|api[_-]?|auth[_-]?)?(?:token|key|password|passwd|secret))(\s*[=:]\s*)[^\s&,;]+")
+
+
+def redact(text, limit=240):
+    """text with credentials removed, $HOME shortened to ~, and length capped."""
+    s = "" if text is None else str(text)
+    s = _URL_USERINFO_RE.sub(r"\1***@", s)
+    for rx in _TOKEN_RES:
+        s = rx.sub("***", s)
+    s = _KEYVAL_RE.sub(r"\1\2***", s)
+    home = os.path.expanduser("~")
+    if home and home not in ("/", "~"):
+        s = s.replace(home, "~")
+    s = " ".join(s.split())
+    return s if len(s) <= limit else s[:limit - 3] + "..."
+
+
 # ---- shared action contract ----------------------------------------------
 
 class ActionError(Exception):
@@ -234,9 +262,9 @@ class ActionError(Exception):
         self.status = status
 
     def payload(self):
-        out = {"ok": False, "error": self.message, "code": self.code}
+        out = {"ok": False, "error": redact(self.message), "code": self.code}
         if self.hint:
-            out["hint"] = self.hint
+            out["hint"] = redact(self.hint)
         return out
 
 
@@ -277,7 +305,8 @@ def _vcs_out(repo, *args, timeout=15):
 
 
 def _check(cid, ok, detail, hint="", level="fail"):
-    return {"id": cid, "ok": bool(ok), "level": level, "detail": detail, "hint": hint}
+    return {"id": cid, "ok": bool(ok), "level": level,
+            "detail": redact(detail), "hint": redact(hint)}
 
 
 def self_check(content_dir, engine_root, compact_dir, graduation_path, status_dir,

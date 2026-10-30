@@ -166,6 +166,8 @@ def implement_status(text):
             # The job process is gone and never wrote a status. Report why.
             return {"state": "failed", "ref": died, "log": JOB_LOG}
         return {"state": "none"}
+    if isinstance(st, dict) and isinstance(st.get("ref"), str):
+        st["ref"] = np_dashboard_actions.redact(st["ref"])   # older files were written raw
     if st.get("state") == "queued":
         # The position shifts as the queue drains, so read it live.
         pos = np_implement_suggestion.queue_position(IMPLEMENT_QUEUE_DIR, key)
@@ -436,7 +438,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         except Exception as exc:  # fail-open: report, stay up
             log(f"GET {self.path}: {exc}")
-            try: self._json({"error": str(exc)}, 500)
+            try: self._json({"error": np_dashboard_actions.redact(exc)}, 500)
             except Exception: pass
 
     def _host_ok(self):
@@ -595,7 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                     try:
                         np_toggle.flip(key, value)
                     except Exception as exc:
-                        return self._json({"error": str(exc) or "toggle failed"}, 500)
+                        return self._json({"error": np_dashboard_actions.redact(exc) or "toggle failed"}, 500)
                     return self._json({"ok": True, "key": key, "value": value})
                 if "." in key:
                     valid, coerced, error = np_toggle_schema.validate(key, value)
@@ -624,7 +626,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # fail-open, but never silent
             import traceback
             log("POST %s: %s\n%s" % (route, exc, traceback.format_exc()))
-            return self._json({"ok": False, "error": str(exc) or type(exc).__name__, "code": "internal",
+            return self._json({"ok": False, "error": np_dashboard_actions.redact(exc) or type(exc).__name__, "code": "internal",
                                "hint": "see %s" % LOG}, 500)
 
 
@@ -650,9 +652,9 @@ def spawn_died(key):
     except OSError:
         pass
     lines = [ln for ln in tail.splitlines() if " spawn " not in ln]
-    detail = " | ".join(lines[-3:])[:240]
+    detail = np_dashboard_actions.redact(" | ".join(lines[-3:]))
     return ("the job process exited without reporting a result%s (log: %s)"
-            % ((": " + detail) if detail else "", JOB_LOG))
+            % ((": " + detail) if detail else "", np_dashboard_actions.redact(JOB_LOG)))
 
 
 def launch(argv, label, key=""):

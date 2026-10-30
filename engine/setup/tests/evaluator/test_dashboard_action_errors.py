@@ -61,11 +61,13 @@ def make_overlay(root, origin=True):
 class Booted:
     """One server process with its own temp root. Use as a context manager."""
 
-    def __init__(self, overlay=True, origin=True, env=None, cwd=None, git_repo=True):
+    def __init__(self, overlay=True, origin=True, env=None, cwd=None, git_repo=True, origin_url=None):
         self.tmp = tempfile.TemporaryDirectory()
         root = self.tmp.name
         self.root = root
         self.overlay = make_overlay(root, origin) if overlay else os.path.join(root, "missing")
+        if overlay and origin and origin_url:
+            git(self.overlay, "remote", "set-url", "origin", origin_url)
         if overlay and not git_repo:
             subprocess.run(["rm", "-rf", os.path.join(self.overlay, ".git")], check=True)
         self.job_log = os.path.join(root, "jobs.log")
@@ -284,6 +286,88 @@ class TestPageContract(unittest.TestCase):
         with open(self.PAGE, encoding="utf-8") as fh:
             html = fh.read()
         self.assertIn("const EXPECT_API = %d;" % np_dashboard_actions.API_VERSION, html)
+
+
+SECRET = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"
+CRED_URL = "https://deploy:" + SECRET + "@example.com/org/overlay.git"
+
+
+class TestRedaction(unittest.TestCase):
+    def setUp(self):
+        import sys
+        sys.path.insert(0, SETUP)
+        import np_dashboard_actions
+        self.r = np_dashboard_actions.redact
+
+    def test_strips_url_userinfo_tokens_and_key_values(self):
+        for raw in (CRED_URL, "push failed " + SECRET, "Authorization: Bearer abc.def-123",
+                    "remote: token=hunter2 password: s3cret api_key=zzz",
+                    "github_pat_" + "x" * 30, "sk-" + "y" * 30):
+            out = self.r(raw)
+            for bad in (SECRET, "hunter2", "s3cret", "abc.def-123", "x" * 30, "y" * 30, "deploy:"):
+                self.assertNotIn(bad, out, raw)
+
+    def test_home_is_shortened_and_length_capped(self):
+        home = os.path.expanduser("~")
+        self.assertEqual(self.r(home + "/Code/x"), "~/Code/x")
+        self.assertLessEqual(len(self.r("z" * 1000)), 240)
+        self.assertEqual(self.r(None), "")
+
+    def test_push_reason_redacts_before_it_truncates(self):
+        import np_implement_suggestion as imp
+        push = type("P", (), {"stderr": "a" * 190 + SECRET, "stdout": ""})()
+        self.assertNotIn("ghp_", imp._push_reason(push))
+
+    def test_status_file_never_stores_the_token(self):
+        import np_implement_suggestion as imp
+        with tempfile.TemporaryDirectory() as d:
+            imp._write_status(d, "k1", "failed", "push rejected for " + CRED_URL)
+            with open(os.path.join(d, "k1.json")) as fh:
+                raw = fh.read()
+        self.assertNotIn(SECRET, raw)
+        self.assertNotIn("deploy:", raw)
+
+
+class TestRedactionOverHttp(unittest.TestCase):
+    def test_credentialed_origin_is_redacted_in_doctor_and_dry_run(self):
+        with Booted(origin_url=CRED_URL) as s:
+            status, doc = s.get("/api/doctor")
+            self.assertEqual(status, 200)
+            blob = json.dumps(doc)
+            self.assertNotIn(SECRET, blob)
+            self.assertNotIn("deploy:", blob)
+            self.assertIn("***@", blob)
+            status, out = s.post(*APPLY)
+            self.assertNotIn(SECRET, json.dumps(out))
+
+    def test_token_in_job_output_is_redacted_in_the_http_status(self):
+        with tempfile.TemporaryDirectory() as d:
+            stub = os.path.join(d, "die.sh")
+            with open(stub, "w") as fh:
+                fh.write('#!/usr/bin/env bash\necho "fatal: push to ' + CRED_URL + ' failed" >&2\nexit 3\n')
+            os.chmod(stub, 0o755)
+            with Booted(env={"NP_IMPLEMENT": stub}) as s:
+                s.post("/api/implement", {"text": "Leak check"})
+                state = {}
+                for _ in range(50):
+                    state = s.get("/api/implement-status?text=Leak%20check")[1]
+                    if state.get("state") == "failed":
+                        break
+                    time.sleep(0.1)
+                self.assertEqual(state.get("state"), "failed", state)
+                self.assertNotIn(SECRET, json.dumps(state))
+                self.assertNotIn("deploy:", json.dumps(state))
+                self.assertIn("fatal: push", state["ref"])
+
+    def test_an_old_status_file_with_a_raw_token_is_redacted_on_read(self):
+        import hashlib
+        with Booted() as s:
+            os.makedirs(s.status_dir, exist_ok=True)
+            key = hashlib.sha256(b"Old job").hexdigest()[:16]
+            with open(os.path.join(s.status_dir, key + ".json"), "w") as fh:
+                json.dump({"state": "failed", "ref": "push failed " + SECRET}, fh)
+            state = s.get("/api/implement-status?text=Old%20job")[1]
+            self.assertNotIn(SECRET, json.dumps(state))
 
 
 class TestDeadJob(unittest.TestCase):

@@ -71,7 +71,9 @@ Changing which agent prompts the jobs run, or the compact and graduate semantics
 - Security: routes keep the loopback bind and the CSRF header. Lesson names pass an
   allowlist before they build a path. The launcher signals a pid only after the
   existing listener, uid and command checks.
-- Privacy: job output goes to a local cache log only.
+- Privacy: job output goes to a local cache log only. `redact()` strips URL
+  credentials and token-shaped strings from every self-check row, HTTP error body
+  and status-file reason, and caps their length.
 - Observability: `dashboard-jobs.log`, the server log, `/api/doctor`, and the banner.
 
 ## Consequences

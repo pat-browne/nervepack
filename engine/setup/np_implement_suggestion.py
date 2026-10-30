@@ -96,7 +96,7 @@ def _log(log_path, msg):
 
 def _write_status(status_dir, key, state, ref="", **extra):
     """`extra` carries optional fields: position, model_error, model, log."""
-    rec = {"state": state, "ref": ref, "ts": _now()}
+    rec = {"state": state, "ref": np_dashboard_actions.redact(ref), "ts": _now()}
     rec.update(extra)
     try:
         os.makedirs(status_dir, exist_ok=True)
@@ -1027,7 +1027,7 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
 
 
 def _push_reason(push):
-    return ((push.stderr or push.stdout or "").strip().replace("\n", " "))[:200] or "no output"
+    return np_dashboard_actions.redact(push.stderr or push.stdout or "", 200) or "no output"
 
 
 def _rebase_onto_origin(repo, branch, agent_sha, base, log_path):
