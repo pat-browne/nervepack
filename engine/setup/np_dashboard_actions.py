@@ -221,31 +221,41 @@ def find_candidate(path, kind, name):
 
 
 # ---- redaction ------------------------------------------------------------
-# Text that leaves the process (HTTP bodies, status files, self-check rows)
-# goes through redact(). The full text stays only in the local job log.
-_URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s@]+@")
-_TOKEN_RES = (
-    re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),
-    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
-    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
-    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"),
-)
-_KEYVAL_RE = re.compile(
-    r"(?i)\b((?:access[_-]?|api[_-]?|auth[_-]?)?(?:token|key|password|passwd|secret))(\s*[=:]\s*)[^\s&,;]+")
+# Text that leaves the process goes through redact().
+# It uses the engine's shared secret patterns in np_scrub.
+# The full text stays only in the local job log.
+def _scrub(text):
+    import sys
+    engine = os.path.join(_HERE, "..", "nervepack_engine")
+    if engine not in sys.path:
+        sys.path.insert(0, engine)
+    import np_scrub
+    return np_scrub.scrub(text.encode("utf-8", "replace")).decode("utf-8", "replace")
 
 
 def redact(text, limit=240):
-    """text with credentials removed, $HOME shortened to ~, and length capped."""
+    """text with secrets removed, HOME shortened to ~, and length capped.
+
+    Fails closed: if the scrubber cannot run, the details are withheld.
+    """
     s = "" if text is None else str(text)
-    s = _URL_USERINFO_RE.sub(r"\1***@", s)
-    for rx in _TOKEN_RES:
-        s = rx.sub("***", s)
-    s = _KEYVAL_RE.sub(r"\1\2***", s)
+    try:
+        s = _scrub(s)
+    except Exception:
+        return "(details withheld)" if s else ""
     home = os.path.expanduser("~")
     if home and home not in ("/", "~"):
         s = s.replace(home, "~")
     s = " ".join(s.split())
     return s if len(s) <= limit else s[:limit - 3] + "..."
+
+
+def first_line(text, limit=160):
+    """The redacted first non-empty line, used instead of a raw output tail."""
+    for ln in (text or "").splitlines():
+        if ln.strip():
+            return redact(ln, limit)
+    return ""
 
 
 # ---- shared action contract ----------------------------------------------

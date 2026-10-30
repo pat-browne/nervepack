@@ -328,6 +328,68 @@ class TestRedaction(unittest.TestCase):
         self.assertNotIn("deploy:", raw)
 
 
+class TestRedactionPatterns(unittest.TestCase):
+    """One case per secret shape, all through the shared np_scrub rules."""
+
+    def setUp(self):
+        import sys
+        sys.path.insert(0, SETUP)
+        import np_dashboard_actions
+        self.r = np_dashboard_actions.redact
+
+    def gone(self, raw, *secrets):
+        out = self.r(raw)
+        for sec in secrets:
+            self.assertNotIn(sec, out, raw)
+        return out
+
+    def test_prefixed_name_without_word_boundary(self):
+        self.gone("stripe_api_key=zq81xk", "zq81xk")
+        self.gone("MY_SECRET_TOKEN=zq81xk", "zq81xk")
+        self.gone("aws_secret_access_key=zq81xk", "zq81xk")
+
+    def test_any_case_name(self):
+        self.gone("API_KEY=zq81xk", "zq81xk")
+        self.gone("Password: zq81xk", "zq81xk")
+
+    def test_quoted_values_with_spaces(self):
+        self.gone('password="zq81 xk ab"', "zq81", "xk ab")
+        self.gone("token='zq81 xk'", "zq81", "xk'")
+        self.gone('{"api_key": "zq81xk"}', "zq81xk")
+
+    def test_authorization_header_one_token(self):
+        self.gone("Authorization: zq81xk", "zq81xk")
+
+    def test_authorization_header_scheme_and_token(self):
+        self.gone("Authorization: Bearer zq81xk", "zq81xk")
+        self.gone("authorization: Basic zq81xk==", "zq81xk")
+
+    def test_aws_access_key_id(self):
+        key = "AKIA" + "ABCDEFGHIJKLMNOP"
+        self.gone("creds " + key + " rejected", key)
+
+    def test_slack_tokens(self):
+        for kind in "baprs":
+            tok = "xox" + kind + "-" + "123456789012-abcdefABCDEF"
+            self.gone("slack " + tok, tok)
+
+    def test_gitlab_token(self):
+        tok = "glpat-" + "abcdefghij0123456789"
+        self.gone("remote: " + tok, tok)
+
+    def test_url_userinfo_without_a_token_shape(self):
+        out = self.gone("fatal: https://bob:hunter2@example.com/x.git", "hunter2", "bob:")
+        self.assertIn("example.com", out)
+
+    def test_first_line_keeps_only_the_redacted_first_line(self):
+        import np_dashboard_actions as act
+        raw = "\n\nfatal: push to " + CRED_URL + " failed\nsecond line zq81xk\n"
+        out = act.first_line(raw)
+        self.assertNotIn(SECRET, out)
+        self.assertNotIn("second line", out)
+        self.assertTrue(out.startswith("fatal: push to"))
+
+
 class TestRedactionOverHttp(unittest.TestCase):
     def test_credentialed_origin_is_redacted_in_doctor_and_dry_run(self):
         with Booted(origin_url=CRED_URL) as s:
@@ -336,7 +398,7 @@ class TestRedactionOverHttp(unittest.TestCase):
             blob = json.dumps(doc)
             self.assertNotIn(SECRET, blob)
             self.assertNotIn("deploy:", blob)
-            self.assertIn("***@", blob)
+            self.assertIn("[REDACTED-CRED]@", blob)
             status, out = s.post(*APPLY)
             self.assertNotIn(SECRET, json.dumps(out))
 
@@ -375,7 +437,7 @@ class TestDeadJob(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             stub = os.path.join(d, "die.sh")
             with open(stub, "w") as fh:
-                fh.write('#!/usr/bin/env bash\necho "boom: agent missing" >&2\nexit 3\n')
+                fh.write('#!/usr/bin/env bash\necho "boom: agent missing" >&2\necho "second line zq81xk" >&2\nexit 3\n')
             os.chmod(stub, 0o755)
             with Booted(env={"NP_IMPLEMENT": stub}) as s:
                 status, out = s.post("/api/implement", {"text": "Do the thing"})
@@ -389,6 +451,8 @@ class TestDeadJob(unittest.TestCase):
                 self.assertEqual(state.get("state"), "failed", state)
                 self.assertIn("exited without reporting", state.get("ref", ""))
                 self.assertIn("boom", state["ref"])
+                self.assertTrue(state["ref"].startswith("job_exited:"), state["ref"])
+                self.assertNotIn("second line", state["ref"])
 
 
 if __name__ == "__main__":

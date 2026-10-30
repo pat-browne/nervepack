@@ -1027,7 +1027,7 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
 
 
 def _push_reason(push):
-    return np_dashboard_actions.redact(push.stderr or push.stdout or "", 200) or "no output"
+    return np_dashboard_actions.first_line(push.stderr or push.stdout or "", 200) or "no output"
 
 
 def _rebase_onto_origin(repo, branch, agent_sha, base, log_path):

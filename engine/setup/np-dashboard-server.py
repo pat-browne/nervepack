@@ -652,8 +652,8 @@ def spawn_died(key):
     except OSError:
         pass
     lines = [ln for ln in tail.splitlines() if " spawn " not in ln]
-    detail = np_dashboard_actions.redact(" | ".join(lines[-3:]))
-    return ("the job process exited without reporting a result%s (log: %s)"
+    detail = np_dashboard_actions.first_line("\n".join(lines))
+    return ("job_exited: the job process exited without reporting a result%s (log: %s)"
             % ((": " + detail) if detail else "", np_dashboard_actions.redact(JOB_LOG)))
 
 
