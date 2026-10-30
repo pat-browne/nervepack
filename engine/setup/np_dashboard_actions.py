@@ -279,6 +279,8 @@ class ActionError(Exception):
 
 
 APPLIED_NAME = "compact-applied.json"
+# A lesson name becomes a file path. No slash and no leading dot keeps it
+# inside memory/lessons, so a crafted name cannot walk out of the overlay.
 _LESSON_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -309,6 +311,8 @@ def _vcs_out(repo, *args, timeout=15):
     try:
         r = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
                            text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        return 124, "git %s timed out after %ss" % (args[0] if args else "", timeout)
     except (OSError, subprocess.SubprocessError):
         return 1, ""
     return r.returncode, (r.stdout or "") + (r.stderr or "")

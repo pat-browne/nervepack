@@ -390,6 +390,40 @@ class TestRedactionPatterns(unittest.TestCase):
         self.assertTrue(out.startswith("fatal: push to"))
 
 
+class TestReviewFixes(unittest.TestCase):
+    def setUp(self):
+        import sys
+        sys.path.insert(0, SETUP)
+
+    def test_invalid_lesson_name_is_named_as_invalid(self):
+        import np_implement_suggestion as imp
+        check = imp._kind_precheck_fn("graduate", "lesson:../evil")
+        with tempfile.TemporaryDirectory() as wt:
+            self.assertIn("not a valid lesson file name", check(wt))
+
+    def test_git_timeout_is_reported_as_a_timeout(self):
+        import np_dashboard_actions as act
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q", d], check=True)
+            code, out = act._vcs_out(d, "status", timeout=0.000001)
+        self.assertEqual(code, 124)
+        self.assertIn("timed out", out)
+
+    def test_job_log_rotates_once_it_is_large(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "np_dashboard_server_rot", os.path.join(SETUP, "np-dashboard-server.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with tempfile.TemporaryDirectory() as d:
+            mod.JOB_LOG = os.path.join(d, "jobs.log")
+            with open(mod.JOB_LOG, "wb") as fh:
+                fh.write(b"x" * (mod.JOB_LOG_MAX + 1))
+            mod._rotate_job_log()
+            self.assertFalse(os.path.exists(mod.JOB_LOG))
+            self.assertTrue(os.path.exists(mod.JOB_LOG + ".1"))
+
+
 class TestRedactionOverHttp(unittest.TestCase):
     def test_credentialed_origin_is_redacted_in_doctor_and_dry_run(self):
         with Booted(origin_url=CRED_URL) as s:

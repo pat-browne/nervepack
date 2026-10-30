@@ -509,10 +509,10 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
     try:
         # precheck_fn names a target that origin no longer has or already
         # handled. That is a stale click, not a failure, so no agent pass runs.
-        stale = precheck_fn(wt) if precheck_fn is not None else ""
-        if stale:
+        stale_reason = precheck_fn(wt) if precheck_fn is not None else ""
+        if stale_reason:
             a.state = "stale"
-            a.detail = stale
+            a.detail = stale_reason
             return a
         # apply_fn: a deterministic edit that needs no agent pass. It returns
         # True when it handled the job.
@@ -1112,8 +1112,8 @@ def _land_result(land_repo, land_label, mode, branch, base, agent_sha, log_path,
     # Advance the local base only when it is checked out and clean.
     # Otherwise leave the checkout alone and keep the commit on `branch`.
     current = (_git(land_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
-    # Untracked files never block a fast-forward. The dashboard's own marker
-    # files are untracked, so counting them would pin the checkout forever.
+    # Untracked files never block a fast-forward. Ignore them so a stray
+    # untracked file cannot pin the checkout off the new tip forever.
     dirty = bool((_git(land_repo, "status", "--porcelain", "--untracked-files=no").stdout or "").strip())
     if (current == base and not dirty and pushed_sha == agent_sha
             and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0):
@@ -1168,7 +1168,9 @@ def _kind_precheck_fn(kind, task):
 
     def check_lesson(wt):
         path = np_dashboard_actions.lesson_path(wt, name.strip())
-        if not path or not os.path.isfile(path):
+        if not path:
+            return "lesson name %r is not a valid lesson file name" % name.strip()
+        if not os.path.isfile(path):
             return "lesson memory/lessons/%s.md is not on origin" % name.strip()
         try:
             with open(path, encoding="utf-8", errors="replace") as fh:

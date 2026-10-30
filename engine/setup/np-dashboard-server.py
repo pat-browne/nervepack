@@ -657,10 +657,23 @@ def spawn_died(key):
             % ((": " + detail) if detail else "", np_dashboard_actions.redact(JOB_LOG)))
 
 
+JOB_LOG_MAX = 1 << 20
+
+
+def _rotate_job_log():
+    """Keep one previous log so the file cannot grow without bound."""
+    try:
+        if os.path.getsize(JOB_LOG) > JOB_LOG_MAX:
+            os.replace(JOB_LOG, JOB_LOG + ".1")
+    except OSError:
+        pass
+
+
 def launch(argv, label, key=""):
     """Detached spawn whose output goes to JOB_LOG, so a crash leaves evidence."""
     try:
         os.makedirs(os.path.dirname(JOB_LOG), exist_ok=True)
+        _rotate_job_log()
         with open(JOB_LOG, "ab") as out:
             offset = os.fstat(out.fileno()).st_size
             out.write(("[%s] spawn %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S"), label)).encode("utf-8"))

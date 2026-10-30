@@ -622,7 +622,7 @@
   // stays until dismissed. Native dialogs are not used: embedded browsers suppress them.
   function notify(msg, level) {
     const host = document.getElementById("action-banner");
-    if (!host) return;
+    if (!host) { console.error("action-banner missing:", msg); return; }
     const d = document.createElement("div");
     d.className = "banner" + (level === "warn" ? " warn" : "");
     const t = document.createElement("span"); t.textContent = msg;
