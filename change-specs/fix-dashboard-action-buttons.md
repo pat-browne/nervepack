@@ -8,6 +8,7 @@ blast_radius:
   - dashboard/index.html
   - engine/nervepack_engine/np_dashboard.py
   - engine/nervepack_engine/np_doctor.py
+  - engine/nervepack_engine/np_scrub.py
   - engine/onboard/capabilities.json
   - engine/setup/np-dashboard-server.py
   - engine/setup/np_dashboard_actions.py
