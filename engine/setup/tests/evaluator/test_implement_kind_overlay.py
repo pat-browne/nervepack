@@ -51,6 +51,10 @@ def _overlay(root):
     os.makedirs(os.path.join(clone, "compact-proposals"))
     with open(os.path.join(clone, "compact-proposals", "2026-10-15.md"), "w") as fh:
         fh.write(PROPOSAL)
+    os.makedirs(os.path.join(clone, "memory", "lessons"))
+    for name in ("ado-session-sync", "y", "z"):
+        with open(os.path.join(clone, "memory", "lessons", name + ".md"), "w") as fh:
+            fh.write("---\nstatus: active\n---\nbody\n")
     with open(os.path.join(clone, "content-marker.txt"), "w") as fh:
         fh.write("m\n")
     _git(clone, "add", "-A")

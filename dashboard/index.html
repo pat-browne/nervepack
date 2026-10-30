@@ -259,6 +259,14 @@
   .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
                 background:var(--status-warn-bg); }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
+  /* Action errors live in one banner: role=alert, kept until dismissed, never a dialog. */
+  #action-banner { margin:8px 0; }
+  #action-banner .banner { display:flex; gap:8px; align-items:flex-start; font-size:12px; margin:4px 0;
+                           padding:6px 10px; border-radius:6px; border:1px solid #dcb3aa;
+                           color:var(--status-neg); background:var(--status-neg-bg); }
+  #action-banner .banner.warn { color:var(--status-warn); background:var(--status-warn-bg); border-color:#d9c9a3; }
+  #action-banner .banner span { flex:1; overflow-wrap:anywhere; }
+  .pill.wrap { white-space:normal; overflow-wrap:anywhere; max-width:480px; }
 
   /* Feature-toggle switches (served-mode only; see renderToggles()) */
   .togfam { border-top:1px solid var(--border); padding:10px 0; }
@@ -333,6 +341,7 @@
         <button class="btn-icon" id="btn-settings" type="button"
                 aria-haspopup="dialog" aria-label="Settings" title="Settings: models and feature toggles">⚙</button>
       </header>
+      <div id="action-banner" role="alert" aria-live="assertive"></div>
 
       <div class="grid" style="margin-top:0">
         <section class="panel" id="panel-trend"></section>
@@ -609,18 +618,64 @@
 
   // ---- backend (only when SERVED over http) ----
   const SERVED = location.protocol === "http:" || location.protocol === "https:";
+  // Every action failure ends up here: the pill on the row AND a banner that
+  // stays until dismissed. Native dialogs are not used: embedded browsers suppress them.
+  function notify(msg, level) {
+    const host = document.getElementById("action-banner");
+    if (!host) return;
+    const d = document.createElement("div");
+    d.className = "banner" + (level === "warn" ? " warn" : "");
+    const t = document.createElement("span"); t.textContent = msg;
+    const x = document.createElement("button");
+    x.className = "btn sm"; x.type = "button"; x.textContent = "Dismiss";
+    x.addEventListener("click", () => d.remove());
+    d.append(t, x);
+    host.appendChild(d);
+  }
+
+  // POST helper. A failure throws an Error whose message holds the server's
+  // reason and hint, so every caller shows the same text.
   async function api(path, body) {
-    const res = await fetch(path, {
-      method: "POST",
-      // X-Requested-With is the CSRF guard: a cross-origin form POST can't set a
-      // custom header without a preflight the server refuses (see np-dashboard-server.py).
-      headers: { "Content-Type": "application/json", "X-Requested-With": "nervepack" },
-      body: body ? JSON.stringify(body) : null,
-    });
+    let res;
+    try {
+      res = await fetch(path, {
+        method: "POST",
+        // X-Requested-With is the CSRF guard: a cross-origin form POST can't set a
+        // custom header without a preflight the server refuses (see np-dashboard-server.py).
+        headers: { "Content-Type": "application/json", "X-Requested-With": "nervepack" },
+        body: body ? JSON.stringify(body) : null,
+      });
+    } catch (e) {
+      const err = new Error("cannot reach the dashboard server. Is it still running? Reopen it with: cli.py open-dashboard");
+      err.code = "unreachable"; throw err;
+    }
     let data;
     try { data = await res.json(); } catch (e) { data = null; }
-    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    if (!res.ok || (data && data.ok === false)) {
+      const base = (data && data.error) || ("HTTP " + res.status);
+      const err = new Error(base + (data && data.hint ? " (" + data.hint + ")" : ""));
+      err.code = (data && data.code) || ("http_" + res.status);
+      err.status = res.status;
+      throw err;
+    }
     return data;
+  }
+
+  // On load, say up front when the buttons cannot work: an old server
+  // (no api field) or a failing action self-check.
+  const EXPECT_API = 2;
+  async function checkActions() {
+    let h;
+    try { h = await (await fetch("/api/health")).json(); } catch (e) { return; }
+    if (!h || (h.api || 0) < EXPECT_API) {
+      notify("The dashboard server is out of date, so Apply, Graduate and Implement may fail. Reopen it with: cli.py open-dashboard", "warn");
+      return;
+    }
+    try {
+      const d = await (await fetch("/api/doctor")).json();
+      (d.checks || []).filter(c => !c.ok && c.level === "fail").forEach(c =>
+        notify("Action check failed: " + c.id + ": " + c.detail + (c.hint ? " (" + c.hint + ")" : ""), "warn"));
+    } catch (e) { /* the check is advisory */ }
   }
 
   // ---- Implement queue count, served mode only ----
@@ -710,12 +765,12 @@
       sel.addEventListener("change", async () => {
         sel.disabled = true;
         try { renderModels((await api("/api/models/select", { feature: sel.dataset.modelFeature, model: sel.value })).models); }
-        catch (e) { sel.disabled = false; alert("Model select failed: " + e.message); }
+        catch (e) { sel.disabled = false; notify("Model select failed: " + e.message); }
       }));
     const probeBtn = async (btn, model) => {
       btn.disabled = true; btn.textContent = "Probing…";
       try { await api("/api/models/probe", model ? { model } : {}); await refreshModels(); }
-      catch (e) { btn.disabled = false; btn.textContent = "Probe"; alert("Probe failed: " + e.message); }
+      catch (e) { btn.disabled = false; btn.textContent = "Probe"; notify("Probe failed: " + e.message); }
     };
     elModels.querySelectorAll("[data-probe]").forEach(b => b.addEventListener("click", () => probeBtn(b, b.dataset.probe)));
     const all = document.getElementById("btn-probe-all");
@@ -1075,7 +1130,7 @@
         }
         input.disabled = true;
         try { await api("/api/toggle", { key, value: next }); }
-        catch (e) { input.checked = !input.checked; alert("Toggle failed: " + e.message); }
+        catch (e) { input.checked = !input.checked; notify("Toggle failed: " + e.message); }
         finally { input.disabled = false; }
       });
     });
@@ -1090,7 +1145,7 @@
           el.dataset.saved = value;
         } catch (e) {
           if (isBool) el.checked = el.dataset.saved === "on"; else el.value = el.dataset.saved;
-          alert("Toggle failed: " + e.message);
+          notify("Toggle failed: " + e.message);
         } finally { el.disabled = false; }
       });
     });
@@ -1157,7 +1212,7 @@
       const row = b.closest(".sug");
       b.disabled = true;
       try { await api("/api/graduation/dismiss", body(row)); row.remove(); }
-      catch (e) { b.disabled = false; alert("Dismiss failed: " + e.message); }
+      catch (e) { b.disabled = false; notify("Dismiss failed: " + e.message); }
     }));
     elGrad.querySelectorAll("[data-graduate]").forEach(b => b.addEventListener("click", () => {
       const row = b.closest(".sug");
@@ -1165,37 +1220,59 @@
     }));
   }
 
+  // Poll one job's status until it ends. `on` maps a state to a handler; a
+  // handler returns true to stop. A dead server or a bad reply is shown, not
+  // swallowed: after 5 straight failures the caller hears about it.
+  function pollStatus(text, on) {
+    let tries = 0, bad = 0;
+    const tick = () => setTimeout(async () => {
+      let s;
+      try {
+        const res = await fetch("/api/implement-status?text=" + encodeURIComponent(text));
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        s = await res.json(); bad = 0;
+      } catch (e) {
+        if (++bad >= 5) return on.lost && on.lost(e.message);
+        return tick();
+      }
+      if (s.state === "queued") { on.queued && on.queued(s); return tick(); }
+      const h = on[s.state];
+      if (h) return h(s);
+      if (++tries < 220) { if (s.state === "running" && on.running) on.running(s); return tick(); }
+      on.timeout && on.timeout(s);
+    }, 3000);
+    tick();
+  }
+
   // Shared runner for agent jobs queued through the implement machinery
-  // (compact Apply, graduation Graduate). Starts the job, then polls
-  // /api/implement-status with the job text the server returns.
+  // (compact Apply, graduation Graduate). Starts the job, then polls.
   async function runJob(b, route, body, onDone) {
     const acts = b.closest(".rowacts");
     const buttons = [...acts.querySelectorAll("button")];
     buttons.forEach(x => x.style.display = "none");
     const pill = document.createElement("span");
     acts.appendChild(pill);
-    const set = (cls, t) => { pill.className = "pill " + cls; pill.textContent = t; };
+    const set = (cls, t) => { pill.className = "pill wrap " + cls; pill.textContent = t; };
     const restore = () => buttons.forEach(x => x.style.display = "");
+    const fail = (msg) => { set("neg", "✕ " + msg); notify(msg); restore(); };
     set("warn", "⋯ Starting…");
     let r;
     try { r = await api(route, body); }
-    catch (e) { set("neg", "✕ " + e.message); setTimeout(() => { pill.remove(); restore(); }, 4000); return; }
+    catch (e) { fail(e.message); return; }
     if (r.deduped) set("warn", "⋯ Already queued");
     refreshQueue();
-    let tries = 0;
-    const poll = () => setTimeout(async () => {
-      let st;
-      try { st = await (await fetch("/api/implement-status?text=" + encodeURIComponent(r.text))).json(); }
-      catch { return (++tries < 220) && poll(); }
-      const ref = st.ref ? ": " + st.ref : "";
-      if (st.state === "done") { set("pos", "✓ Done" + ref); if (onDone) onDone(); }
-      else if (st.state === "not_implementable") { set("warn", "▲ Left open" + ref); restore(); }
-      else if (st.state === "failed") { set("neg", "✕ Failed" + ref); restore(); }
-      else if (st.state === "queued") { set("warn", "⋯ Queued" + (st.position ? " #" + st.position : "")); poll(); }
-      else if (++tries < 220) { if (st.state === "running") set("warn", "⋯ Running…"); poll(); }
-      else set("warn", "… still running, refresh the page later");
-    }, 3000);
-    poll();
+    const ref = s => s.ref ? ": " + s.ref : "";
+    const logHint = s => s.log ? " (log: " + s.log + ")" : "";
+    pollStatus(r.text, {
+      done: s => { set("pos", "✓ Done" + ref(s)); if (onDone) onDone(); },
+      not_implementable: s => { set("warn", "▲ Left open" + ref(s)); restore(); },
+      stale: s => fail("Already handled or out of date" + ref(s) + ". Reload the page."),
+      failed: s => fail("Failed" + ref(s) + logHint(s)),
+      queued: s => set("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")),
+      running: () => set("warn", "⋯ Running…"),
+      timeout: () => set("warn", "… still running, refresh the page later"),
+      lost: m => fail("Lost contact with the dashboard server (" + m + ")"),
+    });
   }
 
   // Compact proposals from the weekly-compact agent (compact-proposals/<date>.md),
@@ -1229,7 +1306,7 @@
       const row = b.closest(".sug");
       b.disabled = true;
       try { await api("/api/compact/reject", body(row)); row.remove(); paint(); }
-      catch (e) { b.disabled = false; alert("Reject failed: " + e.message); }
+      catch (e) { b.disabled = false; notify("Reject failed: " + e.message); }
     }));
     elProp.querySelectorAll("[data-apply]").forEach(b => b.addEventListener("click", () => {
       const row = b.closest(".sug");
@@ -1469,7 +1546,7 @@
             "Direct mode commits straight to main and pushes — no PR review gate. Switch to direct?")) return;
           modeBtn.disabled = true;
           try { paint((await api("/api/implement-mode", { mode: next })).mode); }
-          catch (e) { alert("Mode switch failed: " + e.message); }
+          catch (e) { notify("Mode switch failed: " + e.message); }
           finally { modeBtn.disabled = false; }
         });
       }
@@ -1479,7 +1556,7 @@
           b.disabled = true;
           try { await api("/api/resolve", { text: b.getAttribute("data-reject") });
                 dropResolved(b.getAttribute("data-reject")); }
-          catch (e) { b.disabled = false; alert("Reject failed: " + e.message); }
+          catch (e) { b.disabled = false; notify("Reject failed: " + e.message); }
         }));
       // Implement → start the async agentic job, then POLL its status so the row
       // updates itself (✓ done & removed, or back to the buttons on failure) with no
@@ -1538,20 +1615,18 @@
         buttons.forEach(x => x.style.display = "none");
         const pill = document.createElement("span");
         acts.appendChild(pill);
-        const setPill = (cls, txt) => { pill.className = "pill " + cls; pill.textContent = txt; };
-        const restore = () => { buttons.forEach(x => x.style.display = ""); pill.remove(); };
+        const setPill = (cls, txt) => { pill.className = "pill wrap " + cls; pill.textContent = txt; };
+        const back = () => buttons.forEach(x => x.style.display = "");
+        const fail = msg => { setPill("neg", "✕ " + msg); notify(msg); back(); };
         setPill("warn", "⋯ Starting…");
         // A busy server queues the job, so rapid clicks on several rows are fine.
-        try { await api("/api/implement", { text, edited: edited || "", target: tgtOf(row) }) }
-        catch (e) { setPill("neg", "✕ " + e.message); setTimeout(restore, 4000); return; }
+        let r;
+        try { r = await api("/api/implement", { text, edited: edited || "", target: tgtOf(row) }); }
+        catch (e) { fail(e.message); return; }
         refreshQueue();
-        let tries = 0;
         const logHint = s => s.log ? " (log: " + s.log + ")" : "";
-        const poll = () => setTimeout(async () => {
-          let s;
-          try { s = await (await fetch("/api/implement-status?text=" + encodeURIComponent(text))).json(); }
-          catch { return (++tries < 220) && poll(); }
-          if (s.state === "done") {
+        pollStatus(r.text || text, {
+          done: s => {
             const ref = s.ref || "", isUrl = /^https?:\/\//.test(ref);
             const link = isUrl
               ? ` — <a href="${esc(ref)}" target="_blank">${esc(ref.replace(/^https?:\/\/github\.com\//, ""))}</a>`
@@ -1560,34 +1635,27 @@
             note.className = "note ok"; note.innerHTML = "✓ Implemented" + link + esc(logHint(s));
             elSug.querySelector(".panelhead").after(note);
             dropResolved(text);
-          } else if (s.state === "already_resolved") {
-            // Another machine sharing this content overlay got there first.
-            dropResolved(text);
-          } else if (s.state === "not_implementable") {
-            setPill("warn", "▲ Not a code change — left open" + (s.ref ? ": " + s.ref : "") + logHint(s)); buttons.forEach(x => x.style.display = "");
-          } else if (s.state === "failed") {
+          },
+          // Another machine sharing this content overlay got there first.
+          already_resolved: () => dropResolved(text),
+          not_implementable: s => { setPill("warn", "▲ Not a code change, left open" + (s.ref ? ": " + s.ref : "") + logHint(s)); back(); },
+          failed: s => {
             if (s.model_error) {
               pill.className = "pill neg"; pill.textContent = "✕ Model " + (s.model || "") + " unavailable: ";
               const a = document.createElement("a");
               a.href = "#model-row-implement"; a.textContent = "pick another";
               pill.append(a);
-              refreshModels();
-            } else {
-              setPill("neg", "✕ Failed" + (s.ref ? ": " + s.ref : "") + logHint(s));
-            }
-            buttons.forEach(x => x.style.display = "");
-
-          } else if (s.state === "queued") {
-            // Queue time does not count toward the polling cap.
-            setPill("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")); poll();
-
-          } else if (++tries < 220) {                // running, not-yet, or legacy busy: keep polling (~11 min cap)
-            if (s.state === "running") setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…");
-            poll();
-          }
-          else { setPill("warn", "… still running — check back later"); }
-        }, 3000);
-        poll();
+              notify("Model " + (s.model || "") + " is unavailable. Pick another in the model row.");
+              refreshModels(); back();
+            } else fail("Failed" + (s.ref ? ": " + s.ref : "") + logHint(s));
+          },
+          stale: s => fail("Already handled or out of date" + (s.ref ? ": " + s.ref : "") + ". Reload the page."),
+          // Queue time does not count toward the polling cap.
+          queued: s => setPill("warn", "⋯ Queued" + (s.position ? " #" + s.position : "")),
+          running: () => setPill("warn", edited ? "⋯ Implementing your edit…" : "⋯ Implementing…"),
+          timeout: () => setPill("warn", "… still running, check back later"),
+          lost: m => fail("Lost contact with the dashboard server (" + m + ")"),
+        });
       }
       const review = document.getElementById("btn-review");
       if (review) review.addEventListener("click", async () => {
@@ -1598,7 +1666,7 @@
           renderSug(rows, r.degraded
             ? "Ranked by confidence — model verdicts unavailable (model seam offline)."
             : "Verdicts from a single Haiku pass — Implement or Reject each, or Clear all.");
-        } catch (e) { review.disabled = false; review.textContent = "Review"; alert("Review failed: " + e.message); }
+        } catch (e) { review.disabled = false; review.textContent = "Review"; notify("Review failed: " + e.message); }
       });
       const clear = document.getElementById("btn-clear");
       if (clear) clear.addEventListener("click", async () => {
@@ -1606,12 +1674,12 @@
         clear.disabled = true; clear.textContent = "Clearing…";
         try { const r = await api("/api/clear", {});
               renderSug([], `Cleared ${r.count || 0} suggestion(s). New ones will accumulate.`); }
-        catch (e) { clear.disabled = false; clear.textContent = "Clear"; alert("Clear failed: " + e.message); }
+        catch (e) { clear.disabled = false; clear.textContent = "Clear"; notify("Clear failed: " + e.message); }
       });
     }
 
     renderSug(sugs);
-    if (SERVED) refreshQueue();
+    if (SERVED) { refreshQueue(); checkActions(); }
 
     // B2 · Wins & learnings (positive mirror of struggles): strategies-learned
     // count + chips, then the 6 most-recent helped[] items (✓ + --status-pos).

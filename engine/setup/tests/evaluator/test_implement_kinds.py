@@ -47,6 +47,16 @@ class TestKinds(unittest.TestCase):
         os.environ["NP_RESOLVED_SUGGESTIONS"] = os.path.join(d, "resolved.txt")
         self.engine = _mkrepo(os.path.join(d, "engine"), "engine-marker.txt")
         self.content = _mkrepo(os.path.join(d, "content"), "content-marker.txt")
+        # The jobs refuse a target origin lacks, so seed the entries the tests name.
+        os.makedirs(os.path.join(self.content, "compact-proposals"))
+        os.makedirs(os.path.join(self.content, "memory", "lessons"))
+        with open(os.path.join(self.content, "compact-proposals", "2026-09-30.md"), "w") as fh:
+            fh.write("### a vs b\n**Recommendation:** merge a into b\n")
+        for name in ("s1", "security-review"):
+            with open(os.path.join(self.content, "memory", "lessons", name + ".md"), "w") as fh:
+                fh.write("---\nstatus: active\n---\nbody\n")
+        _git(self.content, "add", "-A")
+        _git(self.content, "commit", "-qm", "seed")
         os.environ["NP_CONTENT_DIR"] = self.content
         self.calls, self.resolved = [], []
 

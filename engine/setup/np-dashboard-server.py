@@ -57,6 +57,7 @@ if _ENGINE_PKG not in sys.path:
 import np_bashlib  # noqa: E402
 import np_content  # noqa: E402
 import np_dashboard_actions  # noqa: E402
+from np_dashboard_actions import ActionError  # noqa: E402
 import np_dirs
 import np_implement_suggestion  # noqa: E402
 import np_job_health  # noqa: E402
@@ -94,13 +95,28 @@ IMPLEMENT_STATUS_DIR = os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cach
 IMPLEMENT_QUEUE_DIR = (os.environ.get("NP_IMPLEMENT_QUEUE_DIR")
                        or np_implement_suggestion.queue_dir(IMPLEMENT_STATUS_DIR))
 LOG = np_dirs.cache_path("dashboard-server.log")
+JOB_LOG = os.environ.get("NP_DASH_JOB_LOG") or np_dirs.cache_path("dashboard-jobs.log")
+
+
 # Compact proposals and graduation candidates live in the content overlay.
-COMPACT_DIR = (os.environ.get("NP_COMPACT_PROPOSALS_DIR")
-               or os.path.join(np_content.content_dir(), "compact-proposals"))
-GRADUATION = (os.environ.get("NP_GRADUATION_CANDIDATES")
-              or os.path.join(np_content.content_dir(), "dashboard", "data", "graduation-candidates.json"))
-GRAD_DISMISSED = (os.environ.get("NP_GRADUATION_DISMISSED")
-                  or os.path.join(os.path.dirname(GRADUATION), "graduation-dismissed.json"))
+# Resolved per request, so an overlay change needs no restart. An unset
+# overlay falls back to the engine root, never to a path relative to the cwd.
+def content_root():
+    return np_content.content_dir() or NP
+
+
+def compact_dir():
+    return os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(content_root(), "compact-proposals")
+
+
+def graduation_path():
+    return (os.environ.get("NP_GRADUATION_CANDIDATES")
+            or os.path.join(content_root(), "dashboard", "data", "graduation-candidates.json"))
+
+
+def grad_dismissed_path():
+    return (os.environ.get("NP_GRADUATION_DISMISSED")
+            or os.path.join(os.path.dirname(graduation_path()), "graduation-dismissed.json"))
 
 PORT = int(os.environ.get("NP_DASH_PORT", "8787") or "8787")
 TOP = int(os.environ.get("NP_SUGGESTIONS_TOP", "10") or "10")
@@ -145,6 +161,10 @@ def implement_status(text):
         with open(os.path.join(IMPLEMENT_STATUS_DIR, key + ".json")) as fh:
             st = json.load(fh)
     except (OSError, ValueError):
+        died = spawn_died(key)
+        if died:
+            # The job process is gone and never wrote a status. Report why.
+            return {"state": "failed", "ref": died, "log": JOB_LOG}
         return {"state": "none"}
     if st.get("state") == "queued":
         # The position shifts as the queue drains, so read it live.
@@ -174,6 +194,39 @@ def already_pending(text):
         return True
     running = np_implement_suggestion.running_job(IMPLEMENT_QUEUE_DIR)
     return bool(running and running.get("key") == key)
+
+
+# --- shared action path ------------------------------------------------------
+# Every job button goes through start_job(): one preflight, one detached spawn
+# that keeps its output, one structured error shape.
+_SPAWNED = {}
+_SPAWN_LOCK = threading.Lock()
+JOB_CHECKS = ("implement-toggle", "agent-env", "overlay", "job-files", "status-dir")
+STUB_CHECKS = ("implement-toggle", "agent-env", "status-dir")
+SUGGESTION_CHECKS = ("implement-toggle", "agent-env", "job-files", "status-dir")
+
+
+def status_key(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def self_check(deep=False, only=None):
+    return np_dashboard_actions.self_check(
+        content_root(), NP, compact_dir(), graduation_path(), IMPLEMENT_STATUS_DIR,
+        toggle_param=np_toggle.param, deep=deep, only=only)
+
+
+def preflight(checks, deep=False):
+    """Rows for the named checks, or ActionError for the first failure."""
+    if _IMPLEMENT_OVERRIDE:  # the test seam runs a stub: no overlay needed
+        checks = tuple(c for c in checks if c in STUB_CHECKS)
+    rows = self_check(deep=deep, only=checks)
+    bad = np_dashboard_actions.failing(rows)
+    if bad:
+        err = np_dashboard_actions.ActionError("preflight_failed", bad[0]["detail"], bad[0]["hint"], 409)
+        err.checks = rows
+        raise err
+    return rows
 
 
 # --- models ------------------------------------------------------------------
@@ -342,7 +395,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "forbidden"}, 403)
         try:
             if self.path.split("?")[0] == "/api/health":
-                return self._json({"ok": True, "pid": os.getpid(), "code": CODE})
+                return self._json({"ok": True, "pid": os.getpid(), "code": CODE,
+                                   "api": np_dashboard_actions.API_VERSION})
+            if self.path.split("?")[0] == "/api/doctor":
+                rows = self_check(deep="deep=1" in self.path)
+                return self._json({"ok": not np_dashboard_actions.failing(rows),
+                                   "api": np_dashboard_actions.API_VERSION, "checks": rows})
             if self.path.split("?")[0] == "/api/config":
                 return self._json({"implement_mode": current_mode()})
             if self.path.split("?")[0] == "/api/implement-status":
@@ -413,66 +471,61 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if not self._origin_ok():
-            return self._json({"error": "forbidden"}, 403)
+            return self._json({"ok": False, "error": "forbidden", "code": "forbidden",
+                               "hint": "open the dashboard at http://127.0.0.1:%d/" % PORT}, 403)
         route = self.path.split("?", 1)[0]
         try:
             if route == "/api/resolve":
                 text = (self._body().get("text") or "").strip()
                 if not text:
-                    return self._json({"error": "missing text"}, 400)
+                    raise ActionError("bad_request", "missing text", "send the suggestion text in the body", 400)
                 np_suggestion_resolve.resolve(text, ledger_path=_RESOLVED or None, no_build=_NO_BUILD or None)
                 return self._json({"ok": True})
             if route == "/api/implement":
                 body = self._body()
                 text = (body.get("text") or "").strip()
                 if not text:
-                    return self._json({"error": "missing text"}, 400)
-                # Optional Modify-box rewrite. Capped like the suggestion text itself —
-                # it reaches the agent prompt, which caps and data-fences it again.
+                    raise ActionError("bad_request", "missing text", "send the suggestion text in the body", 400)
+                # The Modify-box rewrite reaches the agent prompt, which caps it again.
                 edited = (body.get("edited") or "").strip()[:2000]
                 extra = [edited] if edited and edited != text else []
-                # The evaluator's own layer classification, forwarded so the job
-                # can try the right repo first. The job allowlists it.
+                # The evaluator's layer tag picks the repo to try first. The job allowlists it.
                 target = (body.get("target") or "").strip()[:32]
                 if target:
                     extra = extra + ["--target=" + target]
-                # A second click on a queued or running row is a no-op.
-                if already_pending(text):
-                    return self._json({"ok": True, "deduped": True,
-                                       "status": implement_status(text)})
-                # Spawn the agentic job DETACHED — it takes minutes; never block the
-                # request. The job owns the lock, clean-tree check, branch/mode, agent
-                # call, push, and resolve. argv list (no shell) per the §10 lockdown.
-                # preexec_fn: reset SIGCHLD to default in this child so its own
-                # subprocess tree (git, the agent) doesn't inherit this process's
-                # SIG_IGN and misreport exit statuses on Linux — see
-                # implement_job_preexec()'s docstring.
-                subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text] + extra), cwd=NP, start_new_session=True,
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL,
-                                 preexec_fn=implement_job_preexec if os.name != "nt" else None)
-                return self._json({"ok": True, "started": True})
+                return self._json(start_job(text, "", extra, SUGGESTION_CHECKS, bool(body.get("dry_run"))))
             if route in ("/api/compact/reject", "/api/compact/apply"):
                 body = self._body()
                 fname = (body.get("file") or "").strip()
                 title = (body.get("title") or "").strip()
-                if not np_dashboard_actions.find_proposal(COMPACT_DIR, fname, title):
-                    return self._json({"error": "no such proposal"}, 404)
+                key = np_dashboard_actions.applied_key(fname, title)
+                gone = ActionError("stale", "That proposal is no longer in the overlay checkout.",
+                                   "It was applied, rejected or moved. Reload the page.", 404)
+                if (not np_dashboard_actions.find_proposal(compact_dir(), fname, title)
+                        or key in np_dashboard_actions.load_dismissed(np_dashboard_actions.applied_path())):
+                    raise gone
                 if route == "/api/compact/apply":
-                    return self._json(spawn_job("%s :: %s" % (fname, title), "compact"))
-                if not np_dashboard_actions.reject_proposal(COMPACT_DIR, fname, title):
-                    return self._json({"error": "no such proposal"}, 404)
+                    return self._json(start_job("%s :: %s" % (fname, title), "compact",
+                                                dry_run=bool(body.get("dry_run"))))
+                if body.get("dry_run"):
+                    return self._json({"ok": True, "dry_run": True, "would": "reject this proposal"})
+                if not np_dashboard_actions.reject_proposal(compact_dir(), fname, title):
+                    raise gone
                 log("compact reject: %s :: %s" % (fname, title))
                 return self._json({"ok": True})
             if route in ("/api/graduation/dismiss", "/api/graduation/graduate"):
                 body = self._body()
                 kind = (body.get("kind") or "").strip()
                 name = (body.get("name") or "").strip()
-                if not np_dashboard_actions.find_candidate(GRADUATION, kind, name):
-                    return self._json({"error": "no such candidate"}, 404)
+                if not np_dashboard_actions.find_candidate(graduation_path(), kind, name):
+                    raise ActionError("stale", "That candidate is no longer in the graduation list.",
+                                      "It was graduated or dismissed. Reload the page.", 404)
                 if route == "/api/graduation/graduate":
-                    return self._json(spawn_job("%s:%s" % (kind, name), "graduate"))
-                np_dashboard_actions.dismiss(GRAD_DISMISSED, kind, name)
+                    return self._json(start_job("%s:%s" % (kind, name), "graduate",
+                                                dry_run=bool(body.get("dry_run"))))
+                if body.get("dry_run"):
+                    return self._json({"ok": True, "dry_run": True, "would": "dismiss this candidate"})
+                np_dashboard_actions.dismiss(grad_dismissed_path(), kind, name)
                 log("graduation dismiss: %s:%s" % (kind, name))
                 return self._json({"ok": True})
             if route == "/api/models/select":
@@ -502,10 +555,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not claimed:
                     return self._json({"ok": True, "started": False, "running": True})
                 try:
-                    subprocess.Popen(np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
-                                     cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+                    _reap(subprocess.Popen(
+                        np_bashlib.argv([sys.executable, PROBE_SCRIPT, "probe"] + targets),
+                        cwd=NP, start_new_session=True, stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        preexec_fn=implement_job_preexec if os.name != "nt" else None))
                 except OSError as exc:
                     np_model.release_probe()   # a failed spawn must not hold the marker
                     log("probe spawn failed: %s" % exc)
@@ -561,39 +615,88 @@ class Handler(BaseHTTPRequestHandler):
                 subprocess.run(clear, capture_output=True, text=True, timeout=60)
                 return self._json({"ok": True, "count": len(before)})
             return self._json({"error": "no such route"}, 404)
-        except Exception as exc:  # fail-open
-            log(f"POST {route}: {exc}")
-            return self._json({"error": str(exc)}, 500)
+        except ActionError as exc:
+            log("POST %s refused: %s (%s)" % (route, exc.message, exc.code))
+            body = exc.payload()
+            if getattr(exc, "checks", None):
+                body["checks"] = exc.checks
+            return self._json(body, exc.status)
+        except Exception as exc:  # fail-open, but never silent
+            import traceback
+            log("POST %s: %s\n%s" % (route, exc, traceback.format_exc()))
+            return self._json({"ok": False, "error": str(exc) or type(exc).__name__, "code": "internal",
+                               "hint": "see %s" % LOG}, 500)
 
 
-def _autoreap_children():
-    """Reap detached children (the implement jobs) as they exit.
+def _reap(proc):
+    """Wait on one detached child in a daemon thread so it never lingers as a zombie.
 
-    We Popen() those jobs fire-and-forget and never wait() on them, so each one
-    lingers as a zombie for the server's whole lifetime. A zombie keeps its
-    pid-table entry, so a lock left behind by a job that died before cleanup
-    looks permanently owned and every later Implement click bails "busy".
-    _pid_alive() now detects zombies directly; this stops producing them at all.
-    POSIX only — SIGCHLD does not exist on Windows. Fail-open."""
-    if os.name == "nt":
-        return
+    Do not ignore SIGCHLD instead. With SIG_IGN the kernel reaps every child
+    at once, so every subprocess.run here reported returncode 0."""
+    threading.Thread(target=proc.wait, daemon=True).start()
+
+
+def spawn_died(key):
+    """A reason when the job process for `key` exited without a status file."""
+    with _SPAWN_LOCK:
+        info = _SPAWNED.get(key)
+    if not info or info["proc"].poll() is None:
+        return ""
+    tail = ""
     try:
-        import signal
-        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
-    except (ImportError, OSError, ValueError, AttributeError):
+        with open(JOB_LOG, "rb") as fh:
+            fh.seek(info["offset"])
+            tail = fh.read()[-400:].decode("utf-8", "replace").strip()
+    except OSError:
         pass
+    lines = [ln for ln in tail.splitlines() if " spawn " not in ln]
+    detail = " | ".join(lines[-3:])[:240]
+    return ("the job process exited without reporting a result%s (log: %s)"
+            % ((": " + detail) if detail else "", JOB_LOG))
 
 
-def spawn_job(text, kind):
-    """Queue a compact/graduate agent job through the implement machinery.
-    Same detached spawn as /api/implement. A pending duplicate is a no-op."""
+def launch(argv, label, key=""):
+    """Detached spawn whose output goes to JOB_LOG, so a crash leaves evidence."""
+    try:
+        os.makedirs(os.path.dirname(JOB_LOG), exist_ok=True)
+        with open(JOB_LOG, "ab") as out:
+            offset = os.fstat(out.fileno()).st_size
+            out.write(("[%s] spawn %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S"), label)).encode("utf-8"))
+            out.flush()
+            proc = subprocess.Popen(np_bashlib.argv(argv), cwd=NP, start_new_session=True,
+                                    stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+                                    preexec_fn=implement_job_preexec if os.name != "nt" else None)
+    except OSError as exc:
+        log("spawn failed (%s): %s" % (label, exc))
+        raise np_dashboard_actions.ActionError(
+            "spawn_failed", "could not start the job: %s" % exc,
+            "check that python3 and %s exist, then restart the dashboard" % NP, 500)
+    _reap(proc)
+    if key:
+        with _SPAWN_LOCK:
+            _SPAWNED[key] = {"pid": proc.pid, "offset": offset, "proc": proc}
+    return proc
+
+
+def start_job(text, kind="", extra=(), checks=JOB_CHECKS, dry_run=False):
+    """Preflight, dedupe, then spawn one implement-machinery job.
+
+    `kind` is "" for a suggestion, else compact or graduate.
+    """
+    rows = preflight(checks, deep=dry_run)
+    if dry_run:
+        return {"ok": True, "dry_run": True, "text": text, "kind": kind or "implement",
+                "would": "queue a %s job" % (kind or "implement"), "checks": rows}
     if already_pending(text):
         return {"ok": True, "deduped": True, "text": text, "status": implement_status(text)}
-    log("%s job queued: %s" % (kind, text))
-    subprocess.Popen(np_bashlib.argv(IMPLEMENT_ARGV + [text, "--kind=" + kind]), cwd=NP,
-                     start_new_session=True, stdin=subprocess.DEVNULL,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     preexec_fn=implement_job_preexec if os.name != "nt" else None)
+    argv = IMPLEMENT_ARGV + [text] + list(extra) + (["--kind=" + kind] if kind else [])
+    log("%s job queued: %s" % (kind or "implement", text))
+    key = status_key(text)
+    try:
+        os.remove(os.path.join(IMPLEMENT_STATUS_DIR, key + ".json"))
+    except OSError:
+        pass
+    launch(argv, "%s %s" % (kind or "implement", text[:80]), key)
     return {"ok": True, "started": True, "text": text}
 
 
@@ -620,9 +723,13 @@ def implement_job_preexec():
 
 
 def main():
-    _autoreap_children()
     httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     log(f"serving dashboard on http://127.0.0.1:{PORT}/ (top={TOP})")
+    try:
+        for row in np_dashboard_actions.failing(self_check()):
+            log("self-check FAIL %s: %s (%s)" % (row["id"], row["detail"], row["hint"]))
+    except Exception as exc:  # the check must never stop the server
+        log("self-check crashed: %s" % exc)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
