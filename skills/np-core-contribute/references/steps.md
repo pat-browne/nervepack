@@ -101,8 +101,8 @@
    Without it, the command silently regenerates the primary content
    checkout's `INDEX.md`, not the worktree's.
 
-   Confirm with `git -C "$CONTENT" diff --stat INDEX.md` in the primary
-   content checkout. A clean diff there means it targeted the worktree.
+   Confirm by running `git diff --stat INDEX.md` in the primary content
+   checkout (the repo `np_content.py content_dir` resolves to). A clean diff there means it targeted the worktree.
 
    If you're adding a new skill, hand-edit its row instead. Rows sit in
    alphabetical order:
