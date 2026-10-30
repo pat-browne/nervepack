@@ -91,6 +91,19 @@
    first. For example: `NP_DIR=/path/to/worktree python3
    engine/nervepack_engine/cli.py setup generate-index`.
 
+   A content-overlay worktree needs a different variable. `generate-index`
+   resolves the content dir through `np_content.py`, which ignores `NP_DIR`.
+
+   Set `NP_CONTENT_DIR` to the worktree's own absolute path instead:
+   `NP_CONTENT_DIR=/path/to/content-worktree python3 .../cli.py setup
+   generate-index`.
+
+   Without it, the command silently regenerates the primary content
+   checkout's `INDEX.md`, not the worktree's.
+
+   Confirm with `git -C "$CONTENT" diff --stat INDEX.md` in the primary
+   content checkout. A clean diff there means it targeted the worktree.
+
    If you're adding a new skill, hand-edit its row instead. Rows sit in
    alphabetical order:
    `| [<name>](skills/<name>/SKILL.md) | <line-count> | <frontmatter description> |`.
