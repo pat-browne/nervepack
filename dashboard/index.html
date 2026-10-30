@@ -1236,9 +1236,14 @@
         return tick();
       }
       if (s.state === "queued") { on.queued && on.queued(s); return tick(); }
+      if (s.state === "running") {
+        on.running && on.running(s);
+        if (++tries < 220) return tick();
+        return on.timeout && on.timeout(s);
+      }
       const h = on[s.state];
       if (h) return h(s);
-      if (++tries < 220) { if (s.state === "running" && on.running) on.running(s); return tick(); }
+      if (++tries < 220) return tick();
       on.timeout && on.timeout(s);
     }, 3000);
     tick();

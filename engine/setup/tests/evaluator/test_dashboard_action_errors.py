@@ -288,6 +288,32 @@ class TestPageContract(unittest.TestCase):
         self.assertIn("const EXPECT_API = %d;" % np_dashboard_actions.API_VERSION, html)
 
 
+class TestPollStatusKeepsPolling(unittest.TestCase):
+    """A running job must keep being polled until it reaches a final state."""
+
+    def test_running_then_done_reaches_done(self):
+        import shutil
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not installed")
+        page = os.path.join(SETUP, "..", "..", "dashboard", "index.html")
+        with open(page, encoding="utf-8") as fh:
+            html = fh.read()
+        start = html.index("  function pollStatus(text, on) {")
+        end = html.index("  // Shared runner for agent jobs")
+        fn = html[start:end]
+        script = (
+            "const states=['queued','running','running','done'];let n=0;const seen=[];\n"
+            "global.setTimeout=(f)=>{Promise.resolve().then(f)};\n"
+            "global.fetch=async()=>({ok:true,json:async()=>({state:states[Math.min(n++,3)]})});\n"
+            + fn +
+            "\npollStatus('x',{queued:()=>seen.push('q'),running:()=>seen.push('r'),"
+            "done:()=>{seen.push('d');console.log(seen.join(''))}});\n"
+        )
+        out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=20)
+        self.assertEqual(out.stdout.strip(), "qrrd", out.stderr)
+
+
 SECRET = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"
 CRED_URL = "https://deploy:" + SECRET + "@example.com/org/overlay.git"
 
