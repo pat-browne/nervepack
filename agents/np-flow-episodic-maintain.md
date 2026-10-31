@@ -215,11 +215,13 @@ human-reviewed.
    add a second line.
 4. Skip any claim the stack's wiki page already states.
    Run `grep -ril "<key words>" wiki/topics/<stack> wiki/concepts`.
-   If grep errors, stage the fact and say so in the report.
+   Exit 1 means no match: stage the fact. Exit 2 or higher is an error: stage it
+   anyway and say so in the report.
 5. Drop items with no evidence, and any claim that is one project's own detail.
 6. In the final report, list stacks with a new or `seen >= 2` entry as
    **wiki promotion candidates**. A human promotes them through
    `np-core-contribute` (kind `knowledge`).
+7. State in the report whether the step 6 commit included `memory/stack-facts`.
 
 ### 6. Commit, push, clear inbox
 
@@ -237,7 +239,9 @@ git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
-_paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources memory/stack-facts"
+_paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources"
+# Step 5c creates memory/stack-facts only when a fact was staged; `git add` fails on a missing path.
+[ -d memory/stack-facts ] && _paths="$_paths memory/stack-facts"
 # Only if step 5b ran: also add each skill/wiki page that got a `Lessons: [[lessons/<topic>]]`
 # backlink, explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
 git add $_paths
