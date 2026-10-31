@@ -203,7 +203,8 @@ class TestNpCapture(unittest.TestCase):
         facts = json.loads(self._inbox_line())["stack_facts"]
         self.assertEqual([f["stack"] for f in facts], ["fastapi", "rust", "go"])
         self.assertNotIn("user:pw", facts[0]["evidence"])
-        self.assertLessEqual(len(facts[0]["evidence"]), 300)
+        # Capped at 300 before np_scrub runs; its redaction marker can add a few characters.
+        self.assertLessEqual(len(facts[0]["evidence"]), 320)
         self.assertEqual(facts[0]["source"], "https://docs.example.com/a")
         self.assertEqual(facts[1]["source"], "")
         self.assertEqual(facts[2]["source"], "")

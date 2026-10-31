@@ -300,7 +300,7 @@ def capture(payload, mode="session-end"):
     if isinstance(note, dict):
         _sanitize_stack_facts(note)
 
-    envelope ={"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
+    envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note
     if not append_note(envelope):
         return "captured"
