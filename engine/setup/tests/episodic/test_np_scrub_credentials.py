@@ -46,6 +46,24 @@ class TestScrubCredentials(unittest.TestCase):
             self.assertNotIn(secret, out, cmd)
             self.assertEqual(out.replace("[REDACTED-SECRET]", "").strip(), "x --password", cmd)
 
+    def test_escaped_quotes_inside_quoted_values(self):
+        for cmd in ('x --password="abc\\"def9z" y', "x --token 'abc\\'def9z' y"):
+            out = s(cmd)
+            self.assertNotIn("def9z", out, cmd)
+            self.assertNotIn("abc", out, cmd)
+
+    def test_basic_header_equals_form_keeps_case_and_needs_word_boundary(self):
+        # The "Authorization:" colon form is redacted by an earlier rule. This rule adds "=".
+        self.assertIn("authorization=basic [REDACTED-SECRET]", s("authorization=basic Ym9iOmh1bnRlcjI="))
+        self.assertIn("Authorization=Basic [REDACTED-SECRET]", s("Authorization=Basic Ym9iOmh1bnRlcjI="))
+        self.assertIn("Ym9iOmh1bnRlcjI", s("NotAuthorization=Basic Ym9iOmh1bnRlcjI="))
+        self.assertNotIn("Ym9iOmh1bnRlcjI", s("Authorization: Basic Ym9iOmh1bnRlcjI="))
+
+    def test_user_flag_stops_before_a_following_flag(self):
+        out = s("curl -u bob:aaa1;--token bbb2 x")
+        self.assertNotIn("aaa1", out)
+        self.assertNotIn("bbb2", out)
+
     def test_similar_flags_untouched(self):
         for cmd in ("x --token-file /tmp/t", "docker login --password-stdin", "x --port 8080"):
             self.assertEqual(s(cmd), cmd)
