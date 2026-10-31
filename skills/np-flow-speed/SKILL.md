@@ -76,11 +76,12 @@ a live check passes. Do not hand back at "PR open" or "merged".
    the page in a browser, or the new infrastructure's own check. A green
    deploy command is not verification. Retry over a couple of minutes to ride
    out propagation, and log each result.
-   A failed check means diagnose with the deploy output and the live response,
-   never retry silently, then fix forward or roll back and say which. To roll
-   back, use the repo's procedure or revert the merge commit, redeploy, and
-   pass the same live check.
-6. **Report** the PR, merge SHA, deploy result and the live check evidence.
+   A failed check: diagnose, never retry silently, then fix forward or roll back. Steps: references/verify-and-rollback.md
+6. **Capture.** Run [[np-core-capture-learning]], including its stack sweep, over
+   every verified fact from the run: gotchas, numbers, diagnoses, evaluations.
+   Nothing merged is still a trigger. Skipping needs a named KB location per
+   learning. Add `Captured: <fact> -> <destination>` lines to the decisions log.
+7. **Report** the PR, merge SHA, deploy result and the live check evidence.
 
 ## Landing several PRs: one integration branch
 
@@ -136,6 +137,9 @@ Decisions
 
 Stopped at limits
 - <action> -- <which limit> -- <your recommendation>
+
+Captured
+- <fact> -> <skill, reference or wiki path>
 
 Scope suggestions
 - <idea> -- <how it helps the end goal>
