@@ -196,6 +196,31 @@ enforcement gates the tool call — the two are decoupled).
    for a human to graduate into a `skills/np-kb-*` rule via `np-core-contribute`. Prune
    stale/disproven lessons to `archive/lessons/`.
 
+### 5c. Stage stack facts for the wiki
+
+Process the `stack_facts[]` arrays across the inbox into `memory/stack-facts/`.
+This is the staging layer. You never write to `wiki/`: that tree is
+human-reviewed.
+
+1. Group items by `stack`. Skip any item whose `stack` is not a plain slug
+   (lowercase letters, digits and hyphens; starts with a letter or digit; 40 chars max). The path must be exactly
+   `memory/stack-facts/<slug>.md`. For each stack, create or refresh
+   `memory/stack-facts/<stack>.md` with frontmatter `kind: stack-fact`,
+   `stack: <stack>` and `seen: <n>`.
+2. One entry per claim, in this shape:
+   `- **<claim>** Verified: <version or "unversioned">. Evidence: <evidence>. [[episodic/<topic>]]`.
+   Add a `Source:` link when the item has one.
+3. A claim that matches an existing entry: bump `seen`, keep the higher
+   version number (the later note when versions tie or are missing), and do not
+   add a second line.
+4. Skip any claim the stack's wiki page already states.
+   Run `grep -ril "<key words>" wiki/topics/<stack> wiki/concepts`.
+   If grep errors, stage the fact and say so in the report.
+5. Drop items with no evidence, and any claim that is one project's own detail.
+6. In the final report, list stacks with a new or `seen >= 2` entry as
+   **wiki promotion candidates**. A human promotes them through
+   `np-core-contribute` (kind `knowledge`).
+
 ### 6. Commit, push, clear inbox
 
 If `memory/episodic/` or `memory/resources/` changed — commit + push **the cwd repo** (the content repo; do NOT
@@ -212,7 +237,7 @@ git config user.email >/dev/null 2>&1 || git config user.email "${NP_GIT_AUTHOR_
 git config user.name  >/dev/null 2>&1 || git config user.name  "${NP_GIT_AUTHOR_NAME:-nervepack agent}"
 # Path-limit BOTH `add` and `commit` — a bare commit re-commits the whole index and
 # sweeps a concurrent session's staged work into this drain (issue #11).
-_paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources"
+_paths="memory/episodic archive/episodic memory/lessons archive/lessons memory/resources memory/stack-facts"
 # Only if step 5b ran: also add each skill/wiki page that got a `Lessons: [[lessons/<topic>]]`
 # backlink, explicitly (e.g. _paths="$_paths skills/<name>/SKILL.md"). Never -A.
 git add $_paths

@@ -59,7 +59,7 @@ Classify the learning as one **kind**. The kind is the engine's vocabulary; the
 | Claude plugin choice or rationale | `skill` | extend `np-env-claude-plugin-stack` |
 | New cross-cutting how-to the user will hit again | `skill` | a new skill (engine only for machinery) |
 | Curated technical reference (version-pinned spec, RFC, official docs) | `reference` | **invoke ingest protocol** (see below) |
-| Synthesis of a topic or concept | `knowledge` | pick the variant the layer declares |
+| Topic, concept or tech-stack fact | `knowledge` | pick the variant the layer declares |
 | Recurring AI-agent prompt | `prompt` | the layer's prompt route |
 | Bootstrap step (re-runnable) | — | Engine: `engine/setup/NN-name.sh` |
 | Repo workflow / protocol | — | Engine: `CLAUDE.md` (this is the AI manual) |

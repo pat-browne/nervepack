@@ -51,6 +51,10 @@ model that can do its job. The session default is never a worker's model.
 - Record each step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
 - Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
+- Every worker brief carries the prime and capture blocks from `np-core-dispatch`
+  references/nervepack-context.md. Workers recall related context first and
+  capture at each milestone. The coordinator captures its own learnings before
+  the final report, and again at the finish line if the session is still live.
 
 ## The finish line
 
