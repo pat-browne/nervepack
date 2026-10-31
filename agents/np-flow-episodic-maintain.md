@@ -205,20 +205,21 @@ human-reviewed.
 1. Group items by `stack`. Skip any item whose `stack` is not a plain slug
    (lowercase letters, digits and hyphens; starts with a letter or digit; 40 chars max). The path must be exactly
    `memory/stack-facts/<slug>.md`. For each stack, create or refresh
-   `memory/stack-facts/<stack>.md` with frontmatter `kind: stack-fact`,
-   `stack: <stack>` and `seen: <n>`.
+   `memory/stack-facts/<stack>.md` with frontmatter `kind: stack-fact` and
+   `stack: <stack>`. The file has no file-level count: `Seen` is per claim.
 2. One entry per claim, in this shape:
-   `- **<claim>** Verified: <version or "unversioned">. Evidence: <evidence>. [[episodic/<topic>]]`.
-   Add a `Source:` link when the item has one.
-3. A claim that matches an existing entry: bump `seen`, keep the higher
+   `- **<claim>** Verified: <version or "unversioned">. Evidence: <evidence>. Seen: <n>. [[episodic/<topic>]]`.
+   Start `Seen` at 1. Add a `Source:` link when the item has one.
+3. A claim that matches an existing entry: bump that entry's `Seen`, keep the higher
    version number (the later note when versions tie or are missing), and do not
    add a second line.
 4. Skip any claim the stack's wiki page already states.
    Run `grep -ril "<key words>" wiki/topics/<stack> wiki/concepts`.
-   Exit 1 means no match: stage the fact. Exit 2 or higher is an error: stage it
-   anyway and say so in the report.
+   Exit 0 with a hit that states the claim: skip the fact. Exit 1 means no match:
+   stage the fact. Exit 2 or higher is an error: stage it anyway and list the
+   stack under "Dedup check failed:" in the report.
 5. Drop items with no evidence, and any claim that is one project's own detail.
-6. In the final report, list stacks with a new or `seen >= 2` entry as
+6. In the final report, list stacks with a new entry or a `Seen >= 2` entry as
    **wiki promotion candidates**. A human promotes them through
    `np-core-contribute` (kind `knowledge`).
 7. State in the report whether the step 6 commit included `memory/stack-facts`.
