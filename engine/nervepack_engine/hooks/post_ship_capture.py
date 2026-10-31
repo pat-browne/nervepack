@@ -30,7 +30,8 @@ _MSG = ("Post-ship capture (Nervepack): this command shipped work ({label}). "
         "Before ending this turn, invoke the np-core-capture-learning skill to "
         "capture what this change taught: gotchas hit, fixes, decisions. "
         "Skip a learning only by naming the KB location where it already "
-        "lives. The PR, chat or an artifact does not count.")
+        "lives, such as a skill, reference or wiki path. The PR, chat or an "
+        "artifact does not count.")
 
 
 def detect(command):

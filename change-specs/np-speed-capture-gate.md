@@ -9,6 +9,7 @@ blast_radius:
   - skills/np-flow-speed/SKILL.md
   - skills/np-flow-speed/references/verify-and-rollback.md
   - change-specs/np-speed-capture-gate.md
+  - engine/setup/tests/nervepack_engine/test_post_ship_capture.py
 ---
 
 # 0107: Capture step in the speed finish line
