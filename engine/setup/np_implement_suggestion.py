@@ -57,6 +57,7 @@ import np_model
 import np_suggestion_resolve
 import np_toggle
 import np_dirs
+import np_frontmatter
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _NP = os.path.dirname(os.path.dirname(_HERE))  # engine/setup -> engine -> repo root
@@ -95,7 +96,7 @@ def _log(log_path, msg):
 
 def _write_status(status_dir, key, state, ref="", **extra):
     """`extra` carries optional fields: position, model_error, model, log."""
-    rec = {"state": state, "ref": ref, "ts": _now()}
+    rec = {"state": state, "ref": np_dashboard_actions.redact(ref), "ts": _now()}
     rec.update(extra)
     try:
         os.makedirs(status_dir, exist_ok=True)
@@ -458,7 +459,8 @@ def _origin_base(repo, log_path=None):
 
 
 def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
-                  tools=_AGENT_TOOLS, commit_msg=None, from_origin=False, apply_fn=None):
+                  tools=_AGENT_TOOLS, commit_msg=None, from_origin=False, apply_fn=None,
+                  precheck_fn=None):
     """Isolate the agent in a throwaway git WORKTREE off the committed base tip
     of `repo`. The agent never sees (and can never commit) the caller's
     uncommitted work; the worktree lives OUTSIDE the repo (a temp dir, always
@@ -505,6 +507,13 @@ def _attempt_repo(repo, label, branch, prompt, agent_fn, log_path,
         return a
 
     try:
+        # precheck_fn names a target that origin no longer has or already
+        # handled. That is a stale click, not a failure, so no agent pass runs.
+        stale_reason = precheck_fn(wt) if precheck_fn is not None else ""
+        if stale_reason:
+            a.state = "stale"
+            a.detail = stale_reason
+            return a
         # apply_fn: a deterministic edit that needs no agent pass. It returns
         # True when it handled the job.
         try:
@@ -781,8 +790,15 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
     Modify-box rewrite the agent receives instead. `target` is the evaluator's
     layer tag, which picks the repo to try first.
     """
+    sdir = (status_dir or os.environ.get("IMPLEMENT_STATUS_DIR")
+            or np_dirs.cache_path("implement-status"))
     if os.environ.get("NERVEPACK_AGENT"):
-        return 0  # never recurse if already inside an agent
+        # Never recurse inside an agent. Say so: a silent return leaves the
+        # dashboard polling a job that will never report.
+        if text:
+            _write_status(sdir, _status_key(text), "failed",
+                          "refused: NERVEPACK_AGENT is set (the server was started inside an agent)")
+        return 0
     ctx = {
         "repo": repo or os.environ.get("IMPLEMENT_REPO") or _NP,
         "log_path": log_path or os.environ.get("IMPLEMENT_LOG") or np_dirs.cache_path("implement.log"),
@@ -797,6 +813,9 @@ def implement(text, edited=None, target=None, repo=None, log_path=None, lock_pat
     qdir = queue_dir(ctx["status_dir"])
 
     if np_toggle.param("evaluator.implement", "on") != "on":
+        if text:
+            _write_status(ctx["status_dir"], _status_key(text), "failed",
+                          "evaluator.implement is off (cli.py toggle evaluator.implement on)")
         return 0
     if not text:
         _log(log_path, "no suggestion text given")
@@ -905,6 +924,7 @@ def _run_one(text, edited, target, ctx, kind=None):
         _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
         return
     apply_fn = _keep_separate_fn(task) if kind == "compact" else None
+    precheck_fn = _kind_precheck_fn(kind, task) if kind else None
 
     land_repo = land_label = base = base_sha = agent_sha = ""
     tried = []
@@ -915,7 +935,7 @@ def _run_one(text, edited, target, ctx, kind=None):
             prompt = _build_prompt(ctx["prompt_file"], task, labels[r], index, len(planned), target)
             attempt = _attempt_repo(repos[r], labels[r], branch, prompt, ctx["agent_fn"], log_path,
                                     tools=tools, commit_msg=commit_msg, from_origin=bool(kind),
-                                    apply_fn=apply_fn)
+                                    apply_fn=apply_fn, precheck_fn=precheck_fn)
             tried.append((labels[r], attempt))
             if attempt.state == "implemented":
                 land_repo, land_label = repos[r], r
@@ -942,6 +962,15 @@ def _run_one(text, edited, target, ctx, kind=None):
         reason = reason[:300]
         all_not_implementable = bool(tried) and all(
             a.state == "not_implementable" for _, a in tried)
+        if tried and all(a.state == "stale" for _, a in tried):
+            # Origin already handled this entry. Hide it locally and say so.
+            if kind == "graduate":
+                _dismiss_graduated(task, log_path)
+            elif kind == "compact":
+                _mark_compact_applied(task, log_path)
+            _write_status(status_dir, key, "stale", reason, log=log_path)
+            _log(log_path, "stale, already handled on origin: %r (%s)" % (text, reason))
+            return
         if all_not_implementable:
             _write_status(status_dir, key, "not_implementable", reason, log=log_path)
             _log(log_path, "not a code change, left unresolved: %r (%s)" % (text, reason))
@@ -950,9 +979,19 @@ def _run_one(text, edited, target, ctx, kind=None):
             _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, reason))
         return
 
-    ref = _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, ctx["gh_pr_create_fn"])
+    landing = _land_result(land_repo, land_label, mode, branch, base, agent_sha, log_path,
+                           ctx["gh_pr_create_fn"])
+    ref = landing.ref
+    if not landing.landed:
+        # Nothing reached origin. Leave the row, the ledger and the dismissal
+        # list alone so the user can retry, and say where the commit is.
+        _write_status(status_dir, key, "failed", landing.reason[:300], log=log_path)
+        _log(log_path, "implement failed, left unresolved: %r (%s)" % (text, landing.reason))
+        return
     if kind == "graduate":
         _dismiss_graduated(task, log_path)
+    elif kind == "compact":
+        _mark_compact_applied(task, log_path)
 
     note = ("implemented as: %s" % task) if task != text else ""
     try:
@@ -965,18 +1004,67 @@ def _run_one(text, edited, target, ctx, kind=None):
          % (text, (" as %r" % task) if task != text else "", ref, land_label))
 
 
+class Landing:
+    """Outcome of _land_result.
+
+    `landed` is False when the commit did not reach where the job promised.
+    The commit then stays on the local branch `ref` and `reason` says why.
+    The caller fails the job instead of reporting a success nobody can see.
+    """
+
+    def __init__(self, ref, landed=True, reason=""):
+        self.ref, self.landed, self.reason = ref, landed, reason
+
+
 def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn):
-    """Land the agent's commit per mode/repo. Returns the ref (a branch name,
-    a base branch name, or a PR URL) recorded in the status file."""
+    """Land the agent's commit per mode and repo.
+
+    Returns the ref (a branch name, a base branch name, or a PR URL) that the
+    status file records.
+    """
+    return _land_result(land_repo, land_label, mode, branch, base, agent_sha,
+                        log_path, gh_pr_create_fn).ref
+
+
+def _push_reason(push):
+    return np_dashboard_actions.first_line(push.stderr or push.stdout or "", 200) or "no output"
+
+
+def _rebase_onto_origin(repo, branch, agent_sha, base, log_path):
+    """The agent's commit replayed on origin's current tip, or "" on a conflict.
+
+    Runs in a throwaway worktree, so the caller's tree is untouched.
+    """
+    new_base, new_sha = _origin_base(repo, log_path)
+    if not new_sha:
+        return ""
+    wtbase = tempfile.mkdtemp(prefix="np-implement-rebase-", dir=os.environ.get("TMPDIR"))
+    wt = os.path.join(wtbase, "wt")
+    try:
+        add = _git(repo, "worktree", "add", "-q", "--detach", wt, new_sha)
+        if add.returncode != 0 or not os.path.isdir(wt):
+            return ""
+        pick = _git(wt, "cherry-pick", agent_sha)
+        if pick.returncode != 0:
+            _log(log_path, "cherry-pick onto origin/%s conflicted: %s" % (new_base, _push_reason(pick)))
+            return ""
+        head = (_git(wt, "rev-parse", "HEAD").stdout or "").strip()
+        return head if _SHA_RE.match(head) else ""
+    finally:
+        _git(repo, "worktree", "remove", "--force", wt)
+        _git(repo, "worktree", "prune")
+        shutil.rmtree(wtbase, ignore_errors=True)
+
+
+def _land_result(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_create_fn):
     gh_pr_create_fn = gh_pr_create_fn or _default_gh_pr_create
     ref = land_repo
 
-    # Belt-and-braces: only _attempt_repo's verified sha may reach a remote. An
-    # empty agent_sha would make the direct-landing refspec ":refs/heads/<base>",
-    # which git reads as DELETE <base> -- and exits 0 doing it.
+    # Only a verified sha may reach a remote. An empty sha makes the refspec
+    # ":refs/heads/<base>", which git reads as a branch DELETE and exits 0.
     if not _SHA_RE.match(agent_sha or ""):
         _log(log_path, "refusing to land %r: not a verified commit sha (%s repo)" % (agent_sha, land_label))
-        return branch
+        return Landing(branch, False, "not a verified commit sha")
 
     if land_label == "engine" and mode == "pr":
         ref = branch
@@ -988,34 +1076,52 @@ def _land(land_repo, land_label, mode, branch, base, agent_sha, log_path, gh_pr_
                     if pr_url:
                         ref = pr_url
             else:
-                _log(log_path, "branch push failed; PR not opened (branch %s is local, %s repo)" % (branch, land_label))
+                reason = "branch push failed (%s)" % _push_reason(push)
+                _log(log_path, "%s; PR not opened (branch %s is local, %s repo)" % (reason, branch, land_label))
+                return Landing(branch, False, reason)
         else:
             _log(log_path, "no origin remote; change is local on %s (%s repo)" % (branch, land_label))
-        return ref
+        return Landing(ref)
 
-    # direct landing: engine in "direct" mode, OR any content-overlay success
-    # (the overlay is private with no PR gate -- always lands directly).
+    # Direct landing: engine in "direct" mode, or any overlay success.
+    # The overlay is private and has no PR gate.
     ref = base
+    pushed_sha = agent_sha
     if _git(land_repo, "remote", "get-url", "origin").returncode == 0:
         push = _git(land_repo, "push", "-q", "origin", "%s:refs/heads/%s" % (agent_sha, base))
         if push.returncode != 0:
-            _log(log_path, "direct push to %s failed (%s repo; commit is local on %s)" % (base, land_label, branch))
+            first = _push_reason(push)
+            _log(log_path, "direct push to %s failed (%s repo; commit is local on %s): %s"
+                 % (base, land_label, branch, first))
+            # Origin may have moved while the agent worked. Replay the commit
+            # on the new tip and push once more. A hook rejection fails twice.
+            replay = _rebase_onto_origin(land_repo, branch, agent_sha, base, log_path)
+            if replay:
+                push = _git(land_repo, "push", "-q", "origin", "%s:refs/heads/%s" % (replay, base))
+                if push.returncode == 0:
+                    pushed_sha = replay
+                    _log(log_path, "direct push to %s succeeded after replaying on origin's tip" % base)
+            if push.returncode != 0:
+                reason = ("push to origin/%s rejected: %s; the change is kept on local branch %s"
+                          % (base, _push_reason(push), branch))
+                _log(log_path, reason)
+                return Landing(branch, False, reason)
     else:
         _log(log_path, "no origin remote; change is local on %s (%s repo)" % (branch, land_label))
 
-    # Advance the LOCAL base too -- only when it is checked out and clean, so we
-    # never clobber uncommitted work or move some other branch. A checkout that
-    # drifted onto a feature branch stays as it is. It picks the commit up from
-    # origin on its next merge. Else the commit stays on `branch`.
+    # Advance the local base only when it is checked out and clean.
+    # Otherwise leave the checkout alone and keep the commit on `branch`.
     current = (_git(land_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
-    dirty = bool((_git(land_repo, "status", "--porcelain").stdout or "").strip())
-    if (current == base and not dirty
+    # Untracked files never block a fast-forward. Ignore them so a stray
+    # untracked file cannot pin the checkout off the new tip forever.
+    dirty = bool((_git(land_repo, "status", "--porcelain", "--untracked-files=no").stdout or "").strip())
+    if (current == base and not dirty and pushed_sha == agent_sha
             and _git(land_repo, "merge", "--ff-only", agent_sha).returncode == 0):
         _git(land_repo, "branch", "-D", branch)
     else:
         _log(log_path, "local %s not advanced (dirty or non-ff, %s repo); commit on %s" % (base, land_label, branch))
         ref = branch
-    return ref
+    return Landing(ref)
 
 
 def _split_proposal(task):
@@ -1040,6 +1146,52 @@ def _keep_separate_fn(task):
             raise RuntimeError("keep-separate entry vanished mid-apply: %s :: %s" % (fname, title))
         return True
     return apply
+
+
+def _kind_precheck_fn(kind, task):
+    """precheck_fn for a kind job: a reason when origin already handled it.
+
+    The dashboard reads the local overlay checkout, which can lag origin.
+    A proposal or lesson origin has already dealt with is a stale click.
+    """
+    if kind == "compact":
+        fname, title = _split_proposal(task)
+
+        def check(wt):
+            pdir = os.path.join(wt, "compact-proposals")
+            if np_dashboard_actions.find_proposal(pdir, fname, title):
+                return ""
+            return "proposal is no longer on origin (applied or rejected elsewhere)"
+        return check
+
+    cand_kind, _, name = (task or "").partition(":")
+
+    def check_lesson(wt):
+        path = np_dashboard_actions.lesson_path(wt, name.strip())
+        if not path:
+            return "lesson name %r is not a valid lesson file name" % name.strip()
+        if not os.path.isfile(path):
+            return "lesson memory/lessons/%s.md is not on origin" % name.strip()
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                status = np_frontmatter.field(fh.read(), "status", "").lower()
+        except OSError:
+            return ""
+        if status in ("graduated", "promoted", "archived"):
+            return "lesson is already %s on origin" % status
+        return ""
+    return check_lesson
+
+
+def _mark_compact_applied(task, log_path):
+    """Hide a landed compact entry from the panel until the checkout catches up."""
+    fname, title = _split_proposal(task)
+    if not (fname and title):
+        return
+    try:
+        np_dashboard_actions.mark_applied(np_dashboard_actions.applied_path(), fname, title)
+    except OSError as exc:
+        _log(log_path, "compact applied marker failed for %r: %s" % (task, exc))
 
 
 def _dismiss_graduated(task, log_path):

@@ -1,5 +1,5 @@
 ---
-id: 0105
+id: 0107
 status: proposed
 date: 2026-10-29
 tier: normal
@@ -9,12 +9,12 @@ blast_radius:
   - change-specs/fix-scrub-credential-flags.md
 ---
 
-# 0105: Scrub credentials in command lines and URLs
+# 0107: Scrub credentials in command lines and URLs
 
 ## Context and problem statement
 
-`np_scrub` redacts known token shapes and `key=value` pairs. It misses URL
-userinfo, `--password hunter2` style flags, `curl -u user:pw` and Basic auth
+`np_scrub` redacts known token shapes and `key=value` pairs. It misses
+`--password hunter2` style flags, `curl -u user:pw` and Basic auth
 headers. Capture now stores `stack_facts[].evidence`, which often holds a
 command line, so these shapes reach committed memory. The security review of
 nervepack#424 flagged the gap.
@@ -27,7 +27,7 @@ nervepack#424 flagged the gap.
 
 ## Decision
 
-We will add four rules to `np_scrub._RULES`: URL userinfo, long credential
+We will add three rules to `np_scrub._RULES`: long credential
 flags, `-u`/`--user` pairs, and Basic auth values. Flag names must end at `=`
 or whitespace, so `--token-file` and `--password-stdin` stay untouched.
 

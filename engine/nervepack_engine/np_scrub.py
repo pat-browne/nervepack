@@ -41,9 +41,20 @@ _RULES = [
      rb'\1\2[REDACTED-SECRET]'),
     (rb'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}', rb'[REDACTED-JWT]'),
     (rb'-----BEGIN[ A-Z]*PRIVATE KEY-----', rb'[REDACTED-KEY]'),
-    # Credentials in command lines and URLs (security review of stack_facts[].evidence).
-    # URL userinfo: https://user:pw@host or https://TOKEN@host.
-    (rb'([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@', rb'\1[REDACTED-SECRET]@'),
+    # Added for dashboard action text: GitLab tokens, Authorization headers (an optional
+    # scheme word, then one value), URL credentials, and secret-named values with any
+    # name prefix, any case, and quoted or bare values.
+    (rb'glpat-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    (rb'(?i)(authorization\s*:\s*)(?:(?:bearer|basic|token|digest|negotiate)\s+)?[^\s"\']+',
+     rb'\1[REDACTED-SECRET]'),
+    (rb'(?i)(://)[^/\s@:]+(?::[^/\s@]*)?@', rb'\1[REDACTED-CRED]@'),
+    (rb'(?i)((?:password|passwd|secret|token|api[_-]?key|access[_-]?key)'
+     rb'["\']?\s*[:=]\s*)(?:"[^"]*"|\'[^\']*\'|[^\s"\',;&]+)', rb'\1[REDACTED-SECRET]'),
+    # Provider keys with dashes (sk-proj-, sk-ant-api03-) and bearer tokens of any length.
+    (rb'sk-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    (rb'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+', rb'Bearer [REDACTED-SECRET]'),
+    # Command-line credentials (security review of stack_facts[].evidence). URL userinfo and
+    # Authorization headers are covered by the rules above.
     # --password hunter2, --password=hunter2, --token "abc def". Longer flag names such as
     # --token-file and --password-stdin do not match: the name must end at = or space.
     (rb'(--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret))'

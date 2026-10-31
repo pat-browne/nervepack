@@ -1178,8 +1178,10 @@ def main(argv):
         sys.stderr.write("build.py graduation: %s\n" % exc)
         graduation = json.dumps({"candidates": []})
     try:
-        proposals = json.dumps(np_dashboard_actions.load_proposals(
-            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")))
+        proposals = json.dumps(np_dashboard_actions.filter_applied(
+            np_dashboard_actions.load_proposals(
+                os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(_content_dir(), "compact-proposals")),
+            np_dashboard_actions.load_dismissed(np_dashboard_actions.applied_path())))
     except Exception as exc:
         sys.stderr.write("build.py proposals: %s\n" % exc)
         proposals = "[]"

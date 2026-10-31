@@ -131,6 +131,17 @@
       }
     },
     {
+      "id": "dashboard-actions",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "the dashboard action buttons (Implement, Apply, Graduate) can run",
+      "why": "The buttons queue agent jobs against the content overlay. A missing overlay, a disabled implement toggle, an agent re-entry guard in the server environment, or missing job files make a click fail.",
+      "accept": "The overlay is a git checkout with an origin remote, the implement toggle is on, NERVEPACK_AGENT is unset, the agent prompts exist, and the status directory is writable.",
+      "hints": {
+        "generic": "open the dashboard and read the red banner, or run: python3 engine/nervepack_engine/cli.py doctor. Each failed check names its own fix."
+      }
+    },
+    {
       "id": "cron-branch",
       "tier": "SHOULD",
       "check": "core",
