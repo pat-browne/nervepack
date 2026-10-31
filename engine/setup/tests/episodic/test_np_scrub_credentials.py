@@ -22,6 +22,13 @@ class TestScrubCredentials(unittest.TestCase):
                     'x --token "hunter2"', "x --api-key hunter2", "x --client-secret=hunter2"):
             self.assertNotIn("hunter2", s(cmd), cmd)
 
+    def test_quoted_and_odd_values(self):
+        for cmd in ('x --password="abc def" y', "x --token 'abc def' y",
+                    'x --password abc"def y', "x --secret=abc'def y"):
+            out = s(cmd)
+            self.assertNotIn("abc", out, cmd)
+            self.assertNotIn("def", out.replace("[REDACTED-SECRET]", ""), cmd)
+
     def test_similar_flags_untouched(self):
         for cmd in ("x --token-file /tmp/t", "docker login --password-stdin", "x --port 8080"):
             self.assertEqual(s(cmd), cmd)
