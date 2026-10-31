@@ -37,6 +37,15 @@ class TestScrubCredentials(unittest.TestCase):
             self.assertNotIn("aaa1", out, cmd)
             self.assertNotIn("bbb2", out, cmd)
 
+    def test_value_may_start_with_or_contain_a_separator(self):
+        # Only a separator that precedes another flag ends the value.
+        for cmd, secret in (("x --password &hunter2", "hunter2"), ("x --password ;hunter2", "hunter2"),
+                            ("x --password |hunter2", "hunter2"), ("x --password a;b9z", "b9z"),
+                            ("x --password p\\&ss9", "ss9"), ("x --password ab|cd9", "cd9")):
+            out = s(cmd)
+            self.assertNotIn(secret, out, cmd)
+            self.assertEqual(out.replace("[REDACTED-SECRET]", "").strip(), "x --password", cmd)
+
     def test_similar_flags_untouched(self):
         for cmd in ("x --token-file /tmp/t", "docker login --password-stdin", "x --port 8080"):
             self.assertEqual(s(cmd), cmd)
