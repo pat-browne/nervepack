@@ -625,6 +625,19 @@ suggestion ledger.
 - **Dismiss** writes `graduation-dismissed.json` next to
   `graduation-candidates.json`. `build.py` filters dismissed rows out.
 
+**One action path.** Implement, Apply and Graduate share `start_job()` in the
+server. It checks the toggle, the agent guard, the overlay checkout and its origin,
+then queues the job. A refusal returns `{ok:false, error, code, hint}`.
+The page shows it on the row and in a banner that stays until dismissed.
+A job that exits without a status reports failed with the log path.
+
+**Self-check.** `GET /api/doctor` lists each check. The server logs failures at
+startup, the page warns on load, and the `dashboard-actions` doctor capability
+reports the same rows. A server older than the page shows a restart banner.
+
+**Example.** Click Graduate with the overlay's origin removed. The row reads
+"no origin remote" with a hint, and no job spawns.
+
 **Overlay viewer.** Wiki and skill pages open in a modal iframe with
 "Open in new tab" and "Close". Esc or a backdrop click closes it, so the list
 keeps its place. Served, the settings cog opens `index.html?view=settings` in the

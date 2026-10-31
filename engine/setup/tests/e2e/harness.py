@@ -25,7 +25,47 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _build_metrics_js(metrics_jsonl: str, out_js: str) -> None:
+PROPOSAL_TEXT = "# P\n\n### np-kb-c vs np-kb-d\n\nRecommendation: merge.\n"
+CANDIDATES = {"candidates": [{"kind": "strategy", "name": "s1", "seen": 12, "bytes": 2048,
+                              "reasons": ["seen"]}],
+              "thresholds": {"graduate_seen": 10, "graduate_kb": 6}}
+
+
+def _git(cwd: str, *args: str) -> None:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+    subprocess.run(["git", "-C", cwd, *args], check=True, capture_output=True, env=env)
+
+
+def make_overlay(tmp: str) -> str:
+    """A fixture content overlay: a git checkout with one compact proposal and one
+    graduation candidate, plus a bare origin. Never touches the real overlay."""
+    overlay = os.path.join(tmp, "overlay")
+    os.makedirs(os.path.join(overlay, "compact-proposals"))
+    os.makedirs(os.path.join(overlay, "dashboard", "data"))
+    with open(os.path.join(overlay, "compact-proposals", "2026-09-30.md"), "w") as fh:
+        fh.write(PROPOSAL_TEXT)
+    with open(os.path.join(overlay, "dashboard", "data", "graduation-candidates.json"), "w") as fh:
+        json.dump(CANDIDATES, fh)
+    _git(overlay, "init", "-q", "-b", "main")
+    _git(overlay, "add", "-A")
+    _git(overlay, "commit", "-q", "-m", "seed")
+    bare = os.path.join(tmp, "origin.git")
+    subprocess.run(["git", "init", "-q", "--bare", bare], check=True, capture_output=True)
+    _git(overlay, "remote", "add", "origin", bare)
+    _git(overlay, "push", "-q", "origin", "main")
+    return overlay
+
+
+def _overlay_js(overlay: str) -> str:
+    """The window.PROPOSALS and window.GRADUATION globals build.py would write."""
+    props = [{"file": "2026-09-30.md", "date": "2026-09-30",
+              "proposals": [{"title": "np-kb-c vs np-kb-d", "recommendation": "merge", "body": ""}]}]
+    return ("window.PROPOSALS = " + json.dumps(props) + ";\n"
+            "window.GRADUATION = " + json.dumps(CANDIDATES) + ";\n")
+
+
+def _build_metrics_js(metrics_jsonl: str, out_js: str, extra: str = "") -> None:
     """Convert a metrics.jsonl fixture into the window.METRICS = [...] JS the dashboard loads."""
     records = []
     with open(metrics_jsonl) as fh:
@@ -33,14 +73,21 @@ def _build_metrics_js(metrics_jsonl: str, out_js: str) -> None:
             line = line.strip()
             if line:
                 records.append(json.loads(line))
-    js = "window.METRICS = " + json.dumps(records) + ";\nwindow.LEARNED = {playbooks:0,strategies:0,strategy_names:[]};\n"
+    js = ("window.METRICS = " + json.dumps(records)
+          + ";\nwindow.LEARNED = {playbooks:0,strategies:0,strategy_names:[]};\n" + extra)
     with open(out_js, "w") as fh:
         fh.write(js)
 
 
 def start(stub_state: str = "done", metrics_path: str | None = None,
-          toggles_conf: str | None = None) -> tuple[str, callable]:
-    """Boot the dashboard server in a temp-isolated env. Returns (base_url, stop_fn)."""
+          toggles_conf: str | None = None, overlay: bool = False,
+          ctx: dict | None = None) -> tuple[str, callable]:
+    """Boot the dashboard server in a temp-isolated env. Returns (base_url, stop_fn).
+
+    overlay=True adds a fixture content overlay with one compact proposal and one
+    graduation candidate, so the Apply and Graduate buttons render. `ctx`, when
+    given, is filled with the paths the test may need (tmp, overlay, proc).
+    """
     e2e_dir = Path(__file__).resolve().parent
     # parents[3] of e2e_dir (which is .../engine/setup/tests/e2e/) == repo root
     repo_root = e2e_dir.parents[3]
@@ -63,7 +110,9 @@ def start(stub_state: str = "done", metrics_path: str | None = None,
     shutil.copy(str(real_dashboard / "index.html"), os.path.join(dash_root, "index.html"))
     data_dir = os.path.join(dash_root, "data")
     os.makedirs(data_dir)
-    _build_metrics_js(metrics_path, os.path.join(data_dir, "metrics.js"))
+    overlay_dir = make_overlay(tmp) if overlay else ""
+    _build_metrics_js(metrics_path, os.path.join(data_dir, "metrics.js"),
+                      _overlay_js(overlay_dir) if overlay else "")
     # Stub out metrics.js.map / any other files the server might 404 on — not needed.
 
     env = {
@@ -82,6 +131,13 @@ def start(stub_state: str = "done", metrics_path: str | None = None,
     }
     if toggles_conf:
         env["NP_TOGGLES_CONF"] = toggles_conf
+    if overlay:
+        env.update({
+            "NP_CONTENT_DIR": overlay_dir,
+            "NP_COMPACT_APPLIED": os.path.join(tmp, "applied.json"),
+            "NP_DASH_JOB_LOG": os.path.join(tmp, "jobs.log"),
+            "NP_TOGGLES_CONTENT": "",
+        })
 
     proc = subprocess.Popen(
         [sys.executable, str(server_script)],
@@ -91,6 +147,8 @@ def start(stub_state: str = "done", metrics_path: str | None = None,
     )
 
     base_url = f"http://127.0.0.1:{port}"
+    if ctx is not None:
+        ctx.update({"tmp": tmp, "overlay": overlay_dir, "proc": proc})
 
     # Wait up to 10s for /api/health
     deadline = time.time() + 10

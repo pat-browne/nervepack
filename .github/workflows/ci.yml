@@ -147,7 +147,7 @@ jobs:
 
       - name: Run e2e
         working-directory: engine/setup/tests/e2e
-        run: python3 -m unittest test_implement_flow -v 2>&1 | tee "$GITHUB_WORKSPACE/e2e-report.txt"
+        run: python3 -m unittest test_implement_flow test_action_buttons_flow -v 2>&1 | tee "$GITHUB_WORKSPACE/e2e-report.txt"
 
       - name: Publish e2e to job summary
         if: always()
