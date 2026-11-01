@@ -58,16 +58,20 @@ _RULES = [
     # above. The rules below add flag forms and the quoted or "=" header forms.
     # --password hunter2, --password=hunter2, --token "abc def". Longer flag names such as
     # --token-file and --password-stdin do not match: the name must end at = or space.
-    # A quoted value may hold escaped quotes. An unquoted value ends before a separator
-    # that precedes another flag, so "a;--token b" redacts both secrets.
+    # The value follows shell word rules: double quotes honor backslash escapes, single
+    # quotes are literal, and adjacent pieces form one word (so "pw\" --token "s3cret"
+    # is one value). Any other run of non-space characters also counts. It stops before a
+    # separator that leads into another credential flag, so "a;--token b" redacts both.
     (rb'(--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret))'
-     rb'(=|\s+)(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|(?:(?![;&|]\s*-)\S)+)',
+     rb'(=|\s+)(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?![;&|]\s*(?:--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret|user)|-u)\b)\S)+)+',
      rb'\1\2[REDACTED-SECRET]'),
     # curl -u user:pw, --user user:pw (same value shape as above)
-    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:(?:(?![;&|]\s*-)\S)+', rb'\1[REDACTED-SECRET]'),
-    # Authorization: Basic <base64>, also the "authorization=" form. Anchored on the word so
-    # prose like "basic configuration" is untouched. Keeps the original case of "Basic".
-    (rb'(\b[Aa]uthorization["\']?\s*[:=]\s*["\']?[Bb]asic\s+)[A-Za-z0-9+/]{8,}={0,2}',
+    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?![;&|]\s*(?:--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret|user)|-u)\b)\S)+)+',
+     rb'\1[REDACTED-SECRET]'),
+    # Authorization: Basic <base64>, also the "authorization=" form and prefixed names such as
+    # http_authorization. A letter before the word blocks the match, so "NotAuthorization"
+    # and prose like "basic configuration" are untouched. Keeps the original case of Basic.
+    (rb'(?i)((?<![a-z])authorization["\']?\s*[:=]\s*["\']?basic\s+)[A-Za-z0-9+/]{8,}={0,2}',
      rb'\1[REDACTED-SECRET]'),
 ]
 _COMPILED = [(re.compile(p), r) for p, r in _RULES]
