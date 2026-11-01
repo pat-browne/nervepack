@@ -8,7 +8,7 @@ extend rather than create overlapping duplicates.
 
 | Skill | Lines | Description |
 |---|---:|---|
-| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 122 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
+| [np-core-capture-learning](skills/np-core-capture-learning/SKILL.md) | 130 | Capture anything worth remembering and route it: durable to the nervepack repo, session-scoped to local Claude memory. Use when the user says "capture this", "remember this", "save this learning", "/capture" or "/learn" without saying where. |
 | [np-core-contribute](skills/np-core-contribute/SKILL.md) | 144 | Save a durable learning (rule, preference, plugin choice, env quirk, useful command) to the right nervepack file. Use on "remember this in nervepack", "save to nervepack", "add this to my AI context", "save this to the team layer", or any fact worth keeping. |
 | [np-core-dashboard](skills/np-core-dashboard/SKILL.md) | 95 | Open the nervepack performance dashboard and explain its SessionStart auto-open, served vs static modes, and dashboard_* toggles. Use on "open the dashboard", "show me the metrics", "/np-dashboard", or "why didn't the dashboard open". |
 | [np-core-dispatch](skills/np-core-dispatch/SKILL.md) | 126 | Send a task or [[np-core-handoff]] doc to a fresh agent and supervise it: scope, stop-points, verification. Use for long or risky jobs, parallel work, or when SendMessage is unavailable to continue a spawned agent. |
@@ -26,7 +26,7 @@ extend rather than create overlapping duplicates.
 | [np-flow-merge-gate](skills/np-flow-merge-gate/SKILL.md) | 68 | Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". |
 | [np-flow-orchestrate](skills/np-flow-orchestrate/SKILL.md) | 164 | Use when several tickets of one kind of work should run at once, each in its own session and worktree, with one coordinator driving them. Triggers: "orchestrate my tickets", "run these tickets in parallel", "be my orchestrator", "/np-orchestrate". |
 | [np-flow-quota-watch](skills/np-flow-quota-watch/SKILL.md) | 53 | Detect a claude.ai usage-limit (quota) violation and get nudged to resume automatically once it resets. Use when a session hit "usage limit reached", when debugging why the resume nudge didn't fire, or when asked to check quota-watch status, install/enable/disable it, or adjust its resume delay. |
-| [np-flow-speed](skills/np-flow-speed/SKILL.md) | 157 | Use when the user wants a change delivered end to end with no clarifying questions or permission check-ins. Triggers: "speed mode", "/np-speed", "just ship it", "no questions", "don't ask, just do it". |
+| [np-flow-speed](skills/np-flow-speed/SKILL.md) | 161 | Use when the user wants a change delivered end to end with no clarifying questions or permission check-ins. Triggers: "speed mode", "/np-speed", "just ship it", "no questions", "don't ask, just do it". |
 
 ## Archived skills
 
