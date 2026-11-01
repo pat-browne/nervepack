@@ -225,6 +225,7 @@ human-reviewed.
 6. In the final report, list stacks with a new entry or a `Seen >= 2` entry as
    **wiki promotion candidates**. A human promotes them through
    `np-core-contribute` (kind `knowledge`).
+   Under "Dedup check failed:", list each stack from step 4, or write "none".
 7. State in the report whether the step 6 commit included `memory/stack-facts`.
 
 ### 6. Commit, push, clear inbox

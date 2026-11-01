@@ -208,6 +208,10 @@ class TestNpCapture(unittest.TestCase):
                 {"stack": "rust", "claim": "c", "evidence": "e",
                  "source": "https://u:p@evil.example/x"},
                 {"stack": "go", "claim": "c", "evidence": "e", "source": "file:///etc/passwd"},
+                {"stack": "dart", "evidence": "e"},
+                {"stack": "dart", "claim": "  ", "evidence": "e"},
+                {"stack": "dart", "claim": "c"},
+                {"stack": "dart", "claim": "c", "evidence": 5},
             ],
         })
         with mock.patch.object(np_capture.np_model, "complete", return_value=note):

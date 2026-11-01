@@ -86,7 +86,8 @@ def _safe_https_url(value):
 def _sanitize_stack_facts(note):
     """Constrain stack_facts[] in place. `stack` becomes a filename in
     memory/stack-facts/, so it must be a plain slug. `evidence` is capped and
-    stripped of URL userinfo. `source` must be an https URL with no userinfo.
+    stripped of URL userinfo. Items need a non-empty `claim` and
+    `evidence`. `source` must be an https URL with no userinfo.
     Items that fail are dropped. Returns how many were dropped. Never raises."""
     facts = note.get("stack_facts")
     if facts is None:
@@ -101,10 +102,12 @@ def _sanitize_stack_facts(note):
         stack = item.get("stack")
         if not (isinstance(stack, str) and _STACK_SLUG.fullmatch(stack)):
             continue
+        claim, evidence = item.get("claim"), item.get("evidence")
+        if not (isinstance(claim, str) and claim.strip()
+                and isinstance(evidence, str) and evidence.strip()):
+            continue
         out = dict(item)
-        evidence = out.get("evidence")
-        out["evidence"] = _URL_USERINFO.sub(r"\1[REDACTED]@", evidence)[:_EVIDENCE_MAX] \
-            if isinstance(evidence, str) else ""
+        out["evidence"] = _URL_USERINFO.sub(r"\1[REDACTED]@", evidence)[:_EVIDENCE_MAX]
         out["source"] = _safe_https_url(out.get("source"))
         clean.append(out)
     note["stack_facts"] = clean
