@@ -64,6 +64,31 @@ class TestScrubCredentials(unittest.TestCase):
         self.assertNotIn("aaa1", out)
         self.assertNotIn("bbb2", out)
 
+    def test_double_quoted_escape_does_not_hide_a_second_secret(self):
+        # In a shell, "pw\\" --token "s3cretValue" is one word, so both parts are the value.
+        out = s('deploy --password "pw\\" --token "s3cretValue"')
+        self.assertNotIn("s3cretValue", out)
+        self.assertNotIn("pw", out.replace("password", ""))
+
+    def test_single_quotes_are_literal(self):
+        # A backslash does not escape inside single quotes: the first value ends at the second quote.
+        out = s("x --password 'a\\' --token 'b9zValue'")
+        self.assertNotIn("b9zValue", out)
+
+    def test_separator_dash_inside_a_password_is_not_a_flag(self):
+        for cmd, secret in (("curl -u bob:pa;-ss9z x", "ss9z"), ("x --password a;-b9z y", "b9z")):
+            self.assertNotIn(secret, s(cmd), cmd)
+
+    def test_prefixed_authorization_names(self):
+        for cmd in ("http_authorization=basic Ym9iOmh1bnRlcjI=", "HTTP_AUTHORIZATION=Basic Ym9iOmh1bnRlcjI=",
+                    "proxy-authorization=Basic Ym9iOmh1bnRlcjI="):
+            self.assertNotIn("Ym9iOmh1bnRlcjI", s(cmd), cmd)
+
+    def test_letter_prefix_blocks_the_authorization_rule_in_either_case(self):
+        # (?i) makes the lookbehind case-insensitive, so NOTauthorization is blocked too.
+        for cmd in ("NOTauthorization=basic Ym9iOmh1bnRlcjI=", "NOTAuthorization=Basic Ym9iOmh1bnRlcjI="):
+            self.assertIn("Ym9iOmh1bnRlcjI", s(cmd), cmd)
+
     def test_similar_flags_untouched(self):
         for cmd in ("x --token-file /tmp/t", "docker login --password-stdin", "x --port 8080"):
             self.assertEqual(s(cmd), cmd)
