@@ -236,7 +236,7 @@ class TestNpCapture(unittest.TestCase):
             np_capture.capture(self._payload(), mode="session-end")
         with open(os.environ["EPISODIC_CAPTURE_LOG"], encoding="utf-8") as fh:
             log = fh.read()
-        self.assertIn("dropped 2 invalid stack_facts item(s)", log)
+        self.assertIn("dropped 2 invalid stack_facts item(s): 1 bad stack slug, 1 not an object", log)
         self.assertNotIn("../x", log)
 
     def test_9_bail_never_raises_when_log_dir_unwritable(self):

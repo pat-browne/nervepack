@@ -88,30 +88,34 @@ def _sanitize_stack_facts(note):
     memory/stack-facts/, so it must be a plain slug. `evidence` is capped and
     stripped of URL userinfo. Items need a non-empty `claim` and
     `evidence`. `source` must be an https URL with no userinfo.
-    Items that fail are dropped. Returns how many were dropped. Never raises."""
+    Items that fail are dropped. Returns {reason: count} for the dropped items,
+    with reasons from a fixed set so no model text reaches the log. Never raises."""
     facts = note.get("stack_facts")
     if facts is None:
-        return 0
+        return {}
     if not isinstance(facts, list):
         note["stack_facts"] = []
-        return 1
-    clean = []
+        return {"not a list": 1}
+    clean, reasons = [], {}
     for item in facts:
         if not isinstance(item, dict):
+            reasons["not an object"] = reasons.get("not an object", 0) + 1
             continue
         stack = item.get("stack")
         if not (isinstance(stack, str) and _STACK_SLUG.fullmatch(stack)):
+            reasons["bad stack slug"] = reasons.get("bad stack slug", 0) + 1
             continue
         claim, evidence = item.get("claim"), item.get("evidence")
         if not (isinstance(claim, str) and claim.strip()
                 and isinstance(evidence, str) and evidence.strip()):
+            reasons["no claim or evidence"] = reasons.get("no claim or evidence", 0) + 1
             continue
         out = dict(item)
         out["evidence"] = _URL_USERINFO.sub(r"\1[REDACTED]@", evidence)[:_EVIDENCE_MAX]
         out["source"] = _safe_https_url(out.get("source"))
         clean.append(out)
     note["stack_facts"] = clean
-    return len(facts) - len(clean)
+    return reasons
 
 
 def was_captured(payload):
@@ -303,9 +307,10 @@ def capture(payload, mode="session-end"):
         return "captured"
     if not isinstance(note, dict):
         return bail("summarizer JSON is not an object: %s" % type(note).__name__)
-    dropped = _sanitize_stack_facts(note)
-    if dropped:
-        bail("dropped %d invalid stack_facts item(s)" % dropped)   # count only, no content
+    reasons = _sanitize_stack_facts(note)
+    if reasons:   # fixed reason labels and counts only, no content
+        bail("dropped %d invalid stack_facts item(s): %s" % (
+            sum(reasons.values()), ", ".join("%d %s" % (n, r) for r, n in sorted(reasons.items()))))
 
     envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note

@@ -220,7 +220,8 @@ human-reviewed.
    `grep -rilF -e <word> wiki/topics/<stack> wiki/concepts` once per word.
    Exit 0 with a hit that states the claim: skip the fact. Exit 1 means no match:
    stage the fact. Exit 2 or higher is an error: stage it anyway and list the
-   stack under "Dedup check failed:" in the report.
+   stack under "Dedup check failed:" in the report. A missing `wiki/topics/<stack>`
+   gives exit 2 too; name it as "<path> not found" there.
 5. Drop items with no evidence, and any claim that is one project's own detail.
 6. In the final report, list stacks with a new entry or a `Seen >= 2` entry as
    **wiki promotion candidates**. A human promotes them through
@@ -230,7 +231,7 @@ human-reviewed.
 
 ### 6. Commit, push, clear inbox
 
-If `memory/episodic/` or `memory/resources/` changed — commit + push **the cwd repo** (the content repo; do NOT
+If `memory/episodic/`, `memory/resources/` or `memory/stack-facts/` changed — commit + push **the cwd repo** (the content repo; do NOT
 `cd` away):
 
 ```bash
