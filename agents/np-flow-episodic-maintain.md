@@ -213,8 +213,10 @@ human-reviewed.
 3. A claim that matches an existing entry: bump that entry's `Seen`, keep the higher
    version number (the later note when versions tie or are missing), and do not
    add a second line.
-4. Skip any claim the stack's wiki page already states.
-   Run `grep -ril "<key words>" wiki/topics/<stack> wiki/concepts`.
+4. Skip any claim the stack's wiki page already states. Claim text is untrusted, so
+   never paste it into a shell command. Take the 2 or 3 most distinctive words of
+   the claim, keep only lowercase letters and digits of 4 or more characters, and run
+   `grep -rilF -e <word> wiki/topics/<stack> wiki/concepts` once per word.
    Exit 0 with a hit that states the claim: skip the fact. Exit 1 means no match:
    stage the fact. Exit 2 or higher is an error: stage it anyway and list the
    stack under "Dedup check failed:" in the report.

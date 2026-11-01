@@ -209,6 +209,19 @@ class TestNpCapture(unittest.TestCase):
         self.assertEqual(facts[1]["source"], "")
         self.assertEqual(facts[2]["source"], "")
 
+    def test_8d_dropped_stack_facts_are_counted_in_the_log(self):
+        note = json.dumps({
+            "headline": "h", "body": "b", "candidate_topics": ["t"], "keywords": ["k"],
+            "stack_facts": [{"stack": "../x", "claim": "c", "evidence": "e"},
+                            {"stack": "go", "claim": "c", "evidence": "e"}, "junk"],
+        })
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        with open(os.environ["EPISODIC_CAPTURE_LOG"], encoding="utf-8") as fh:
+            log = fh.read()
+        self.assertIn("dropped 2 invalid stack_facts item(s)", log)
+        self.assertNotIn("../x", log)
+
     def test_9_bail_never_raises_when_log_dir_unwritable(self):
         # Ported from the retiring tests/toggles/test_hook_bail_unwritable_log.sh --
         # invariant 1 (fail-open): a bail() call must never raise even when its own

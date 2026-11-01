@@ -51,7 +51,7 @@ A gotcha often splits. The mechanism and root cause go to the wiki. The rule
 
 ## Where it lands
 
-Resolve the path with `cli.py layout route knowledge`. Never invent a directory.
+Resolve the path with `cli.py layout route --kind knowledge`. Never invent a directory.
 
 1. Search first: `grep -ril <stack> "$CONTENT"/wiki/topics "$CONTENT"/wiki/concepts "$CONTENT"/memory/stack-facts`.
 2. Topic exists: add the fact to its synthesis page. Vendor docs go in a

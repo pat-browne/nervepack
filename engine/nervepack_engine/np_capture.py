@@ -87,13 +87,13 @@ def _sanitize_stack_facts(note):
     """Constrain stack_facts[] in place. `stack` becomes a filename in
     memory/stack-facts/, so it must be a plain slug. `evidence` is capped and
     stripped of URL userinfo. `source` must be an https URL with no userinfo.
-    Items that fail are dropped. Never raises."""
+    Items that fail are dropped. Returns how many were dropped. Never raises."""
     facts = note.get("stack_facts")
     if facts is None:
-        return
+        return 0
     if not isinstance(facts, list):
         note["stack_facts"] = []
-        return
+        return 1
     clean = []
     for item in facts:
         if not isinstance(item, dict):
@@ -108,6 +108,7 @@ def _sanitize_stack_facts(note):
         out["source"] = _safe_https_url(out.get("source"))
         clean.append(out)
     note["stack_facts"] = clean
+    return len(facts) - len(clean)
 
 
 def was_captured(payload):
@@ -298,7 +299,9 @@ def capture(payload, mode="session-end"):
     except ValueError:
         return "captured"
     if isinstance(note, dict):
-        _sanitize_stack_facts(note)
+        dropped = _sanitize_stack_facts(note)
+        if dropped:
+            bail("dropped %d invalid stack_facts item(s)" % dropped)   # count only, no content
 
     envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note
