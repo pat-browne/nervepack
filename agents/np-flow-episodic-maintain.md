@@ -205,7 +205,8 @@ human-reviewed.
 1. Group items by `stack`. Skip any item whose `stack` is not a plain slug
    (lowercase letters, digits and hyphens; starts with a letter or digit; 40 chars max). The path must be exactly
    `memory/stack-facts/<slug>.md`. For each stack, create or refresh
-   `memory/stack-facts/<stack>.md` with frontmatter `kind: stack-fact` and
+   `memory/stack-facts/<stack>.md` (run `mkdir -p memory/stack-facts` first) with
+   frontmatter `kind: stack-fact` and
    `stack: <stack>`. The file has no file-level count: `Seen` is per claim.
 2. One entry per claim, in this shape:
    `- **<claim>** Verified: <version or "unversioned">. Evidence: <evidence>. Seen: <n>. [[episodic/<topic>]]`.

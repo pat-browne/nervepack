@@ -73,7 +73,7 @@ isolate-in-a-worktree decision.
 Placement is that skill's job, and it resolves the path from the layer's own
 layout. This skill never picks a directory.
 
-### 2a-bis. Stack sweep → wiki
+### 2c. Stack sweep → wiki
 
 After any code work, run the sweep in references/stack-wiki.md.
 

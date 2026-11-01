@@ -1,5 +1,5 @@
 ---
-id: 0108
+id: 0111
 status: proposed
 date: 2026-10-25
 tier: normal
@@ -17,7 +17,7 @@ blast_radius:
   - change-specs/feat-flows-prime-capture-stack-wiki.md
 ---
 
-# 0108: Subagents prime from nervepack and capture stack facts
+# 0111: Subagents prime from nervepack and capture stack facts
 
 ## Context and problem statement
 
