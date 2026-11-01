@@ -308,7 +308,9 @@ def capture(payload, mode="session-end"):
     if not isinstance(note, dict):
         return bail("summarizer JSON is not an object: %s" % type(note).__name__)
     reasons = _sanitize_stack_facts(note)
-    if reasons:   # fixed reason labels and counts only, no content
+    # Log only and continue: the note is still written with the clean facts.
+    # Fixed reason labels and counts only, no content.
+    if reasons:
         bail("dropped %d invalid stack_facts item(s): %s" % (
             sum(reasons.values()), ", ".join("%d %s" % (n, r) for r, n in sorted(reasons.items()))))
 
