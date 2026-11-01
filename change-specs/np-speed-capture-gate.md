@@ -1,5 +1,5 @@
 ---
-id: 0107
+id: 0108
 status: proposed
 date: 2026-10-31
 tier: high
@@ -12,7 +12,7 @@ blast_radius:
   - engine/setup/tests/nervepack_engine/test_post_ship_capture.py
 ---
 
-# 0107: Capture step in the speed finish line
+# 0108: Capture step in the speed finish line
 
 ## Context and problem statement
 
