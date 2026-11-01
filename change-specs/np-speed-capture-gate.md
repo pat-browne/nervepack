@@ -58,3 +58,5 @@ Revert this PR. No installed state changes, so no re-run of `install-hooks` is
 needed. `cli.py toggle post_ship off` stops the hook immediately.
 
 ## Deviations
+
+- 2026-10-31: review fixes added one behaviour line to verify-and-rollback.md (stop and surface when rollback or the post-rollback check fails) and test assertions in test_post_ship_capture.py. Both came from review threads on #432.
