@@ -16,6 +16,9 @@ Any of these should invoke this skill:
 - "capture this", "remember this", "save this learning"
 - "this is worth keeping"
 - After a PR merge or deploy (auto-prompted by the post-ship hook)
+- After an evaluation, measurement or investigation with no merge: a model
+  eval, a data audit, a diagnosis that found no bug. Scores, metric traps,
+  ruled-out causes and verified facts are learnings even when nothing shipped.
 
 If the user explicitly says where it should go ("save to nervepack",
 "add to memory") — skip this skill and use the targeted one directly
@@ -97,6 +100,11 @@ memories" section — frontmatter with `name:`, `description:`,
 | Behavioural correction or validation | `feedback` |
 | In-flight project state, deadline, motivation | `project` |
 | Pointer to an external system (Linear, Slack, doc URL) | `reference` |
+
+### Skipping
+A skip must name, for each learning, the KB location where it already lives
+(skill, reference or wiki path). "It's in the PR, the chat or an artifact" is
+not a location. No named location means capture it.
 
 ### 3. Report
 One sentence: where it went and why. Include the file path so the user

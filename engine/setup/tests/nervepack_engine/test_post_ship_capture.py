@@ -55,6 +55,8 @@ class TestPostShipCapture(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 out = self._run(cmd)
                 self.assertIn("np-core-capture-learning", self._ctx(out))
+                self.assertIn("naming the KB location", self._ctx(out))
+                self.assertNotIn("nothing new was learned", self._ctx(out))
 
     def test_deploy_hits(self):
         for cmd in ("databricks bundle deploy -t prod",
