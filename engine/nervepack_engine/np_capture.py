@@ -298,10 +298,11 @@ def capture(payload, mode="session-end"):
         note = json.loads(jx.stdout)
     except ValueError:
         return "captured"
-    if isinstance(note, dict):
-        dropped = _sanitize_stack_facts(note)
-        if dropped:
-            bail("dropped %d invalid stack_facts item(s)" % dropped)   # count only, no content
+    if not isinstance(note, dict):
+        return bail("summarizer JSON is not an object: %s" % type(note).__name__)
+    dropped = _sanitize_stack_facts(note)
+    if dropped:
+        bail("dropped %d invalid stack_facts item(s)" % dropped)   # count only, no content
 
     envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note

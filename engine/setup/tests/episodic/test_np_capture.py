@@ -87,6 +87,18 @@ class TestNpCapture(unittest.TestCase):
         with open(log, encoding="utf-8") as fh:
             self.assertIn("bail", fh.read())
 
+    def test_2b_non_object_json_bails_logged_no_inbox_write(self):
+        for raw in ('["a", "b"]', '"just a string"', "42"):
+            with self.subTest(raw=raw):
+                with mock.patch.object(np_capture.np_model, "complete", return_value=raw):
+                    status = np_capture.capture(self._payload(), mode="session-end")
+                self.assertEqual(status, "captured")
+                inbox = os.environ["EPISODIC_INBOX"]
+                self.assertFalse(os.path.isdir(inbox) and os.listdir(inbox))
+        with open(os.environ["EPISODIC_CAPTURE_LOG"], encoding="utf-8") as fh:
+            log = fh.read()
+        self.assertEqual(log.count("capture bail"), 3)
+
     def test_3_dedup_unchanged_transcript_skips_second_capture(self):
         note = '{"headline":"h","body":"b","candidate_topics":[],"keywords":[]}'
         with mock.patch.object(np_capture.np_model, "complete", return_value=note) as m:
