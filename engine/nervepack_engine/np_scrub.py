@@ -25,6 +25,12 @@ import os
 import re
 import sys
 
+# Credential flag names, listed once. Both flag rules below use them, so adding a name here
+# covers the value pattern and the "stop before the next credential flag" lookahead.
+_CRED_FLAGS = rb'password|passwd|token|secret|api-?key|access-token|auth-token|client-secret'
+_NEXT_CRED_FLAG = rb'[;&|]\s*(?:--(?:' + _CRED_FLAGS + rb'|user)|-u)\b'
+_FLAG_VALUE = (rb'(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?!' + _NEXT_CRED_FLAG + rb')\S)+)+')
+
 # The sed -E rules, in order. \s in a bytes pattern is exactly POSIX [[:space:]]
 # under LC_ALL=C ([ \t\n\r\f\v]); processing per-line means \n never appears within
 # a segment, matching sed's line-at-a-time behavior.
@@ -62,15 +68,14 @@ _RULES = [
     # quotes are literal, and adjacent pieces form one word (so "pw\" --token "s3cret"
     # is one value). Any other run of non-space characters also counts. It stops before a
     # separator that leads into another credential flag, so "a;--token b" redacts both.
-    (rb'(--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret))'
-     rb'(=|\s+)(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?![;&|]\s*(?:--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret|user)|-u)\b)\S)+)+',
-     rb'\1\2[REDACTED-SECRET]'),
+    (rb'(--(?:' + _CRED_FLAGS + rb'))(=|\s+)' + _FLAG_VALUE, rb'\1\2[REDACTED-SECRET]'),
     # curl -u user:pw, --user user:pw (same value shape as above)
-    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?![;&|]\s*(?:--(?:password|passwd|token|secret|api-?key|access-token|auth-token|client-secret|user)|-u)\b)\S)+)+',
-     rb'\1[REDACTED-SECRET]'),
+    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:' + _FLAG_VALUE, rb'\1[REDACTED-SECRET]'),
     # Authorization: Basic <base64>, also the "authorization=" form and prefixed names such as
-    # http_authorization. A letter before the word blocks the match, so "NotAuthorization"
-    # and prose like "basic configuration" are untouched. Keeps the original case of Basic.
+    # http_authorization. The leading (?i) makes the [a-z] in the lookbehind match both cases,
+    # so a letter of either case before the word blocks the match ("NotAuthorization",
+    # "NOTauthorization") and prose like "basic configuration" is untouched. Keeps the
+    # original case of Basic.
     (rb'(?i)((?<![a-z])authorization["\']?\s*[:=]\s*["\']?basic\s+)[A-Za-z0-9+/]{8,}={0,2}',
      rb'\1[REDACTED-SECRET]'),
 ]
