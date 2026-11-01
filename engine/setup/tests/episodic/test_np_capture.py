@@ -87,6 +87,18 @@ class TestNpCapture(unittest.TestCase):
         with open(log, encoding="utf-8") as fh:
             self.assertIn("bail", fh.read())
 
+    def test_2b_non_object_json_bails_logged_no_inbox_write(self):
+        for raw in ('["a", "b"]', '"just a string"', "42"):
+            with self.subTest(raw=raw):
+                with mock.patch.object(np_capture.np_model, "complete", return_value=raw):
+                    status = np_capture.capture(self._payload(), mode="session-end")
+                self.assertEqual(status, "captured")
+                inbox = os.environ["EPISODIC_INBOX"]
+                self.assertFalse(os.path.isdir(inbox) and os.listdir(inbox))
+        with open(os.environ["EPISODIC_CAPTURE_LOG"], encoding="utf-8") as fh:
+            log = fh.read()
+        self.assertEqual(log.count("capture bail"), 3)
+
     def test_3_dedup_unchanged_transcript_skips_second_capture(self):
         note = '{"headline":"h","body":"b","candidate_topics":[],"keywords":[]}'
         with mock.patch.object(np_capture.np_model, "complete", return_value=note) as m:
@@ -155,6 +167,77 @@ class TestNpCapture(unittest.TestCase):
         self.assertIn("memory", record["strategies"][0]["topic_triggers"])
         self.assertNotIn("ghp_ABCDEFG", line)
         self.assertIn("REDACTED", line)
+
+    def test_8b_stack_facts_passthrough_with_redaction(self):
+        # stack_facts[] rides the same capture + scrub path as struggles[] and
+        # strategies[], so episodic-maintain can stage them for the wiki.
+        note = json.dumps({
+            "headline": "h", "body": "b", "candidate_topics": ["t"], "keywords": ["k"],
+            "stack_facts": [{
+                "stack": "fastapi", "claim": "Depends() results are cached per request",
+                "evidence": "calls=1 after two uses; token ghp_ABCDEFGHIJKLMNOPQRSTU",
+                "version": "0.115", "source": "",
+            }],
+        })
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        line = self._inbox_line()
+        record = json.loads(line)
+        self.assertEqual(record["stack_facts"][0]["stack"], "fastapi")
+        self.assertEqual(record["stack_facts"][0]["version"], "0.115")
+        self.assertNotIn("ghp_ABCDEFG", line)
+        self.assertIn("REDACTED", line)
+
+    def test_8c_stack_facts_are_sanitized(self):
+        # `stack` becomes memory/stack-facts/<stack>.md, so a model-supplied
+        # traversal string must never reach the inbox. evidence and source are
+        # constrained too.
+        good = {"stack": "fastapi", "claim": "c", "version": "1",
+                "evidence": "curl https://user:pw@host/x " + "e" * 400,
+                "source": "https://docs.example.com/a"}
+        note = json.dumps({
+            "headline": "h", "body": "b", "candidate_topics": ["t"], "keywords": ["k"],
+            "stack_facts": [
+                good,
+                {"stack": "../../skills/np-core-recall/SKILL", "claim": "c", "evidence": "e"},
+                {"stack": "..", "claim": "c", "evidence": "e"},
+                {"stack": "Py Thon", "claim": "c", "evidence": "e"},
+                {"stack": "", "claim": "c", "evidence": "e"},
+                {"stack": 7, "claim": "c", "evidence": "e"},
+                "not-a-dict",
+                {"stack": "rust", "claim": "c", "evidence": "e",
+                 "source": "https://u:p@evil.example/x"},
+                {"stack": "go", "claim": "c", "evidence": "e", "source": "file:///etc/passwd"},
+                {"stack": "dart", "evidence": "e"},
+                {"stack": "dart", "claim": "  ", "evidence": "e"},
+                {"stack": "dart", "claim": "c"},
+                {"stack": "dart", "claim": "c", "evidence": 5},
+            ],
+        })
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        facts = json.loads(self._inbox_line())["stack_facts"]
+        self.assertEqual([f["stack"] for f in facts], ["fastapi", "rust", "go"])
+        self.assertNotIn("user:pw", facts[0]["evidence"])
+        # Capped at 300 before np_scrub runs. Each redaction marker is a few characters longer
+        # than the text it replaces, so the bound is 300 plus headroom for several markers.
+        self.assertLessEqual(len(facts[0]["evidence"]), 320)
+        self.assertEqual(facts[0]["source"], "https://docs.example.com/a")
+        self.assertEqual(facts[1]["source"], "")
+        self.assertEqual(facts[2]["source"], "")
+
+    def test_8d_dropped_stack_facts_are_counted_in_the_log(self):
+        note = json.dumps({
+            "headline": "h", "body": "b", "candidate_topics": ["t"], "keywords": ["k"],
+            "stack_facts": [{"stack": "../x", "claim": "c", "evidence": "e"},
+                            {"stack": "go", "claim": "c", "evidence": "e"}, "junk"],
+        })
+        with mock.patch.object(np_capture.np_model, "complete", return_value=note):
+            np_capture.capture(self._payload(), mode="session-end")
+        with open(os.environ["EPISODIC_CAPTURE_LOG"], encoding="utf-8") as fh:
+            log = fh.read()
+        self.assertIn("dropped 2 invalid stack_facts item(s): 1 bad stack slug, 1 not an object", log)
+        self.assertNotIn("../x", log)
 
     def test_9_bail_never_raises_when_log_dir_unwritable(self):
         # Ported from the retiring tests/toggles/test_hook_bail_unwritable_log.sh --
