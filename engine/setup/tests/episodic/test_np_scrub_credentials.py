@@ -84,6 +84,11 @@ class TestScrubCredentials(unittest.TestCase):
                     "proxy-authorization=Basic Ym9iOmh1bnRlcjI="):
             self.assertNotIn("Ym9iOmh1bnRlcjI", s(cmd), cmd)
 
+    def test_letter_prefix_blocks_the_authorization_rule_in_either_case(self):
+        # (?i) makes the lookbehind case-insensitive, so NOTauthorization is blocked too.
+        for cmd in ("NOTauthorization=basic Ym9iOmh1bnRlcjI=", "NOTAuthorization=Basic Ym9iOmh1bnRlcjI="):
+            self.assertIn("Ym9iOmh1bnRlcjI", s(cmd), cmd)
+
     def test_similar_flags_untouched(self):
         for cmd in ("x --token-file /tmp/t", "docker login --password-stdin", "x --port 8080"):
             self.assertEqual(s(cmd), cmd)
