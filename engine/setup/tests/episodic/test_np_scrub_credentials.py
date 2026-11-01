@@ -65,7 +65,8 @@ class TestScrubCredentials(unittest.TestCase):
         self.assertNotIn("bbb2", out)
 
     def test_double_quoted_escape_does_not_hide_a_second_secret(self):
-        # In a shell, "pw\\" --token "s3cretValue" is one word, so both parts are the value.
+        # Shell quoting: after the escaped quote the string runs on to the next unescaped quote,
+        # so the text up to there and the adjacent s3cretValue are all one value.
         out = s('deploy --password "pw\\" --token "s3cretValue"')
         self.assertNotIn("s3cretValue", out)
         self.assertNotIn("pw", out.replace("password", ""))
