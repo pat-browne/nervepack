@@ -18,6 +18,20 @@
     "type": "bool",
     "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
   },
+  "lessons.recall_min_hits": {
+    "type": "number",
+    "min": 1,
+    "description": "Whole-word trigger hits a lesson topic needs before recall can inject it."
+  },
+  "lessons.recall_top": {
+    "type": "number",
+    "min": 1,
+    "description": "Most lesson topics injected per prompt, ranked by hits then trigger rarity."
+  },
+  "memory.write_guard": {
+    "type": "bool",
+    "description": "Drop junk, too-short, too-long and duplicate struggles and strategies before they reach the inbox."
+  },
   "sync.interval": {
     "type": "number",
     "min": 60,
@@ -212,6 +226,9 @@
   },
   "allowlist": {
     "description": "Managed permission allowlist for common read-only tool calls."
+  },
+  "global-config": {
+    "description": "Project the overlay's config/global-rules.md and config/host-settings.json onto each host at install-hooks and sync time. Off removes what it wrote."
   },
   "evaluator": {
     "description": "Per-session performance scoring, the dashboard, and the suggestion review/implement pipeline."
@@ -423,6 +440,10 @@
     "type": "number",
     "min": 1,
     "description": "Delete journals and stale recall receipts older than this many days."
+  },
+  "journal.crawl": {
+    "type": "bool",
+    "description": "Before a journal is deleted, send its struggles and wins to the episodic inbox and its resources to the resources catalog."
   },
   "journal.recall_sources": {
     "type": "string",

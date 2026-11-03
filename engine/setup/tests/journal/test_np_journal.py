@@ -23,11 +23,15 @@ class JournalBase(unittest.TestCase):
         self.jdir = os.path.join(self.tmp, "journal")
         self.toggles_conf = os.path.join(self.tmp, "toggles.conf")
         with open(self.toggles_conf, "w") as fh:
-            fh.write("journal|shared|runtime|on|ttl_days=30,recall_sources=compact+resume\n")
+            fh.write("journal|shared|runtime|on|ttl_days=30,recall_sources=compact+resume,crawl=on\n")
+        os.makedirs(os.path.join(self.tmp, "content"))
         self.transcript = os.path.join(self.tmp, "t.jsonl")
         self._env = mock.patch.dict(os.environ, {
             "NP_SESSION_JOURNAL_DIR": self.jdir,
             "NP_JOURNAL_LOG": os.path.join(self.tmp, "j.log"),
+            "EPISODIC_INBOX": os.path.join(self.tmp, "epi-inbox"),
+            "NP_RESOURCES_INBOX": os.path.join(self.tmp, "res-inbox"),
+            "NP_CONTENT_DIR": os.path.join(self.tmp, "content"),
             "NP_TOGGLES_CONF": self.toggles_conf,
             "NP_TOGGLES_LOCAL": os.path.join(self.tmp, "local-none"),
         }, clear=False)

@@ -128,6 +128,11 @@ def _stop_if_stale(port):
     if health.get("ok") is not True:
         _log("stale-check: health reply is not ours, server left running")
         return False
+    if pid is None and code is None:
+        # A legacy server reports neither field and is the stalest kind.
+        # Find its pid from the port. _is_our_server still vets it.
+        listeners = _run(["lsof", "-nP", "-t", "-iTCP:%d" % port, "-sTCP:LISTEN"]).split()
+        pid = int(listeners[0]) if len(listeners) == 1 and listeners[0].isdigit() else None
     if not current:
         _log("stale-check: no local fingerprint, server left running")
         return False

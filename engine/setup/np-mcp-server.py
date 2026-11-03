@@ -192,7 +192,8 @@ def _tool_toggle(args):
             return f"{feat} = {state}" if "." in feat else f"{feat} -> {state}"
         if "." in feat:
             np_toggle.set_conf_param(feat, state)
-            np_toggle.commit_shared(f"toggle({feat}): {state}")
+            np_toggle.commit_shared(f"toggle({feat}): {state}",
+                                    replay=("param", feat, state))
             return f"{feat} = {state}"
         return np_toggle.flip(feat, state)           # "feat -> state"
     raise ValueError(f"unknown toggle action: {action}")

@@ -50,6 +50,26 @@ def _max_prompts():
     return np_recall_common.max_prompts()
 
 
+def _norm(text):
+    # Same normalization as np_episodic_match: lowercase, non-alnum runs -> one space.
+    return " " + re.sub(r'[^a-z0-9]+', ' ', text.lower()) + " "
+
+
+def _int_param(key, default):
+    try:
+        return int(np_toggle.param(key, str(default)))
+    except ValueError:
+        return default
+
+
+def _min_hits():
+    return _int_param("lessons.recall_min_hits", 1)
+
+
+def _top():
+    return _int_param("lessons.recall_top", 3)
+
+
 def _state_dir():
     return os.environ.get("EPISODIC_STATE_DIR") or "/tmp/nervepack-playbook-recall"
 
@@ -120,6 +140,26 @@ def _lesson_blocks(path):
     return result
 
 
+def _arm_if_gated(f, state_dir, sid, topic):
+    """Touch the marker lesson_guard.py checks when a failure lesson carries tool_name_match."""
+    try:
+        with open(f, encoding="utf-8", errors="replace") as fh:
+            whole = fh.read()
+    except OSError:
+        return
+    if "provenance: failure" not in whole or not _TOOL_NAME_MATCH_RE.search(whole):
+        return
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        # Slashes become "_" in both ids, so an INDEX topic like "../x" stays in state_dir.
+        with open(os.path.join(state_dir, "%s-%s-gate-armed" % (
+                sid.replace("/", "_"), topic.replace("/", "_"))),
+                  "a", encoding="utf-8"):
+            pass
+    except OSError:
+        pass
+
+
 def _default_pii_filter(text):
     return np_recall_common.default_pii_filter(text)
 
@@ -162,7 +202,9 @@ def run(payload_text, pii_filter_fn=None):
     rule_ctx = ""
     fail_ctx = ""
     success_ctx = ""
-    seen = []
+    norm_prompt = _norm(prompt)
+    candidates = []  # (hit_count, specificity, order, topic, file)
+    rows = []
     for d in ls_roots:
         index_path = os.path.join(d, "INDEX.md")
         if not os.path.isfile(index_path):
@@ -173,57 +215,52 @@ def run(payload_text, pii_filter_fn=None):
         except OSError:
             continue
         for line in index_lines:
-            line = line.rstrip("\n")
-            fields = line.split("|")
+            fields = line.rstrip("\n").split("|")
             if len(fields) < 5:
                 continue
             topic = fields[1].strip()
-            triggers = fields[4].strip()
-            if not topic or topic == "topic":
+            if not topic or topic == "topic" or re.match(r'^-+$', topic):
                 continue
-            if re.match(r'^-+$', topic):
-                continue
-            if mode == "override" and topic in seen:
-                continue
-            hit = False
-            for kw in triggers.split(","):
-                kw = kw.strip().lower()
-                if kw and kw in prompt:
-                    hit = True
-                    break
-            if not hit:
-                continue
-            seen.append(topic)
-            f = os.path.join(d, topic + ".md")
-            if not os.path.isfile(f):
-                continue
-            for prov, body, paired in _lesson_blocks(f):
-                # Never inject a bare "[topic]" tag for a body recall can't read.
-                entry = "[%s] %s\n" % (topic, body) if body.strip() else ""
-                if paired:
-                    # A paired rule is self-framing (DON'T -> DO, when, why), so it
-                    # skips the legacy preamble and topic tag -- that keeps the
-                    # per-prompt cost at the rule itself (spec 0093).
-                    rule_ctx += body + "\n"
-                    entry = ""
-                if prov == "failure":
-                    fail_ctx += entry
-                    try:
-                        with open(f, encoding="utf-8", errors="replace") as fh:
-                            whole = fh.read()
-                    except OSError:
-                        whole = ""
-                    if _TOOL_NAME_MATCH_RE.search(whole):
-                        try:
-                            os.makedirs(state_dir, exist_ok=True)
-                            armed = os.path.join(state_dir, "%s-%s-gate-armed" % (
-                                sid.replace("/", "_"), topic))
-                            with open(armed, "a", encoding="utf-8"):
-                                pass
-                        except OSError:
-                            pass
-                elif prov == "success":
-                    success_ctx += entry
+            kws = [_norm(kw).strip() for kw in fields[4].split(",")]
+            rows.append((d, topic, [k for k in kws if k]))
+    # Document frequency per trigger: a trigger many topics share is weak evidence.
+    df = {}
+    for _, _, kws in rows:
+        for k in set(kws):
+            df[k] = df.get(k, 0) + 1
+    seen = []
+    for order, (d, topic, kws) in enumerate(rows):
+        if mode == "override" and topic in seen:
+            continue
+        # Whole-word match only: a substring hit ("ci" in "decision") is noise.
+        hits = [k for k in set(kws) if (" " + k + " ") in norm_prompt]
+        if len(hits) < _min_hits():
+            continue
+        seen.append(topic)
+        spec = sum(1.0 / df[k] for k in hits)
+        candidates.append((len(hits), spec, order, topic, os.path.join(d, topic + ".md")))
+    candidates.sort(key=lambda c: (-c[0], -c[1], c[2]))
+    # Arm the tool gate for every matched failure lesson, not only the injected top N,
+    # so the cap never silently disables a lesson_guard check.
+    for _, _, _, topic, f in candidates[_top():]:
+        _arm_if_gated(f, state_dir, sid, topic)
+    for _, _, _, topic, f in candidates[:_top()]:
+        if not os.path.isfile(f):
+            continue
+        for prov, body, paired in _lesson_blocks(f):
+            # Never inject a bare "[topic]" tag for a body recall can't read.
+            entry = "[%s] %s\n" % (topic, body) if body.strip() else ""
+            if paired:
+                # A paired rule is self-framing (DON'T -> DO, when, why), so it
+                # skips the legacy preamble and topic tag -- that keeps the
+                # per-prompt cost at the rule itself (spec 0093).
+                rule_ctx += body + "\n"
+                entry = ""
+            if prov == "failure":
+                fail_ctx += entry
+                _arm_if_gated(f, state_dir, sid, topic)
+            elif prov == "success":
+                success_ctx += entry
 
     ctx = rule_ctx
     if fail_ctx:

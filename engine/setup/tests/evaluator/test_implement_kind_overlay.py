@@ -15,6 +15,9 @@ import sys
 import tempfile
 import unittest
 
+# Never read or write the real per-machine applied marker.
+os.environ["NP_COMPACT_APPLIED"] = os.path.join(tempfile.mkdtemp(), "applied.json")
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE_SETUP = os.path.normpath(os.path.join(_HERE, "..", ".."))
 if _ENGINE_SETUP not in sys.path:
@@ -51,6 +54,10 @@ def _overlay(root):
     os.makedirs(os.path.join(clone, "compact-proposals"))
     with open(os.path.join(clone, "compact-proposals", "2026-10-15.md"), "w") as fh:
         fh.write(PROPOSAL)
+    os.makedirs(os.path.join(clone, "memory", "lessons"))
+    for name in ("ado-session-sync", "y", "z"):
+        with open(os.path.join(clone, "memory", "lessons", name + ".md"), "w") as fh:
+            fh.write("---\nstatus: active\n---\nbody\n")
     with open(os.path.join(clone, "content-marker.txt"), "w") as fh:
         fh.write("m\n")
     _git(clone, "add", "-A")

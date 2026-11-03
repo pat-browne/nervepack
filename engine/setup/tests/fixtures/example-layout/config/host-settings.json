@@ -1,0 +1,6 @@
+{
+  "theme": "dark",
+  "skipWorkflowUsageWarning": true,
+  "enabledPlugins": {"example-plugin@example-marketplace": true},
+  "allowlist": []
+}

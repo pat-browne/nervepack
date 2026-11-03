@@ -115,6 +115,12 @@ def _core_check(cap_id, np):
         return _skill_listing_check()
     if cap_id == "cron-branch":
         return _cron_branch_check(np)
+    if cap_id == "global-config":
+        try:
+            import np_global_config
+            return np_global_config.doctor_status()
+        except Exception as exc:
+            return "WARN (global-config check failed: %s)" % type(exc).__name__
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call
@@ -307,6 +313,21 @@ def _core_check(cap_id, np):
         return ("WARN (dashboard/data bridge missing — run: cli.py setup link-dashboard-data "
                 "to create the symlink into the content overlay; the dashboard will show no "
                 "metrics until then)")
+    if cap_id == "dashboard-actions":
+        import np_dashboard_actions
+        cdir = np_content.content_dir() or np
+        grad = os.environ.get("NP_GRADUATION_CANDIDATES") or os.path.join(
+            cdir, "dashboard", "data", "graduation-candidates.json")
+        rows = np_dashboard_actions.self_check(
+            cdir, np,
+            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(cdir, "compact-proposals"),
+            grad,
+            os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status"),
+            toggle_param=np_toggle.param)
+        bad = np_dashboard_actions.failing(rows)
+        if bad:
+            return "WARN (%s; %s)" % (bad[0]["detail"], bad[0]["hint"] or "see the dashboard banner")
+        return "PASS (%d action checks ok)" % len(rows)
     if cap_id == "resume-pointer":
         writer = os.path.join(np, "engine", "nervepack_engine", "hooks", "resume_write.py")
         if not os.path.isfile(writer):

@@ -25,6 +25,12 @@ import os
 import re
 import sys
 
+# Credential flag names, listed once. Both flag rules below use them, so adding a name here
+# covers the value pattern and the "stop before the next credential flag" lookahead.
+_CRED_FLAGS = rb'password|passwd|token|secret|api-?key|access-token|auth-token|client-secret'
+_NEXT_CRED_FLAG = rb'[;&|]\s*(?:--(?:' + _CRED_FLAGS + rb'|user)|-u)\b'
+_FLAG_VALUE = (rb'(?:"(?:\\.|[^"\\])*"|\'[^\']*\'|(?:(?!' + _NEXT_CRED_FLAG + rb')\S)+)+')
+
 # The sed -E rules, in order. \s in a bytes pattern is exactly POSIX [[:space:]]
 # under LC_ALL=C ([ \t\n\r\f\v]); processing per-line means \n never appears within
 # a segment, matching sed's line-at-a-time behavior.
@@ -41,6 +47,37 @@ _RULES = [
      rb'\1\2[REDACTED-SECRET]'),
     (rb'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}', rb'[REDACTED-JWT]'),
     (rb'-----BEGIN[ A-Z]*PRIVATE KEY-----', rb'[REDACTED-KEY]'),
+    # Added for dashboard action text: GitLab tokens, Authorization headers (an optional
+    # scheme word, then one value), URL credentials, and secret-named values with any
+    # name prefix, any case, and quoted or bare values.
+    (rb'glpat-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    (rb'(?i)(authorization\s*:\s*)(?:(?:bearer|basic|token|digest|negotiate)\s+)?[^\s"\']+',
+     rb'\1[REDACTED-SECRET]'),
+    (rb'(?i)(://)[^/\s@:]+(?::[^/\s@]*)?@', rb'\1[REDACTED-CRED]@'),
+    (rb'(?i)((?:password|passwd|secret|token|api[_-]?key|access[_-]?key)'
+     rb'["\']?\s*[:=]\s*)(?:"[^"]*"|\'[^\']*\'|[^\s"\',;&]+)', rb'\1[REDACTED-SECRET]'),
+    # Provider keys with dashes (sk-proj-, sk-ant-api03-) and bearer tokens of any length.
+    (rb'sk-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    (rb'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+', rb'Bearer [REDACTED-SECRET]'),
+    # Command-line credentials (security review of stack_facts[].evidence).
+    # URL userinfo and "Authorization: <scheme> <value>" headers are redacted by the rules
+    # above. The rules below add flag forms and the quoted or "=" header forms.
+    # --password hunter2, --password=hunter2, --token "abc def". Longer flag names such as
+    # --token-file and --password-stdin do not match: the name must end at = or space.
+    # The value follows shell word rules: double quotes honor backslash escapes, single
+    # quotes are literal, and adjacent pieces form one word (so "pw\" --token "s3cret"
+    # is one value). Any other run of non-space characters also counts. It stops before a
+    # separator that leads into another credential flag, so "a;--token b" redacts both.
+    (rb'(--(?:' + _CRED_FLAGS + rb'))(=|\s+)' + _FLAG_VALUE, rb'\1\2[REDACTED-SECRET]'),
+    # curl -u user:pw, --user user:pw (same value shape as above)
+    (rb'((?:^|\s)(?:-u|--user)(?:=|\s+))[^\s:]+:' + _FLAG_VALUE, rb'\1[REDACTED-SECRET]'),
+    # Authorization: Basic <base64>, also the "authorization=" form and prefixed names such as
+    # http_authorization. The leading (?i) makes the [a-z] in the lookbehind match both cases,
+    # so a letter of either case before the word blocks the match ("NotAuthorization",
+    # "NOTauthorization") and prose like "basic configuration" is untouched. Keeps the
+    # original case of Basic.
+    (rb'(?i)((?<![a-z])authorization["\']?\s*[:=]\s*["\']?basic\s+)[A-Za-z0-9+/]{8,}={0,2}',
+     rb'\1[REDACTED-SECRET]'),
 ]
 _COMPILED = [(re.compile(p), r) for p, r in _RULES]
 
