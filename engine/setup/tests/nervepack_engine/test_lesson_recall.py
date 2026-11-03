@@ -292,5 +292,177 @@ class TestLessonRecall(unittest.TestCase):
             os.path.join(self.tmp, "state", "s15-guarded-write-gate-armed")))
 
 
+    # --- recall gate: whole-word match, ranked, capped ---
+    def _lesson(self, topic):
+        self._write(topic + ".md", "---\nprovenance: failure\n---\n**Do:** %s-body\n" % topic)
+
+    def test_recall_gate_substring_does_not_match(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| ci-timeouts |  |  | ci |\n")
+        self._lesson("ci-timeouts")
+        self.assertEqual(self._run("g1", "record the decision in the spec"), "")
+        self.assertIn("ci-timeouts-body", self._run("g2", "the ci job hung"))
+
+    def test_recall_gate_hyphenated_trigger_matches_spaced_prompt(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| gha |  |  | github-actions |\n")
+        self._lesson("gha")
+        self.assertIn("gha-body", self._run("g3", "fix the github actions workflow"))
+
+    def test_recall_gate_caps_at_top_n_preferring_more_and_rarer_hits(self):
+        rows = "".join("| t%d |  |  | merge |\n" % n for n in range(5))
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            + rows + "| squash |  |  | merge, squash |\n")
+        for n in range(5):
+            self._lesson("t%d" % n)
+        self._lesson("squash")
+        ctx = json.loads(self._run("g4", "squash merge this"))["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("squash-body", ctx)
+        self.assertEqual(sum(("t%d-body" % n) in ctx for n in range(5)), 2)
+
+
+    def test_recall_gate_arms_tool_gate_beyond_the_cap(self):
+        rows = "".join("| t%d |  |  | merge |\n" % n for n in range(4))
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n" + rows)
+        for n in range(4):
+            self._lesson("t%d" % n)
+        self._write("t3.md", "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** t3-body\n")
+        self._run("g5", "merge it")
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "state", "g5-t3-gate-armed")))
+
+    def test_recall_gate_arms_every_gated_lesson_past_the_cap(self):
+        self._index("".join("| t%d |  |  | merge |\n" % n for n in range(5)))
+        for n in range(3):
+            self._lesson("t%d" % n)
+        for n in (3, 4):
+            self._write("t%d.md" % n, "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** b\n")
+        self._run("g17", "merge it")
+        for n in (3, 4):
+            self.assertTrue(os.path.exists(os.path.join(self.tmp, "state", "g17-t%d-gate-armed" % n)))
+
+    def test_recall_gate_below_min_hits_is_not_armed(self):
+        self._index("| gated |  |  | merge |\n")
+        self._write("gated.md", "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** b\n")
+        self._param("lessons.recall_min_hits=2")
+        self.assertEqual(self._run("g18", "merge it"), "")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g18-gated-gate-armed")))
+
+    def test_recall_gate_more_hits_beat_a_rarer_trigger(self):
+        # "deploy" and "merge" are shared, "rebase" is unique. Two common hits outrank one rare hit.
+        # Rarity: "two" scores 2 x 1/4 = 0.5, "rare" scores 1.0, so hits must decide.
+        self._index("| two |  |  | deploy, merge |\n"
+                    + "".join("| f%d |  |  | deploy, merge |\n" % n for n in range(3))
+                    + "| rare |  |  | rebase |\n")
+        for t in ("two", "f0", "f1", "f2", "rare"):
+            self._lesson(t)
+        self._param("lessons.recall_top=1")
+        ctx = self._ctx("g19", "deploy, merge, rebase")
+        self.assertIn("two-body", ctx)
+        self.assertNotIn("rare-body", ctx)
+
+    def test_recall_gate_bad_min_hits_falls_back_to_one(self):
+        self._index("| one |  |  | deploy |\n")
+        self._lesson("one")
+        self._param("lessons.recall_min_hits=x")
+        self.assertIn("one-body", self._ctx("g20", "deploy now"))
+
+
+    def _index(self, rows):
+        self._write("INDEX.md", "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n" + rows)
+
+    def _ctx(self, sid, prompt):
+        out = self._run(sid, prompt)
+        return json.loads(out)["hookSpecificOutput"]["additionalContext"] if out else ""
+
+    def _param(self, line):
+        with open(self.toggles_local, "a") as fh:
+            fh.write(line + "\n")
+
+    def test_recall_gate_rarer_trigger_breaks_a_hit_tie(self):
+        # "merge" is shared by three topics, "rebase" by one. Each topic hits once,
+        # so the rarer trigger wins even though it is last in the index.
+        self._index("| common-a |  |  | merge |\n| common-b |  |  | merge |\n"
+                    "| common-c |  |  | merge |\n| rare |  |  | rebase |\n")
+        for t in ("common-a", "common-b", "common-c", "rare"):
+            self._lesson(t)
+        self._param("lessons.recall_top=1")
+        ctx = self._ctx("g6", "merge and rebase")
+        self.assertIn("rare-body", ctx)
+        self.assertNotIn("common-a-body", ctx)
+
+    def test_recall_gate_ties_keep_index_order(self):
+        self._index("| first |  |  | deploy |\n| second |  |  | deploy |\n")
+        self._lesson("first")
+        self._lesson("second")
+        self._param("lessons.recall_top=1")
+        self.assertIn("first-body", self._ctx("g7", "deploy now"))
+
+    def test_recall_gate_top_param_is_honored(self):
+        self._index("".join("| t%d |  |  | deploy |\n" % n for n in range(6)))
+        for n in range(6):
+            self._lesson("t%d" % n)
+        self._param("lessons.recall_top=5")
+        ctx = self._ctx("g8", "deploy now")
+        self.assertEqual(sum(("t%d-body" % n) in ctx for n in range(6)), 5)
+
+    def test_recall_gate_min_hits_param_suppresses_weak_matches(self):
+        self._index("| weak |  |  | deploy |\n| strong |  |  | deploy, rollback |\n")
+        self._lesson("weak")
+        self._lesson("strong")
+        self._param("lessons.recall_min_hits=2")
+        ctx = self._ctx("g9", "deploy then rollback")
+        self.assertIn("strong-body", ctx)
+        self.assertNotIn("weak-body", ctx)
+        self.assertEqual(self._run("g10", "deploy only"), "")
+
+    def test_recall_gate_bad_param_values_fall_back_to_defaults(self):
+        self._index("".join("| t%d |  |  | deploy |\n" % n for n in range(4)))
+        for n in range(4):
+            self._lesson("t%d" % n)
+        self._param("lessons.recall_top=lots")
+        self._param("lessons.recall_min_hits=x")
+        ctx = self._ctx("g11", "deploy now")
+        self.assertEqual(sum(("t%d-body" % n) in ctx for n in range(4)), 3)
+
+    def test_recall_gate_multiword_trigger_needs_the_phrase(self):
+        self._index("| sq |  |  | squash merge |\n")
+        self._lesson("sq")
+        self.assertEqual(self._run("g12", "squash the commits, then merge"), "")
+        self.assertIn("sq-body", self._ctx("g13", "do a squash merge"))
+
+    def test_recall_gate_ignores_case_and_punctuation(self):
+        self._index("| ci-t |  |  | ci |\n")
+        self._lesson("ci-t")
+        self.assertIn("ci-t-body", self._ctx("g14", "Why is CI, again, red?"))
+
+    def test_recall_gate_blank_triggers_never_match(self):
+        self._index("| blank |  |  |  |\n| commas |  |  | , , |\n")
+        self._lesson("blank")
+        self._lesson("commas")
+        self.assertEqual(self._run("g15", "anything at all"), "")
+
+    def test_recall_gate_success_lesson_beyond_cap_is_neither_injected_nor_armed(self):
+        self._index("".join("| t%d |  |  | deploy |\n" % n for n in range(4)))
+        for n in range(3):
+            self._lesson("t%d" % n)
+        self._write("t3.md", "---\nprovenance: success\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** t3-body\n")
+        ctx = self._ctx("g16", "deploy now")
+        self.assertNotIn("t3-body", ctx)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g16-t3-gate-armed")))
+
+
+    def test_recall_gate_marker_for_a_traversal_topic_stays_in_state_dir(self):
+        os.makedirs(os.path.join(self.lessons, "sub"), exist_ok=True)
+        self._index("| sub/evil |  |  | merge |\n")
+        self._write("sub/evil.md", "---\nprovenance: failure\nenforce:\n  tool_name_match: mcp__x\n---\n**Do:** b\n")
+        self._run("g21", "merge it")
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "state", "g21-sub_evil-gate-armed")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g21-sub")))
+
+
 if __name__ == "__main__":
     unittest.main()

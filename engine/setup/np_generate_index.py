@@ -325,7 +325,22 @@ def generate(np_dir=None, out=None):
     return 0
 
 
+USAGE = """usage: np_generate_index.py [-h|--help]
+
+Regenerate INDEX.md from skills/*/SKILL.md frontmatter. Writes the engine index,
+and in a split layout the merged index in the content overlay. Takes no arguments.
+Roots come from NP_DIR / NP_CONTENT_DIR.
+"""
+
+
+def main(argv):
+    if any(a in ("-h", "--help") for a in argv):
+        sys.stdout.write(USAGE)
+        return 0
+    return generate()
+
+
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", newline="\n")
-    sys.exit(generate())
+    sys.exit(main(sys.argv[1:]))
