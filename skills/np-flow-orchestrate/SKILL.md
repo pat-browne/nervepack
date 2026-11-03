@@ -23,7 +23,10 @@ Then, for each chosen ticket:
 1. Call `start_session` once, with a model. The brief names the ticket.
 2. The brief tells the child to run the repo's plan/work entry point in its own
    worktree: [[np-flow-develop]], or the repo's own factory when it has one.
-3. Talk to children with the session tools (`send_message`, `get_session`,
+3. Paste the prime and capture blocks from `np-core-dispatch`
+   references/nervepack-context.md into every brief. Each child recalls related
+   nervepack context first and captures at each milestone.
+4. Talk to children with the session tools (`send_message`, `get_session`,
    `list_sessions`).
 
 ## The prompt
@@ -51,6 +54,10 @@ worktree.
 - Keep a ledger in memory (paused, waiting on me, done) so state survives
   compaction.
 
+- Every brief tells the child to recall nervepack context before it designs,
+  and to run /np-core-capture-learning at each milestone. A child is not done
+  until its final report has a "Captured:" line.
+
 - Small calls are yours, but tell me after you make them. Scope, security, or
   anything customers see comes to me.
 
@@ -77,6 +84,31 @@ itself. This section owns the rule for every coordinator, including
 - A worker sends a hard call back as a decision request: the options and its
   pick. You decide, tell the worker, and record the call in the ledger.
 
+## Close-out: capture, then archive
+
+This section owns the rule for every coordinator, including [[np-core-dispatch]]
+and [[np-flow-speed]]. A child that met its stated goal and sits idle gets closed
+out, never left open.
+
+1. Confirm the goal is met from evidence: merged PR, pushed commit, or report
+   verified. A child still owed a step (live checks, a merge, an answer) stays
+   open.
+2. Send it [[np-core-capture-learning]] as one message. Tell it to take no new
+   work after the capture.
+3. Wait for its capture report. Check where the capture landed: a commit, a
+   branch, or memory.
+4. Run `git -C "$worktree" status -sb`, where `$worktree` is the child's
+   working directory. Archive only when the tree is clean and the branch is not
+   ahead of its remote. Otherwise, or if the command fails (missing worktree,
+   git error), ask the child to commit and push, or leave it open as
+   `waiting on me`.
+5. Archive the child. Mark its row in § The ledger `done`, with the PR if one
+   exists and the capture location.
+
+A child that ends its turn on a gate or a question, with no capture report,
+stays open as `waiting on me`. Archiving can remove the child's folder. Never
+archive a child whose folder another live session uses.
+
 ## The loop
 
 Bring these to the user:
@@ -94,6 +126,7 @@ Handle these yourself:
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
 | Stuck or silent | Read its transcript and PR before you call it blocked. |
+| Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
 Several decisions pending? Ask the most blocking one. Keep the rest in the
 ledger as `waiting on me`.
@@ -101,10 +134,15 @@ ledger as `waiting on me`.
 ## The ledger
 
 Keep one memory file with a row per ticket. Columns: ticket, child session,
-worktree, PR, state, next action.
+worktree, PR, state, captured, next action.
 
 States: `paused`, `waiting on me`, `in progress`, `done`. Update the row on every
 state change. After a compaction, read the ledger before anything else.
+
+`captured` holds the paths from the child's `Captured:` line, or `no`. A row
+cannot move to `done` while it says `no`. Check it before you report a ticket
+finished, and again when you close out the whole run, because a child can end
+without warning.
 
 ## Every update to the user
 

@@ -16,6 +16,9 @@ Any of these should invoke this skill:
 - "capture this", "remember this", "save this learning"
 - "this is worth keeping"
 - After a PR merge or deploy (auto-prompted by the post-ship hook)
+- After an evaluation, measurement or investigation with no merge: a model
+  eval, a data audit, a diagnosis that found no bug. Scores, metric traps,
+  ruled-out causes and verified facts are learnings even when nothing shipped.
 
 If the user explicitly says where it should go ("save to nervepack",
 "add to memory") — skip this skill and use the targeted one directly
@@ -32,10 +35,14 @@ different project, a different machine, or six months from now?**
 | Environment quirk, tool gotcha, useful command | **nervepack** (durable) |
 | Plugin choice, architectural taste | **nervepack** (durable) |
 | Cross-cutting principle | **nervepack** (durable) |
+| Verified fact about how a tech stack, framework, API or tool behaves | **nervepack wiki** (knowledge) |
 | "Currently doing X" / "mid-debugging Y" | **memory** (session) |
 | "Reminded me to do Z tomorrow" / "back from PTO Thursday" | **memory** (session) |
 | Hostnames, paths, tokens, anything machine-specific | **memory** (session — and even then, avoid secrets) |
 | Mid-conversation context the next session won't need | **memory** (session) |
+
+A stack fact verified this session goes to the wiki, never to memory. The
+sweep below finds them.
 
 When genuinely uncertain → **default to memory**. The daily
 `memory-promote` cron will lift it to nervepack if it turns out to
@@ -66,6 +73,18 @@ isolate-in-a-worktree decision.
 Placement is that skill's job, and it resolves the path from the layer's own
 layout. This skill never picks a directory.
 
+### 2c. Stack sweep → wiki
+
+After any code work, run the sweep in references/stack-wiki.md.
+
+1. Name each stack touched.
+2. Save the facts you verified about it to its wiki topic, through
+   [[np-core-contribute]] (kind `knowledge`).
+3. Do this even when the user asked to capture one thing.
+4. No extra job: the capture hook and `episodic-maintain` stage the same facts
+   from every session into `memory/stack-facts/`. This step is the attended
+   fast path.
+
 ### 2b. Session-scoped → memory
 Draft the memory body, then run it through [[np-flow-concise-output]] —
 "memory lesson" is explicitly in its scope, and this is the one path in this
@@ -81,6 +100,11 @@ memories" section — frontmatter with `name:`, `description:`,
 | Behavioural correction or validation | `feedback` |
 | In-flight project state, deadline, motivation | `project` |
 | Pointer to an external system (Linear, Slack, doc URL) | `reference` |
+
+### Skipping
+A skip must name, for each learning, the KB location where it already lives
+(skill, reference or wiki path). "It's in the PR, the chat or an artifact" is
+not a location. No named location means capture it.
 
 ### 3. Report
 One sentence: where it went and why. Include the file path so the user

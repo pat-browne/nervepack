@@ -34,6 +34,7 @@ import os
 import sys
 
 import np_content
+import np_git_publish
 import np_llm_agent
 import np_model
 import np_toggle
@@ -84,6 +85,7 @@ class CronConfig:
     extra_roots: bool = False
     extra_roots_steps: str = "2-3"
     extra_roots_repo_detail: str = ""
+    commits_in_target: bool = True
 
 
 def _log_path(cfg):
@@ -155,6 +157,26 @@ def _extra_roots_note(cfg):
             "`git -C \"%s\" push`. Never combine its commit with this repo's "
             "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, r))
     return "\n".join(lines) + "\n"
+
+
+def _off_main_refusal(cfg, target):
+    """A refusal status when any repo this cron commits into is off main."""
+    if not cfg.commits_in_target:
+        return ""
+    repos = [target]
+    if cfg.extra_roots:
+        try:
+            repos += [r for r in np_content.merge_roots() if r and r != _NP]
+        except Exception:
+            pass
+    for repo in repos:
+        head = np_git_publish.off_main(repo)
+        if head is not None:
+            msg = np_git_publish.off_main_message(cfg.name, repo, head)
+            _log(cfg, "REFUSED: %s Return it to main to resume." % msg)
+            print("np-agentic-cron: %s" % msg, file=sys.stderr)
+            return "refused: %s on '%s', not main" % (repo, head)
+    return ""
 
 
 def _resolve_commit_dir(cfg):
@@ -236,6 +258,9 @@ def _run(cfg):
     if not target:
         _log(cfg, "ERROR: commit target could not be resolved")
         return "skipped: commit target unresolved"
+    refused = _off_main_refusal(cfg, target)
+    if refused:
+        return refused
     try:
         ok = np_llm_agent.run_agent(prompt, "Bash Read Write Edit Glob Grep", cwd=target,
                                     timeout=_agent_timeout(), log_path=_log_path(cfg),
@@ -286,7 +311,21 @@ _EPISODIC_MAINTAIN = CronConfig(
 
 def episodic_maintain():
     """Cron entrypoint (dispatched by cli.py as `cron episodic-maintain`).
-    Returns a short status string; never raises."""
+    Returns a short status string; never raises.
+
+    Drains the resources inbox into the overlay catalog first. The merge is
+    deterministic Python, so it does not depend on the agent run.
+    """
+    try:
+        if (np_toggle.enabled("memory.maintain") and not os.environ.get("NERVEPACK_AGENT")
+                and np_toggle.param("journal.crawl", "on") != "off"
+                and np_content.content_is_explicit()):
+            import np_resources
+            merged = np_resources.drain()
+            if merged:
+                _log(_EPISODIC_MAINTAIN, "resources: merged %d record(s)" % merged)
+    except Exception as exc:
+        _log(_EPISODIC_MAINTAIN, "resources drain raised: %r" % (exc,))
     return _run(_EPISODIC_MAINTAIN)
 
 
@@ -348,6 +387,7 @@ _KB_PROMOTE_SCAN = CronConfig(
     commit_target="engine",
     content_gated=False,
     extra_roots=False,
+    commits_in_target=False,
 )
 
 

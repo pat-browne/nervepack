@@ -213,6 +213,13 @@ def _split_one(skill, roots, base_prompt, split_kb):
     md = os.path.join(skill_dir, "SKILL.md")
     if not os.path.isfile(md):
         return None
+    head = np_git_publish.off_main(repo_root)
+    if head is not None:
+        # The agent edits in place, so it cannot move to a cron worktree. Refuse.
+        msg = np_git_publish.off_main_message("skill-maintain", repo_root, head)
+        _log("REFUSED split of %s: %s" % (skill, msg))
+        print("np-skill-maintain: %s" % msg, file=sys.stderr)
+        return False
     orig = _snapshot(repo_root, skill, md)
     try:
         prompt = ("%s\n\nTARGET SKILL DIRECTORY: skills/%s\n"
@@ -300,9 +307,12 @@ def maintain():
     split_kb = os.environ["SKILL_SPLIT_KB"]
     commit_repos = []
     committed = 0
+    refused = 0
     for skill in cands[:max_per_run]:
         repo = _split_one(skill, roots, base_prompt, split_kb)
-        if repo:
+        if repo is False:
+            refused += 1
+        elif repo:
             committed += 1
             if repo not in commit_repos:
                 commit_repos.append(repo)
@@ -316,6 +326,8 @@ def maintain():
                 unpublished.append(why)
 
     status = "split %d skill(s) across %d repo(s)" % (committed, len(commit_repos))
+    if refused:
+        status += " (REFUSED %d: repo off main)" % refused
     if unpublished:
         status += " (NOT PUBLISHED: %s)" % "; ".join(unpublished)
     return status

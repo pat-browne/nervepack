@@ -113,6 +113,14 @@ def _core_check(cap_id, np):
         return "PASS (inferred: %d layer(s), %d open question(s))" % (inferred, pending)
     if cap_id == "skill-listing":
         return _skill_listing_check()
+    if cap_id == "cron-branch":
+        return _cron_branch_check(np)
+    if cap_id == "global-config":
+        try:
+            import np_global_config
+            return np_global_config.doctor_status()
+        except Exception as exc:
+            return "WARN (global-config check failed: %s)" % type(exc).__name__
     if cap_id == "llm-cli":
         # In-process np_model.complete("ping") — the bash `printf 'ping' |
         # np_model.py complete` smoke, without a subprocess. PASS iff the call
@@ -305,6 +313,21 @@ def _core_check(cap_id, np):
         return ("WARN (dashboard/data bridge missing — run: cli.py setup link-dashboard-data "
                 "to create the symlink into the content overlay; the dashboard will show no "
                 "metrics until then)")
+    if cap_id == "dashboard-actions":
+        import np_dashboard_actions
+        cdir = np_content.content_dir() or np
+        grad = os.environ.get("NP_GRADUATION_CANDIDATES") or os.path.join(
+            cdir, "dashboard", "data", "graduation-candidates.json")
+        rows = np_dashboard_actions.self_check(
+            cdir, np,
+            os.environ.get("NP_COMPACT_PROPOSALS_DIR") or os.path.join(cdir, "compact-proposals"),
+            grad,
+            os.environ.get("NP_IMPLEMENT_STATUS_DIR") or np_dirs.cache_path("implement-status"),
+            toggle_param=np_toggle.param)
+        bad = np_dashboard_actions.failing(rows)
+        if bad:
+            return "WARN (%s; %s)" % (bad[0]["detail"], bad[0]["hint"] or "see the dashboard banner")
+        return "PASS (%d action checks ok)" % len(rows)
     if cap_id == "resume-pointer":
         writer = os.path.join(np, "engine", "nervepack_engine", "hooks", "resume_write.py")
         if not os.path.isfile(writer):
@@ -337,6 +360,25 @@ def _core_check(cap_id, np):
         return ("WARN (resume-pointer hooks not registered in %s — run: "
                 "python3 engine/nervepack_engine/cli.py setup install-hooks)" % settings_path)
     return "SKIP"
+
+
+def _cron_branch_check(np):
+    """SHOULD: WARN per checkout the crons commit into that is off main."""
+    try:
+        sys.path.insert(0, os.path.join(np, "engine", "setup"))
+        import np_git_publish
+        content = np_content.content_dir()
+        repos = [np] + ([content] if content and content != np else [])
+        off = []
+        for r in repos:
+            head = np_git_publish.off_main(r)
+            if head is not None:
+                off.append("%s on '%s'" % (r, head))
+    except Exception:
+        return "PASS (could not inspect)"
+    if not off:
+        return "PASS"
+    return "WARN (off main, crons divert or refuse: %s)" % "; ".join(off)
 
 
 def _skill_listing_check():

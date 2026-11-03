@@ -18,12 +18,15 @@ quiet, then gate on the diff**. It is the operational front-end to the
   branch/cron is active in the same repo.
 - The git log/worktree changed under you mid-task (a ref moved, a commit vanished).
 - The user says "wait for the other branch to finish, then merge."
+- `cli.py claim status` says you are not first in, or lists another live claim.
 
 ## The waiter
 
 `cli.py merge-wait` (backed by `engine/setup/np_merge_wait.py`) blocks until the repo
 is **quiet** (all refs + HEAD + working tree stable across a full poll interval),
 then checks merge-readiness. Read-only — it never commits, merges, or pushes.
+
+A follower runs this before it pushes, as its claim's duty line says.
 
 ```bash
 python3 engine/nervepack_engine/cli.py merge-wait --repo "${NP_DIR:-$HOME/Code/nervepack}" --branch <BR> --base origin/main
@@ -36,6 +39,11 @@ identical samples count as quiet. Run it **after** you've finished your own comm
 
 Run it in the background and let the host re-invoke you on exit — a 30-minute block
 shouldn't hold the foreground.
+
+In Claude Code, pass the Bash tool's own `run_in_background: true` on this
+bare command instead of self-backgrounding. A `nohup ... &` wrapper finishes
+the launcher right away, so the harness reports completion on the wrapper,
+not on the real `merge-wait` process, and the log comes back empty.
 
 ## Exit codes → what you do
 

@@ -192,6 +192,16 @@ writer. Resume from the SDD ledger (.superpowers/sdd/progress.md) / plan
 resume-pointer / the branch, or start fresh."* You say "resume" and are back on
 the exact branch, head, and task — no re-deriving state from a stale summary.
 
+## Session claims: who else is live in this repo ("you are 2 in, so wait")
+
+**Purpose.** Two nervepack sessions in one repo, each in its own worktree, cannot see each other until the merge. A session claim tells each live session about the others at its first prompt, so a second agent learns its duty before it branches. Claims inform and never block.
+
+**Workflow.** Every prompt in a git repo writes this session's claim file (`UserPromptSubmit`, `cli.py hook claim-hook prompt`), and `SessionEnd` releases it (`cli.py hook claim-hook end`). The reader gets its FIFO rank by started time, and the hook surfaces the other live claims once per session. The first in keeps its declared paths current with `cli.py claim update --paths`. A follower branches from `origin/main`, owns the merge, and runs `merge-wait` before it pushes (`np-flow-merge-gate`). A claim on the same worktree or branch is a STOP that asks the user.
+
+**Assets.** `engine/nervepack_engine/np_claims.py` (store, rank, overlap, render, one JSON file per session under `<git-common-dir>/nervepack/claims/`), `engine/nervepack_engine/hooks/claim_hook.py` (`cli.py hook claim-hook`), the `cli.py claim` subcommands (`start`, `update`, `release`, `list`, `status`), registered via `cli.py setup install-hooks` (`engine/setup/hooks.manifest`). Toggle: `claims` (params: `stale_days=7`, `heartbeat_s=60`). Pruning is by `stale_days` only (default 7). A claim with an older heartbeat is removed on read. `SessionEnd` releases the claim. The stored pid is informational.
+
+**Worked example.** Session A starts on `feat/a` in worktree `wt-a` and claims `engine/a/`. Session B then sends its first prompt in `wt-b` on `feat/b`. Its hook shows one line for A, `Live now: session a1b2c3d4 on feat/a in wt-a, paths engine/a/.`, then the duty line `You are 2 in. Branch from origin/main and own the merge: run merge-wait before pushing.` B branches from `origin/main`, does its work, and runs `merge-wait` before it pushes.
+
 ## Open artifact on write — auto-open a spec/plan doc so a human reads it
 
 **Purpose.** `superpowers:brainstorming` writes specs to
@@ -250,14 +260,18 @@ in `engine/setup/nervepack-session-directive.md`. Toggle: `post_ship` (no params
 succeeds and the next model step sees the prompt. It runs
 `np-core-capture-learning`, which routes the CI gotcha it hit to nervepack.
 
-## Session journal — live goal/hypotheses/struggles/progress/skills, restored after compact/resume
+## Session journal — live goal, decisions, wins, resources, restored after compact/resume
 
 **Purpose.** A session loses working context on a compaction, a resume, or a
-`/clear`. The journal keeps a local record of five things.
+`/clear`. The journal keeps a local record of each checkpoint.
 
-- Goal, current hypotheses, notable struggles, notable progress, and skills that
-  worked.
-- It is restored to the model after a compact or resume.
+- Goal, hypotheses, struggles, progress, and skills that worked.
+- Wins, decisions with their reason, open questions, the next step, and files
+  touched. Empty fields are omitted and each is capped at 400 characters.
+- Resources: identifiers the session touched, one `id | type | purpose` line each,
+  at most 40 per block.
+- It is restored to the model after a compact or resume. Restore shows the seed
+  block plus the newest three, capped at 12000 characters.
 - It records the skills that succeeded, so a captured session teaches future ones.
 
 **Workflow.**
@@ -271,10 +285,35 @@ succeeds and the next model step sees the prompt. It runs
   `.recall/` receipts, so nothing injects twice.
 - A plain startup and a `/clear` never inject.
 
-**Cleanup.**
+**Resources.**
 
-- The backcapture sweep deletes a journal after it evaluates that session.
-- A 30-day TTL in the same sweep removes any journal the cleanup missed.
+- `np_resources.extract` finds DNS names, URLs, cloud and Azure resource IDs,
+  ARNs, IPs, CIDRs, ports, DB objects, repos, pipeline IDs, and Key Vault secret
+  names by regex.
+- Secret values never enter. Text is redacted first, userinfo URLs and query
+  strings are dropped, and any candidate that still looks like a credential is
+  discarded.
+- Haiku only labels the purpose of ids the regex found. It cannot add one.
+
+**Crawl before cleanup.**
+
+- Before the backcapture sweep or the 30-day TTL deletes a journal,
+  `np_journal.crawl` reads it.
+- Struggles and wins go to the episodic inbox as `mode: journal-crawl` records.
+- Their items sit under `crawl_struggles` and `crawl_strategies`, never `struggles`.
+- The crawl treats journal text as untrusted. It keeps 5 items per kind at 200 chars each.
+- It drops entries with a URL, code, a command, hidden characters, or an agent-directed
+  instruction, and logs the count.
+- `episodic-maintain` uses them as corroboration only. They never create a lesson
+  alone and never feed `enforce`.
+- Resources go to `~/.cache/nervepack/resources-inbox/`.
+- `episodic-maintain` drains that inbox in Python into the overlay catalog
+  `memory/resources/<YYYY-MM>.jsonl`, deduped by identifier. Each row carries
+  `first_seen`, `last_seen`, `session`, `repo`, `purpose`, and a seen count.
+- It rewrites `memory/resources/INDEX.md`, grouped by type, and the agent
+  commits both.
+- A failed crawl keeps the journal. The TTL retries until the file is twice the TTL old. Param `journal.crawl=off` skips the crawl and
+  the drain, and deletion still runs.
 
 **The /clear case.**
 
@@ -283,8 +322,10 @@ succeeds and the next model step sees the prompt. It runs
 - The backcapture sweep re-captures any prior session with no metrics record.
 
 **Assets.** `np_journal.py`, `hooks/journal_write.py`, `hooks/journal_recall.py`,
-cleanup in `backcapture_sweep.py`. Toggle `journal` (`model`, `ttl_days`,
-`recall_sources`). Governing record: `change-specs/worktree-feat+session-journal-and-clear-capture.md`.
+`np_resources.py`, crawl in `backcapture_sweep.py`, drain in `np_agentic_cron.py`.
+Toggle `journal` (`model`, `ttl_days`, `recall_sources`, `crawl`). Governing
+records: `change-specs/worktree-feat+session-journal-and-clear-capture.md`,
+`change-specs/feat-journal-resources.md`, `change-specs/fix-journal-crawl-trust.md`.
 
 ## Spec-review gate — confirm the doc was read before implementation starts
 
@@ -348,7 +389,16 @@ advisory entries regardless of provenance.
 the merge of the former `playbook-recall.sh` + `strategy-recall.sh`) injects
 topic-matched entries on a session's first prompts, framing by provenance:
 imperative "avoid X" wording for `failure`, advisory "the approach that worked is
-Y" wording for `success`.
+Y" wording for `success`. A trigger matches only as a whole word, so `ci` no longer
+fires on "decision". Matches rank by hit count, then by rarer triggers, and only the
+top `lessons.recall_top` (default 3) inject. A topic needs `lessons.recall_min_hits`
+(default 1) hits. Spec: `change-specs/feat-memory-guard-recall-gate.md`.
+
+**Write guard.** `np_capture.append_note()` checks every `struggles[]`/`strategies[]`
+item before it reaches the inbox, with no model call. It drops junk (`n/a`, `none`,
+empty), items whose normalized text is under 20 characters, items whose raw text is
+over 2000 characters, and duplicates of any item still in the undrained inbox. Dropped items are listed in the record's `guard.dropped`. Param
+`memory.write_guard` (default on).
 
 **Body format (paired rules).** Each entry is one line under an `## <objective>`
 heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
@@ -503,6 +553,14 @@ open-dashboard` SessionStart hook (`engine/nervepack_engine/hooks/open_dashboard
 backed by `engine/nervepack_engine/np_dashboard.py`) opens it once per boot (guarded against
 the reconnect loop).
 
+**Off-main checkout.** The aggregator never commits onto a feature branch. Off main,
+`np_git_publish.write_root()` gives it a private worktree at origin/main. The batch
+commits and pushes from there, and stderr names the branch.
+
+The agentic crons and the skill-maintain split refuse with a `REFUSED` log line. The
+doctor `cron-branch` check shows the same state. Example: a checkout left on `feat/x`
+gets no cron commits, and origin/main still gets the metrics.
+
 **Wiki navigation (left sidebar).** The same `build.py` pass also emits `window.WIKI`
 into `metrics.js` (a grouped, searchable index of the overlay's `wiki/topics/<topic>/`
 and `wiki/concepts/<concept>/` synthesis pages with their co-located sources, fields `{name, kind, last_updated, sources[], excerpt, html, topic}`).
@@ -566,6 +624,19 @@ suggestion ledger.
   that runs the np-core-graduate flow.
 - **Dismiss** writes `graduation-dismissed.json` next to
   `graduation-candidates.json`. `build.py` filters dismissed rows out.
+
+**One action path.** Implement, Apply and Graduate share `start_job()` in the
+server. It checks the toggle, the agent guard, the overlay checkout and its origin,
+then queues the job. A refusal returns `{ok:false, error, code, hint}`.
+The page shows it on the row and in a banner that stays until dismissed.
+A job that exits without a status reports failed with the log path.
+
+**Self-check.** `GET /api/doctor` lists each check. The server logs failures at
+startup, the page warns on load, and the `dashboard-actions` doctor capability
+reports the same rows. A server older than the page shows a restart banner.
+
+**Example.** Click Graduate with the overlay's origin removed. The row reads
+"no origin remote" with a hint, and no job spawns.
 
 **Overlay viewer.** Wiki and skill pages open in a modal iframe with
 "Open in new tab" and "Close". Esc or a backdrop click closes it, so the list

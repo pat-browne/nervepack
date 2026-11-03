@@ -42,7 +42,7 @@ cp "$SETUP/np_git_publish.py" "$NP/engine/setup/"
 printf 'evaluator|shared|runtime|on|retain_days=0\n' > "$NP/engine/setup/toggles.conf"
 printf 'evaluator.dashboard=off\n' > "$tmp/local"   # no build.py in this minimal repo
 ORIGIN="$tmp/origin.git"; git init -q --bare "$ORIGIN"
-( cd "$NP" && git init -q && git config user.email "t@t" && git config user.name "Pat" \
+( cd "$NP" && git init -q -b main && git config user.email "t@t" && git config user.name "Pat" \
     && git remote add origin "$ORIGIN" \
     && : > dashboard/data/metrics.jsonl \
     && printf 'window.NP_METRICS=[];\n' > dashboard/data/metrics.js \
