@@ -178,6 +178,31 @@ class TestStaleServerRestart(unittest.TestCase):
         self.assertEqual(kill.call_args[0][0], 999999)
         popen.assert_called_once()
 
+    def test_legacy_server_with_no_pid_is_found_by_port_and_restarted(self):
+        # The oldest servers report neither pid nor code, so the pid comes from lsof.
+        self.health = {"ok": True}
+        def _kill(pid, sig):
+            self.srv.shutdown()
+            self.srv.server_close()
+        with mock.patch.object(np_dashboard, "_run", return_value="4242\n"), \
+             mock.patch.object(np_dashboard, "_is_our_server", return_value=True) as ours, \
+             mock.patch.object(np_dashboard.os, "kill", side_effect=_kill) as kill, \
+             mock.patch.object(np_dashboard, "_POLL_ATTEMPTS", 1), \
+             mock.patch.object(np_dashboard, "_POLL_INTERVAL", 0.01), \
+             mock.patch.object(np_dashboard.subprocess, "Popen") as popen:
+            np_dashboard.dashboard_url()
+        self.assertEqual(ours.call_args[0][0], 4242)
+        self.assertEqual(kill.call_args[0][0], 4242)
+        popen.assert_called_once()
+
+    def test_legacy_server_with_two_listeners_is_left_alone(self):
+        self.health = {"ok": True}
+        with mock.patch.object(np_dashboard, "_run", return_value="4242\n4343\n"), \
+             mock.patch.object(np_dashboard.os, "kill") as kill, \
+             mock.patch.object(np_dashboard.subprocess, "Popen"):
+            np_dashboard.dashboard_url()
+        kill.assert_not_called()
+
     def test_bogus_pid_is_never_signalled(self):
         # The pid comes from an HTTP reply. None of these may reach os.kill.
         bogus = [{"ok": True, "pid": p, "code": "old"}

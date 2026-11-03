@@ -94,6 +94,7 @@ class TestServer(unittest.TestCase):
             "NP_IMPLEMENT": impl, "NP_IMPLEMENT_STATUS_DIR": cls.status_dir,
             "NP_TOGGLES_LOCAL": cls.toggles_local, "NP_TOGGLES_CONF": cls.toggles_conf,
             "NP_TOGGLE_SCHEMA": cls.schema, "NP_TOGGLE_NO_COMMIT": "1",
+            "NP_TOGGLES_CONTENT": "",
             "NP_MODEL_PROBE_CACHE": os.path.join(d, "model-probe.json"),
             "NP_OWN_SESSIONS_DIR": os.path.join(d, "own-sessions"),
             "NP_JOB_HEALTH_BACKEND": "none", "NP_JOB_HEALTH_LOG_DIR": os.path.join(d, "job-logs"),

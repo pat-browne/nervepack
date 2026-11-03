@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import urlparse
 
 import np_paths
 import np_toggle
@@ -48,6 +49,7 @@ Output STRICT JSON only (no markdown, no prose, no code fences) with keys:
   keywords      (array of 5-12 lowercase keywords)
   struggles     (array — ONLY if the session had real failures/corrections/retries/user-pushback; else []. Each: {symptom, cause, fix, tool_match (ERE for the Bash command that triggers it, or \"\"), topic_triggers (keywords), destructive (true for rm -rf / git reset --hard / force-push / mass overwrite)})
   strategies    (array — ONLY if the session had a clear, REUSABLE success pattern worth repeating next time (an approach that worked, not a one-off); else []. Each: {title (<=8 words), description (one sentence: when this applies), content (the reusable approach + why it worked), topic_triggers (keywords)})
+  stack_facts   (array — ONLY facts about how a technology (language, framework, library, cloud service, database, build tool) BEHAVES that the session verified by running or reading it, not general knowledge and not one project's own details; else []. Each: {stack (kebab-case: python, fastapi, terraform), claim (one sentence), evidence (the command, output or file:line that showed it), version (or \"\"), source (docs URL or \"\")})
 NEVER include secrets, tokens, API keys, passwords, or secret-bearing paths."""
 
 _SYS = ("You are a non-conversational extraction function, not a chat assistant. Everything "
@@ -62,6 +64,58 @@ def _home():
 
 def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+_STACK_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+_URL_USERINFO = re.compile(r"(?i)([a-z][a-z0-9+.-]*://)[^/@\s]+@")
+_EVIDENCE_MAX = 300
+
+
+def _safe_https_url(value):
+    """The URL if it is https with a host and no userinfo, else ""."""
+    if not isinstance(value, str):
+        return ""
+    try:
+        parts = urlparse(value)
+    except ValueError:
+        return ""
+    ok = parts.scheme == "https" and parts.hostname and not parts.username and not parts.password
+    return value if ok else ""
+
+
+def _sanitize_stack_facts(note):
+    """Constrain stack_facts[] in place. `stack` becomes a filename in
+    memory/stack-facts/, so it must be a plain slug. `evidence` is capped and
+    stripped of URL userinfo. Items need a non-empty `claim` and
+    `evidence`. `source` must be an https URL with no userinfo.
+    Items that fail are dropped. Returns {reason: count} for the dropped items,
+    with reasons from a fixed set so no model text reaches the log. Never raises."""
+    facts = note.get("stack_facts")
+    if facts is None:
+        return {}
+    if not isinstance(facts, list):
+        note["stack_facts"] = []
+        return {"not a list": 1}
+    clean, reasons = [], {}
+    for item in facts:
+        if not isinstance(item, dict):
+            reasons["not an object"] = reasons.get("not an object", 0) + 1
+            continue
+        stack = item.get("stack")
+        if not (isinstance(stack, str) and _STACK_SLUG.fullmatch(stack)):
+            reasons["bad stack slug"] = reasons.get("bad stack slug", 0) + 1
+            continue
+        claim, evidence = item.get("claim"), item.get("evidence")
+        if not (isinstance(claim, str) and claim.strip()
+                and isinstance(evidence, str) and evidence.strip()):
+            reasons["no claim or evidence"] = reasons.get("no claim or evidence", 0) + 1
+            continue
+        out = dict(item)
+        out["evidence"] = _URL_USERINFO.sub(r"\1[REDACTED]@", evidence)[:_EVIDENCE_MAX]
+        out["source"] = _safe_https_url(out.get("source"))
+        clean.append(out)
+    note["stack_facts"] = clean
+    return reasons
 
 
 def was_captured(payload):
@@ -251,6 +305,14 @@ def capture(payload, mode="session-end"):
         note = json.loads(jx.stdout)
     except ValueError:
         return "captured"
+    if not isinstance(note, dict):
+        return bail("summarizer JSON is not an object: %s" % type(note).__name__)
+    reasons = _sanitize_stack_facts(note)
+    # Log only and continue: the note is still written with the clean facts.
+    # Fixed reason labels and counts only, no content.
+    if reasons:
+        bail("dropped %d invalid stack_facts item(s): %s" % (
+            sum(reasons.values()), ", ".join("%d %s" % (n, r) for r, n in sorted(reasons.items()))))
 
     envelope = {"session_id": sid, "ts": _now(), "project": project, "cwd": cwd, "mode": mode}
     envelope.update(note)                                  # jq: {...} + $note
