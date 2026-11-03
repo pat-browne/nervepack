@@ -25,11 +25,11 @@ stalls.
 ## Decision
 
 We will have the job write the docs, run lint and tests, open a PR, and enable
-auto-merge only when lint, tests, and the required integrity check pass.
+auto-merge only after all six CI gates pass locally and the integrity check passes.
 
 Chosen option: "Write docs and auto-merge", because the host repo requires the
-integrity check on trunk and enabled auto-merge. The job opens a draft PR with
-no auto-merge when the review receipt cannot be produced.
+integrity check on trunk and enabled auto-merge. The job stops before any
+commit or PR when a local gate fails, including a missing review receipt.
 
 ## Non-goals
 
@@ -49,7 +49,7 @@ Writing outside `docs/` and raising the cap of 3 docs per run. The roadmap entry
 
 ## Confirmation
 
-Read the prompt phases. Phase 9 gates auto-merge on draft state, lint, tests, and the check.
+Read the prompt phases. Phase 6 runs the gates before commit. Phase 10 gates auto-merge on them and the check.
 
 ## Deviations
 
