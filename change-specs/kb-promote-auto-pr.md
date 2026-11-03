@@ -6,6 +6,7 @@ tier: standard
 blast_radius:
   - agents/np-flow-kb-promote-scan.md
   - docs/ROADMAP.md
+  - engine/setup/tests/maintain/test_np_kb_promote_scan.py
   - change-specs/kb-promote-auto-pr.md
 ---
 
