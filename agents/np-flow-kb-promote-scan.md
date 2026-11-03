@@ -78,6 +78,8 @@ Hard rules for every phase:
    Do not modify the skill. Do not file issues and do not touch the queue.
    Dedupe each candidate against existing docs and against open PRs:
    `gh pr list -R campminder/data-base --state open --search '<topic>'`.
+   Reduce `<topic>` to letters, digits, and spaces before it enters any command or message.
+   If `gh pr list` fails, print `PHASE scan: FAILED dedupe unavailable` and stop.
    Drop a candidate that an open PR already covers. Rank the survivors by value
    and keep at most 3.
 
@@ -89,18 +91,21 @@ Hard rules for every phase:
      `docs/solutions` for a fix or gotcha, `docs/systems` for how a system works,
      `docs/runbooks` for steps. Follow `templates/<type>.md` and use tags from `docs/index-tags.md`.
    - Re-run the de-personalize rules on the finished text. Strip names, emails, secrets, and tenant or subscription IDs.
+     Then grep the new docs for `@`, `://`, GUID patterns, and `key`, `token`, `secret`, `password`.
+     If any hit stays that you cannot remove, print `PHASE write: FAILED possible sensitive data` and stop.
    - Print `PHASE write: <paths>`.
 
 5. **receipt.** CI's `receipt-gate` needs a `pr-review` receipt. The skill sets
    `disable-model-invocation: true`, so run it only if the host lets you invoke it
    non-interactively. If it runs, keep the receipt it writes under `docs/receipts/`.
-   If it cannot run, print `PHASE receipt: needed (pr-review is user-invoked)`.
+   If it cannot run for any reason, print `PHASE receipt: needed (pr-review is user-invoked)`.
+   A person then runs `pr-review` in the kept worktree, commits the receipt, and re-runs the gates.
    Continue to phase 6, where the missing receipt stops the run.
 
-6. **gates.** Run every CI gate locally in the worktree, one `uv run` call each:
+6. **gates.** Stop with `PHASE gates: FAILED timeout` after 30 minutes. Run every CI gate locally in the worktree, one `uv run` call each:
    `ruff format --check tools tests`, `ruff check tools tests`, `mypy`, `pytest -q`,
    `kb-lint --errors-only --diff-base origin/trunk`, and `receipt-gate --diff-base origin/trunk`.
-   On a failure in the first five, fix the new docs and re-run, up to 3 rounds.
+   On a failure in the first five, fix the new docs and re-run, up to 3 total attempts per gate.
    Never weaken or skip a gate. If any gate still fails, print `PHASE gates: FAILED <gate>`,
    keep the worktree, do not commit, push, or open a PR, and stop.
    A failing `receipt-gate` with no receipt means `PHASE gates: FAILED receipt-gate (receipt needed)`.
@@ -114,6 +119,7 @@ Hard rules for every phase:
 
 8. **pr.**
    - Push the branch with `git push -u origin kb/promote-scan-$DATE`.
+     If push or `gh pr create` fails, print `PHASE pr: FAILED <error>`, keep the worktree, and stop.
    - Open a PR with `PR_URL=$(gh pr create --base trunk ...)`, titled after the commit.
      Set `PR_NUMBER=${PR_URL##*/}`.
    - The body lists promoted and dropped items, one line each.
@@ -124,8 +130,9 @@ Hard rules for every phase:
    `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks "$PR_NUMBER" --watch`. The 15-minute cap keeps a
    stuck check from holding the cron. The alarm kills only `gh`, and the shell sees
    exit code 142. On exit code 142, print `PHASE checks: timeout <url>` and stop with the PR open.
+   On any other non-zero exit, print `PHASE checks: FAILED <failing checks>` and stop with the PR open.
 
-10. **auto-merge.** Enable auto-merge only when all hold: phase 6 passed, and the `Knowledge-base integrity` check is `pass`.
+10. **auto-merge.** Enable auto-merge only when all hold: phase 6 passed, and every check from a fresh `gh pr checks "$PR_NUMBER"` run is `pass`, including `Knowledge-base integrity`.
    Then run `gh pr merge "$PR_NUMBER" --auto --squash` and print `PHASE auto-merge: enabled <url>`.
    Otherwise print `PHASE auto-merge: skipped <reason>` with the PR URL, and leave the PR open.
    Never run a plain `gh pr merge`, never approve, and never merge a PR that failed a check.
