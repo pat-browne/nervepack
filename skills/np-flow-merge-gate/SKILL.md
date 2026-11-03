@@ -1,6 +1,6 @@
 ---
 name: np-flow-merge-gate
-description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a `claim status` STOP at task start, when another live session already holds your branch or worktree.
+description: Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a `claim status` STOP at task start, when a live session holds your branch.
 ---
 
 # Merge gate — wait out concurrency, then merge on a clean diff
