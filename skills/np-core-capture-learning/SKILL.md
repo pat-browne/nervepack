@@ -103,8 +103,8 @@ memories" section — frontmatter with `name:`, `description:`,
 
 ### 2d. Orchestrating? Fan the capture out
 If this session drives other sessions or agents, send each managed session and
-live agent the same capture request. Include the preflight and the no-push rule.
-Collect each one-line report and include them in step 3.
+live agent the same capture request. Include the preflight (above) and a no-push rule: write and commit
+locally, never push; the orchestrator pushes. Collect each one-line report and include them in step 3.
 
 ### Skipping
 A skip must name, for each learning, the KB location where it already lives

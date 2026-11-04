@@ -1,6 +1,6 @@
 # Deploy gates under an orchestrator
 
-The post-deploy loop lives in np-flow-develop. These rules cover the gate itself.
+The post-deploy loop lives in [[np-flow-develop]]. These rules cover the gate itself.
 
 - Per gate, a validator reads the full plan and returns APPROVE or REJECT. An adversarial critic then reviews any APPROVE.
 - Before reporting a gate, list queued runs for the pipeline. Flag any extra run.

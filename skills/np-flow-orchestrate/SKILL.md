@@ -153,7 +153,8 @@ without warning.
 
 Form follows [[np-flow-concise-output]].
 
-Deploy gates (validator, critic, queued runs, push freeze): references/deploy-gates.md
+When any ticket reaches a deploy gate, read references/deploy-gates.md
+(validator, critic, queued runs, push freeze) before approving it.
 
 ## What this is not
 
