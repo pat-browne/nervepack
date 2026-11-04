@@ -102,9 +102,11 @@ memories" section — frontmatter with `name:`, `description:`,
 | Pointer to an external system (Linear, Slack, doc URL) | `reference` |
 
 ### 2d. Orchestrating? Fan the capture out
-If this session drives other sessions or agents, send each managed session and
-live agent the same capture request. Include the preflight (above) and a no-push rule: write and commit
-locally, never push; the orchestrator pushes. Collect each one-line report and include them in step 3.
+Runs after 2a to 2c. If this session drives managed sessions or agents, send each
+one message (`send_message` for a session, `SendMessage` for an agent): "Run
+/np-core-capture-learning now. Preflight first. Write and commit locally, never push. The orchestrator pushes. Reply with one
+`Captured:` line." Wait for each reply. A session that errors or does not reply
+by your next turn is listed in step 3 as `no capture` with its id. Do not retry.
 
 ### Skipping
 A skip must name, for each learning, the KB location where it already lives

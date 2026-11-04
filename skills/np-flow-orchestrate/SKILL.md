@@ -153,8 +153,9 @@ without warning.
 
 Form follows [[np-flow-concise-output]].
 
-When any ticket reaches a deploy gate, read references/deploy-gates.md
-(validator, critic, queued runs, push freeze) before approving it.
+When a child's work reaches a deploy pipeline, the orchestrator owns its approval
+gates: validator and critic, queued-run checks, and the push freeze. Read
+references/deploy-gates.md before approving any gate.
 
 ## What this is not
 
