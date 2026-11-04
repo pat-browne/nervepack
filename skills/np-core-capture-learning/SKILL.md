@@ -101,6 +101,11 @@ memories" section — frontmatter with `name:`, `description:`,
 | In-flight project state, deadline, motivation | `project` |
 | Pointer to an external system (Linear, Slack, doc URL) | `reference` |
 
+### 2d. Orchestrating? Fan the capture out
+If this session drives other sessions or agents, send each managed session and
+live agent the same capture request. Include the preflight and the no-push rule.
+Collect each one-line report and include them in step 3.
+
 ### Skipping
 A skip must name, for each learning, the KB location where it already lives
 (skill, reference or wiki path). "It's in the PR, the chat or an artifact" is

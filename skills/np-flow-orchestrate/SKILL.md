@@ -153,6 +153,8 @@ without warning.
 
 Form follows [[np-flow-concise-output]].
 
+Deploy gates (validator, critic, queued runs, push freeze): references/deploy-gates.md
+
 ## What this is not
 
 - Not [[np-core-dispatch]]. Dispatch hands one task to one agent. This runs a
