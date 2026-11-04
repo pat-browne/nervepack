@@ -7,7 +7,8 @@ or GitHub environment review). The post-deploy validation loop lives in
 ## Validator and critic
 
 - When a Plan job completes, dispatch a validator agent to read the full plan log.
-  It returns APPROVE or REJECT with one line per unit.
+  It returns APPROVE or REJECT with one line per unit. A unit is one Terragrunt
+  module directory (or one bundle target) that the job plans and applies on its own.
 - Dispatch a separate critic agent to review any APPROVE. It tries to find a
   reason to reject.
 - Bring the gate to the user only with APPROVE from both.

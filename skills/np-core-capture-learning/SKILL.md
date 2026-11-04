@@ -103,7 +103,8 @@ memories" section — frontmatter with `name:`, `description:`,
 
 ### 2d. Orchestrating? Fan the capture out
 Runs after 2a to 2c. If this session drives managed sessions or agents, send each
-one message (`send_message` for a session, `SendMessage` for an agent): "Run
+one message: the session tool `send_message` for a desktop session, or the
+Agent tool `SendMessage` for a spawned agent. Request text: "Run
 /np-core-capture-learning now. Preflight first. Write and commit locally, never push. The orchestrator pushes. Reply with one
 `Captured:` line." Wait for each reply. A session that errors or does not reply
 by your next turn is listed in step 3 as `no capture` with its id. Do not retry.
