@@ -118,9 +118,13 @@ Speed mode never overrides any of these:
 2. The repo's `CLAUDE.md`, including deploy rules such as no prod deploys on
    Fridays and all environments or none.
 3. Destructive or irreversible actions.
-4. Credentials or secrets. One exception: a new-account password is generated,
-   not asked for. Run `new-account-secret.sh ... --generate` from
-   [[np-env-secrets-refresh]], then surface the paste-and-submit step.
+4. Credentials or secrets. The one carve-out is a new-account password. Speed mode
+   generates it and never asks for or shows it. Run
+   `new-account-secret.sh ITEM USERNAME URL --generate` from [[np-env-secrets-refresh]]
+   (`scripts/new-account-secret.sh`) in a real terminal with the vault unlocked. It stores
+   the password in Bitwarden and copies it to the clipboard. Never print or log the value.
+   If the script exits non-zero, such as a locked vault or an existing item, stop and report
+   its message. On success, tell the user to paste the clipboard into the form and submit it.
 5. Messages sent on the user's behalf.
 6. Anything customer-facing.
 
