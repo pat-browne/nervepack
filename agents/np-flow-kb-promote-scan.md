@@ -91,7 +91,7 @@ Hard rules for every phase:
      `docs/solutions` for a fix or gotcha, `docs/systems` for how a system works,
      `docs/runbooks` for steps. Follow `templates/<type>.md` and use tags from `docs/index-tags.md`.
    - Re-run the de-personalize rules on the finished text. Strip names, emails, secrets, and tenant or subscription IDs.
-     Then grep the new docs for `@`, `://`, GUID patterns, and `key`, `token`, `secret`, `password`.
+     Then grep the new docs for `@`, `://`, GUID patterns, IPv4 addresses, and `key`, `token`, `secret`, `password`.
      If any hit stays that you cannot remove, print `PHASE write: FAILED possible sensitive data` and stop.
    - Print `PHASE write: <paths>`.
 
@@ -110,6 +110,7 @@ Hard rules for every phase:
    keep the worktree, do not commit, push, or open a PR, and stop.
    A failing `receipt-gate` with no receipt means `PHASE gates: FAILED receipt-gate (receipt needed)`.
    Never open a PR expecting CI to fail and never open a draft to get around a gate.
+   Also run `git diff --name-status origin/trunk`. Every line must be `A` (added) under `docs/solutions/`, `docs/systems/`, `docs/runbooks/`, or `docs/receipts/`, plus the receipt index row in `docs/receipts/README.md`. Any other path, a delete, or a rename prints `PHASE gates: FAILED path-allowlist` and stops.
    On success print `PHASE gates: all passed`.
 
 7. **commit.** Stage only the new doc paths and the receipt, by explicit path. Use a conventional
@@ -134,5 +135,6 @@ Hard rules for every phase:
 
 10. **auto-merge.** Enable auto-merge only when all hold: phase 6 passed, and every check from a fresh `gh pr checks "$PR_NUMBER"` run is `pass`, including `Knowledge-base integrity`.
    Then run `gh pr merge "$PR_NUMBER" --auto --squash` and print `PHASE auto-merge: enabled <url>`.
+   If the merge command fails, print `PHASE auto-merge: FAILED <error>` with the PR URL and leave the PR open.
    Otherwise print `PHASE auto-merge: skipped <reason>` with the PR URL, and leave the PR open.
    Never run a plain `gh pr merge`, never approve, and never merge a PR that failed a check.
