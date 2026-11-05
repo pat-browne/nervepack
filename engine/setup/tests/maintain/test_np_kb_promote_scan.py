@@ -97,7 +97,9 @@ class PromptContractTest(unittest.TestCase):
         for needle in ("harness-promote-scan", "pr-review", "origin/trunk",
                        "kb/promote-scan-$DATE", "no promotable content",
                        "Committed by Claude Code", "AI-assisted PR",
-                       "gh pr checks", "alarm 900", "PR_NUMBER=${PR_URL##*/}", "Never merge",
+                       "gh pr checks", "alarm 900", "PR_NUMBER=${PR_URL##*/}", "Never run a plain `gh pr merge`",
+                       "gh pr merge \"$PR_NUMBER\" --auto --squash", "PHASE gates: FAILED",
+                       "receipt-gate --diff-base origin/trunk", "kb-lint --errors-only",
                        "PHASE cleanup", "Remove the",
                        "docs/reviews/queue.md",
                        "$HOME/Code/nervepack:$HOME/Code/nervepack-content"):
