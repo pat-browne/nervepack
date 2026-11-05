@@ -96,14 +96,16 @@ class PromptContractTest(unittest.TestCase):
     def test_prompt_rules(self):
         for needle in ("harness-promote-scan", "origin/trunk", "--detach",
                        "gh auth status", "PHASE cleanup", "worktree remove --force",
-                       "Never commit, push, open a PR",
-                       "$HOME/Code/nervepack:$HOME/Code/nervepack-content"):
+                       "git push origin HEAD:trunk", "Committed by Claude Code",
+                       "Never use `git add -A`", "kb-lint --errors-only",
+                       "PROMOTE_DRY_RUN", "Never open a PR"):
             self.assertIn(needle, self.prompt)
 
     def test_prompt_has_no_queue_pr_flow(self):
         # The queue froze on 2026-10-19. A PR phase keyed on it never runs.
         body = self.prompt
-        for gone in ("gh pr create", "pr-review", "no promotable content"):
+        for gone in ("gh pr create", "pr-review", "no promotable content",
+                     "push --force", "--force-with-lease"):
             self.assertNotIn(gone, body)
 
 

@@ -26,27 +26,30 @@ Every run since then stopped at that check, and its four later phases were dead.
 
 ## Decision
 
-We will drop the review, commit, PR and checks phases.
-The agent reads data-base from a detached `origin/trunk` worktree, runs the skill, prints its report, and removes the worktree.
-It never commits, pushes or opens a PR.
+We will drop the queue review, commit, PR and checks phases.
+The agent runs the skill in a detached `origin/trunk` worktree of data-base.
+The skill writes docs and small skill additions, and files `triage` issues for new or large skills.
+The agent runs data-base's five CI gates, commits the listed paths, and pushes to `trunk`.
+data-base's CONTRIBUTING puts additions in its push-to-trunk column, so no PR is needed.
 
-Chosen option: "Rewrite to the issue flow", because the skill already files issues.
+Chosen option: "Rewrite to the issue flow", extended to push gated additions.
 
 ## Non-goals
 
-Widening what the skill treats as promotable. That change lives in data-base.
+The routing rules themselves. They live in the data-base skill and its own change.
 Per-layer autopromote settings in the dashboard. That is a separate feature.
 
 ## Cross-cutting concerns
 
-- Security: the agent's only external write is `gh issue create`, done by the skill.
-- Privacy: unchanged. The skill de-personalizes before filing.
-- Observability: phase lines in `kb-promote-scan.log` are kept.
+- Security: the agent pushes to data-base `trunk` and files issues. It never force-pushes or opens a PR.
+- Privacy: the skill de-personalizes before writing or filing.
+- Observability: phase lines in `kb-promote-scan.log`. The commit body lists every path written.
 
 ## Consequences
 
-- Good, because the run log no longer reports a false "no promotable content".
-- Neutral, because a worktree never holds commits, so setup removes old ones unconditionally.
+- Good, because harness knowledge reaches data-base without a manual review step.
+- Bad, because a wrong doc lands on `trunk` before a person reads it. The gates and the team's trunk review catch it after.
+- Neutral, because a worktree with an unpushed commit is kept for manual recovery.
 
 ## Confirmation
 
