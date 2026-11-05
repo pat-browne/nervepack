@@ -101,8 +101,10 @@
    Without it, the command silently regenerates the primary content
    checkout's `INDEX.md`, not the worktree's.
 
-   Confirm by running `git diff --stat INDEX.md` in the primary content
-   checkout (the repo `np_content.py content_dir` resolves to). A clean diff there means it targeted the worktree.
+   The command gives no warning, so always check. In the primary content checkout
+   (the directory `NP_CONTENT_DIR` pointed at before you overrode it, usually
+   `~/Code/nervepack-content`), `git diff --stat INDEX.md` must be clean. Then confirm the
+   worktree changed: `git -C /path/to/content-worktree diff --stat INDEX.md` must show the update.
 
    If you're adding a new skill, hand-edit its row instead. Rows sit in
    alphabetical order:
