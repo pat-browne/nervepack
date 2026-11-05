@@ -118,13 +118,8 @@ Speed mode never overrides any of these:
 2. The repo's `CLAUDE.md`, including deploy rules such as no prod deploys on
    Fridays and all environments or none.
 3. Destructive or irreversible actions.
-4. Credentials or secrets. The one carve-out is a new-account password. Speed mode
-   generates it and never asks for or shows it. Run
-   `new-account-secret.sh ITEM USERNAME URL --generate` from [[np-env-secrets-refresh]]
-   (`scripts/new-account-secret.sh`) in a real terminal with the vault unlocked. It stores
-   the password in Bitwarden and copies it to the clipboard. Never print or log the value.
-   If the script exits non-zero, such as a locked vault or an existing item, stop and report
-   its message. On success, tell the user to paste the clipboard into the form and submit it.
+4. Credentials or secrets. The one carve-out is a new-account password: speed mode
+   generates it and never asks for or shows it. Steps: references/new-account-password.md
 5. Messages sent on the user's behalf.
 6. Anything customer-facing.
 
@@ -136,27 +131,9 @@ A limit is not a deferrable call. The coordinator cannot approve it either.
 
 ## The decisions log
 
-Keep it as you go. Hand it back at the end.
-
-```text
-Decisions
-1. <decision> -- <one-line reason>
-2. <decision> -- <one-line reason> (deferred to coordinator)
-3. <worker> on <model> -- <task>
-4. <worker> step-up <from> to <to> -- <failure that caused it>
-
-Stopped at limits
-- <action> -- <which limit> -- <your recommendation>
-
-Captured
-- <fact> -> <skill, reference or wiki path>
-
-Scope suggestions
-- <idea> -- <how it helps the end goal>
-```
-
-The final report also gives the PR link, merge state, CI result, the worker
-and step-up lines from the log, and status per environment.
+Keep it as you go. Hand it back at the end. Sections: Decisions, Stopped at
+limits, Captured, Scope suggestions. Template and final-report contents:
+references/decisions-log.md
 
 ## What this is not
 
