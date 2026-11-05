@@ -1,5 +1,5 @@
 ---
-id: 0112
+id: 0113
 status: accepted
 date: 2026-11-05
 tier: normal
@@ -11,7 +11,7 @@ blast_radius:
   - change-specs/fix-kb-promote-scan-issues.md
 ---
 
-# 0112: kb-promote-scan files issues, not queue PRs
+# 0113: kb-promote-scan files issues, not queue PRs
 
 ## Context and problem statement
 
@@ -29,8 +29,10 @@ Every run since then stopped at that check, and its four later phases were dead.
 We will drop the queue review, commit, PR and checks phases.
 The agent runs the skill in a detached `origin/trunk` worktree of data-base.
 The skill writes docs and small skill additions, and files `triage` issues for new or large skills.
-The agent runs data-base's five CI gates, commits the listed paths, and pushes to `trunk`.
-data-base's CONTRIBUTING puts additions in its push-to-trunk column, so no PR is needed.
+The agent runs data-base's CI gates and a scope gate on every changed path.
+It pushes docs to `trunk`. Every data-base PR needs a pr-review receipt, so docs cannot auto-merge via PR.
+Skill additions go to one PR without auto-merge. A person runs pr-review and merges it.
+This replaces the auto-merge PR flow from the kb-promote-auto-pr spec.
 
 Chosen option: "Rewrite to the issue flow", extended to push gated additions.
 

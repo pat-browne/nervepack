@@ -15,8 +15,8 @@ so a cloud routine cannot run it.
 **Log:** `~/.cache/nervepack/kb-promote-scan.log` (the agent's stdout lands there).
 
 **Standing mandate:** work in a throwaway detached worktree of `origin/trunk`.
-Push additions straight to `trunk`, as data-base's CONTRIBUTING allows. Never open a PR,
-force-push, or touch the main data-base checkout.
+Docs go straight to `trunk`. Skill changes go to one PR a person merges. Never
+force-push or touch the main data-base checkout.
 
 **Parameters:** the skill reads `HARNESS_PATHS`, `PROMOTE_TERMS_FILE`, `PROMOTE_MIN_TERMS`,
 `PROMOTE_MAX_WRITES`, `PROMOTE_MAX_PROPOSALS`, `PROMOTE_LARGE_SKILL_LINES`, `PROMOTE_SKIP_DIRS`
@@ -86,8 +86,8 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    If the failure names no scan file, treat it as the other case below.
    If a gate fails for any other reason, print `PHASE gate: FAILED <gate> <reason>` and push nothing.
 
-4. **commit.**
-   - Stage only the paths the skill's report lists, by name. Never use `git add -A` or `git add .`.
+4. **commit.** Split the gated paths in two. Paths under `docs/` are docs. Paths under `.claude/skills/` are skill changes.
+   - Commit the docs first. Stage only docs paths the skill's report lists, by name. Never use `git add -A` or `git add .`.
    - The subject is `docs: promote <N> harness additions`, where N counts the paths staged after the gate. The body lists every staged path, one per line.
    - The message must end with exactly this line: `Committed by Claude Code`
    - The pre-commit hook may bump `.claude/.claude-plugin/plugin.json`. If `git status --porcelain` then shows it, stage it and run `git commit --amend --no-edit`. If the amend fails, print `PHASE commit: FAILED amend <error>`.
@@ -98,11 +98,19 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - On a second rejection, print `PHASE push: FAILED rejected twice`. On a rebase conflict, run `git rebase --abort` and print `PHASE push: FAILED rebase conflict <paths>`. Keep the worktree in both cases.
    - Print `PHASE push: <short sha> <N> files`.
 
+5b. **skill PR.** Skip this phase if no skill paths remain.
+   - Run `git switch -c promote-scan/skills-$DATE`. Stage the skill paths by name.
+   - Commit with subject `skills: promote <N> harness additions`, the same body rules, and the same trailer and hook amend.
+   - Push the branch with `git push -u origin HEAD`.
+   - Open it with `gh pr create -R campminder/data-base -B trunk`. The body lists each path and says a person must run `pr-review` and merge.
+   - Never enable auto-merge on this PR. A person merges skill changes.
+   - Print `PHASE skill-pr: <url> <N> files` or `PHASE skill-pr: FAILED <reason>`.
+
 6. **report.** Print the skill's report, one line per item: files written, writes held back,
    issues filed, conflicts for `/kb-review`, and drops with reasons.
 
 7. **cleanup.**
    - If `$WT` is unset because setup failed early, print `PHASE cleanup: nothing to remove` and stop.
-   - If the push succeeded or `git log origin/trunk..HEAD` is empty, run `git -C "$DB" worktree remove --force "$WT"`.
+   - If every push succeeded or `git log origin/trunk..HEAD` is empty, run `git -C "$DB" worktree remove --force "$WT"`.
    - Print `PHASE cleanup: removed <path>`, `PHASE cleanup: kept <path> (unpushed commit)`, or `PHASE cleanup: FAILED <reason>`.
-   - Never open a PR, force-push, or close an issue.
+   - Never force-push, close an issue, or open any PR except the skill PR in phase 5b.
