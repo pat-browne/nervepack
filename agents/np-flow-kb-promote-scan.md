@@ -19,8 +19,9 @@ Push additions straight to `trunk`, as data-base's CONTRIBUTING allows. Never op
 force-push, or touch the main data-base checkout.
 
 **Parameters:** the skill reads `HARNESS_PATHS`, `PROMOTE_TERMS_FILE`, `PROMOTE_MIN_TERMS`,
-`PROMOTE_MAX_WRITES`, `PROMOTE_MAX_PROPOSALS`, `PROMOTE_SKIP_DIRS` and `PROMOTE_DRY_RUN`
-from the environment. Unset means the skill's default.
+`PROMOTE_MAX_WRITES`, `PROMOTE_MAX_PROPOSALS`, `PROMOTE_LARGE_SKILL_LINES`, `PROMOTE_SKIP_DIRS`
+and `PROMOTE_DRY_RUN` from the environment. Unset means the skill's default. The gate in
+phase 3 reads `PROMOTE_LARGE_SKILL_LINES` too.
 
 **Attribution:** the commit lands in data-base, so it ends with `Committed by Claude Code`
 per Campminder's managed settings. AGENTS.md's no-attribution rule covers nervepack only.
@@ -31,6 +32,7 @@ The queue moved to GitHub Issues on 2026-10-19, so those phases stopped running.
 **Manual recovery:** a crashed run can leave `data-base-promote-scan-<date>`.
 If it holds an unpushed commit, push it with `git -C <path> push origin HEAD:trunk`.
 Otherwise remove it with `git -C ~/Code/data-base worktree remove --force <path>`.
+After a rebase conflict, run `git -C <path> rebase --abort` first, then fix the conflict by hand or remove the worktree.
 
 ---
 
@@ -55,9 +57,10 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
 
 2. **scan.**
    - Read `.claude/skills/harness-promote-scan/SKILL.md` in `$WT` and follow it exactly. Do not modify it.
+   - If the skill stops early or prints no step 7 report, print `PHASE scan: FAILED no report` and go to phase cleanup.
    - Take the counts, paths and URLs from the skill's step 7 report. Print `PHASE scan: wrote <N> files, filed <M> issues <urls>`.
-   - If `PROMOTE_DRY_RUN=1`, print the skill's plan, skip phases gate, commit and push, and go to phase report.
-   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write`, skip phases gate, commit and push, and go to phase report.
+   - If `PROMOTE_DRY_RUN=1`, print the skill's plan and go straight to phase 6 (report). Phases 3, 4 and 5 do not run.
+   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and go straight to phase 6 (report). Phases 3, 4 and 5 do not run.
 
 3. **gate.** First check the scope of every changed path. Use `git status --porcelain` and
    `git diff --numstat origin/trunk`, not the skill's word.
@@ -78,8 +81,8 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - `uv run pytest -q`
    - `uv run kb-lint --errors-only --diff-base origin/trunk`
 
-   Wrap each command in `timeout 900` (`gtimeout` on macOS, skip the wrap if neither exists). A timeout is a gate failure.
-   If a gate's output names a file the scan wrote, restore it with `git checkout origin/trunk -- <path>` or delete it if new. Then run all gates again, at most twice.
+   Wrap each command in `timeout 900` (`gtimeout` on macOS). If neither exists, print `PHASE gate: no timeout available` and run unwrapped. A timeout is a gate failure.
+   If a gate's output names a file the scan wrote, restore it with `git checkout origin/trunk -- <path>` or delete it if new. Then rerun all five gates. Allow at most two reruns after the first run.
    If the failure names no scan file, treat it as the other case below.
    If a gate fails for any other reason, print `PHASE gate: FAILED <gate> <reason>` and push nothing.
 
@@ -99,6 +102,7 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    issues filed, conflicts for `/kb-review`, and drops with reasons.
 
 7. **cleanup.**
+   - If `$WT` is unset because setup failed early, print `PHASE cleanup: nothing to remove` and stop.
    - If the push succeeded or `git log origin/trunk..HEAD` is empty, run `git -C "$DB" worktree remove --force "$WT"`.
    - Print `PHASE cleanup: removed <path>`, `PHASE cleanup: kept <path> (unpushed commit)`, or `PHASE cleanup: FAILED <reason>`.
    - Never open a PR, force-push, or close an issue.
