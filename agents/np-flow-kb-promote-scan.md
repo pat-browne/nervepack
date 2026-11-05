@@ -59,7 +59,17 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - If `PROMOTE_DRY_RUN=1`, print the skill's plan, skip to phase report, and commit nothing.
    - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and skip to phase report.
 
-3. **gate.** Run each of these in `$WT`, one command per call:
+3. **gate.** First check the scope of every changed path. Use `git status --porcelain` and
+   `git diff --numstat origin/trunk`, not the skill's word.
+   - Delete each new file the report lists under `lint-failed`.
+   - A path outside `docs/` and `.claude/skills/<name>/` for an existing skill is out of scope.
+   - A new file under `.claude/skills/` is out of scope. New skills go through issues.
+   - A changed skill file is out of scope if it deletes any line, or adds more than `PROMOTE_LARGE_SKILL_LINES` (default 40) lines.
+   - A changed `SKILL.md` is out of scope if `git diff` touches its frontmatter.
+   - Restore each out-of-scope tracked file with `git checkout origin/trunk -- <path>`. Delete each out-of-scope new file.
+   - Print `PHASE gate: dropped <path> <reason>` for each one.
+
+   Then run each of these in `$WT`, one command per call:
    - `uv run ruff format --check tools tests`
    - `uv run ruff check tools tests`
    - `uv run mypy`
