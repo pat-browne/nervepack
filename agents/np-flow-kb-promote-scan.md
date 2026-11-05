@@ -1,7 +1,8 @@
 # kb-promote-scan
 
 Weekday agent prompt that runs data-base's `harness-promote-scan` skill against
-this machine's harness and opens a data-base PR when the scan queues items.
+this machine's harness. The skill files promotion suggestions as GitHub issues
+on `campminder/data-base`, labelled `triage` and `venue:kb`.
 
 **Cadence:** Monday to Friday, 11:00 local.
 Installed by `cli.py setup install-memory-{cron,launchd,schtasks}`. Default-on.
@@ -12,20 +13,18 @@ so a cloud routine cannot run it.
 
 **Log:** `~/.cache/nervepack/kb-promote-scan.log` (the agent's stdout lands there).
 
-**Standing mandate:** create a data-base worktree, commit, push, and open a PR.
-Never merge.
+**Standing mandate:** read data-base from a throwaway detached worktree of
+`origin/trunk`. File issues through the skill. Never commit, push, or open a PR.
 
-**Attribution markers:** the commit and PR land in data-base, not nervepack.
-Campminder's managed Claude Code settings require `Committed by Claude Code` and
-`AI-assisted PR` there. AGENTS.md's no-attribution rule covers nervepack commits only.
+**History:** until 2026-11-05 this prompt committed `docs/reviews/queue.md` and
+opened a PR. The queue moved to GitHub Issues on 2026-10-19, so those phases
+never ran again. The skill already filed issues.
 
-**Prerequisites in data-base trunk:** `.claude/skills/harness-promote-scan/SKILL.md`,
-`.claude/skills/pr-review/SKILL.md`, and `docs/reviews/queue.md`. Phase setup
-checks them and fails loudly if one is missing.
+**Prerequisites:** the skill and `docs/systems/review-queue.md` on data-base trunk.
+A `gh` login that can file issues on `campminder/data-base`. Phase setup checks both.
 
-**Manual recovery:** a run that committed but failed before push leaves
-`data-base-promote-scan-<date>` in place. Push it by hand, or remove it with
-`git -C ~/Code/data-base worktree remove --force <path>` and delete the branch.
+**Manual recovery:** a crashed run can leave `data-base-promote-scan-<date>`.
+Remove it with `git -C ~/Code/data-base worktree remove --force <path>`.
 
 ---
 
@@ -35,56 +34,28 @@ You are the kb-promote-scan agent. Your stdout is the run log. Print one
 line `PHASE <name>: <result>` at the end of each phase below. Do the phases in
 order, then stop.
 
-On any failure, print `PHASE <name>: FAILED <reason>` and stop. Remove the
-worktree first if it has no commits. Then print `PHASE cleanup: removed <path>`,
-`PHASE cleanup: kept <path> (has commits)`, or `PHASE cleanup: FAILED <reason>`.
+On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup and stop.
 
 1. **setup.**
    - Set `DB=$HOME/Code/data-base` and `DATE=$(date +%F)`. If `$DB` is not a git repo, print `PHASE setup: FAILED $DB is not a git repo` and stop.
+   - Run `gh auth status`. If it fails, print `PHASE setup: FAILED gh not authenticated` and stop.
    - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
-   - List `$DB/../data-base-promote-scan-*` worktrees. "Older" means the date suffix is before `$DATE`.
-     Remove each older one unless it has unpushed commits, and print `PHASE setup: removed <path>`.
-     If a removal fails, print `PHASE setup: could not remove <path>: <error>` and continue.
-     A kept older worktree never blocks this run, because each run uses its own dated path.
-   - If `kb/promote-scan-$DATE` exists on origin, print `PHASE setup: already ran today` and stop.
-   - If today's worktree path already exists, a same-day run is in progress or crashed.
-     Print `PHASE setup: FAILED worktree exists, see Manual recovery` and stop. The next day's run is unaffected.
-   - Create a worktree at `$DB/../data-base-promote-scan-$DATE` on new branch `kb/promote-scan-$DATE` from `origin/trunk`.
-   - Confirm `.claude/skills/harness-promote-scan/SKILL.md`,
-     `.claude/skills/pr-review/SKILL.md` and `docs/reviews/queue.md` exist in the
-     worktree. If any is missing, print `PHASE setup: FAILED missing <paths>` and stop.
+   - Remove every `$DB/../data-base-promote-scan-*` worktree with `git -C "$DB" worktree remove --force <path>`. They hold no work, since this job never commits. Print `PHASE setup: removed <path>` for each.
+   - Create a detached worktree with `git -C "$DB" worktree add --detach "$DB/../data-base-promote-scan-$DATE" origin/trunk`.
+   - Confirm `.claude/skills/harness-promote-scan/SKILL.md` and `docs/systems/review-queue.md` exist in the worktree. If either is missing, print `PHASE setup: FAILED missing <paths>`.
    - Never touch the main `$DB` checkout. Run every later step inside the worktree.
 
-2. **scan.** Read `.claude/skills/harness-promote-scan/SKILL.md` in the worktree
-   and follow it exactly. Use `HARNESS_PATHS` if set, else
-   `$HOME/Code/nervepack:$HOME/Code/nervepack-content`. Do not modify the skill.
+2. **scan.**
+   - Read `.claude/skills/harness-promote-scan/SKILL.md` in the worktree and follow it exactly. Do not modify it.
+   - Use `HARNESS_PATHS` if set, else `$HOME/Code/nervepack:$HOME/Code/nervepack-content`.
+   - Do not edit, commit, or push anything in the worktree.
+   - Print `PHASE scan: filed <N> issues <urls>`, or `PHASE scan: nothing to file`. If `gh issue create` fails, print `PHASE scan: FAILED <error>`.
 
-3. **check.** Run `git status --porcelain`. If `docs/reviews/queue.md` is
-   unchanged, print `PHASE check: no promotable content`. Then remove the
-   worktree and its local branch, and stop cleanly.
+3. **report.**
+   - Print the skill's report under the scan line, one line per item.
+   - List each filed issue, each item held back by the cap, each conflict for `/kb-review`, and each drop with its reason.
 
-4. **review.**
-   - Read `.claude/skills/pr-review/SKILL.md` in the worktree and follow it against the working-tree diff.
-   - Keep the review receipt it produces for the commit.
-   - Fix any blocking finding inside the queue items you added. Stop if you cannot.
-
-5. **commit.** Stage only the queue change and the receipt. Use a conventional
-   message such as `docs(reviews): queue harness promote-scan items`. The
-   message must end with exactly this line:
-
-   Committed by Claude Code
-
-6. **pr.**
-   - Push the branch with `git push -u origin kb/promote-scan-$DATE`.
-   - Open a PR with `PR_URL=$(gh pr create --base trunk ...)`, titled after the commit.
-     Set `PR_NUMBER=${PR_URL##*/}`.
-   - The body lists queued and dropped items, one line each.
-   - The body must end with exactly this line: `AI-assisted PR`
-
-7. **checks.** Confirm `git log -1 --format=%B` ends with the commit marker and
-   `gh pr view --json body` ends with the PR marker. Fix them with an amend or
-   `gh pr edit` if not. Run `perl -e 'alarm 900; exec @ARGV' gh pr checks "$PR_NUMBER" --watch`. The 15-minute cap keeps a
-   stuck check from holding the cron. The alarm kills only `gh`, and the shell sees
-   exit code 142. On exit code 142, print
-   `PHASE checks: timeout <url>` with the current check state. Otherwise print
-   the PR URL and the final check state. Never merge, approve, or enable auto-merge.
+4. **cleanup.**
+   - Run `git -C "$DB" worktree remove --force <worktree path>`.
+   - Print `PHASE cleanup: removed <path>` or `PHASE cleanup: FAILED <reason>`.
+   - Never commit, push, open a PR, or close an issue.

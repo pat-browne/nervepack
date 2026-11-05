@@ -1,6 +1,6 @@
 # np-test: kb-promote-scan | toggle/backend/re-entrancy gating, prompt contract,
 #          and dispatch wiring for np_agentic_cron.kb_promote_scan().
-"""Mirrors test_np_compact.py's gating tests. The agent's own worktree/PR steps
+"""Mirrors test_np_compact.py's gating tests. The agent's own worktree and issue steps
 live in the prompt, so this also pins the prompt's hard rules."""
 import os
 import sys
@@ -94,14 +94,17 @@ class PromptContractTest(unittest.TestCase):
         self.prompt = np_agentic_cron._base_prompt(path)
 
     def test_prompt_rules(self):
-        for needle in ("harness-promote-scan", "pr-review", "origin/trunk",
-                       "kb/promote-scan-$DATE", "no promotable content",
-                       "Committed by Claude Code", "AI-assisted PR",
-                       "gh pr checks", "alarm 900", "PR_NUMBER=${PR_URL##*/}", "Never merge",
-                       "PHASE cleanup", "Remove the",
-                       "docs/reviews/queue.md",
+        for needle in ("harness-promote-scan", "origin/trunk", "--detach",
+                       "gh auth status", "PHASE cleanup", "worktree remove --force",
+                       "Never commit, push, open a PR",
                        "$HOME/Code/nervepack:$HOME/Code/nervepack-content"):
             self.assertIn(needle, self.prompt)
+
+    def test_prompt_has_no_queue_pr_flow(self):
+        # The queue froze on 2026-10-19. A PR phase keyed on it never runs.
+        body = self.prompt
+        for gone in ("gh pr create", "pr-review", "no promotable content"):
+            self.assertNotIn(gone, body)
 
 
 class WiringTest(unittest.TestCase):
