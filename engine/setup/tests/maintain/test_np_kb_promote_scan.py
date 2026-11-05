@@ -98,7 +98,7 @@ class PromptContractTest(unittest.TestCase):
                        "gh auth status", "PHASE cleanup", "worktree remove --force",
                        "git push origin HEAD:trunk", "Committed by Claude Code",
                        "Never use `git add -A`", "kb-lint --errors-only",
-                       "PROMOTE_DRY_RUN", "Never open a PR", "lint-failed", "git diff --numstat origin/trunk", "PROMOTE_LARGE_SKILL_LINES",
+                       "PROMOTE_DRY_RUN", "Never open a PR", "lint-failed", "never edits itself", "AccountKey=", "git diff --numstat origin/trunk", "PROMOTE_LARGE_SKILL_LINES",
                        "FAILED worktree add", "skill missing on trunk"):
             self.assertIn(needle, self.prompt)
 

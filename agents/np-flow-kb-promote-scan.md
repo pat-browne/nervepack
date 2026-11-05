@@ -64,6 +64,8 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - Delete each new file the report lists under `lint-failed`.
    - A path outside `docs/` and `.claude/skills/<name>/` for an existing skill is out of scope.
    - A new file under `.claude/skills/` is out of scope. New skills go through issues.
+   - Any path under `.claude/skills/harness-promote-scan/` is out of scope. The scan never edits itself.
+   - A file is out of scope if an added line matches a secret pattern: `AccountKey=`, `Password=`, `SharedAccessSignature`, `-----BEGIN`, `ghp_`, `xox`, `AKIA`, or a GUID.
    - A changed skill file is out of scope if it deletes any line, or adds more than `PROMOTE_LARGE_SKILL_LINES` (default 40) lines.
    - A changed `SKILL.md` is out of scope if `git diff` touches its frontmatter.
    - Restore each out-of-scope tracked file with `git checkout origin/trunk -- <path>`. Delete each out-of-scope new file.
