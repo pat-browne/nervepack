@@ -110,7 +110,7 @@ Hard rules for every phase:
    keep the worktree, do not commit, push, or open a PR, and stop.
    A failing `receipt-gate` with no receipt means `PHASE gates: FAILED receipt-gate (receipt needed)`.
    Never open a PR expecting CI to fail and never open a draft to get around a gate.
-   Also run `git diff --name-status origin/trunk`. Every line must be `A` (added) under `docs/solutions/`, `docs/systems/`, `docs/runbooks/`, or `docs/receipts/`, plus the receipt index row in `docs/receipts/README.md`. Any other path, a delete, or a rename prints `PHASE gates: FAILED path-allowlist` and stops.
+   Also run `git diff --name-status origin/trunk`. Every line must be `A` (added) under `docs/solutions/`, `docs/systems/`, `docs/runbooks/`, or `docs/receipts/`. The one exception is `M` (modified) for `docs/receipts/README.md`, which gains the receipt index row. Any other path, a delete, or a rename prints `PHASE gates: FAILED path-allowlist` and stops.
    On success print `PHASE gates: all passed`.
 
 7. **commit.** Stage only the new doc paths and the receipt, by explicit path. Use a conventional
@@ -133,8 +133,8 @@ Hard rules for every phase:
    exit code 142. On exit code 142, print `PHASE checks: timeout <url>` and stop with the PR open.
    On any other non-zero exit, print `PHASE checks: FAILED <failing checks>` and stop with the PR open.
 
-10. **auto-merge.** Enable auto-merge only when all hold: phase 6 passed, and every check from a fresh `gh pr checks "$PR_NUMBER"` run is `pass`, including `Knowledge-base integrity`.
-   Then run `gh pr merge "$PR_NUMBER" --auto --squash` and print `PHASE auto-merge: enabled <url>`.
-   If the merge command fails, print `PHASE auto-merge: FAILED <error>` with the PR URL and leave the PR open.
-   Otherwise print `PHASE auto-merge: skipped <reason>` with the PR URL, and leave the PR open.
+10. **auto-merge.** If phase 6 passed and every check from a fresh `gh pr checks "$PR_NUMBER"` run is `pass`, including `Knowledge-base integrity`, run `gh pr merge "$PR_NUMBER" --auto --squash`.
+   On success print `PHASE auto-merge: enabled <url>`. If that command fails, print `PHASE auto-merge: FAILED <error>` with the PR URL.
+   If any condition above is unmet, do not run it. Print `PHASE auto-merge: skipped <reason>` with the PR URL.
+   In every case except `enabled`, leave the PR open.
    Never run a plain `gh pr merge`, never approve, and never merge a PR that failed a check.
