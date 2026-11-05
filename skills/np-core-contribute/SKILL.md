@@ -32,17 +32,14 @@ Nervepack is split (`docs/ARCHITECTURE.md` § "Content seam"):
 - **engine** (`~/Code/nervepack`) — machinery only, PII-clean: `np-core-*`/`np-flow-*`
   skills, `engine/setup/`, `agents/`, its own docs.
 - **personal content overlay** — the default target for domain knowledge
-  (`np-kb-*`/`np-env-*` skills, `wiki/`, `sources/`). Resolve it:
-  `CONTENT="$(python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/np_content.py" content_dir)" || { echo "no content overlay resolved" >&2; exit 1; }`
-  (single-repo layouts resolve to the engine root, so the same paths work).
-  Check the exit status rather than assuming: `content_dir` exits 1 when it
-  cannot resolve, and an unchecked `$CONTENT` is then empty, so every path built
-  from it silently becomes a relative one rooted at the current directory.
+  (`np-kb-*`/`np-env-*` skills, `wiki/`, `sources/`). Resolve it with
+  `np_content.py content_dir` and check its exit status (an unchecked empty
+  `$CONTENT` turns every path into a relative one).
 - **team overlay** — only for a shared team convention ("save to the team layer",
-  "this is a team rule", `--layer team`): resolve with `np_content.py team_dir` (same resolver).
-  If that errors, STOP and tell the user the team layer isn't configured
-  (`NP_TEAM_DIR` / `~/.config/nervepack/team-dir`) — never silently fall back to
-  personal. Team overlays have the same shape; relink/index are team-aware.
+  "this is a team rule", `--layer team`): resolve with `np_content.py team_dir`.
+  If that errors, STOP and tell the user — never silently fall back to personal.
+
+Resolver command, exit-status handling, and team setup: references/layer-resolution.md
 
 `team.merge` governs read-time merging only; this gate controls *where the
 write lands*. Below, `$REPO` = the root you picked.
@@ -114,7 +111,7 @@ worktree but harmless from an overlay one: references/isolation.md
 
 ## When the contribute tool says disabled
 
-Two separate params gate writes. `evaluator.implement_mode=direct` lives in `~/.config/nervepack/toggles.local`. The `nervepack_contribute` MCP tool uses `mcp.contribute`, set in `engine/setup/toggles.conf` (`mcp|...|writes=on,contribute=off`). The toggle `list` view shows neither. Grep both files for `contribute` before asking the user to flip it again. Fallback: a hand-written commit in a worktree off `origin/main`.
+Two separate params gate writes (`evaluator.implement_mode` and `mcp.contribute`). Grep both toggle files for `contribute` before asking the user to flip it again. Fallback: a hand-written commit in a worktree off `origin/main`. Details: references/contribute-tool-disabled.md
 
 ## Ingest protocol (when target is `sources/`)
 
