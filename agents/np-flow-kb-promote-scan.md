@@ -47,14 +47,15 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - Run `gh auth status`. If it fails, print `PHASE setup: FAILED gh not authenticated` and stop.
    - Run `git -C "$DB" fetch origin` and `git -C "$DB" worktree prune`.
    - For each `$DB/../data-base-promote-scan-*` worktree, check `git -C <path> log origin/trunk..HEAD`. Remove it if that is empty. Otherwise keep it and print `PHASE setup: kept <path> (unpushed commit)`.
-   - Create `WT=$DB/../data-base-promote-scan-$DATE` with `git -C "$DB" worktree add --detach "$WT" origin/trunk`. If it already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery`.
-   - Confirm `.claude/skills/harness-promote-scan/SKILL.md` exists in `$WT`. Run `uv sync --all-extras --dev` there.
+   - Create `WT=$DB/../data-base-promote-scan-$DATE` with `git -C "$DB" worktree add --detach "$WT" origin/trunk`. If it already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery`. If the command fails for another reason, print `PHASE setup: FAILED worktree add <error>`.
+   - Confirm `.claude/skills/harness-promote-scan/SKILL.md` exists in `$WT`. If not, print `PHASE setup: FAILED harness-promote-scan skill missing on trunk`.
+   - Run `uv sync --all-extras --dev` in `$WT`.
    - Never touch the main `$DB` checkout. Run every later step inside `$WT`.
    - Print `PHASE setup: ok <WT path>`.
 
 2. **scan.**
    - Read `.claude/skills/harness-promote-scan/SKILL.md` in `$WT` and follow it exactly. Do not modify it.
-   - Print `PHASE scan: wrote <N> files, filed <M> issues <urls>`.
+   - Take the counts, paths and URLs from the skill's step 7 report. Print `PHASE scan: wrote <N> files, filed <M> issues <urls>`.
    - If `PROMOTE_DRY_RUN=1`, print the skill's plan, skip to phase report, and commit nothing.
    - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and skip to phase report.
 

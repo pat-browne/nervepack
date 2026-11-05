@@ -98,7 +98,8 @@ class PromptContractTest(unittest.TestCase):
                        "gh auth status", "PHASE cleanup", "worktree remove --force",
                        "git push origin HEAD:trunk", "Committed by Claude Code",
                        "Never use `git add -A`", "kb-lint --errors-only",
-                       "PROMOTE_DRY_RUN", "Never open a PR"):
+                       "PROMOTE_DRY_RUN", "Never open a PR",
+                       "FAILED worktree add", "skill missing on trunk"):
             self.assertIn(needle, self.prompt)
 
     def test_prompt_has_no_queue_pr_flow(self):
