@@ -112,6 +112,10 @@ before staging it**, and **re-read a `SKILL.md` from disk** before relying on it
 decision table, the `EnterWorktree` contract, and why relinking is hazardous from an engine
 worktree but harmless from an overlay one: references/isolation.md
 
+## When the contribute tool says disabled
+
+Two separate params gate writes. `evaluator.implement_mode=direct` lives in `~/.config/nervepack/toggles.local`. The `nervepack_contribute` MCP tool uses `mcp.contribute`, set in `engine/setup/toggles.conf` (`mcp|...|writes=on,contribute=off`). The toggle `list` view shows neither. Grep both files for `contribute` before asking the user to flip it again. Fallback: a hand-written commit in a worktree off `origin/main`.
+
 ## Ingest protocol (when target is `sources/`)
 
 If step 3 routes the contribution to `sources/<topic>/`, do not silently
