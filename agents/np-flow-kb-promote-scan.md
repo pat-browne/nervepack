@@ -100,12 +100,12 @@ Hard rules for every phase:
    non-interactively. If it runs, keep the receipt it writes under `docs/receipts/`.
    If it cannot run for any reason, print `PHASE receipt: needed (pr-review is user-invoked)`.
    A person then runs `pr-review` in the kept worktree, commits the receipt, and re-runs the gates.
-   Continue to phase 6, where the missing receipt stops the run.
+   Then continue to phase 6 anyway; `receipt-gate` fails there and that failure stops the run.
 
-6. **gates.** Stop with `PHASE gates: FAILED timeout` after 30 minutes. Run every CI gate locally in the worktree, one `uv run` call each:
+6. **gates.** Stop with `PHASE gates: FAILED timeout` after 30 minutes total for the whole gates phase (not per gate). Run every CI gate locally in the worktree, one `uv run` call each:
    `ruff format --check tools tests`, `ruff check tools tests`, `mypy`, `pytest -q`,
    `kb-lint --errors-only --diff-base origin/trunk`, and `receipt-gate --diff-base origin/trunk`.
-   On a failure in the first five, fix the new docs and re-run, up to 3 total attempts per gate.
+   On a failure in the first five, you (the agent) edit the new docs to address the reported errors and re-run that gate, up to 3 total attempts per gate.
    Never weaken or skip a gate. If any gate still fails, print `PHASE gates: FAILED <gate>`,
    keep the worktree, do not commit, push, or open a PR, and stop.
    A failing `receipt-gate` with no receipt means `PHASE gates: FAILED receipt-gate (receipt needed)`.
