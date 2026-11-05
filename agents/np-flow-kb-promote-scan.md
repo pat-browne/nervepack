@@ -49,15 +49,15 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - For each `$DB/../data-base-promote-scan-*` worktree, check `git -C <path> log origin/trunk..HEAD`. Remove it if that is empty. Otherwise keep it and print `PHASE setup: kept <path> (unpushed commit)`.
    - Create `WT=$DB/../data-base-promote-scan-$DATE` with `git -C "$DB" worktree add --detach "$WT" origin/trunk`. If it already exists, print `PHASE setup: FAILED worktree exists, see Manual recovery`. If the command fails for another reason, print `PHASE setup: FAILED worktree add <error>`.
    - Confirm `.claude/skills/harness-promote-scan/SKILL.md` exists in `$WT`. If not, print `PHASE setup: FAILED harness-promote-scan skill missing on trunk`.
-   - Run `uv sync --all-extras --dev` in `$WT`.
+   - Run `uv sync --all-extras --dev` in `$WT`. If it fails, print `PHASE setup: FAILED uv sync <error>`.
    - Never touch the main `$DB` checkout. Run every later step inside `$WT`.
    - Print `PHASE setup: ok <WT path>`.
 
 2. **scan.**
    - Read `.claude/skills/harness-promote-scan/SKILL.md` in `$WT` and follow it exactly. Do not modify it.
    - Take the counts, paths and URLs from the skill's step 7 report. Print `PHASE scan: wrote <N> files, filed <M> issues <urls>`.
-   - If `PROMOTE_DRY_RUN=1`, print the skill's plan, skip to phase report, and commit nothing.
-   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and skip to phase report.
+   - If `PROMOTE_DRY_RUN=1`, print the skill's plan, skip phases gate, commit and push, and go to phase report.
+   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write`, skip phases gate, commit and push, and go to phase report.
 
 3. **gate.** First check the scope of every changed path. Use `git status --porcelain` and
    `git diff --numstat origin/trunk`, not the skill's word.
@@ -78,25 +78,27 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - `uv run pytest -q`
    - `uv run kb-lint --errors-only --diff-base origin/trunk`
 
-   If one fails because of a file the scan wrote, revert that file and run the gates again.
+   Wrap each command in `timeout 900` (`gtimeout` on macOS, skip the wrap if neither exists). A timeout is a gate failure.
+   If a gate's output names a file the scan wrote, restore it with `git checkout origin/trunk -- <path>` or delete it if new. Then run all gates again, at most twice.
+   If the failure names no scan file, treat it as the other case below.
    If a gate fails for any other reason, print `PHASE gate: FAILED <gate> <reason>` and push nothing.
 
 4. **commit.**
    - Stage only the paths the skill's report lists, by name. Never use `git add -A` or `git add .`.
-   - The subject is `docs: promote <N> harness additions`. The body lists every staged path, one per line.
+   - The subject is `docs: promote <N> harness additions`, where N counts the paths staged after the gate. The body lists every staged path, one per line.
    - The message must end with exactly this line: `Committed by Claude Code`
-   - The pre-commit hook may bump `.claude/.claude-plugin/plugin.json`. Stage that bump and amend.
+   - The pre-commit hook may bump `.claude/.claude-plugin/plugin.json`. If `git status --porcelain` then shows it, stage it and run `git commit --amend --no-edit`. If the amend fails, print `PHASE commit: FAILED amend <error>`.
 
 5. **push.**
    - Run `git push origin HEAD:trunk`.
-   - If it is rejected, run `git fetch origin`, `git rebase origin/trunk`, the kb-lint gate, then push once more.
-   - On a second rejection or a rebase conflict, print `PHASE push: FAILED <reason>` and keep the worktree.
+   - If it is rejected, run `git fetch origin`, `git rebase origin/trunk`, the kb-lint gate, then push once more. If that kb-lint fails, print `PHASE push: FAILED kb-lint after rebase` and push nothing.
+   - On a second rejection, print `PHASE push: FAILED rejected twice`. On a rebase conflict, run `git rebase --abort` and print `PHASE push: FAILED rebase conflict <paths>`. Keep the worktree in both cases.
    - Print `PHASE push: <short sha> <N> files`.
 
 6. **report.** Print the skill's report, one line per item: files written, writes held back,
    issues filed, conflicts for `/kb-review`, and drops with reasons.
 
 7. **cleanup.**
-   - If the push succeeded or nothing was committed, run `git -C "$DB" worktree remove --force "$WT"`.
+   - If the push succeeded or `git log origin/trunk..HEAD` is empty, run `git -C "$DB" worktree remove --force "$WT"`.
    - Print `PHASE cleanup: removed <path>`, `PHASE cleanup: kept <path> (unpushed commit)`, or `PHASE cleanup: FAILED <reason>`.
    - Never open a PR, force-push, or close an issue.
