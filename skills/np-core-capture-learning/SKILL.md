@@ -101,6 +101,15 @@ memories" section — frontmatter with `name:`, `description:`,
 | In-flight project state, deadline, motivation | `project` |
 | Pointer to an external system (Linear, Slack, doc URL) | `reference` |
 
+### 2d. Orchestrating? Fan the capture out
+Runs after 2a to 2c. If this session drives managed sessions or agents, send each
+one message: the session tool `send_message` for a desktop session, or the
+standalone `SendMessage` tool, which messages a spawned agent or teammate by id.
+Request text: "Run
+/np-core-capture-learning now. Preflight first. Write and commit locally, never push. The orchestrator pushes. Reply with one
+`Captured:` line." Wait for each reply. A session that errors or does not reply
+by your next turn is listed in step 3 as `no capture` with its id. Do not retry.
+
 ### Skipping
 A skip must name, for each learning, the KB location where it already lives
 (skill, reference or wiki path). "It's in the PR, the chat or an artifact" is
