@@ -128,6 +128,12 @@ Handle these yourself:
 | Stuck or silent | Read its transcript and PR before you call it blocked. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
+Before a worker PR is ready or merged, the coordinator dispatches the reviews
+and owns relaying the links:
+
+- [[np-flow-code-review]] in read-only subagents, one per PR or repo. Fix every Hard block. Fix or answer every Soft warning.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. CI disabled means no gate: say so, run a trial-merge preflight. Give the user every check and deploy run link.
+
 Several decisions pending? Ask the most blocking one. Keep the rest in the
 ledger as `waiting on me`.
 
@@ -159,10 +165,8 @@ references/deploy-gates.md before approving any gate.
 
 ## What this is not
 
-- Not [[np-core-dispatch]]. Dispatch hands one task to one agent. This runs a
-  fleet of user-planned tickets.
+- Not [[np-core-dispatch]]. Dispatch hands one task to one agent.
 - Not [[np-flow-speed]]. Speed mode removes check-ins for one deliverable. The
   orchestrator keeps the user on every plan and risky merge.
-
 - Not a coding session. A coordinator that edits code has stopped coordinating.
 - Not a way past the repo's `CLAUDE.md`. Deploy rules still bind every child.
