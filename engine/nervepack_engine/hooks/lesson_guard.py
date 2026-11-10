@@ -40,11 +40,6 @@ import np_content
 import np_toggle
 
 _HEADER_RE = re.compile(r'^\*\*(Symptom|Why|Do|Avoid|Title|When):')
-# A bare tool name in the Bash tool_match column is a misplaced
-# tool_name_match. As a regex it hits any command containing the word.
-# Matched by shape, not a list, so new tools (Monitor, TaskCreate) and MCP
-# names are caught too. No real Bash pattern is one capitalized word.
-_BARE_TOOL_NAME_RE = re.compile(r'^(?:[A-Z][A-Za-z]+|mcp__\w+)$')
 
 
 def _lesson_dir():
@@ -160,8 +155,11 @@ def run(payload_text):
                 continue
             if not tool_match:
                 continue  # advisory-only lesson (no enforce)
-            if _BARE_TOOL_NAME_RE.match(tool_match):
-                np_toggle.signal(sid, "lesson-guard skip-bare-tool-name %s :: %s" % (topic, tool_match))
+            # A cell equal to the lesson's own tool_name_match is a misplaced
+            # tool name. As a regex it would hit any command containing it.
+            tnm = _first_block_value(os.path.join(lesson_dir, topic + ".md"), "tool_name_match")
+            if tnm and tool_match == tnm:
+                np_toggle.signal(sid, "lesson-skip misplaced-tool-name %s %s" % (topic, tool_match))
                 continue
             try:
                 if re.search(tool_match, cmd):
