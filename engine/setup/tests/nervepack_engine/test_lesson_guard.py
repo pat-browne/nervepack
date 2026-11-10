@@ -268,6 +268,79 @@ class TestLessonGuard(unittest.TestCase):
         out = self._run({"tool_name": "Edit", "session_id": "s9", "tool_input": {"file_path": "/x"}})
         self.assertEqual(out, "")
 
+    def test_17_phase1_bare_tool_name_row_never_gates_bash(self):
+        # A regenerated INDEX once put tool_name_match "Read" in the Bash
+        # tool_match column, so every command containing "Read" asked.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| sec-first | Read | ask | security |\n")
+        self._write("sec-first.md",
+            "---\nname: sec-first\nprovenance: failure\n"
+            "enforce:\n  tool_match: \"\"\n  tool_name_match: \"Read\"\n  gate: ask\n---\n"
+            "**Do:** invoke the skill first.\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {
+            "command": "cat > t.dart <<'EOF'\n/// Reads the corpus\nEOF"}})
+        self.assertEqual(out, "")
+
+    def test_18_phase1_skip_needs_proof_and_logs_outside_guard_prefix(self):
+        # Skip only when the cell equals the lesson's own tool_name_match.
+        # The diagnostic must not start with "lesson-guard", which counts fires.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| later-tool | Monitor | ask | watch |\n"
+            "| nuke | rm -rf | ask | delete |\n")
+        self._write("later-tool.md",
+            "---\nname: later-tool\nprovenance: failure\n"
+            "enforce:\n  tool_name_match: \"Monitor\"\n  gate: ask\n---\n**Do:** x\n")
+        self._write("nuke.md", "---\nname: nuke\nprovenance: failure\n---\n**Avoid:** rm -rf.\n")
+        with mock.patch("np_toggle.signal") as sig:
+            out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Monitor"}})
+        self.assertEqual(out, "")
+        marker = sig.call_args[0][1]
+        self.assertTrue(marker.startswith("lesson-skip "), marker)
+        self.assertNotIn(" :: ", marker)
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/x"}})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_19_phase1_capitalized_bash_pattern_without_proof_still_fires(self):
+        # A real Bash pattern can be one capitalized word. No tool_name_match
+        # in the lesson means no skip.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| docker-root | Docker | warn | docker |\n")
+        self._write("docker-root.md",
+            "---\nname: docker-root\nprovenance: failure\n---\n**Do:** use rootless.\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "open -a Docker"}})
+        d = json.loads(out)["hookSpecificOutput"]
+        # A warn gate fires as allow plus injected context, so the gate fired.
+        self.assertEqual(d["permissionDecision"], "allow")
+        self.assertIn("use rootless", d["additionalContext"])
+
+    def test_20_phase1_cell_equal_to_tool_match_too_still_fires(self):
+        # The lesson names the word as both tool_match and tool_name_match,
+        # so the cell is not misplaced.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| both | Monitor | ask | watch |\n")
+        self._write("both.md",
+            "---\nname: both\nprovenance: failure\n"
+            "enforce:\n  tool_match: \"Monitor\"\n  tool_name_match: \"Monitor\"\n  gate: ask\n---\n**Do:** x\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Monitor"}})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_21_phase1_traversal_topic_reads_no_lesson_file(self):
+        # A topic with a path in it is never joined into a path. The row then
+        # behaves as before this change and fires.
+        os.makedirs(os.path.join(self.tmp, "outside"), exist_ok=True)
+        with open(os.path.join(self.tmp, "outside", "x.md"), "w") as fh:
+            fh.write("---\nname: x\nenforce:\n  tool_name_match: \"Read\"\n---\n")
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| ../outside/x | Read | warn | x |\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Read"}})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "allow")
+        self.assertIn("additionalContext", json.loads(out)["hookSpecificOutput"])
+
 
 if __name__ == "__main__":
     unittest.main()

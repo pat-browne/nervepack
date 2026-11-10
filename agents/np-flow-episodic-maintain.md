@@ -180,7 +180,9 @@ enforcement gates the tool call — the two are decoupled).
 5. Regenerate `memory/lessons/INDEX.md` — a Markdown table whose data rows are
    `| <topic> | <tool_match> | <gate> | <topic_triggers> |` (empty `tool_match`/`gate`
    cells for advisory entries), so `engine/nervepack_engine/hooks/lesson_guard.py`'s
-   parser reads it unchanged.
+   parser reads it unchanged. The `tool_match` cell comes from `enforce.tool_match`
+   only. Never copy `tool_name_match` into it: the guard reads that cell as a regex
+   over Bash commands, so `Read` there gates every command containing the word.
 6. **Discoverability backlink.** For each lesson file written, if a matching overlay
    skill (`skills/<name>/SKILL.md`) or wiki topic page (`wiki/topics/<topic>/<topic>.md`)
    clearly matches the topic, add a `Lessons: [[lessons/<topic>]]` line to it unless
