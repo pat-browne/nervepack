@@ -268,6 +268,19 @@ class TestLessonGuard(unittest.TestCase):
         out = self._run({"tool_name": "Edit", "session_id": "s9", "tool_input": {"file_path": "/x"}})
         self.assertEqual(out, "")
 
+    def test_17_phase1_bare_tool_name_row_never_gates_bash(self):
+        # A regenerated INDEX once put tool_name_match "Read" in the Bash
+        # tool_match column, so every command containing "Read" asked.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| sec-first | Read | ask | security |\n")
+        self._write("sec-first.md",
+            "---\nname: sec-first\nprovenance: failure\n---\n"
+            "**Do:** invoke the skill first.\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {
+            "command": "cat > t.dart <<'EOF'\n/// Reads the corpus\nEOF"}})
+        self.assertEqual(out, "")
+
 
 if __name__ == "__main__":
     unittest.main()

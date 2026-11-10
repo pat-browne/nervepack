@@ -40,6 +40,9 @@ import np_content
 import np_toggle
 
 _HEADER_RE = re.compile(r'^\*\*(Symptom|Why|Do|Avoid|Title|When):')
+# A bare tool name in the Bash tool_match column is a misplaced
+# tool_name_match. As a regex it hits any command containing the word.
+_BARE_TOOL_NAME_RE = re.compile(r'^(Bash|Read|Edit|Write|Grep|Glob|Skill|Agent|WebFetch|WebSearch|NotebookEdit)$')
 
 
 def _lesson_dir():
@@ -155,6 +158,8 @@ def run(payload_text):
                 continue
             if not tool_match:
                 continue  # advisory-only lesson (no enforce)
+            if _BARE_TOOL_NAME_RE.match(tool_match):
+                continue
             try:
                 if re.search(tool_match, cmd):
                     return _fire_gate(sid, lesson_dir, cmd, gate, topic)
