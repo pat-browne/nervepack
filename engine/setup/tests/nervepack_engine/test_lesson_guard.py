@@ -281,6 +281,21 @@ class TestLessonGuard(unittest.TestCase):
             "command": "cat > t.dart <<'EOF'\n/// Reads the corpus\nEOF"}})
         self.assertEqual(out, "")
 
+    def test_18_phase1_skip_is_by_shape_and_logged(self):
+        # A tool added later (Monitor) is caught without a list update, the
+        # skip leaves a signal, and a real pattern in the same INDEX fires.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| later-tool | Monitor | ask | watch |\n"
+            "| nuke | rm -rf | ask | delete |\n")
+        self._write("nuke.md", "---\nname: nuke\nprovenance: failure\n---\n**Avoid:** rm -rf.\n")
+        with mock.patch("np_toggle.signal") as sig:
+            out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Monitor"}})
+        self.assertEqual(out, "")
+        self.assertIn("skip-bare-tool-name later-tool", sig.call_args[0][1])
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/x"}})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "ask")
+
 
 if __name__ == "__main__":
     unittest.main()
