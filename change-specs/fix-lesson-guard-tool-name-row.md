@@ -35,3 +35,8 @@ name. `np-flow-episodic-maintain` step 5 says the cell comes from
 
 A lesson that really needs to match the word `Read` in a command must use a
 pattern, not the bare word. Test 17 reproduces the report.
+
+## Rollback
+
+Revert the squash commit. The content row fix (nervepack-content 4a62c5af)
+stands on its own, so a revert brings back only the regeneration risk.
