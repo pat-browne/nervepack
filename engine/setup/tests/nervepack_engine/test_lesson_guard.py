@@ -311,7 +311,35 @@ class TestLessonGuard(unittest.TestCase):
         self._write("docker-root.md",
             "---\nname: docker-root\nprovenance: failure\n---\n**Do:** use rootless.\n")
         out = self._run({"tool_name": "Bash", "tool_input": {"command": "open -a Docker"}})
+        d = json.loads(out)["hookSpecificOutput"]
+        # A warn gate fires as allow plus injected context, so the gate fired.
+        self.assertEqual(d["permissionDecision"], "allow")
+        self.assertIn("use rootless", d["additionalContext"])
+
+    def test_20_phase1_cell_equal_to_tool_match_too_still_fires(self):
+        # The lesson names the word as both tool_match and tool_name_match,
+        # so the cell is not misplaced.
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| both | Monitor | ask | watch |\n")
+        self._write("both.md",
+            "---\nname: both\nprovenance: failure\n"
+            "enforce:\n  tool_match: \"Monitor\"\n  tool_name_match: \"Monitor\"\n  gate: ask\n---\n**Do:** x\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Monitor"}})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_21_phase1_traversal_topic_reads_no_lesson_file(self):
+        # A topic with a path in it is never joined into a path. The row then
+        # behaves as before this change and fires.
+        os.makedirs(os.path.join(self.tmp, "outside"), exist_ok=True)
+        with open(os.path.join(self.tmp, "outside", "x.md"), "w") as fh:
+            fh.write("---\nname: x\nenforce:\n  tool_name_match: \"Read\"\n---\n")
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| ../outside/x | Read | warn | x |\n")
+        out = self._run({"tool_name": "Bash", "tool_input": {"command": "echo Read"}})
         self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "allow")
+        self.assertIn("additionalContext", json.loads(out)["hookSpecificOutput"])
 
 
 if __name__ == "__main__":
