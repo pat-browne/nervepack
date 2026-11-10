@@ -27,14 +27,17 @@ including routine heredocs.
 
 ## Decision
 
-We will take option 2. Phase 1 skips a row whose `tool_match` is a bare tool
-name. `np-flow-episodic-maintain` step 5 says the cell comes from
-`enforce.tool_match` only. Phase 2, which matches tool names, is unchanged.
+We will take option 2. Phase 1 skips a row only when its `tool_match` equals
+the lesson's own `enforce.tool_name_match`. That proves the cell is misplaced.
+
+The skip logs a `lesson-skip` signal, outside the `lesson-guard` prefix that
+counts fires. `np-flow-episodic-maintain` step 5 says the cell comes from
+`enforce.tool_match` only. Phase 2 is unchanged.
 
 ## Consequences
 
-A lesson that really needs to match the word `Read` in a command must use a
-pattern, not the bare word. Test 17 reproduces the report.
+A real one-word Bash pattern still fires, since its lesson has no matching
+`tool_name_match`. Tests 17 to 19 cover the report, the proof rule and that case.
 
 ## Rollback
 
