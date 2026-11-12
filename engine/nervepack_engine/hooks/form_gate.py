@@ -10,9 +10,11 @@ return "ask" or `allow`+context, exactly as before. Rate-based findings
 `block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
 write carrying em_dash, semicolon, marketing_adjective, an over-length
 sentence, or an over-length paragraph is denied outright, up to two retries
-per (session, target). A third strike allows the write with context naming
-the findings, never a prompt, and emits a struggles[] record to the episodic
-inbox so episodic-maintain can distill the pattern. `contraction` never blocks -- it stays a rate-channel signal only.
+per (session, target). A third strike abstains: it adds context naming the
+findings and returns no permission decision, so Claude Code's own checks
+apply. It also emits a struggles[] record to the episodic inbox so
+episodic-maintain can distill the pattern. `contraction` never blocks -- it
+stays a rate-channel signal only.
 The engine ships `categorical=warn`. `block` is opt-in.
 
 Fails open everywhere, per ARCHITECTURE invariant 1: every counter-file and
@@ -490,6 +492,15 @@ def _allow_with_context(context):
     }}, separators=(",", ":"))
 
 
+def _context_only(context):
+    """Inject context and abstain: no permissionDecision, so Claude Code's own
+    permission system decides the tool call."""
+    return json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "additionalContext": context,
+    }}, separators=(",", ":"))
+
+
 def _categorical_hits(violations):
     return [(_RULE_LABEL[rule], int(violations.get(rule) or 0))
             for rule in _CATEGORICAL
@@ -567,7 +578,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
     try:
         cwd = payload.get("cwd") or os.getcwd()
         project = os.path.basename(cwd.rstrip(os.sep) or "unknown") or "unknown"
-        symptom = ("form gate escalated to allow after 2 blocks on %s: %s"
+        symptom = ("form gate escalated to context after 2 blocks on %s: %s"
                    % (label, detail))
         record = {
             "session_id": sid,
@@ -575,7 +586,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
             "project": project,
             "cwd": cwd,
             "mode": "form-gate-escalation",
-            "headline": "form gate escalated to allow on %s" % label,
+            "headline": "form gate escalated to context on %s" % label,
             "body": "%s. Rewrite could not satisfy the linter." % symptom,
             "candidate_topics": ["form-gate"],
             "keywords": ["form-gate", "escalation", label],
@@ -625,7 +636,7 @@ def _run_block(sid, target, label, violations, payload, extra_labels=None):
                "np-flow-concise-output." % (label, detail))
     np_toggle.signal(sid, "form-gate-escalation :: %s :: %s" % (label, detail))
     _emit_escalation_struggle(sid, payload, label, detail)
-    return _allow_with_context(message)
+    return _context_only(message)
 
 
 def run(payload_text):
