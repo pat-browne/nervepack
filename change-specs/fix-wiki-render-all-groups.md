@@ -14,7 +14,7 @@ blast_radius:
 ## Context and problem statement
 
 `render_pages` wrote HTML only for the `topics` and `concepts` groups. A layer that
-declares other knowledge routes (data-base's `data-model` variant) got nav entries
+declares other knowledge routes (team-kb's `data-model` variant) got nav entries
 whose pages were never written, so every click returned not found. 64 of 198 nav
 links were broken on a real install.
 

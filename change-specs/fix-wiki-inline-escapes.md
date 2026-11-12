@@ -14,7 +14,7 @@ blast_radius:
 ## Context and problem statement
 
 Pages converted from Word carry empty `<a id="...">` bookmarks and Markdown
-backslash escapes such as `\_` and `\(`. The renderer escaped both, so data-base
+backslash escapes such as `\_` and `\(`. The renderer escaped both, so team-kb
 data-model pages showed raw tags and backslashes in the body and the nav excerpt.
 
 ## Considered options

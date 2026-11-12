@@ -1,8 +1,8 @@
 | 2026-07-08 | np-kb-browser-extension-monetization | relocated → nervepack-content | engine-minimization |
 | 2026-07-08 | np-kb-reader-friendly-monetization | relocated → nervepack-content | engine-minimization |
-| 2026-07-08 | np-kb-campminder-ado | relocated → nervepack-content | engine-minimization |
-| 2026-07-08 | np-kb-campminder-azure | relocated → nervepack-content | engine-minimization |
-| 2026-07-08 | np-kb-campminder-brand | relocated → nervepack-content | engine-minimization |
+| 2026-07-08 | np-kb-employer-ado | relocated → nervepack-content | engine-minimization |
+| 2026-07-08 | np-kb-employer-azure | relocated → nervepack-content | engine-minimization |
+| 2026-07-08 | np-kb-employer-brand | relocated → nervepack-content | engine-minimization |
 | 2026-07-08 | np-kb-coding-rules | relocated → nervepack-content (full) + nervepack-content-example (generic) | straddle-split |
 | 2026-07-09 | np-kb-security-review | relocated → nervepack-content-example | engine-minimization |
 | 2026-07-09 | np-kb-mermaid-authoring | relocated → nervepack-content-example | engine-minimization |

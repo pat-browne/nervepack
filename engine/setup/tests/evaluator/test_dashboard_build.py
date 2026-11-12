@@ -1261,7 +1261,7 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         self.assertIn("widgets", names, wiki)
 
     def test_flat_route_nests_a_subdir_under_its_landing_page(self):
-        # A flat route (folder_owning=False, e.g. data-base's `system` route
+        # A flat route (folder_owning=False, e.g. team-kb's `system` route
         # `docs/systems/{name}.md`) used to list only the container's top level
         # (os.listdir), so a page moved under a landing subdirectory --
         # docs/systems/data-mcp/data-mcp.md -- silently vanished from the nav.
@@ -1334,7 +1334,7 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
         # `.claude/references/{name}.md` (convention) contains
         # `.claude/references/data-model/{name}.md` (data-model). The outer route
         # must not descend into the inner one -- doing so reported data-model's
-        # pages under BOTH groups (data-base: Conventions 3 -> 42).
+        # pages under BOTH groups (team-kb: Conventions 3 -> 42).
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
                 tmp,
@@ -1351,7 +1351,7 @@ class TestWikiNavFollowsLayerLayout(unittest.TestCase):
 
     def test_nonstandard_route_pages_are_rendered(self):
         # Pages from a declared route outside topics/concepts showed in the nav but
-        # never rendered, so every click 404'd (data-base data-model: 64 pages).
+        # never rendered, so every click 404'd (team-kb data-model: 64 pages).
         with tempfile.TemporaryDirectory() as tmp:
             cd = self._layer(
                 tmp,

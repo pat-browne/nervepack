@@ -210,10 +210,8 @@ class TestTurnGateExemptParity(unittest.TestCase):
         from hooks import form_gate
         self.assertEqual(turn_gate._EXEMPT.pattern, form_gate._EXEMPT.pattern)
 
-    def test_campco_paths_are_exempt(self):
-        for p in ("/r/.campco-plans/plan.md", "briefs/ado_workitem-1.md"):
-            self.assertTrue(turn_gate._EXEMPT.search(p), p)
-        self.assertFalse(turn_gate._EXEMPT.search("/r/briefs/q3-summary.md"))
+    def test_no_tool_named_in_builtin_exemption(self):
+        self.assertFalse(turn_gate._EXEMPT.search("/r/briefs/github_issue-1.md"))
 
 if __name__ == "__main__":
     unittest.main()

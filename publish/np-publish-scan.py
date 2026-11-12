@@ -6,12 +6,17 @@ Exit 0 if clean, 1 if any non-allowlisted finding, 2 on usage error.
 Pure stdlib. A finding is suppressed only if its (relpath, exact-matched-text)
 appears in publish/scan-allowlist.txt (printed in the report so it can't grow silently).
 """
+import hashlib
 import os
 import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ALLOWLIST = os.path.join(HERE, "scan-allowlist.txt")
+DENY_HASHES = os.path.join(HERE, "deny-term-hashes.txt")
+# Words split on non-alphanumerics and camelCase. Each word and each adjacent
+# pair is hashed, so "Acme-Corp", "AcmeCorp" and "acmecorp" all match one term.
+_WORD = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])")
 
 RULES = {
     "aws-akia":    re.compile(r"AKIA[0-9A-Z]{16}"),
@@ -58,6 +63,7 @@ SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2", 
 SKIP_FILES = {
     "publish/np-publish-scan.py",
     "publish/scan-allowlist.txt",
+    "publish/deny-term-hashes.txt",
     "engine/setup/tests/publish/test_scan.py",
     "engine/setup/tests/publish/test_no_engine_pii.py",
     "engine/setup/tests/publish/test_snapshot.sh",  # plants a fake AKIA + LAN IP to prove the gate blocks
@@ -79,7 +85,26 @@ def load_allowlist(path):
     return allow
 
 
-def scan(root, allow):
+def load_deny_hashes(path):
+    hashes = set()
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip().lower()
+                if line and not line.startswith("#"):
+                    hashes.add(line)
+    return hashes
+
+
+def _deny_hits(line, hashes):
+    if not hashes:
+        return 0
+    words = [w.lower() for w in _WORD.findall(line)]
+    grams = words + [a + b for a, b in zip(words, words[1:])]
+    return sum(1 for g in grams if hashlib.sha256(g.encode()).hexdigest() in hashes)
+
+
+def scan(root, allow, deny=frozenset()):
     findings = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
@@ -94,6 +119,8 @@ def scan(root, allow):
             rel = os.path.relpath(full, root).replace(os.sep, "/")
             if rel in SKIP_FILES:
                 continue
+            if _deny_hits(rel, deny) and (rel, "denied-term") not in allow:
+                findings.append((rel, 0, "denied-term", "<hashed term in path>"))
             try:
                 with open(full, encoding="utf-8", errors="replace") as fh:
                     for lineno, line in enumerate(fh, 1):
@@ -103,6 +130,9 @@ def scan(root, allow):
                                 if (rel, txt) in allow:
                                     continue
                                 findings.append((rel, lineno, rule, txt))
+                        # Never echo the term. CI logs are public.
+                        if _deny_hits(line, deny) and (rel, "denied-term") not in allow:
+                            findings.append((rel, lineno, "denied-term", "<hashed term>"))
             except OSError:
                 continue
     return findings
@@ -124,7 +154,7 @@ def main(argv):
         print(f"[scan] ERROR: target directory is empty: {target!r}", file=sys.stderr)
         return 2
     allow = load_allowlist(ALLOWLIST)
-    findings = scan(target, allow)
+    findings = scan(target, allow, load_deny_hashes(DENY_HASHES))
     if allow:
         print(f"[scan] {len(allow)} allowlisted false-positive(s) in effect:")
         for rel, txt in sorted(allow):
