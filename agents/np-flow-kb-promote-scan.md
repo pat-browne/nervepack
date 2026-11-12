@@ -94,13 +94,13 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - A pre-commit hook may change a tracked file. If `git status --porcelain` then shows one, stage it and run `git commit --amend --no-edit`. If the amend fails, print `PHASE commit: FAILED amend <error>`.
 
 5. **push.**
-   - Run `git push origin HEAD:$BASE`.
-   - If it is rejected, run `git fetch origin`, `git rebase origin/$BASE`, every gate again, then push once more. If a gate fails, print `PHASE push: FAILED gate after rebase` and push nothing.
+   - Run `git push origin HEAD:"$BASE"`.
+   - If it is rejected, run `git fetch origin`, `git rebase origin/"$BASE"`, every gate again, then push once more. If a gate fails, print `PHASE push: FAILED gate after rebase` and push nothing.
    - On a second rejection, print `PHASE push: FAILED rejected twice`. On a rebase conflict, run `git rebase --abort` and print `PHASE push: FAILED rebase conflict <paths>`. Keep the worktree in both cases.
    - Print `PHASE push: <short sha> <N> files`.
 
 5b. **skill PR.** Skip this phase if no skill paths remain.
-   - Run `git switch -c promote-scan/skills-$DATE`. If the branch exists, print `PHASE skill-pr: FAILED branch exists, see Manual recovery` and keep the worktree. Stage the skill paths by name.
+   - Run `git switch -c "promote-scan/skills-$DATE"`. If the branch exists, print `PHASE skill-pr: FAILED branch exists, see Manual recovery` and keep the worktree. Stage the skill paths by name.
    - Commit with subject `skills: promote <N> harness additions`, the same body rules, and the same trailer and hook amend.
    - Push the branch with `git push -u origin HEAD`.
    - Open it with `gh pr create -R "$REPO" -B "$BASE"`. The body lists each path and says a person must review and merge.
