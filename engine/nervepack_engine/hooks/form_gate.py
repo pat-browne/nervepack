@@ -90,7 +90,10 @@ _GATED_MCP = {
 
 # Mirrors turn_gate._EXEMPT so the two prose gates agree on what is not prose.
 _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules"
-                     r"|dist|build)([/\\]|$)|\.min\.", re.I)
+                     r"|dist|build)([/\\]|$)|\.min\."
+                     # CampCo Plans owns these files and their format.
+                     r"|(^|[/\\])\.campco-plans([/\\]|$)"
+                     r"|[/\\]briefs[/\\](ado_workitem|github_issue|jira_issue|linear_issue)-[^/\\]+\.md$", re.I)
 
 _CATEGORICAL = ("em_dash", "semicolon", "contraction", "marketing_adjective")
 
