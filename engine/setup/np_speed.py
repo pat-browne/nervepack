@@ -93,6 +93,23 @@ def transcript_session(path):
     return base[:-6] if base.endswith(".jsonl") else ""
 
 
+def transcript_ok(payload):
+    """True when the payload's transcript is a real file under ~/.claude/projects
+    whose session segment equals session_id. Missing or odd paths fail closed."""
+    try:
+        tp = payload.get("transcript_path")
+        sid = payload.get("session_id")
+        if not tp or not sid or not os.path.isfile(tp):
+            return False
+        root = os.path.realpath(os.path.expanduser("~/.claude/projects"))
+        real = os.path.realpath(tp)
+        if os.path.commonpath([root, real]) != root:
+            return False
+        return transcript_session(tp) == sid
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def is_speed(payload):
     """True when this hook payload belongs to a fresh speed-mode session."""
     try:

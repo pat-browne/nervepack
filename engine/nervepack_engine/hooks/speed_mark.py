@@ -13,8 +13,7 @@ def run(payload_text, *_args):
         payload = json.loads(payload_text or "{}")
         if payload.get("hook_event_name") != "UserPromptSubmit":
             return ""
-        tp = payload.get("transcript_path")
-        if tp and np_speed.transcript_session(tp) != payload.get("session_id"):
+        if not np_speed.transcript_ok(payload):
             return ""
         if np_speed.names_speed_prompt(payload):
             sid = payload.get("session_id")

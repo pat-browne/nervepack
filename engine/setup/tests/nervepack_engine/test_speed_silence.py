@@ -31,6 +31,8 @@ class _Base(unittest.TestCase):
             os.environ[var] = os.path.join(self.tmp, name)
         os.environ["NP_SPEC_REVIEW_DIR"] = os.path.join(self.tmp, "seen")
         os.environ["NP_SPEED_DIR"] = os.path.join(self.tmp, "speed")
+        self._home = os.environ.get("HOME")
+        os.environ["HOME"] = os.path.join(self.tmp, "home")
         self.repo = os.path.join(self.tmp, "repo")
         os.makedirs(os.path.join(self.repo, ".git"))
         os.makedirs(os.path.join(self.repo, "change-specs"))
@@ -40,9 +42,27 @@ class _Base(unittest.TestCase):
             fh.write(SPEC)
 
     def tearDown(self):
+        if self._home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = self._home
         for var in ("NP_SPEC_REVIEW_LOG", "NP_DRIFT_GUARD_LOG",
                     "NP_SPEC_REVIEW_DIR", "NP_SPEED_DIR"):
             os.environ.pop(var, None)
+
+    def _transcript(self, sid=SID, root=None, create=True):
+        root = root or os.path.join(self.tmp, "home", ".claude", "projects", "p")
+        path = os.path.join(root, sid + ".jsonl")
+        if create:
+            os.makedirs(root, exist_ok=True)
+            open(path, "w").close()
+        return path
+
+    def _ups(self, **kw):
+        p = {"session_id": SID, "hook_event_name": "UserPromptSubmit",
+             "prompt": "/np-speed", "transcript_path": self._transcript()}
+        p.update(kw)
+        return {k: v for k, v in p.items() if v is not None}
 
     def _payload(self, rel, **extra):
         p = {"session_id": SID, "tool_name": "Edit",
@@ -157,9 +177,7 @@ class TestPathAndFailure(_Base):
         open(blocker, "w").close()
         os.environ["NP_SPEED_DIR"] = os.path.join(blocker, "sub")
         from hooks import speed_mark
-        speed_mark.run(json.dumps({"session_id": SID,
-                                   "hook_event_name": "UserPromptSubmit",
-                                   "prompt": "/np-speed"}))
+        speed_mark.run(json.dumps(self._ups()))
         self.assertIn("MARKFAIL", self._log("sr.log"))
 
 
@@ -179,40 +197,47 @@ class TestMarking(_Base):
             self.assertFalse(self._marked(), name)
 
     def test_prompt_slash_marks(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "/np-flow-speed fix it"})
+        self._hook(self._ups(prompt="/np-flow-speed fix it"))
         self.assertTrue(self._marked())
 
     def test_short_prompt_slash_marks(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "  /np-speed"})
+        self._hook(self._ups(prompt="  /np-speed"))
         self.assertTrue(self._marked())
 
     def test_wrong_event_name_does_not_mark(self):
         for ev in ("PreToolUse", "SubagentStop", None):
-            p = {"session_id": SID, "prompt": "/np-speed"}
-            if ev:
-                p["hook_event_name"] = ev
-            self._hook(p)
+            self._hook(self._ups(hook_event_name=ev))
             self.assertFalse(self._marked(), ev)
 
-    def test_event_name_userpromptsubmit_marks(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
-                    "prompt": "/np-speed"})
-        self.assertTrue(self._marked())
-
     def test_transcript_session_mismatch_does_not_mark(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
-                    "prompt": "/np-speed",
-                    "transcript_path": "/h/.claude/projects/p/other-sid.jsonl"})
+        self._hook(self._ups(transcript_path=self._transcript("other-sid")))
         self.assertFalse(self._marked())
 
-    def test_transcript_session_match_marks(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
-                    "prompt": "/np-speed",
-                    "transcript_path": "/h/.claude/projects/p/%s.jsonl" % SID})
-        self.assertTrue(self._marked())
+    def test_missing_transcript_path_does_not_mark(self):
+        self._hook(self._ups(transcript_path=None))
+        self.assertFalse(self._marked())
+
+    def test_transcript_file_must_exist(self):
+        missing = self._transcript(root=os.path.join(self.tmp, "home", ".claude", "projects", "gone"), create=False)
+        self._hook(self._ups(transcript_path=missing))
+        self.assertFalse(self._marked())
+
+    def test_transcript_outside_projects_does_not_mark(self):
+        outside = self._transcript(root=os.path.join(self.tmp, "elsewhere"))
+        self._hook(self._ups(transcript_path=outside))
+        self.assertFalse(self._marked())
+
+    def test_symlink_out_of_projects_does_not_mark(self):
+        real = self._transcript(root=os.path.join(self.tmp, "elsewhere"))
+        root = os.path.join(self.tmp, "home", ".claude", "projects", "q")
+        os.makedirs(root)
+        link = os.path.join(root, SID + ".jsonl")
+        os.symlink(real, link)
+        self._hook(self._ups(transcript_path=link))
+        self.assertFalse(self._marked())
 
     def test_prompt_mentioning_speed_does_not_mark(self):
-        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "what is speed mode? /np-flow-speed"})
+        self._hook(self._ups(prompt="what is speed mode? /np-flow-speed"))
         self.assertFalse(self._marked())
 
 
