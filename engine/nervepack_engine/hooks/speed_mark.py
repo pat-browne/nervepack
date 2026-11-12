@@ -5,6 +5,7 @@ Writes the marker np_speed reads. Never prints, never blocks, fails open.
 import json
 
 import np_speed
+from nervepack_engine.hooks import spec_review
 
 
 def run(payload_text, *_args):
@@ -16,7 +17,9 @@ def run(payload_text, *_args):
         if tp and np_speed.transcript_session(tp) != payload.get("session_id"):
             return ""
         if np_speed.names_speed_prompt(payload):
-            np_speed.mark(payload.get("session_id"), payload.get("cwd") or "")
+            sid = payload.get("session_id")
+            if not np_speed.mark(sid):
+                spec_review._log("MARKFAIL", sid, "speed-mode marker not written")
     except Exception:
         pass
     return ""

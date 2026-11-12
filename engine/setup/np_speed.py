@@ -12,6 +12,7 @@ Fallback: transcript_path shaped like <parent-sid>/subagents/agent-*.jsonl.
 
 Every error path answers "not speed mode", so a gate keeps its normal verdict.
 """
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,8 @@ import np_toggle
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 _PROMPT = re.compile(r"^\s*/(np-flow-speed|np-speed)\b")
+# Claude Code names a subagent transcript <parent-sid>/subagents/agent-*.jsonl.
+# A change to that layout stops the fallback matching, and the gate then asks.
 _PARENT_FROM_TRANSCRIPT = re.compile(r"/([^/]+)/subagents/agent-[^/]+\.jsonl$")
 
 
@@ -30,18 +33,24 @@ def _dir():
 
 
 def _path(sid):
-    safe = (_UNSAFE.sub("_", str(sid)).lstrip(".") or "unknown")[:128]
+    sid = str(sid)
+    # Dots pass the character filter, so a leading dot must go: no id may
+    # resolve to "." or "..".
+    safe = (_UNSAFE.sub("_", sid).lstrip(".") or "unknown")[:128]
+    if safe != sid:
+        # The id was altered, so two ids could share a name. Tell them apart.
+        safe += "-" + hashlib.sha1(sid.encode("utf-8", "replace")).hexdigest()[:12]
     return os.path.join(_dir(), safe)
 
 
-def mark(sid, cwd=""):
+def mark(sid):
     """Record sid as a speed-mode session. Returns True when written."""
     if not sid or sid == "unknown":
         return False
     try:
         os.makedirs(_dir(), exist_ok=True)
         with open(_path(sid), "w", encoding="utf-8") as fh:
-            json.dump({"ts": time.time(), "cwd": cwd or ""}, fh)
+            json.dump({"ts": time.time()}, fh)
         return True
     except OSError:
         return False
@@ -51,7 +60,7 @@ def names_speed_prompt(payload):
     """True when the human's prompt starts with /np-flow-speed or /np-speed."""
     if not isinstance(payload, dict) or payload.get("tool_name"):
         return False
-    return bool(_PROMPT.search(str(payload.get("prompt") or "")))
+    return bool(_PROMPT.match(str(payload.get("prompt") or "")))
 
 
 def _ttl_s():

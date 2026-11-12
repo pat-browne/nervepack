@@ -102,7 +102,7 @@ class TestMarked(_Base):
         self.assertEqual(out, "")
 
     def test_agent_worktree_cwd_alone_is_not_silenced(self):
-        np_speed.mark("root-sid", cwd="/work/proj")
+        np_speed.mark("root-sid")
         cwd = "/work/proj/.claude/worktrees/agent-abc"
         out = self._call(spec_review, "engine/a.py", session_id="child", cwd=cwd)
         self.assertEqual(self._decision(out), "ask")
@@ -136,6 +136,31 @@ class TestTtl(_Base):
         self._age(13)
         with self._with_ttl("junk"):
             self.assertEqual(self._decision(self._call(spec_review, "engine/a.py")), "ask")
+
+
+class TestPathAndFailure(_Base):
+    def test_sanitised_ids_do_not_collide(self):
+        ids = [".A.B", "A.B", "a/b", "a_b", "a\\b", "..", "x"]
+        paths = {np_speed._path(i) for i in ids}
+        self.assertEqual(len(paths), len(ids))
+
+    def test_plain_uuid_keeps_its_name(self):
+        self.assertEqual(os.path.basename(np_speed._path("abc-123")), "abc-123")
+
+    def test_marker_holds_no_cwd(self):
+        np_speed.mark(SID)
+        with open(os.path.join(self.tmp, "speed", SID)) as fh:
+            self.assertEqual(set(json.load(fh)), {"ts"})
+
+    def test_write_failure_is_logged_to_spec_review_log(self):
+        blocker = os.path.join(self.tmp, "blocker")
+        open(blocker, "w").close()
+        os.environ["NP_SPEED_DIR"] = os.path.join(blocker, "sub")
+        from hooks import speed_mark
+        speed_mark.run(json.dumps({"session_id": SID,
+                                   "hook_event_name": "UserPromptSubmit",
+                                   "prompt": "/np-speed"}))
+        self.assertIn("MARKFAIL", self._log("sr.log"))
 
 
 class TestMarking(_Base):
