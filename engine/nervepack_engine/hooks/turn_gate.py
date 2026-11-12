@@ -34,7 +34,7 @@ _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules|dis
                      r"([/\\]|$)|\.min\."
                      # CampCo Plans owns these files and their format.
                      r"|(^|[/\\])\.campco-plans([/\\]|$)"
-                     r"|[/\\]briefs[/\\](ado_workitem|github_issue|jira_issue|linear_issue)-[^/\\]+\.md$", re.I)
+                     r"|(^|[/\\])briefs[/\\](ado_workitem|github_issue|jira_issue|linear_issue)-[^/\\]+\.md$", re.I)
 _SPEC_DOC = re.compile(r"[/\\]docs[/\\]superpowers[/\\](?:specs|plans)[/\\]", re.I)
 
 # Sent with every block. Without it the model answers again in full and the
