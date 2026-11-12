@@ -67,8 +67,8 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - Read `.claude/skills/harness-promote-scan/SKILL.md` in `$WT` and follow it exactly. Do not modify it.
    - If the skill stops early or prints no final report, print `PHASE scan: FAILED no report` and go to phase cleanup.
    - Take the counts, paths and URLs from the skill's report. Print `PHASE scan: wrote <N> files, filed <M> issues <urls>`.
-   - If `PROMOTE_DRY_RUN=1`, print the skill's plan and go straight to phase 6 (report). Phases 3, 4 and 5 do not run.
-   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and go straight to phase 6 (report). Phases 3, 4 and 5 do not run.
+   - If `PROMOTE_DRY_RUN=1`, print the skill's plan and go straight to phase 6 (report). Phases 3, 4, 5 and 5b do not run.
+   - If `git status --porcelain` is empty, print `PHASE scan: nothing to write` and go straight to phase 6 (report). Phases 3, 4, 5 and 5b do not run.
 
 3. **gate.** First check the scope of every changed path. Use `git status --porcelain` and
    `git diff --numstat origin/$BASE`, not the skill's word.
@@ -113,6 +113,6 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
 
 7. **cleanup.**
    - If `$WT` is unset because setup failed early, print `PHASE cleanup: nothing to remove` and stop.
-   - If every push succeeded or `git log origin/$BASE..HEAD` is empty, run `git -C "$KB" worktree remove --force "$WT"`.
+   - If the docs push and any skill-branch push succeeded, or `git log origin/$BASE..HEAD` is empty, run `git -C "$KB" worktree remove --force "$WT"`.
    - Print `PHASE cleanup: removed <path>`, `PHASE cleanup: kept <path> (unpushed commit)`, or `PHASE cleanup: FAILED <reason>`.
    - Never force-push, close an issue, or open any PR except the skill PR in phase 5b.
