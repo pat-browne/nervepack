@@ -472,7 +472,7 @@
       "off",
       "block"
     ],
-    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and escalates to ask after two retries."
+    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and adds context without a permission decision after two retries."
   },
   "form_gate.rate": {
     "type": "enum",
