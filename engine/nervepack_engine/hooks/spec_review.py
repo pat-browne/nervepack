@@ -58,6 +58,7 @@ def _log(verdict, sid, detail):
     is the common case in every repo that has not adopted the convention, and
     logging it would be one line per Write and Edit per session, machine-wide.
     """
+    sid = np_speed.safe_id(sid)
     try:
         path = _log_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -70,7 +71,7 @@ def _log(verdict, sid, detail):
 
 def log_verdict(verdict, sid, detail):
     """Public entry for sibling hooks that write to this gate's log."""
-    _log(verdict, np_speed.safe_id(sid), detail)
+    _log(verdict, sid, detail)
 
 
 def _ask(reason):

@@ -203,6 +203,32 @@ class TestPathAndFailure(_Base):
         from hooks import speed_mark
         speed_mark.run(json.dumps(self._ups()))
         self.assertIn("MARKFAIL", self._log("sr.log"))
+        self.assertIn("ENOTDIR", self._log("sr.log"))
+
+    def test_hook_error_is_logged_by_type_and_fails_open(self):
+        from hooks import speed_mark
+        with mock.patch("np_speed.names_speed_prompt", side_effect=RuntimeError("secret")):
+            self.assertEqual(speed_mark.run(json.dumps(self._ups())), "")
+        text = self._log("sr.log")
+        self.assertIn("RuntimeError", text)
+        self.assertNotIn("secret", text)
+
+    def test_log_sanitises_sid_for_every_caller(self):
+        forged = "x\nspec-review FORGED sid=y"
+        spec_review._log("T", forged, "d")
+        text = self._log("sr.log")
+        self.assertEqual(len(text.splitlines()), 1)
+        self.assertNotIn("\n" + "spec-review FORGED", text)
+
+    def test_ask_path_with_newline_sid_logs_one_line(self):
+        sid = "x\nspec-review FORGED sid=y"
+        out = self._call(spec_review, "engine/a.py", speed_silent=False, session_id=sid)
+        self.assertEqual(self._decision(out), "ask")
+        self.assertEqual(len(self._log("sr.log").splitlines()), 1)
+
+    def test_names_speed_prompt_false_for_tool_call(self):
+        self.assertFalse(np_speed.names_speed_prompt(
+            {"tool_name": "Skill", "prompt": "/np-speed"}))
 
 
 class TestMarking(_Base):

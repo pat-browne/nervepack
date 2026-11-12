@@ -12,6 +12,7 @@ Fallback: transcript_path shaped like <parent-sid>/subagents/agent-*.jsonl.
 
 Every error path answers "not speed mode", so a gate keeps its normal verdict.
 """
+import errno
 import hashlib
 import json
 import os
@@ -54,8 +55,16 @@ def _path(sid):
     return os.path.join(_dir(), safe_id(sid))
 
 
+last_mark_error = ""
+
+
 def mark(sid):
-    """Record sid as a speed-mode session. Returns True when written."""
+    """Record sid as a speed-mode session. Returns True when written.
+
+    On failure, last_mark_error holds the errno name, for the caller to log.
+    """
+    global last_mark_error
+    last_mark_error = ""
     if not sid or sid == "unknown":
         return False
     try:
@@ -63,12 +72,14 @@ def mark(sid):
         with open(_path(sid), "w", encoding="utf-8") as fh:
             json.dump({"ts": time.time()}, fh)
         return True
-    except OSError:
+    except OSError as e:
+        last_mark_error = errno.errorcode.get(e.errno, "OSError")
         return False
 
 
 def names_speed_prompt(payload):
-    """True when the human's prompt starts with /np-flow-speed or /np-speed."""
+    """True when the human's prompt starts with /np-flow-speed or /np-speed.
+    False for a tool call, such as a Skill call, and for any other payload."""
     if not isinstance(payload, dict) or payload.get("tool_name"):
         return False
     return bool(_PROMPT.match(str(payload.get("prompt") or "")))

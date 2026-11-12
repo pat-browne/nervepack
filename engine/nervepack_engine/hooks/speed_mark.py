@@ -19,7 +19,10 @@ def run(payload_text, *_args):
                 return ""
             sid = payload.get("session_id")
             if not np_speed.mark(sid):
-                spec_review.log_verdict("MARKFAIL", sid, "speed-mode marker not written")
-    except Exception:
-        pass
+                spec_review.log_verdict("MARKFAIL", sid, "speed-mode marker not written (%s)" % (np_speed.last_mark_error or "unknown"))
+    except Exception as e:
+        try:
+            spec_review.log_verdict("MARKERR", "unknown", type(e).__name__)
+        except Exception:
+            pass
     return ""
