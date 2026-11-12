@@ -32,7 +32,10 @@ class _Base(unittest.TestCase):
         os.environ["NP_SPEC_REVIEW_DIR"] = os.path.join(self.tmp, "seen")
         os.environ["NP_SPEED_DIR"] = os.path.join(self.tmp, "speed")
         self._home = os.environ.get("HOME")
-        os.environ["HOME"] = os.path.join(self.tmp, "home")
+        os.environ["HOME"] = os.path.join(self.tmp, "fake-env-home")
+        self._pw = mock.patch("np_speed.pwd.getpwuid", return_value=mock.Mock(
+            pw_dir=os.path.join(self.tmp, "home")))
+        self._pw.start()
         self.repo = os.path.join(self.tmp, "repo")
         os.makedirs(os.path.join(self.repo, ".git"))
         os.makedirs(os.path.join(self.repo, "change-specs"))
@@ -42,6 +45,7 @@ class _Base(unittest.TestCase):
             fh.write(SPEC)
 
     def tearDown(self):
+        self._pw.stop()
         if self._home is None:
             os.environ.pop("HOME", None)
         else:
@@ -234,6 +238,32 @@ class TestMarking(_Base):
         link = os.path.join(root, SID + ".jsonl")
         os.symlink(real, link)
         self._hook(self._ups(transcript_path=link))
+        self.assertFalse(self._marked())
+
+    def test_session_comes_from_the_resolved_path(self):
+        other = self._transcript("other-sid")
+        root = os.path.join(self.tmp, "home", ".claude", "projects", "q")
+        os.makedirs(root)
+        link = os.path.join(root, SID + ".jsonl")
+        os.symlink(other, link)
+        self._hook(self._ups(transcript_path=link))
+        self.assertFalse(self._marked())
+
+    def test_home_comes_from_passwd_not_env(self):
+        env_root = os.path.join(self.tmp, "fake-env-home", ".claude", "projects", "p")
+        os.makedirs(env_root)
+        tp = os.path.join(env_root, SID + ".jsonl")
+        open(tp, "w").close()
+        self._hook(self._ups(transcript_path=tp))
+        self.assertFalse(self._marked())
+
+    def test_missing_projects_root_does_not_mark(self):
+        payload = self._ups()
+        import shutil
+        shutil.rmtree(os.path.join(self.tmp, "home", ".claude", "projects"))
+        open(os.path.join(self.tmp, "home", ".claude", "t.jsonl"), "w").close()
+        payload["transcript_path"] = os.path.join(self.tmp, "home", ".claude", "t.jsonl")
+        self._hook(payload)
         self.assertFalse(self._marked())
 
     def test_prompt_mentioning_speed_does_not_mark(self):

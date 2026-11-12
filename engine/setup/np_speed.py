@@ -18,7 +18,13 @@ import os
 import re
 import time
 
+try:
+    import pwd
+except ImportError:  # no passwd database: the marker is never written
+    pwd = None
+
 import np_dirs
+import np_host
 import np_toggle
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
@@ -94,19 +100,22 @@ def transcript_session(path):
 
 
 def transcript_ok(payload):
-    """True when the payload's transcript is a real file under ~/.claude/projects
-    whose session segment equals session_id. Missing or odd paths fail closed."""
+    """True when the payload's transcript is a real file under the passwd home's
+    .claude/projects and its resolved name matches session_id. Fails closed."""
     try:
         tp = payload.get("transcript_path")
         sid = payload.get("session_id")
-        if not tp or not sid or not os.path.isfile(tp):
+        if not tp or not sid or pwd is None or not os.path.isfile(tp):
             return False
-        root = os.path.realpath(os.path.expanduser("~/.claude/projects"))
+        home = pwd.getpwuid(os.getuid()).pw_dir
+        root = os.path.realpath(np_host.default_under("transcripts", home))
+        if not os.path.isdir(root):
+            return False
         real = os.path.realpath(tp)
         if os.path.commonpath([root, real]) != root:
             return False
-        return transcript_session(tp) == sid
-    except (OSError, ValueError, TypeError, AttributeError):
+        return transcript_session(real) == sid
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
         return False
 
 
