@@ -10,8 +10,8 @@ return "ask" or `allow`+context, exactly as before. Rate-based findings
 `block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
 write carrying em_dash, semicolon, marketing_adjective, an over-length
 sentence, or an over-length paragraph is denied outright, up to two retries
-per (session, target). A third strike escalates to `ask` and emits a
-struggles[] record to the episodic inbox so episodic-maintain can distill the
+per (session, target). A third strike allows the write with context naming the findings, never a
+prompt, and emits a struggles[] record to the episodic inbox so episodic-maintain can distill the
 pattern. `contraction` never blocks -- it stays a rate-channel signal only.
 The engine ships `categorical=warn`. `block` is opt-in.
 
@@ -567,7 +567,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
     try:
         cwd = payload.get("cwd") or os.getcwd()
         project = os.path.basename(cwd.rstrip(os.sep) or "unknown") or "unknown"
-        symptom = ("form gate escalated to ask after 2 blocks on %s: %s"
+        symptom = ("form gate escalated to allow after 2 blocks on %s: %s"
                    % (label, detail))
         record = {
             "session_id": sid,
@@ -575,7 +575,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
             "project": project,
             "cwd": cwd,
             "mode": "form-gate-escalation",
-            "headline": "form gate escalated to ask on %s" % label,
+            "headline": "form gate escalated to allow on %s" % label,
             "body": "%s. Rewrite could not satisfy the linter." % symptom,
             "candidate_topics": ["form-gate"],
             "keywords": ["form-gate", "escalation", label],
@@ -625,7 +625,7 @@ def _run_block(sid, target, label, violations, payload, extra_labels=None):
                "np-flow-concise-output." % (label, detail))
     np_toggle.signal(sid, "form-gate-escalation :: %s :: %s" % (label, detail))
     _emit_escalation_struggle(sid, payload, label, detail)
-    return _ask(message)
+    return _allow_with_context(message)
 
 
 def run(payload_text):

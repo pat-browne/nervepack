@@ -363,7 +363,7 @@ class TestBlockMode(unittest.TestCase):
         self.assertIn("semicolon", data["permissionDecisionReason"])
         self.assertEqual(notes, [])
 
-    def test_escalates_to_ask_at_counter_two_and_emits_struggle(self):
+    def test_escalates_to_allow_with_context_at_counter_two_and_emits_struggle(self):
         payload = self._write("A clause; another.")
         lint = self._violations(semicolon=1)
         out1, notes1 = self._run(payload, lint=lint)
@@ -373,9 +373,10 @@ class TestBlockMode(unittest.TestCase):
         self.assertEqual(json.loads(out1)["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertEqual(json.loads(out2)["hookSpecificOutput"]["permissionDecision"], "deny")
         data3 = json.loads(out3)["hookSpecificOutput"]
-        self.assertEqual(data3["permissionDecision"], "ask")
-        self.assertIn("tuning", data3["permissionDecisionReason"])
-        self.assertIn("np-ste-lint.py", data3["permissionDecisionReason"])
+        self.assertEqual(data3["permissionDecision"], "allow")
+        self.assertNotIn("permissionDecisionReason", data3)
+        self.assertIn("semicolon", data3["additionalContext"])
+        self.assertIn("np-ste-lint.py", data3["additionalContext"])
 
         self.assertEqual(notes1, [])
         self.assertEqual(notes2, [])
@@ -432,14 +433,14 @@ class TestBlockMode(unittest.TestCase):
 
     def test_failed_counter_write_escalates_not_denies(self):
         # If the retry counter cannot be persisted, the gate must escalate to
-        # ask rather than deny -- a stuck counter reads 0 forever, so denying
+        # allow rather than deny -- a stuck counter reads 0 forever, so denying
         # would trap the user in permanent denies with no escalation.
         payload = self._write("A clause; another.")
         with mock.patch.object(form_gate, "_write_retry", return_value=False):
             out, notes = self._run(payload, lint=self._violations(semicolon=1))
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "ask")
-        self.assertIn("tuning", data["permissionDecisionReason"])
+        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertIn("tuning", data["additionalContext"])
         self.assertEqual(len(notes), 1)
 
     def test_ask_mode_unaffected_by_block_helpers(self):
