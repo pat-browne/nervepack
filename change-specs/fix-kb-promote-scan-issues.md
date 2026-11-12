@@ -29,6 +29,7 @@ blast_radius:
   - engine/setup/tests/journal/test_journal_resources.py
   - engine/setup/tests/nervepack_engine/test_lesson_guard.py
   - skills/np-core-contribute/references/cross-reference-convention.md
+  - .github/claude-review-standards.md
 ---
 
 # 0118: kb-promote-scan files issues and names no employer
@@ -80,6 +81,8 @@ Git history. Old commits still hold the terms, and rewriting them needs a force-
 - Widened to the prose gates and spec 0116, which named a planning plugin by its employer brand. The exemption now lives in `form_gate.exempt_globs`, set per machine.
 
 - Widened to the publish scan, its test and the skill-name guard, to stop a repeat.
+
+- Widened to the review bot's standards, which now block employer names.
 
 - Widened to `archive/MANIFEST.md`, whose rows named relocated employer skills.
 
