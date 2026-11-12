@@ -229,6 +229,14 @@ def _overlap(a, b):
             if _norm(p) and any(_norm(p).startswith(q) or q.startswith(_norm(p)) for q in mine)]
 
 
+READ_ONLY = "read-only"
+
+
+def _read_only(claim):
+    """A session that set phase read-only edits nothing, so it never blocks a peer."""
+    return str((claim or {}).get("phase") or "").strip().lower() == READ_ONLY
+
+
 def _same_worktree(o, mine):
     def wt(r):
         w = r.get("worktree")
@@ -255,11 +263,14 @@ def position(session_id, cwd):
             "started": time.time(), "session_id": session_id,
             "worktree": ctx["top"], "branch": ctx["branch"], "paths": []}
         key = (_num(mine.get("started")), session_id)
-        rank = 1 + sum(1 for o in others if (o["started"], str(o.get("session_id", ""))) < key)
+        writers = [o for o in others if not _read_only(o)]
+        rank = 1 + sum(1 for o in writers if (o["started"], str(o.get("session_id", ""))) < key)
         return {
             "rank": rank, "leader": rank == 1, "others": others,
-            "overlaps": [o for o in others if _overlap(mine, o)],
-            "same_worktree": [o for o in others if _same_worktree(o, mine)],
+            "overlaps": [] if _read_only(mine) else
+                        [o for o in writers if _overlap(mine, o)],
+            "same_worktree": [] if _read_only(mine) else
+                             [o for o in writers if _same_worktree(o, mine)],
             "mine": mine,
         }
     except Exception as exc:
