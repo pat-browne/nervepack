@@ -1,5 +1,5 @@
 # np-test: speed-silence | failure
-"""Speed mode silences spec-review and drift-guard; nothing else changes."""
+"""Speed mode silences spec-review only; drift-guard and everything else stay."""
 import json
 import os
 import sys
@@ -81,15 +81,12 @@ class TestMarked(_Base):
         self.assertEqual(self._call(spec_review, "engine/a.py"), "")
         self.assertIn("speed mode", self._log("sr.log"))
 
-    def test_drift_guard_silent_and_logged(self):
-        self.assertEqual(self._call(drift_guard, "docs/a.md"), "")
-        self.assertIn("speed mode", self._log("dg.log"))
+    def test_drift_guard_still_denies_in_marked_session(self):
+        self.assertEqual(self._decision(self._call(drift_guard, "docs/a.md")), "deny")
 
     def test_toggle_off_asks_again(self):
         self.assertEqual(
             self._decision(self._call(spec_review, "engine/a.py", speed_silent=False)), "ask")
-        self.assertEqual(
-            self._decision(self._call(drift_guard, "docs/a.md", speed_silent=False)), "deny")
 
     def test_other_session_not_silenced(self):
         out = self._call(spec_review, "engine/a.py", session_id="other")
@@ -104,17 +101,11 @@ class TestMarked(_Base):
         out = self._call(spec_review, "engine/a.py", session_id="child", transcript_path=tp)
         self.assertEqual(out, "")
 
-    def test_agent_worktree_cwd_matches_marker_root(self):
+    def test_agent_worktree_cwd_alone_is_not_silenced(self):
         np_speed.mark("root-sid", cwd="/work/proj")
         cwd = "/work/proj/.claude/worktrees/agent-abc"
-        out = self._call(drift_guard, "docs/a.md", session_id="child", cwd=cwd)
-        self.assertEqual(out, "")
-
-    def test_agent_worktree_of_other_root_not_silenced(self):
-        np_speed.mark("root-sid", cwd="/work/proj")
-        cwd = "/work/other/.claude/worktrees/agent-abc"
-        out = self._call(drift_guard, "docs/a.md", session_id="child", cwd=cwd)
-        self.assertEqual(self._decision(out), "deny")
+        out = self._call(spec_review, "engine/a.py", session_id="child", cwd=cwd)
+        self.assertEqual(self._decision(out), "ask")
 
 
 class TestDetect(unittest.TestCase):

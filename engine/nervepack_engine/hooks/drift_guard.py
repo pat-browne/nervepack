@@ -28,7 +28,6 @@ import os
 import np_change_spec
 import np_toggle
 import np_dirs
-import np_speed
 
 _RESPONSES = ("Either widen the spec's blast_radius and record why in its "
               "## Deviations section, or supersede the spec with a new one. "
@@ -124,10 +123,6 @@ def run(payload_text, *_args):
 
     if np_change_spec.in_radius(rel, globs):
         _log("PASS", sid, "%s in radius of %s" % (rel, spec_rel))
-        return ""
-
-    if np_speed.is_speed(payload):
-        _log("SKIP", sid, "speed mode; %s outside radius of %s" % (rel, spec_rel))
         return ""
 
     message = ("Spec drift: %s is outside the blast_radius declared by %s "

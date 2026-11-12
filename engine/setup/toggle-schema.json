@@ -332,7 +332,7 @@
   },
   "gates.speed_silent": {
     "type": "bool",
-    "description": "Whether a session running np-flow-speed (and its subagents) silences the spec-review ask and the drift-guard deny. Off makes both gates speak in speed mode too."
+    "description": "Whether a session running np-flow-speed (and its subagents) silences the spec-review ask. Off makes the gate ask in speed mode too."
   },
   "gates.drift_guard.enforce": {
     "type": "bool",
