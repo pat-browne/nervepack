@@ -109,7 +109,10 @@ def _home_dir():
     trusted root. Windows has no pwd, so it gets "" and no speed silence."""
     if pwd is None:
         return ""
-    return pwd.getpwuid(os.getuid()).pw_dir
+    try:
+        return pwd.getpwuid(os.getuid()).pw_dir
+    except (OSError, KeyError):
+        return ""
 
 
 def transcript_ok(payload):
