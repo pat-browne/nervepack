@@ -309,6 +309,11 @@ class PositionTests(ClaimsCase):
         pos = np_claims.position("cccccccc-3", self.repo)
         self.assertEqual(pos["same_worktree"], [])
 
+    def test_read_only_session_sees_no_overlap(self):
+        np_claims.write("dddddddd-4", self.repo, force=True, paths=["a.py"])
+        np_claims.write("eeeeeeee-5", self.repo, force=True, paths=["a.py"], phase="read-only")
+        self.assertEqual(np_claims.position("eeeeeeee-5", self.repo)["overlaps"], [])
+
     def test_read_only_peer_does_not_raise_rank(self):
         np_claims.write("aaaaaaaa-1", self.repo, force=True, phase="read-only")
         self.assertEqual(np_claims.position("bbbbbbbb-2", self.wt)["rank"], 1)

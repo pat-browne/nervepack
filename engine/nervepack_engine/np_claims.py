@@ -267,7 +267,8 @@ def position(session_id, cwd):
         rank = 1 + sum(1 for o in writers if (o["started"], str(o.get("session_id", ""))) < key)
         return {
             "rank": rank, "leader": rank == 1, "others": others,
-            "overlaps": [o for o in writers if _overlap(mine, o)],
+            "overlaps": [] if _read_only(mine) else
+                        [o for o in writers if _overlap(mine, o)],
             "same_worktree": [] if _read_only(mine) else
                              [o for o in writers if _same_worktree(o, mine)],
             "mine": mine,

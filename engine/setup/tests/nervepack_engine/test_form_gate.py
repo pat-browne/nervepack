@@ -33,6 +33,10 @@ class TestFormGatePaths(unittest.TestCase):
     def test_campco_brief_is_exempt(self):
         self.assertTrue(form_gate._is_exempt_path("/r/briefs/ado_workitem-30089.md"))
 
+    def test_every_campco_tracker_brief_is_exempt(self):
+        for kind in ("ado_workitem", "github_issue", "jira_issue", "linear_issue"):
+            self.assertTrue(form_gate._is_exempt_path("/r/briefs/%s-1.md" % kind), kind)
+
     def test_relative_campco_brief_is_exempt(self):
         self.assertTrue(form_gate._is_exempt_path("briefs/github_issue-12.md"))
 
