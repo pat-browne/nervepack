@@ -186,7 +186,7 @@ class TestChannels(unittest.TestCase):
                         lint={"violations": {"passive_voice": 3},
                               "total_per100w": 9.0})
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertNotIn("permissionDecision", data)
         self.assertIn("additionalContext", data)
 
     def test_rate_below_threshold_returns_empty(self):
@@ -201,7 +201,8 @@ class TestChannels(unittest.TestCase):
                         params={"form_gate.categorical": "warn"},
                         lint=self._clean(semicolon=1))
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertNotIn("permissionDecision", data)
+        self.assertIn("additionalContext", data)
 
     def test_reason_names_every_violated_rule(self):
         out = self._run(self._write("Text"),

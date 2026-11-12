@@ -95,7 +95,8 @@ class FormGateCoverageTest(unittest.TestCase):
         out = self._run("Write", {"file_path": os.path.join(self.tmp.name, "n.md"),
                                   "content": DIRTY},
                         **{"form_gate.categorical": "warn"})
-        self.assertEqual(self._decision(out), "allow")
+        self.assertIsNone(self._decision(out))
+        self.assertIn("semicolon", self._reason(out))
 
     # --- delta linting on Write -------------------------------------------
     def test_write_onto_existing_file_ignores_inherited_violations(self):
