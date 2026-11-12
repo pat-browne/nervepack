@@ -69,6 +69,11 @@ def _log(verdict, sid, detail):
         pass  # a log that cannot be written must not change the decision
 
 
+def log_verdict(verdict, sid, detail):
+    """Public entry for sibling hooks that write to this gate's log."""
+    _log(verdict, sid, detail)
+
+
 def _ask(reason):
     return json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",

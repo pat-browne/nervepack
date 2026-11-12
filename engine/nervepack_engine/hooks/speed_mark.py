@@ -18,7 +18,7 @@ def run(payload_text, *_args):
         if np_speed.names_speed_prompt(payload):
             sid = payload.get("session_id")
             if not np_speed.mark(sid):
-                spec_review._log("MARKFAIL", sid, "speed-mode marker not written")
+                spec_review.log_verdict("MARKFAIL", sid, "speed-mode marker not written")
     except Exception:
         pass
     return ""
