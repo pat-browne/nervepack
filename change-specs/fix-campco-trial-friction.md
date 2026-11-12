@@ -9,6 +9,7 @@ blast_radius:
   - engine/nervepack_engine/np_claims.py
   - engine/setup/tests/nervepack_engine/test_form_gate.py
   - engine/setup/tests/nervepack_engine/test_np_claims.py
+  - engine/setup/tests/nervepack_engine/test_turn_gate.py
   - docs/ARCHITECTURE.md
   - change-specs/fix-campco-trial-friction.md
 ---
