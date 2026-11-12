@@ -6,6 +6,8 @@ tier: high
 blast_radius:
   - engine/nervepack_engine/hooks/form_gate.py
   - engine/setup/tests/nervepack_engine/test_form_gate.py
+  - engine/setup/tests/nervepack_engine/test_form_gate_composition.py
+  - engine/setup/tests/nervepack_engine/test_form_gate_coverage.py
   - docs/ARCHITECTURE.md
   - change-specs/fix-form-gate-context-only.md
 ---
