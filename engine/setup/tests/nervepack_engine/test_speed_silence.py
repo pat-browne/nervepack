@@ -108,19 +108,32 @@ class TestMarked(_Base):
         self.assertEqual(self._decision(out), "ask")
 
 
-class TestDetect(unittest.TestCase):
-    def test_skill_call(self):
+class TestMarking(_Base):
+    def _hook(self, payload):
+        import json as _j
+        from hooks import speed_mark
+        return speed_mark.run(_j.dumps(payload))
+
+    def _marked(self):
+        return os.path.isfile(os.path.join(self.tmp, "speed", SID))
+
+    def test_skill_call_writes_no_marker(self):
         for name in ("np-flow-speed", "nervepack:np-flow-speed", "np-speed"):
-            self.assertTrue(np_speed.names_speed_skill(
-                {"tool_name": "Skill", "tool_input": {"skill": name}}), name)
+            self._hook({"session_id": SID, "tool_name": "Skill",
+                        "tool_input": {"skill": name}})
+            self.assertFalse(self._marked(), name)
 
-    def test_other_skill(self):
-        self.assertFalse(np_speed.names_speed_skill(
-            {"tool_name": "Skill", "tool_input": {"skill": "np-flow-develop"}}))
+    def test_prompt_slash_marks(self):
+        self._hook({"session_id": SID, "prompt": "/np-flow-speed fix it"})
+        self.assertTrue(self._marked())
 
-    def test_prompt_slash(self):
-        self.assertTrue(np_speed.names_speed_skill({"prompt": "/np-flow-speed fix it"}))
-        self.assertFalse(np_speed.names_speed_skill({"prompt": "what is speed mode?"}))
+    def test_short_prompt_slash_marks(self):
+        self._hook({"session_id": SID, "prompt": "  /np-speed"})
+        self.assertTrue(self._marked())
+
+    def test_prompt_mentioning_speed_does_not_mark(self):
+        self._hook({"session_id": SID, "prompt": "what is speed mode? /np-flow-speed"})
+        self.assertFalse(self._marked())
 
 
 if __name__ == "__main__":

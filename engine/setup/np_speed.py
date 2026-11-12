@@ -1,6 +1,8 @@
 """Speed-mode marker: which sessions run np-flow-speed.
 
-The skill call writes one file per session id under the cache dir.
+A human slash prompt writes one file per session id under the cache dir.
+
+A Skill tool call never marks: the gated agent must not silence its own gate.
 
 spec-review reads it and stays silent.
 
@@ -19,7 +21,6 @@ import np_dirs
 import np_toggle
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
-_SKILL = re.compile(r"(^|[:/])np-(flow-)?speed$")
 _PROMPT = re.compile(r"^\s*/(np-flow-speed|np-speed)\b")
 _PARENT_FROM_TRANSCRIPT = re.compile(r"/([^/]+)/subagents/agent-[^/]+\.jsonl$")
 
@@ -46,13 +47,10 @@ def mark(sid, cwd=""):
         return False
 
 
-def names_speed_skill(payload):
-    """True when a Skill tool call or a prompt names np-flow-speed."""
-    if not isinstance(payload, dict):
+def names_speed_prompt(payload):
+    """True when the human's prompt starts with /np-flow-speed or /np-speed."""
+    if not isinstance(payload, dict) or payload.get("tool_name"):
         return False
-    ti = payload.get("tool_input")
-    if payload.get("tool_name") == "Skill" and isinstance(ti, dict):
-        return bool(_SKILL.search(str(ti.get("skill") or ti.get("name") or "").strip()))
     return bool(_PROMPT.search(str(payload.get("prompt") or "")))
 
 
