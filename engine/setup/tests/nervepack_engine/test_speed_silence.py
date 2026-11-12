@@ -257,6 +257,19 @@ class TestMarking(_Base):
         self._hook(self._ups(transcript_path=tp))
         self.assertFalse(self._marked())
 
+    def test_empty_or_relative_home_does_not_mark(self):
+        import np_host
+        self.assertEqual(np_host.default_under("transcripts", ""), "")
+        self.assertEqual(np_host.default_under("transcripts", "rel/home"), "")
+        payload = self._ups()
+        for home in ("", "rel/home"):
+            self._pw.stop()
+            self._pw = mock.patch("np_speed.pwd.getpwuid",
+                                  return_value=mock.Mock(pw_dir=home))
+            self._pw.start()
+            self._hook(payload)
+            self.assertFalse(self._marked(), repr(home))
+
     def test_missing_projects_root_does_not_mark(self):
         payload = self._ups()
         import shutil

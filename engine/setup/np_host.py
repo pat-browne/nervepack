@@ -175,7 +175,10 @@ def default_for(key):
 
 
 def default_under(key, home):
-    """The built-in path for key under an explicit home directory."""
+    """The built-in path for key under an explicit home directory, or "" when
+    home is empty or not absolute."""
+    if not home or not os.path.isabs(home):
+        return ""
     return os.path.join(home, *_DEFAULTS[key])
 
 

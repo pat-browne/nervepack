@@ -108,9 +108,10 @@ def transcript_ok(payload):
         if not tp or not sid or pwd is None or not os.path.isfile(tp):
             return False
         home = pwd.getpwuid(os.getuid()).pw_dir
-        root = os.path.realpath(np_host.default_under("transcripts", home))
-        if not os.path.isdir(root):
+        base = np_host.default_under("transcripts", home)
+        if not base or not os.path.isdir(base):
             return False
+        root = os.path.realpath(base)
         real = os.path.realpath(tp)
         if os.path.commonpath([root, real]) != root:
             return False
