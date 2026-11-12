@@ -106,10 +106,10 @@ def transcript_session(path):
 
 def _home_dir():
     """The passwd home where pwd exists, so a spoofed HOME does not move the
-    trusted root. Windows has no pwd and falls back to expanduser."""
-    if pwd is not None:
-        return pwd.getpwuid(os.getuid()).pw_dir
-    return os.path.expanduser("~")
+    trusted root. Windows has no pwd, so it gets "" and no speed silence."""
+    if pwd is None:
+        return ""
+    return pwd.getpwuid(os.getuid()).pw_dir
 
 
 def transcript_ok(payload):

@@ -279,13 +279,16 @@ class TestMarking(_Base):
         finally:
             self._pw.start()
 
-    def test_home_falls_back_to_expanduser_without_pwd(self):
+    def test_no_pwd_fails_closed_and_writes_no_marker(self):
+        payload = self._ups()
         self._pw.stop()
         try:
             with mock.patch.object(np_speed, "pwd", None):
-                self.assertEqual(np_speed._home_dir(), os.path.expanduser("~"))
+                self.assertEqual(np_speed._home_dir(), "")
+                self._hook(payload)
         finally:
             self._pw.start()
+        self.assertFalse(self._marked())
 
     def test_empty_or_relative_home_does_not_mark(self):
         import np_host

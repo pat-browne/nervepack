@@ -25,7 +25,6 @@ is confirmed again and an unchanged one is never asked about twice.
 import datetime
 import json
 import os
-import re
 
 import np_change_spec
 import np_toggle
