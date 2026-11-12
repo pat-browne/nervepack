@@ -373,16 +373,16 @@ def compact():
 
 
 # --- kb-promote-scan ----------------------------------------------------------
-# Weekly (Mon 08:45): run data-base's harness-promote-scan skill in a fresh
-# data-base worktree and open a PR if it queued anything. The prompt owns the
-# worktree, branch, and PR steps, so the cwd is only a launch point.
+# Weekdays 11:00: run a team KB repo's harness-promote-scan skill in a fresh
+# worktree of that repo. The prompt owns the worktree, branch, and PR steps,
+# so the cwd is only a launch point.
 _KB_PROMOTE_SCAN = CronConfig(
     name="kb-promote-scan",
     toggle="maintain.kb_promote_scan",
     prompt_rel_path=os.path.join("agents", "np-flow-kb-promote-scan.md"),
     log_env="KB_PROMOTE_SCAN_LOG",
     log_basename="kb-promote-scan.log",
-    # cwd only. The agent commits in its own data-base worktree, never here,
+    # cwd only. The agent commits in its own KB worktree, never here,
     # so _run() finds no engine changes and skips its commit step.
     commit_target="engine",
     content_gated=False,
@@ -391,9 +391,23 @@ _KB_PROMOTE_SCAN = CronConfig(
 )
 
 
+# Param -> env var. Values live only in toggles.local, so the engine never
+# names the KB repo.
+_KB_PARAMS = (("kb_dir", "PROMOTE_KB_DIR"), ("kb_repo", "PROMOTE_KB_REPO"),
+              ("kb_base", "PROMOTE_KB_BASE"), ("kb_gates", "PROMOTE_KB_GATES"),
+              ("commit_trailer", "PROMOTE_COMMIT_TRAILER"))
+
+
 def kb_promote_scan():
     """Cron entrypoint (dispatched by cli.py as `cron kb-promote-scan`).
-    Returns a short status string; never raises."""
+    Returns a short status string and never raises."""
+    if np_toggle.enabled(_KB_PROMOTE_SCAN.toggle):
+        for key, var in _KB_PARAMS:
+            value = (np_toggle.param("maintain.kb_promote_scan." + key, "") or "").strip()
+            if value:
+                os.environ[var] = os.path.expanduser(value) if key == "kb_dir" else value
+        if not (os.environ.get("PROMOTE_KB_DIR") and os.environ.get("PROMOTE_KB_REPO")):
+            return "skipped: maintain.kb_promote_scan.kb_dir or kb_repo not configured"
     return _run(_KB_PROMOTE_SCAN)
 
 

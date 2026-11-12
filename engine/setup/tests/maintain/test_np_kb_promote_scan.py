@@ -1,6 +1,6 @@
 # np-test: kb-promote-scan | toggle/backend/re-entrancy gating, prompt contract,
 #          and dispatch wiring for np_agentic_cron.kb_promote_scan().
-"""Mirrors test_np_compact.py's gating tests. The agent's own worktree/PR steps
+"""Mirrors test_np_compact.py's gating tests. The agent's own worktree and issue steps
 live in the prompt, so this also pins the prompt's hard rules."""
 import os
 import sys
@@ -20,7 +20,8 @@ import np_agentic_cron  # noqa: E402
 
 PROMPT_BODY = "# kb-promote-scan\n\nMetadata.\n\n## Prompt\n\nRun the scan.\n"
 _ENV_KEYS = ("NERVEPACK_AGENT", "CLAUDE_BIN", "NP_LLM_AGENT_CMD", "NP_LLM_BACKEND",
-             "KB_PROMOTE_SCAN_LOG")
+             "KB_PROMOTE_SCAN_LOG", "PROMOTE_KB_DIR", "PROMOTE_KB_REPO", "PROMOTE_KB_BASE",
+             "PROMOTE_KB_GATES", "PROMOTE_COMMIT_TRAILER")
 
 
 def _write(path, text):
@@ -39,6 +40,8 @@ class GatingTest(unittest.TestCase):
         self.local = os.path.join(self.tmp, "toggles.local")
         conf = os.path.join(self.tmp, "toggles.conf")
         _write(conf, "maintain.kb_promote_scan|shared|runtime|on|\n")
+        _write(self.local, "maintain.kb_promote_scan.kb_dir=/tmp/kb\n"
+                           "maintain.kb_promote_scan.kb_repo=org/kb\n")
         for k in _ENV_KEYS:
             os.environ.pop(k, None)
         self.env = mock.patch.dict(os.environ, {
@@ -54,6 +57,20 @@ class GatingTest(unittest.TestCase):
     def _log(self):
         p = os.path.join(self.home, ".cache", "nervepack", "kb-promote-scan.log")
         return open(p, encoding="utf-8").read() if os.path.isfile(p) else ""
+
+    def test_unconfigured_skips(self):
+        _write(self.local, "")
+        for var in ("PROMOTE_KB_DIR", "PROMOTE_KB_REPO"):
+            os.environ.pop(var, None)
+        self.assertEqual(np_agentic_cron.kb_promote_scan(),
+                         "skipped: maintain.kb_promote_scan.kb_dir or kb_repo not configured")
+
+    def test_params_export_env(self):
+        with mock.patch.object(np_agentic_cron, "_run", return_value="ok") as run:
+            self.assertEqual(np_agentic_cron.kb_promote_scan(), "ok")
+        run.assert_called_once()
+        self.assertEqual(os.environ["PROMOTE_KB_REPO"], "org/kb")
+        self.assertEqual(os.environ["PROMOTE_KB_DIR"], "/tmp/kb")
 
     def test_toggle_off_skips(self):
         _write(self.local, "maintain.kb_promote_scan=off\n")
@@ -94,16 +111,21 @@ class PromptContractTest(unittest.TestCase):
         self.prompt = np_agentic_cron._base_prompt(path)
 
     def test_prompt_rules(self):
-        for needle in ("harness-promote-scan", "pr-review", "origin/trunk",
-                       "kb/promote-scan-$DATE", "no promotable content",
-                       "Committed by Claude Code", "AI-assisted PR",
-                       "gh pr checks", "alarm 900", "PR_NUMBER=${PR_URL##*/}", "Never run a plain `gh pr merge`",
-                       "gh pr merge \"$PR_NUMBER\" --auto --squash", "PHASE gates: FAILED",
-                       "receipt-gate --diff-base origin/trunk", "kb-lint --errors-only",
-                       "PHASE cleanup", "Remove the",
-                       "docs/reviews/queue.md",
-                       "$HOME/Code/nervepack:$HOME/Code/nervepack-content"):
+        for needle in ("harness-promote-scan", "origin/$BASE", "--detach",
+                       "gh auth status", "PHASE cleanup", "worktree remove --force",
+                       'git push origin HEAD:"$BASE"', "PROMOTE_COMMIT_TRAILER",
+                       "Never use `git add -A`", "PROMOTE_KB_GATES", "PROMOTE_KB_REPO",
+                       "PROMOTE_DRY_RUN", "Never enable auto-merge", "promote-scan/skills-", "lint-failed", "never edits itself", "AccountKey=", "git diff --numstat origin/$BASE", "PROMOTE_LARGE_SKILL_LINES",
+                       "FAILED worktree add", "skill missing on base", "not configured",
+                       "FAILED no timeout available", "nothing left after gate"):
             self.assertIn(needle, self.prompt)
+
+    def test_prompt_has_no_queue_pr_flow(self):
+        # The queue froze on 2026-10-19. A PR phase keyed on it never runs.
+        body = self.prompt
+        for gone in ("--auto", "queue.md", "no promotable content",
+                     "push --force", "--force-with-lease", "trunk", "data-base"):
+            self.assertNotIn(gone, body)
 
 
 class WiringTest(unittest.TestCase):
