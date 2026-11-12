@@ -35,6 +35,7 @@ Silencing drift-guard, whose deny blocks the agent, not the human; any other gat
 ## Cross-cutting concerns
 
 - Security: errors answer "not speed mode", so gates keep their normal verdict.
+- Trust: an agent with shell access can still write the marker file directly, as it can edit toggles.local. The gate guards against accidental prompts, not a hostile agent. Markers expire after `gates.speed_silent_ttl_h` hours (default 12).
 - Privacy: the marker holds only a session id under the local cache.
 - Observability: each skip logs one `SKIP ... speed mode` line.
 

@@ -54,19 +54,47 @@ def names_speed_prompt(payload):
     return bool(_PROMPT.search(str(payload.get("prompt") or "")))
 
 
+def _ttl_s():
+    try:
+        h = float(np_toggle.param("gates.speed_silent_ttl_h", "12") or "12")
+        if h > 0:
+            return h * 3600
+    except (TypeError, ValueError):
+        pass
+    return 12 * 3600
+
+
+def _fresh(sid):
+    """True when sid has a marker younger than the ttl."""
+    try:
+        with open(_path(sid), encoding="utf-8") as fh:
+            ts = float(json.load(fh).get("ts", 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+    return time.time() - ts <= _ttl_s()
+
+
+def transcript_session(path):
+    """Session id named by a transcript path, or "" when it names none."""
+    path = str(path or "")
+    m = _PARENT_FROM_TRANSCRIPT.search(path)
+    if m:
+        return m.group(1)
+    base = os.path.basename(path)
+    return base[:-6] if base.endswith(".jsonl") else ""
+
+
 def is_speed(payload):
-    """True when this hook payload belongs to a speed-mode session."""
+    """True when this hook payload belongs to a fresh speed-mode session."""
     try:
         if not isinstance(payload, dict):
             return False
         if not np_toggle.enabled("gates.speed_silent"):
             return False
         sid = payload.get("session_id")
-        if sid and os.path.isfile(_path(sid)):
+        if sid and _fresh(sid):
             return True
         m = _PARENT_FROM_TRANSCRIPT.search(str(payload.get("transcript_path") or ""))
-        if m and os.path.isfile(_path(m.group(1))):
-            return True
-        return False
+        return bool(m) and _fresh(m.group(1))
     except Exception:
         return False

@@ -108,6 +108,36 @@ class TestMarked(_Base):
         self.assertEqual(self._decision(out), "ask")
 
 
+class TestTtl(_Base):
+    def _age(self, hours):
+        path = os.path.join(self.tmp, "speed", SID)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            json.dump({"ts": __import__("time").time() - hours * 3600, "cwd": ""}, fh)
+
+    def _with_ttl(self, ttl):
+        return mock.patch("np_toggle.param",
+                          side_effect=lambda k, d=None: ttl if k == "gates.speed_silent_ttl_h" else d)
+
+    def test_fresh_marker_silences(self):
+        self._age(11)
+        self.assertEqual(self._call(spec_review, "engine/a.py"), "")
+
+    def test_old_marker_asks(self):
+        self._age(13)
+        self.assertEqual(self._decision(self._call(spec_review, "engine/a.py")), "ask")
+
+    def test_ttl_param_widens(self):
+        self._age(13)
+        with self._with_ttl("24"):
+            self.assertEqual(self._call(spec_review, "engine/a.py"), "")
+
+    def test_bad_ttl_falls_back_to_12(self):
+        self._age(13)
+        with self._with_ttl("junk"):
+            self.assertEqual(self._decision(self._call(spec_review, "engine/a.py")), "ask")
+
+
 class TestMarking(_Base):
     def _hook(self, payload):
         import json as _j
@@ -124,15 +154,40 @@ class TestMarking(_Base):
             self.assertFalse(self._marked(), name)
 
     def test_prompt_slash_marks(self):
-        self._hook({"session_id": SID, "prompt": "/np-flow-speed fix it"})
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "/np-flow-speed fix it"})
         self.assertTrue(self._marked())
 
     def test_short_prompt_slash_marks(self):
-        self._hook({"session_id": SID, "prompt": "  /np-speed"})
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "  /np-speed"})
+        self.assertTrue(self._marked())
+
+    def test_wrong_event_name_does_not_mark(self):
+        for ev in ("PreToolUse", "SubagentStop", None):
+            p = {"session_id": SID, "prompt": "/np-speed"}
+            if ev:
+                p["hook_event_name"] = ev
+            self._hook(p)
+            self.assertFalse(self._marked(), ev)
+
+    def test_event_name_userpromptsubmit_marks(self):
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
+                    "prompt": "/np-speed"})
+        self.assertTrue(self._marked())
+
+    def test_transcript_session_mismatch_does_not_mark(self):
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
+                    "prompt": "/np-speed",
+                    "transcript_path": "/h/.claude/projects/p/other-sid.jsonl"})
+        self.assertFalse(self._marked())
+
+    def test_transcript_session_match_marks(self):
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit",
+                    "prompt": "/np-speed",
+                    "transcript_path": "/h/.claude/projects/p/%s.jsonl" % SID})
         self.assertTrue(self._marked())
 
     def test_prompt_mentioning_speed_does_not_mark(self):
-        self._hook({"session_id": SID, "prompt": "what is speed mode? /np-flow-speed"})
+        self._hook({"session_id": SID, "hook_event_name": "UserPromptSubmit", "prompt": "what is speed mode? /np-flow-speed"})
         self.assertFalse(self._marked())
 
 
