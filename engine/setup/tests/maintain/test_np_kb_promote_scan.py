@@ -116,7 +116,8 @@ class PromptContractTest(unittest.TestCase):
                        "git push origin HEAD:$BASE", "PROMOTE_COMMIT_TRAILER",
                        "Never use `git add -A`", "PROMOTE_KB_GATES", "PROMOTE_KB_REPO",
                        "PROMOTE_DRY_RUN", "Never enable auto-merge", "promote-scan/skills-", "lint-failed", "never edits itself", "AccountKey=", "git diff --numstat origin/$BASE", "PROMOTE_LARGE_SKILL_LINES",
-                       "FAILED worktree add", "skill missing on base", "not configured"):
+                       "FAILED worktree add", "skill missing on base", "not configured",
+                       "FAILED no timeout available", "nothing left after gate"):
             self.assertIn(needle, self.prompt)
 
     def test_prompt_has_no_queue_pr_flow(self):

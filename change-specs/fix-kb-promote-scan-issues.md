@@ -103,6 +103,11 @@ Git history. Old commits still hold the terms, and rewriting them needs a force-
 
 - Neutral, because a forker sets five params before the job does anything.
 
+## Rollback
+
+Revert the squash commit. The cron then reads no params and the old prompt returns.
+The local `toggles.local` params are harmless when unread.
+
 ## Confirmation
 
 `test_np_kb_promote_scan.py` pins the prompt rules and the unconfigured skip.

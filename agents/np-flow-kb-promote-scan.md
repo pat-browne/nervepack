@@ -83,12 +83,11 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - Print `PHASE gate: dropped <path> <reason>` for each one.
 
    Then split `$PROMOTE_KB_GATES` on ` | ` and run each command in `$WT`, one command per call.
-   Wrap each command in `timeout 900` (`gtimeout` on macOS). If neither exists, print `PHASE gate: no timeout available` and run unwrapped. A timeout is a gate failure.
+   Wrap each command in `timeout 900` (`gtimeout` on macOS). If neither exists, print `PHASE gate: FAILED no timeout available` and push nothing. A timeout is a gate failure.
    If a gate's output names a file the scan wrote, restore it with `git checkout origin/$BASE -- <path>` or delete it if new. Then rerun every gate. Allow at most two reruns after the first run.
-   If the failure names no scan file, treat it as the other case below.
-   If a gate fails for any other reason, print `PHASE gate: FAILED <gate> <reason>` and push nothing.
+   If a gate fails and names no scan file, or fails for any other reason, print `PHASE gate: FAILED <gate> <reason>` and push nothing.
 
-4. **commit.** Split the gated paths in two. Paths under `docs/` are docs. Paths under `.claude/skills/` are skill changes.
+4. **commit.** If `git status --porcelain` is empty after the gate, print `PHASE commit: nothing left after gate` and go to phase 6. Otherwise split the gated paths in two. Paths under `docs/` are docs. Paths under `.claude/skills/` are skill changes.
    - Commit the docs first. Stage only docs paths the skill's report lists, by name. Never use `git add -A` or `git add .`.
    - The subject is `docs: promote <N> harness additions`, where N counts the paths staged after the gate. The body lists every staged path, one per line.
    - If `$PROMOTE_COMMIT_TRAILER` is set, the message must end with exactly that line.
@@ -101,11 +100,12 @@ On any failure, print `PHASE <name>: FAILED <reason>`. Then run phase cleanup an
    - Print `PHASE push: <short sha> <N> files`.
 
 5b. **skill PR.** Skip this phase if no skill paths remain.
-   - Run `git switch -c promote-scan/skills-$DATE`. Stage the skill paths by name.
+   - Run `git switch -c promote-scan/skills-$DATE`. If the branch exists, print `PHASE skill-pr: FAILED branch exists, see Manual recovery` and keep the worktree. Stage the skill paths by name.
    - Commit with subject `skills: promote <N> harness additions`, the same body rules, and the same trailer and hook amend.
    - Push the branch with `git push -u origin HEAD`.
    - Open it with `gh pr create -R "$REPO" -B "$BASE"`. The body lists each path and says a person must review and merge.
    - Never enable auto-merge on this PR. A person merges skill changes.
+   - If `gh pr create` fails, print `PHASE skill-pr: FAILED pr create <error> branch <name>`. The pushed branch stays for a person to open by hand.
    - Print `PHASE skill-pr: <url> <N> files` or `PHASE skill-pr: FAILED <reason>`.
 
 6. **report.** Print the skill's report, one line per item: files written, writes held back,
