@@ -24,7 +24,7 @@ blast_radius:
 
 ## Problem
 
-data-base ships a `harness-promote-scan` skill meant to run weekly from each
+team-kb ships a `harness-promote-scan` skill meant to run weekly from each
 teammate's local harness. Harness paths exist only on the local machine, so no
 cloud routine can run it. Nothing in nervepack schedules it.
 
@@ -34,7 +34,7 @@ The launchd installer also dropped the weekday of weekly jobs. `refine` and
 ## Change
 
 Add a `kb-promote-scan` agentic cron, Monday 08:45, gated by
-`maintain.kb_promote_scan` (default on). Its prompt makes a fresh data-base
+`maintain.kb_promote_scan` (default on). Its prompt makes a fresh team-kb
 worktree from `origin/trunk`, runs the skill, and on new queue items runs
 `pr-review`, commits, pushes, opens a PR, and watches checks. It never merges.
 
@@ -57,7 +57,7 @@ Emit `Weekday` in launchd plists for every weekly job.
    then delete `~/Library/LaunchAgents/com.nervepack.kb-promote-scan.plist`.
    On Linux, drop the `nervepack-kb-promote-scan` crontab line. On Windows, run
    `schtasks /delete /tn "nervepack\kb-promote-scan" /f`.
-3. Remove leftover worktrees: `git -C ~/Code/data-base worktree list`, then
-   `git worktree remove` each `data-base-promote-scan-*` entry.
+3. Remove leftover worktrees: `git -C ~/Code/team-kb worktree list`, then
+   `git worktree remove` each `team-kb-promote-scan-*` entry.
 4. Revert this PR and rerun `cli.py setup install-memory-launchd` to restore the
    old plists.

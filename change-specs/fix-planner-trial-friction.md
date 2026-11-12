@@ -14,26 +14,26 @@ blast_radius:
   - change-specs/fix-planner-trial-friction.md
 ---
 
-# 0116: planner file exemption and read-only claims
+# 0116: Planning-plugin file exemption and read-only claims
 
 ## Context and problem statement
 
-The AB#30089 planner orchestrator trial hit two nervepack frictions.
+An orchestrator trial with a planning plugin hit two nervepack frictions.
 
-The form gate blocked the planner plan and brief files twice. The plan agent then read hook source to get past it. The plugin owns the format of those files.
+The form gate blocked the plugin's plan and brief files twice. The plan agent then read hook source to get past it. The plugin owns the format of those files.
 
 A read-only monitor session held a claim on the same branch. The orchestrator got a STOP and asked the user about it.
 
 ## Considered options
 
-1. Add planner paths to `exempt_globs` in the content overlay. Bad, because the paths sit in every repo and a glob per repo does not scale.
-2. Add planner paths to the built-in `_EXEMPT` pattern. Good, because it covers every repo and mirrors the existing test and build exemptions.
+1. Add the plugin's paths to `exempt_globs` in the content overlay. Bad, because the paths sit in every repo and a glob per repo does not scale.
+2. Add the plugin's paths to the built-in `_EXEMPT` pattern. Good, because it covers every repo and mirrors the existing test and build exemptions.
 3. Detect read-only sessions from their tool calls. Bad, because the claim hook sees prompts, not tool calls.
 4. Let a session declare phase `read-only`. Good, because it is explicit and needs no new field.
 
 ## Decision
 
-We will add `.planner-plans/` and `briefs/<tracker_type>-<id>.md` to `_EXEMPT` in both prose gates.
+We will add the plugin's plan directory and `briefs/<tracker_type>-<id>.md` to `_EXEMPT` in both prose gates. Spec 0118 later moved this exemption to `form_gate.exempt_globs`, set per machine.
 
 We will treat a claim with phase `read-only` as a non-writer. It adds no STOP, overlap or rank, and a read-only session sees no STOP.
 
@@ -51,7 +51,7 @@ Other files in a `briefs/` folder stay gated. No automatic read-only detection.
 
 ## Consequences
 
-- Good, because planner runs no longer fight the form gate.
+- Good, because plugin runs no longer fight the form gate.
 - Good, because a monitor session no longer stalls an orchestrator.
 - Bad, because a session that wrongly claims `read-only` hides a real conflict.
 

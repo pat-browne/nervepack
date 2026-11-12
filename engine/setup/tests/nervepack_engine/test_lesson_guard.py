@@ -227,7 +227,7 @@ class TestLessonGuard(unittest.TestCase):
             % self._CONCISE_TNM)
         open(os.path.join(self.state, "s7-concise-output-gate-armed"), "a").close()
         out = self._run({
-            "tool_name": "mcp__plugin_data-base_azure-devops__repo_create_pull_request",
+            "tool_name": "mcp__plugin_team-kb_azure-devops__repo_create_pull_request",
             "session_id": "s7",
             "tool_input": {},
         })
@@ -249,7 +249,7 @@ class TestLessonGuard(unittest.TestCase):
         out = self._run({
             # a read-shaped MCP verb on the same server -- must NOT match the
             # write-only alternation above.
-            "tool_name": "mcp__plugin_data-base_azure-devops__repo_list_pull_requests_by_repo_or_project",
+            "tool_name": "mcp__plugin_team-kb_azure-devops__repo_list_pull_requests_by_repo_or_project",
             "session_id": "s8",
             "tool_input": {},
         })
