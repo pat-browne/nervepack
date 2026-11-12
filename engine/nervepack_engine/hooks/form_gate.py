@@ -4,7 +4,7 @@ Enforces the categorical rules of np-flow-concise-output (no em dash, no
 semicolon, no contraction, no marketing adjective) on text that persists:
 files, artifacts, Notion pages, Slack posts, work-item descriptions, and
 commit messages. `form_gate.categorical` selects the mode: `ask`/`warn`/`off`
-return "ask" or `allow`+context, exactly as before. Rate-based findings
+return "ask" or add context with no permission decision. Rate-based findings
 (passive voice, sentence length) only ever add context in every mode.
 
 `block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
@@ -484,14 +484,6 @@ def _deny(reason):
     }}, separators=(",", ":"))
 
 
-def _allow_with_context(context):
-    return json.dumps({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "allow",
-        "additionalContext": context,
-    }}, separators=(",", ":"))
-
-
 def _context_only(context):
     """Inject context and abstain: no permissionDecision, so Claude Code's own
     permission system decides the tool call."""
@@ -696,7 +688,7 @@ def run(payload_text):
                    "them, then retry." % (label, detail))
         np_toggle.signal(sid, "form-gate %s categorical :: %s"
                          % (categorical, ", ".join(n for n, _ in hits)))
-        return _ask(message) if categorical == "ask" else _allow_with_context(message)
+        return _ask(message) if categorical == "ask" else _context_only(message)
 
     if _mode("form_gate.rate", "warn", ("warn", "off")) == "off":
         return ""
@@ -712,6 +704,6 @@ def run(payload_text):
                  key=lambda kv: -kv[1])[:3]
     detail = ", ".join("%s=%d" % (k, v) for k, v in top) or "see np-ste-lint.py"
     np_toggle.signal(sid, "form-gate rate :: %.1f" % float(score))
-    return _allow_with_context(
+    return _context_only(
         "%s scores %.1f violations per 100 words against a threshold of %.1f "
         "(%s). See np-flow-concise-output." % (label, float(score), threshold, detail))
