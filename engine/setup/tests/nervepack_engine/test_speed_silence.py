@@ -33,8 +33,8 @@ class _Base(unittest.TestCase):
         os.environ["NP_SPEED_DIR"] = os.path.join(self.tmp, "speed")
         self._home = os.environ.get("HOME")
         os.environ["HOME"] = os.path.join(self.tmp, "fake-env-home")
-        self._pw = mock.patch("np_speed.pwd.getpwuid", return_value=mock.Mock(
-            pw_dir=os.path.join(self.tmp, "home")))
+        self._pw = mock.patch(
+            "np_speed._home_dir", return_value=os.path.join(self.tmp, "home"))
         self._pw.start()
         self.repo = os.path.join(self.tmp, "repo")
         os.makedirs(os.path.join(self.repo, ".git"))
@@ -61,6 +61,12 @@ class _Base(unittest.TestCase):
             os.makedirs(root, exist_ok=True)
             open(path, "w").close()
         return path
+
+    def _symlink(self, target, link):
+        try:
+            os.symlink(target, link)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable")
 
     def _ups(self, **kw):
         p = {"session_id": SID, "hook_event_name": "UserPromptSubmit",
@@ -168,6 +174,20 @@ class TestPathAndFailure(_Base):
         paths = {np_speed._path(i) for i in ids}
         self.assertEqual(len(paths), len(ids))
 
+    def test_one_helper_for_both_modules(self):
+        for sid in ("../x", "a/b", ".A", "ok-1"):
+            self.assertEqual(os.path.basename(np_speed._path(sid)), np_speed.safe_id(sid))
+            self.assertEqual(spec_review._safe_sid(sid), np_speed.safe_id(sid))
+
+    def test_traversal_sid_stays_in_receipt_dir_and_log_is_one_line(self):
+        seen = os.environ["NP_SPEC_REVIEW_DIR"]
+        got = spec_review._receipt_path("../x")
+        self.assertEqual(os.path.dirname(got), seen)
+        spec_review.log_verdict("T", "../x\nspec-review FORGED sid=y", "d")
+        text = self._log("sr.log")
+        self.assertEqual(len(text.splitlines()), 1)
+        self.assertNotIn("../", text)
+
     def test_plain_uuid_keeps_its_name(self):
         self.assertEqual(os.path.basename(np_speed._path("abc-123")), "abc-123")
 
@@ -236,7 +256,7 @@ class TestMarking(_Base):
         root = os.path.join(self.tmp, "home", ".claude", "projects", "q")
         os.makedirs(root)
         link = os.path.join(root, SID + ".jsonl")
-        os.symlink(real, link)
+        self._symlink(real, link)
         self._hook(self._ups(transcript_path=link))
         self.assertFalse(self._marked())
 
@@ -245,17 +265,27 @@ class TestMarking(_Base):
         root = os.path.join(self.tmp, "home", ".claude", "projects", "q")
         os.makedirs(root)
         link = os.path.join(root, SID + ".jsonl")
-        os.symlink(other, link)
+        self._symlink(other, link)
         self._hook(self._ups(transcript_path=link))
         self.assertFalse(self._marked())
 
+    @unittest.skipIf(np_speed.pwd is None, "no passwd database on this platform")
     def test_home_comes_from_passwd_not_env(self):
-        env_root = os.path.join(self.tmp, "fake-env-home", ".claude", "projects", "p")
-        os.makedirs(env_root)
-        tp = os.path.join(env_root, SID + ".jsonl")
-        open(tp, "w").close()
-        self._hook(self._ups(transcript_path=tp))
-        self.assertFalse(self._marked())
+        import pwd
+        os.environ["HOME"] = os.path.join(self.tmp, "fake-env-home")
+        self._pw.stop()
+        try:
+            self.assertEqual(np_speed._home_dir(), pwd.getpwuid(os.getuid()).pw_dir)
+        finally:
+            self._pw.start()
+
+    def test_home_falls_back_to_expanduser_without_pwd(self):
+        self._pw.stop()
+        try:
+            with mock.patch.object(np_speed, "pwd", None):
+                self.assertEqual(np_speed._home_dir(), os.path.expanduser("~"))
+        finally:
+            self._pw.start()
 
     def test_empty_or_relative_home_does_not_mark(self):
         import np_host
@@ -264,8 +294,7 @@ class TestMarking(_Base):
         payload = self._ups()
         for home in ("", "rel/home"):
             self._pw.stop()
-            self._pw = mock.patch("np_speed.pwd.getpwuid",
-                                  return_value=mock.Mock(pw_dir=home))
+            self._pw = mock.patch("np_speed._home_dir", return_value=home)
             self._pw.start()
             self._hook(payload)
             self.assertFalse(self._marked(), repr(home))

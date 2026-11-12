@@ -71,7 +71,7 @@ def _log(verdict, sid, detail):
 
 def log_verdict(verdict, sid, detail):
     """Public entry for sibling hooks that write to this gate's log."""
-    _log(verdict, sid, detail)
+    _log(verdict, np_speed.safe_id(sid), detail)
 
 
 def _ask(reason):
@@ -137,16 +137,9 @@ def _governing_document(root, branch):
 
 
 # A receipt filename is built from the session id, which arrives in the hook
-# payload. It is a UUID in practice, but nothing here should depend on that: an
-# id of ".." or one carrying a separator would name a path outside the cache
-# directory, and on Windows the separator is a backslash. Keep the safe
-# characters rather than trying to strip the dangerous ones, then drop leading
-# dots so no id can resolve to "." or "..".
-_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
-
-
+# payload. np_speed.safe_id keeps it inside the cache directory.
 def _safe_sid(sid):
-    return (_UNSAFE.sub("_", sid).lstrip(".") or "unknown")[:128]
+    return np_speed.safe_id(sid)
 
 
 def _receipt_path(sid):

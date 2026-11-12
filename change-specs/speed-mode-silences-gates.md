@@ -2,7 +2,7 @@
 id: 0117
 status: accepted
 date: 2026-11-12
-tier: standard
+tier: high
 blast_radius:
   - engine/**
   - docs/ARCHITECTURE.md
@@ -45,6 +45,10 @@ Silencing drift-guard, whose deny blocks the agent, not the human; any other gat
 - Good, because speed sessions run uninterrupted.
 - Bad, because one more Python process runs per prompt and Skill call.
 - Neutral, because the toggle defaults on and can be turned off per machine.
+
+## Rollback
+
+Set `gates.speed_silent=off` in toggles, or revert the PR. Markers expire after 12 h.
 
 ## Confirmation
 

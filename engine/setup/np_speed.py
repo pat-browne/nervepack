@@ -20,7 +20,7 @@ import time
 
 try:
     import pwd
-except ImportError:  # no passwd database: the marker is never written
+except ImportError:  # Windows
     pwd = None
 
 import np_dirs
@@ -38,7 +38,8 @@ def _dir():
     return os.environ.get("NP_SPEED_DIR") or np_dirs.cache_path("speed-mode")
 
 
-def _path(sid):
+def safe_id(sid):
+    """A filename-safe, collision-free form of a session id."""
     sid = str(sid)
     # Dots pass the character filter, so a leading dot must go: no id may
     # resolve to "." or "..".
@@ -46,7 +47,11 @@ def _path(sid):
     if safe != sid:
         # The id was altered, so two ids could share a name. Tell them apart.
         safe += "-" + hashlib.sha1(sid.encode("utf-8", "replace")).hexdigest()[:12]
-    return os.path.join(_dir(), safe)
+    return safe
+
+
+def _path(sid):
+    return os.path.join(_dir(), safe_id(sid))
 
 
 def mark(sid):
@@ -99,15 +104,23 @@ def transcript_session(path):
     return base[:-6] if base.endswith(".jsonl") else ""
 
 
+def _home_dir():
+    """The passwd home where pwd exists, so a spoofed HOME does not move the
+    trusted root. Windows has no pwd and falls back to expanduser."""
+    if pwd is not None:
+        return pwd.getpwuid(os.getuid()).pw_dir
+    return os.path.expanduser("~")
+
+
 def transcript_ok(payload):
     """True when the payload's transcript is a real file under the passwd home's
     .claude/projects and its resolved name matches session_id. Fails closed."""
     try:
         tp = payload.get("transcript_path")
         sid = payload.get("session_id")
-        if not tp or not sid or pwd is None or not os.path.isfile(tp):
+        if not tp or not sid or not os.path.isfile(tp):
             return False
-        home = pwd.getpwuid(os.getuid()).pw_dir
+        home = _home_dir()
         base = np_host.default_under("transcripts", home)
         if not base or not os.path.isdir(base):
             return False
