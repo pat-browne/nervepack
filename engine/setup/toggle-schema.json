@@ -330,6 +330,10 @@
     "type": "bool",
     "description": "Whether the spec-review hook asks, before the first implementation edit, that the branch's governing spec or plan has been read. Local scope: turning it off applies to this machine only."
   },
+  "gates.speed_silent": {
+    "type": "bool",
+    "description": "Whether a session running np-flow-speed (and its subagents) silences the spec-review ask and the drift-guard deny. Off makes both gates speak in speed mode too."
+  },
   "gates.drift_guard.enforce": {
     "type": "bool",
     "description": "Whether the drift-guard hook blocks or warns when an edit falls outside a change-spec's declared blast_radius."

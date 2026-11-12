@@ -58,6 +58,9 @@ PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook drift-guard
 # silent in any repo that has adopted neither convention.
 PreToolUse|Write|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-review
 PreToolUse|Edit|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook spec-review
+# --- 53d: speed-mode marker (np-flow-speed call silences spec-review and drift-guard) ---
+PreToolUse|Skill|python3 {NP_DIR}/engine/nervepack_engine/cli.py hook speed-mark
+UserPromptSubmit||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook speed-mark
 # --- 54: performance evaluator ---
 SessionEnd||python3 {NP_DIR}/engine/nervepack_engine/cli.py hook evaluator &
 # --- 62b: session claims release (before the flush row, which stays last) ---

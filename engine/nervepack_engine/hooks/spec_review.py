@@ -30,6 +30,7 @@ import re
 import np_change_spec
 import np_toggle
 import np_dirs
+import np_speed
 
 # Directories whose contents ARE the record, never the implementation.
 _RECORD_DIRS = ("change-specs/", "docs/superpowers/specs/",
@@ -211,6 +212,10 @@ def run(payload_text, *_args):
     key = "%s@%d" % (doc_rel, int(mtime))
     if _already_confirmed(sid, key):
         _log("PASS", sid, "%s already confirmed for %s" % (doc_rel, rel))
+        return ""
+
+    if np_speed.is_speed(payload):
+        _log("SKIP", sid, "speed mode; %s not asked before %s" % (doc_rel, rel))
         return ""
 
     _record(sid, key)
