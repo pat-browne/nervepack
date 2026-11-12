@@ -10,9 +10,9 @@ return "ask" or `allow`+context, exactly as before. Rate-based findings
 `block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
 write carrying em_dash, semicolon, marketing_adjective, an over-length
 sentence, or an over-length paragraph is denied outright, up to two retries
-per (session, target). A third strike allows the write with context naming the findings, never a
-prompt, and emits a struggles[] record to the episodic inbox so episodic-maintain can distill the
-pattern. `contraction` never blocks -- it stays a rate-channel signal only.
+per (session, target). A third strike allows the write with context naming
+the findings, never a prompt, and emits a struggles[] record to the episodic
+inbox so episodic-maintain can distill the pattern. `contraction` never blocks -- it stays a rate-channel signal only.
 The engine ships `categorical=warn`. `block` is opt-in.
 
 Fails open everywhere, per ARCHITECTURE invariant 1: every counter-file and
