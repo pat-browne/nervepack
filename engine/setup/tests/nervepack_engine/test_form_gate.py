@@ -27,6 +27,22 @@ class TestFormGatePaths(unittest.TestCase):
     def test_test_fixture_path_is_exempt(self):
         self.assertTrue(form_gate._is_exempt_path("/x/tests/data.md"))
 
+    def test_campco_plan_file_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("/r/.campco-plans/plan-ado-30089.md"))
+
+    def test_campco_brief_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("/r/briefs/ado_workitem-30089.md"))
+
+    def test_every_campco_tracker_brief_is_exempt(self):
+        for kind in ("ado_workitem", "github_issue", "jira_issue", "linear_issue"):
+            self.assertTrue(form_gate._is_exempt_path("/r/briefs/%s-1.md" % kind), kind)
+
+    def test_relative_campco_brief_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("briefs/github_issue-12.md"))
+
+    def test_other_brief_is_not_exempt(self):
+        self.assertFalse(form_gate._is_exempt_path("/r/briefs/q3-summary.md"))
+
     def test_voiced_prose_glob_is_exempt(self):
         globs = os.path.expanduser("~/Code/pbrowne-net/**")
         with mock.patch.object(form_gate.np_toggle, "param",
@@ -186,7 +202,7 @@ class TestChannels(unittest.TestCase):
                         lint={"violations": {"passive_voice": 3},
                               "total_per100w": 9.0})
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertNotIn("permissionDecision", data)
         self.assertIn("additionalContext", data)
 
     def test_rate_below_threshold_returns_empty(self):
@@ -201,7 +217,8 @@ class TestChannels(unittest.TestCase):
                         params={"form_gate.categorical": "warn"},
                         lint=self._clean(semicolon=1))
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "allow")
+        self.assertNotIn("permissionDecision", data)
+        self.assertIn("additionalContext", data)
 
     def test_reason_names_every_violated_rule(self):
         out = self._run(self._write("Text"),
@@ -363,7 +380,7 @@ class TestBlockMode(unittest.TestCase):
         self.assertIn("semicolon", data["permissionDecisionReason"])
         self.assertEqual(notes, [])
 
-    def test_escalates_to_ask_at_counter_two_and_emits_struggle(self):
+    def test_escalates_to_context_only_at_counter_two_and_emits_struggle(self):
         payload = self._write("A clause; another.")
         lint = self._violations(semicolon=1)
         out1, notes1 = self._run(payload, lint=lint)
@@ -373,9 +390,10 @@ class TestBlockMode(unittest.TestCase):
         self.assertEqual(json.loads(out1)["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertEqual(json.loads(out2)["hookSpecificOutput"]["permissionDecision"], "deny")
         data3 = json.loads(out3)["hookSpecificOutput"]
-        self.assertEqual(data3["permissionDecision"], "ask")
-        self.assertIn("tuning", data3["permissionDecisionReason"])
-        self.assertIn("np-ste-lint.py", data3["permissionDecisionReason"])
+        self.assertNotIn("permissionDecision", data3)
+        self.assertNotIn("permissionDecisionReason", data3)
+        self.assertIn("semicolon", data3["additionalContext"])
+        self.assertIn("np-ste-lint.py", data3["additionalContext"])
 
         self.assertEqual(notes1, [])
         self.assertEqual(notes2, [])
@@ -431,15 +449,15 @@ class TestBlockMode(unittest.TestCase):
         self.assertIn("long paragraph", data["permissionDecisionReason"])
 
     def test_failed_counter_write_escalates_not_denies(self):
-        # If the retry counter cannot be persisted, the gate must escalate to
-        # ask rather than deny -- a stuck counter reads 0 forever, so denying
+        # If the retry counter cannot be persisted, the gate must abstain
+        # rather than deny -- a stuck counter reads 0 forever, so denying
         # would trap the user in permanent denies with no escalation.
         payload = self._write("A clause; another.")
         with mock.patch.object(form_gate, "_write_retry", return_value=False):
             out, notes = self._run(payload, lint=self._violations(semicolon=1))
         data = json.loads(out)["hookSpecificOutput"]
-        self.assertEqual(data["permissionDecision"], "ask")
-        self.assertIn("tuning", data["permissionDecisionReason"])
+        self.assertNotIn("permissionDecision", data)
+        self.assertIn("tuning", data["additionalContext"])
         self.assertEqual(len(notes), 1)
 
     def test_ask_mode_unaffected_by_block_helpers(self):

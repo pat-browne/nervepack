@@ -4,15 +4,17 @@ Enforces the categorical rules of np-flow-concise-output (no em dash, no
 semicolon, no contraction, no marketing adjective) on text that persists:
 files, artifacts, Notion pages, Slack posts, work-item descriptions, and
 commit messages. `form_gate.categorical` selects the mode: `ask`/`warn`/`off`
-return "ask" or `allow`+context, exactly as before. Rate-based findings
+return "ask" or add context with no permission decision. Rate-based findings
 (passive voice, sentence length) only ever add context in every mode.
 
 `block` is the third deliberate blocking hook (ARCHITECTURE invariant 1): a
 write carrying em_dash, semicolon, marketing_adjective, an over-length
 sentence, or an over-length paragraph is denied outright, up to two retries
-per (session, target). A third strike escalates to `ask` and emits a
-struggles[] record to the episodic inbox so episodic-maintain can distill the
-pattern. `contraction` never blocks -- it stays a rate-channel signal only.
+per (session, target). A third strike abstains: it adds context naming the
+findings and returns no permission decision, so Claude Code's own checks
+apply. It also emits a struggles[] record to the episodic inbox so
+episodic-maintain can distill the pattern. `contraction` never blocks -- it
+stays a rate-channel signal only.
 The engine ships `categorical=warn`. `block` is opt-in.
 
 Fails open everywhere, per ARCHITECTURE invariant 1: every counter-file and
@@ -88,7 +90,11 @@ _GATED_MCP = {
 
 # Mirrors turn_gate._EXEMPT so the two prose gates agree on what is not prose.
 _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules"
-                     r"|dist|build)([/\\]|$)|\.min\.", re.I)
+                     r"|dist|build)([/\\]|$)|\.min\."
+                     # CampCo Plans owns these files and their format.
+                     # Brief prefixes match CampCo tracker types. Add new ones in both gates.
+                     r"|(^|[/\\])\.campco-plans([/\\]|$)"
+                     r"|(^|[/\\])briefs[/\\](ado_workitem|github_issue|jira_issue|linear_issue)-[^/\\]+\.md$", re.I)
 
 _CATEGORICAL = ("em_dash", "semicolon", "contraction", "marketing_adjective")
 
@@ -482,10 +488,11 @@ def _deny(reason):
     }}, separators=(",", ":"))
 
 
-def _allow_with_context(context):
+def _context_only(context):
+    """Inject context and abstain: no permissionDecision, so Claude Code's own
+    permission system decides the tool call."""
     return json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
-        "permissionDecision": "allow",
         "additionalContext": context,
     }}, separators=(",", ":"))
 
@@ -567,7 +574,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
     try:
         cwd = payload.get("cwd") or os.getcwd()
         project = os.path.basename(cwd.rstrip(os.sep) or "unknown") or "unknown"
-        symptom = ("form gate escalated to ask after 2 blocks on %s: %s"
+        symptom = ("form gate escalated to context after 2 blocks on %s: %s"
                    % (label, detail))
         record = {
             "session_id": sid,
@@ -575,7 +582,7 @@ def _emit_escalation_struggle(sid, payload, label, detail):
             "project": project,
             "cwd": cwd,
             "mode": "form-gate-escalation",
-            "headline": "form gate escalated to ask on %s" % label,
+            "headline": "form gate escalated to context on %s" % label,
             "body": "%s. Rewrite could not satisfy the linter." % symptom,
             "candidate_topics": ["form-gate"],
             "keywords": ["form-gate", "escalation", label],
@@ -625,7 +632,7 @@ def _run_block(sid, target, label, violations, payload, extra_labels=None):
                "np-flow-concise-output." % (label, detail))
     np_toggle.signal(sid, "form-gate-escalation :: %s :: %s" % (label, detail))
     _emit_escalation_struggle(sid, payload, label, detail)
-    return _ask(message)
+    return _context_only(message)
 
 
 def run(payload_text):
@@ -685,7 +692,7 @@ def run(payload_text):
                    "them, then retry." % (label, detail))
         np_toggle.signal(sid, "form-gate %s categorical :: %s"
                          % (categorical, ", ".join(n for n, _ in hits)))
-        return _ask(message) if categorical == "ask" else _allow_with_context(message)
+        return _ask(message) if categorical == "ask" else _context_only(message)
 
     if _mode("form_gate.rate", "warn", ("warn", "off")) == "off":
         return ""
@@ -701,6 +708,6 @@ def run(payload_text):
                  key=lambda kv: -kv[1])[:3]
     detail = ", ".join("%s=%d" % (k, v) for k, v in top) or "see np-ste-lint.py"
     np_toggle.signal(sid, "form-gate rate :: %.1f" % float(score))
-    return _allow_with_context(
+    return _context_only(
         "%s scores %.1f violations per 100 words against a threshold of %.1f "
         "(%s). See np-flow-concise-output." % (label, float(score), threshold, detail))
