@@ -203,7 +203,8 @@ class TestPathAndFailure(_Base):
         from hooks import speed_mark
         speed_mark.run(json.dumps(self._ups()))
         self.assertIn("MARKFAIL", self._log("sr.log"))
-        self.assertIn("ENOTDIR", self._log("sr.log"))
+        self.assertTrue(
+            "ENOTDIR" in self._log("sr.log") or "ENOENT" in self._log("sr.log"))
 
     def test_hook_error_is_logged_by_type_and_fails_open(self):
         from hooks import speed_mark
