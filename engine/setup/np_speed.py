@@ -110,8 +110,8 @@ def _home_dir():
     if pwd is None:
         return ""
     try:
-        return pwd.getpwuid(os.getuid()).pw_dir
-    except (OSError, KeyError):
+        return pwd.getpwuid(os.getuid()).pw_dir or ""
+    except (KeyError, OverflowError, OSError):
         return ""
 
 

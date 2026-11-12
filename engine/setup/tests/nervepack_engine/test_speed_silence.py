@@ -290,6 +290,19 @@ class TestMarking(_Base):
             self._pw.start()
         self.assertFalse(self._marked())
 
+    @unittest.skipIf(np_speed.pwd is None, "no passwd database on this platform")
+    def test_raising_getpwuid_fails_closed_and_writes_no_marker(self):
+        for exc in (KeyError("uid"), OverflowError("uid"), OSError("db")):
+            payload = self._ups()
+            self._pw.stop()
+            try:
+                with mock.patch.object(np_speed.pwd, "getpwuid", side_effect=exc):
+                    self.assertEqual(np_speed._home_dir(), "")
+                    self._hook(payload)
+            finally:
+                self._pw.start()
+            self.assertFalse(self._marked())
+
     def test_empty_or_relative_home_does_not_mark(self):
         import np_host
         self.assertEqual(np_host.default_under("transcripts", ""), "")
