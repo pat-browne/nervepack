@@ -27,6 +27,22 @@ class TestFormGatePaths(unittest.TestCase):
     def test_test_fixture_path_is_exempt(self):
         self.assertTrue(form_gate._is_exempt_path("/x/tests/data.md"))
 
+    def test_planner_plan_file_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("/r/.planner-plans/plan-ado-30089.md"))
+
+    def test_planner_brief_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("/r/briefs/ado_workitem-30089.md"))
+
+    def test_every_planner_tracker_brief_is_exempt(self):
+        for kind in ("ado_workitem", "github_issue", "jira_issue", "linear_issue"):
+            self.assertTrue(form_gate._is_exempt_path("/r/briefs/%s-1.md" % kind), kind)
+
+    def test_relative_planner_brief_is_exempt(self):
+        self.assertTrue(form_gate._is_exempt_path("briefs/github_issue-12.md"))
+
+    def test_other_brief_is_not_exempt(self):
+        self.assertFalse(form_gate._is_exempt_path("/r/briefs/q3-summary.md"))
+
     def test_voiced_prose_glob_is_exempt(self):
         globs = os.path.expanduser("~/Code/pbrowne-net/**")
         with mock.patch.object(form_gate.np_toggle, "param",

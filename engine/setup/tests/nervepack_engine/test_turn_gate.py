@@ -202,5 +202,18 @@ class TestTurnGate(unittest.TestCase):
         self.assertNotEqual(out, "", "the real linter should flag this deliberately bad text")
 
 
+
+class TestTurnGateExemptParity(unittest.TestCase):
+    """The two prose gates must agree on what is not prose."""
+
+    def test_patterns_match_form_gate(self):
+        from hooks import form_gate
+        self.assertEqual(turn_gate._EXEMPT.pattern, form_gate._EXEMPT.pattern)
+
+    def test_planner_paths_are_exempt(self):
+        for p in ("/r/.planner-plans/plan.md", "briefs/ado_workitem-1.md"):
+            self.assertTrue(turn_gate._EXEMPT.search(p), p)
+        self.assertFalse(turn_gate._EXEMPT.search("/r/briefs/q3-summary.md"))
+
 if __name__ == "__main__":
     unittest.main()
