@@ -13,9 +13,10 @@ def run(payload_text, *_args):
         payload = json.loads(payload_text or "{}")
         if payload.get("hook_event_name") != "UserPromptSubmit":
             return ""
-        if not np_speed.transcript_ok(payload):
-            return ""
+        # Cheap regex first: most prompts are not speed prompts, skip the file checks.
         if np_speed.names_speed_prompt(payload):
+            if not np_speed.transcript_ok(payload):
+                return ""
             sid = payload.get("session_id")
             if not np_speed.mark(sid):
                 spec_review.log_verdict("MARKFAIL", sid, "speed-mode marker not written")
