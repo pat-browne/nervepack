@@ -2,7 +2,7 @@
 id: 0116
 status: accepted
 date: 2026-11-12
-tier: normal
+tier: high
 blast_radius:
   - engine/nervepack_engine/hooks/form_gate.py
   - engine/nervepack_engine/hooks/turn_gate.py
@@ -53,3 +53,11 @@ Other files in a `briefs/` folder stay gated. No automatic read-only detection.
 - Good, because CampCo runs no longer fight the form gate.
 - Good, because a monitor session no longer stalls an orchestrator.
 - Bad, because a session that wrongly claims `read-only` hides a real conflict.
+
+## Confirmation
+
+The new tests in `test_form_gate.py` and `test_np_claims.py` cover both changes.
+
+## Rollback
+
+Revert the PR. No data or config format changes, so a revert needs no migration.
