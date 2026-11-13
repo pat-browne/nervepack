@@ -60,8 +60,9 @@ worktree.
 
 - Every brief tells the child to send you each question, blocker and finding
   by SendMessage. Each message names the ticket, the ask, the options and the
-  option the child recommends. The child waits for your reply. It always asks
-  you by SendMessage. If that fails, it asks in its own session and says SendMessage failed.
+  option the child recommends. The child waits for your reply. It asks you by
+  SendMessage first. If that call errors, it asks in its own session and starts
+  the message with `SendMessage failed:`.
   Relay its message to me as sent. Read its transcript to verify a fact it
   reports, and read more if anything looks wrong or missing.
 
@@ -133,7 +134,7 @@ Handle these yourself:
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
 | Stuck or silent (ended its turn with no message to you) | Read its transcript and PR before you call it blocked. |
-| Asked a question in its own session, not by SendMessage | Relay it to me. Send my answer to the child by SendMessage, and remind it to use SendMessage next time. |
+| Asked a question in its own session, not by SendMessage | Relay it to me. Send my answer to the child by SendMessage, and remind it to use SendMessage next time. If your SendMessage errors too, tell me and give the answer in the child's session. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
 Several decisions pending? Ask the most blocking one. Keep the rest in the
