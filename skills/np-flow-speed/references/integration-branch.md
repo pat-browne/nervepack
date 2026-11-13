@@ -67,8 +67,8 @@ A coordinator session dispatches one worker subagent per stream. Each worker's b
 - **A worker that ends mid-gate.** Push its commits yourself and gate on the integration branch.
 - In its log, look for each suite's own PASS or FAIL line. A setup error with no such line means the suite did not run.
 - **Default branch moves mid-gate.** Stop the gate, merge the default branch, resolve, and gate again. A gate on a stale base is not a result.
-- **Unanchored final review.** Give the reviewer the user's asks and the diff. Withhold your decisions log. The reviewer then grades against intent, not your rulings.
+- **Unanchored final review.** An unanchored reviewer has not seen your reasoning. Give it the user's asks and the diff. Withhold your decisions log. It then grades against intent, not your rulings.
 - **A score can reward the fault.** Check what a metric rewards before you gate on it.
 - Example: one score matched a workout plan to song loudness each second. It rewarded the rapid phase changes the user had reported.
 - **Cleanup.** Delete a merged source branch or worktree only when two checks pass.
-- Its tip is an ancestor of the integration head. `git status --porcelain --untracked-files=no` prints nothing.
+- The branch tip is an ancestor of the integration head. In the worktree, `git status --porcelain --untracked-files=no` prints nothing.
