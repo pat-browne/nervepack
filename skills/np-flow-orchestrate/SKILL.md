@@ -60,8 +60,8 @@ worktree.
 
 - Every brief tells the child to send you each question, blocker and finding
   by SendMessage. Each message names the ticket, the ask, the options and the
-  option the child recommends. The child waits for your reply. It never asks
-  me directly in its own session. If SendMessage fails, it asks there instead.
+  option the child recommends. The child waits for your reply. It always asks
+  you by SendMessage. If that fails, it asks in its own session and quotes the error.
   Relay its message to me as sent. Read its transcript to verify a fact it
   reports, and read more if anything looks wrong or missing.
 
