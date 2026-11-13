@@ -7,8 +7,7 @@ description: 'Use when the user wants a change delivered end to end with no clar
 
 Speed mode delivers end to end without asking: brainstorm, plan, implement,
 test, review, PR, review-bot resolution, merge on green, deploy, verify. It
-ends with a decisions log. The hard limits
-below still stop and surface.
+ends with a decisions log. The hard limits below still stop and surface.
 
 Announce: "Using np-flow-speed."
 
@@ -60,6 +59,11 @@ model that can do its job. The session default is never a worker's model.
 
 Opening the PR starts this phase. It ends only when the deploy has landed and
 a live check passes. Do not hand back at "PR open" or "merged".
+
+Before a PR is ready or merged:
+
+- [[np-flow-code-review]] in read-only subagents, one per PR or repo. Fix every Hard block. Fix or answer every Soft warning.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. CI disabled means no gate: say so, run a trial-merge preflight. Give the user every check and deploy run link.
 
 1. **Review bot.** On a repo with the bot ([[np-kb-pr-review-bot]]), wait for
    its review and the responder run. With no bot, or a run that posted
@@ -140,5 +144,4 @@ references/decisions-log.md
 - Not a way past a gate. Tests, CI and the merge gate still decide.
 - Not [[np-flow-orchestrate]]. That mode keeps the user on every plan and risky
   merge across many tickets.
-- Not [[np-core-dispatch]]. Dispatch supervises one handed-off task. Speed mode
-  may use it to run workers.
+- Not [[np-core-dispatch]]. Dispatch supervises one handed-off task.
