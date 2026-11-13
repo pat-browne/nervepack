@@ -113,7 +113,7 @@ class PromptContractTest(unittest.TestCase):
     def test_prompt_rules(self):
         for needle in ("harness-promote-scan", "origin/$BASE", "--detach",
                        "gh auth status", "PHASE cleanup", "worktree remove --force",
-                       "git push origin HEAD:$BASE", "PROMOTE_COMMIT_TRAILER",
+                       'git push origin HEAD:"$BASE"', "PROMOTE_COMMIT_TRAILER",
                        "Never use `git add -A`", "PROMOTE_KB_GATES", "PROMOTE_KB_REPO",
                        "PROMOTE_DRY_RUN", "Never enable auto-merge", "promote-scan/skills-", "lint-failed", "never edits itself", "AccountKey=", "git diff --numstat origin/$BASE", "PROMOTE_LARGE_SKILL_LINES",
                        "FAILED worktree add", "skill missing on base", "not configured",
