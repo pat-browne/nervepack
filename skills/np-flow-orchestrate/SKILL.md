@@ -61,8 +61,9 @@ worktree.
 - Every brief tells the child to send you each question, blocker and finding
   by SendMessage. Each message names the ticket, the ask, the options and the
   option the child recommends. The child waits for your reply. It never asks
-  me directly in its own session. Relay its message to me as sent. When you
-  relay, read its transcript only to check a claim in the message.
+  me directly in its own session. If SendMessage fails, it asks there instead.
+  Relay its message to me as sent. Read its transcript to verify a fact it
+  reports, and read more if anything looks wrong or missing.
 
 - Small calls are yours, but tell me after you make them. Scope, security, or
   anything customers see comes to me.
