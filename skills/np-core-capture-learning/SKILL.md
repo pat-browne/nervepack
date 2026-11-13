@@ -51,14 +51,19 @@ harder, so bias conservative.
 
 ## Steps
 
-### 0. Sync first
-Run [[np-core-sync]] before you classify, so a durable capture lands on a
-current checkout. Read `~/.cache/np-core-sync-status` first. A stale checkout
-hides the skill you would extend and forks the repo.
+### 0. Sync first (durable captures only)
+Before step 2a, run [[np-core-sync]] so a durable capture lands on a current
+checkout. A stale checkout hides the skill you would extend and forks the repo.
+Skip this for a session-scoped capture to memory (step 2b).
+
+Read the status file `~/.cache/np-core-sync-status`. If it is missing or
+unreadable, treat the checkout as stale and run `np-core-sync`. The status
+strings are the ones `np-core-sync` documents, so check that skill for current
+values.
 
 - `up to date`: go on.
 - `SKIPPED (dirty)` or `DIVERGED`: stop and surface it. Do not edit skills on
-  a stale tree. A session-scoped capture to memory needs no sync.
+  a stale tree.
 
 ### 1. Classify
 Read the user's intent. Apply the table above. State the verdict and the
