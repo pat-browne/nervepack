@@ -51,6 +51,15 @@ harder, so bias conservative.
 
 ## Steps
 
+### 0. Sync first
+Run [[np-core-sync]] before you classify, so a durable capture lands on a
+current checkout. Read `~/.cache/np-core-sync-status` first. A stale checkout
+hides the skill you would extend and forks the repo.
+
+- `up to date`: go on.
+- `SKIPPED (dirty)` or `DIVERGED`: stop and surface it. Do not edit skills on
+  a stale tree. A session-scoped capture to memory needs no sync.
+
 ### 1. Classify
 Read the user's intent. Apply the table above. State the verdict and the
 reason in one sentence: "Saving to nervepack → it's a stable coding rule
