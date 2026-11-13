@@ -59,9 +59,10 @@ worktree.
   until its final report has a "Captured:" line.
 
 - Every brief tells the child to send you each question, blocker and finding
-  by SendMessage. Each message names the ticket, the ask, the options and its
-  pick. The child then waits for your reply, not for me in its own session.
-  Relay its message to me as sent. Read its transcript only to check a claim.
+  by SendMessage. Each message names the ticket, the ask, the options and the
+  option the child recommends. The child waits for your reply. It never asks
+  me directly in its own session. Relay its message to me as sent. When you
+  relay, read its transcript only to check a claim in the message.
 
 - Small calls are yours, but tell me after you make them. Scope, security, or
   anything customers see comes to me.
@@ -130,8 +131,8 @@ Handle these yourself:
 |---|---|
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
-| Stuck or silent | Only for a silent child, read its transcript and PR before you call it blocked. |
-| Asked a question in its own session, not by SendMessage | Relay it to me, send the answer back, and restate the rule in the reply. |
+| Stuck or silent (ended its turn with no message to you) | Read its transcript and PR before you call it blocked. |
+| Asked a question in its own session, not by SendMessage | Relay it to me. Send my answer to the child by SendMessage, and remind it to use SendMessage next time. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
 Several decisions pending? Ask the most blocking one. Keep the rest in the
