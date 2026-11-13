@@ -57,3 +57,13 @@ One integration branch pays those costs once.
 8. **Close the sources.** Comment "Landed in #N (<sha>)" on each, close it, and
    delete its branch.
 9. **Verify live** once for the whole batch, as in the finish line.
+
+## Gotchas from long multi-worker runs
+
+- **Brief first, dispatch second.** A form gate can reject the brief file after the worker starts. The worker then reports blocked. Confirm the write succeeded before you dispatch.
+- **One base for every stream.** Every worker branches off the integration branch and merges nothing else. Two workers that touch the same test file run one after the other.
+- **A worker that ends mid-gate.** Push its commits yourself and gate on the integration branch. Its own gate log may show tool temp-dir noise, not a test result.
+- **Default branch moves mid-gate.** Stop the gate, merge the default branch, resolve, and gate again. A gate on a stale base is not a result.
+- **Unanchored final review.** Give the reviewer the user's asks and the diff, not your ledger. It then grades against intent, not against your rulings.
+- **A score can reward the fault.** Check what a metric rewards before you gate on it. Replay scores that track per-second loudness reward the thrash a rider complained about.
+- **Cleanup.** Delete a source branch or worktree only when its tip is an ancestor of the integration head. Its tree must also be clean.
