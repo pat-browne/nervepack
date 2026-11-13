@@ -51,20 +51,6 @@ harder, so bias conservative.
 
 ## Steps
 
-### Prerequisite: sync first (durable captures only)
-Before step 2a, make sure the checkout is current. A stale checkout hides the
-skill you would extend and forks the repo. Skip this for a session-scoped
-capture to memory (step 2b).
-
-Read `~/.cache/np-core-sync-status`. Only `up to date` allows a durable capture.
-
-- `up to date`: go on.
-- Anything else, including a missing file or a value you do not recognize: run
-  [[np-core-sync]], then read the status again.
-- Still not `up to date`, or the sync failed: stop. Tell the user "Cannot
-  capture: checkout is stale", give the status value and any sync error, and
-  ask how to proceed. Do not edit skills on a stale tree.
-
 ### 1. Classify
 Read the user's intent. Apply the table above. State the verdict and the
 reason in one sentence: "Saving to nervepack → it's a stable coding rule
@@ -74,7 +60,28 @@ current PR you're debugging."
 If the user disagrees, switch routes. They have final say.
 
 ### 2a. Durable → nervepack
-Delegate to [[np-core-contribute]]. Follow its full protocol: preflight for other
+First make sure the checkout is current. A stale one hides the skill you would
+extend and forks the repo.
+
+Read the sync status. Only `up to date` allows the capture.
+
+```bash
+cat ~/.cache/np-core-sync-status
+```
+
+For any other content, or a missing or empty file, run the sync and read the
+status again. See [[np-core-sync]].
+
+```bash
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" sync exit
+```
+
+If the sync exits nonzero or the status is still not `up to date`, stop. Tell
+the user "Cannot capture: checkout is stale." Quote the status line and the last
+lines of the sync output, and ask how to proceed. Do not edit skills on a stale
+tree.
+
+Then delegate to [[np-core-contribute]]. Follow its full protocol: preflight for other
 writers, sync first, check `INDEX.md`, pick the right skill (extend over create),
 write the edit, regenerate index, diff, commit, ask before push.
 
