@@ -22,6 +22,7 @@ Announce: "Using np-flow-speed."
 - Run the [[np-flow-develop]] phases in order. Tests stay first and the
   deterministic gate still blocks.
 - Merge on green when the repo allows a merge without a human.
+- Speed mode silences the spec-review ask, for its subagents too (`gates.speed_silent`).
 - Speed is not done at merge. It runs the finish line below until the change
   is deployed and verified live.
 

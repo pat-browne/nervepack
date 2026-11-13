@@ -25,11 +25,11 @@ is confirmed again and an unchanged one is never asked about twice.
 import datetime
 import json
 import os
-import re
 
 import np_change_spec
 import np_toggle
 import np_dirs
+import np_speed
 
 # Directories whose contents ARE the record, never the implementation.
 _RECORD_DIRS = ("change-specs/", "docs/superpowers/specs/",
@@ -58,6 +58,7 @@ def _log(verdict, sid, detail):
     is the common case in every repo that has not adopted the convention, and
     logging it would be one line per Write and Edit per session, machine-wide.
     """
+    sid = np_speed.safe_id(sid)
     try:
         path = _log_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -66,6 +67,11 @@ def _log(verdict, sid, detail):
             fh.write("%s spec-review %s sid=%s %s\n" % (ts, verdict, sid, detail))
     except OSError:
         pass  # a log that cannot be written must not change the decision
+
+
+def log_verdict(verdict, sid, detail):
+    """Public entry for sibling hooks that write to this gate's log."""
+    _log(verdict, sid, detail)
 
 
 def _ask(reason):
@@ -131,16 +137,9 @@ def _governing_document(root, branch):
 
 
 # A receipt filename is built from the session id, which arrives in the hook
-# payload. It is a UUID in practice, but nothing here should depend on that: an
-# id of ".." or one carrying a separator would name a path outside the cache
-# directory, and on Windows the separator is a backslash. Keep the safe
-# characters rather than trying to strip the dangerous ones, then drop leading
-# dots so no id can resolve to "." or "..".
-_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
-
-
+# payload. np_speed.safe_id keeps it inside the cache directory.
 def _safe_sid(sid):
-    return (_UNSAFE.sub("_", sid).lstrip(".") or "unknown")[:128]
+    return np_speed.safe_id(sid)
 
 
 def _receipt_path(sid):
@@ -211,6 +210,10 @@ def run(payload_text, *_args):
     key = "%s@%d" % (doc_rel, int(mtime))
     if _already_confirmed(sid, key):
         _log("PASS", sid, "%s already confirmed for %s" % (doc_rel, rel))
+        return ""
+
+    if np_speed.is_speed(payload):
+        _log("SKIP", sid, "speed mode; %s not asked before %s" % (doc_rel, rel))
         return ""
 
     _record(sid, key)

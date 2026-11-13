@@ -174,6 +174,14 @@ def default_for(key):
     return os.path.join(_home(), *_DEFAULTS[key])
 
 
+def default_under(key, home):
+    """The built-in path for key under an explicit home directory, or "" when
+    home is empty or not absolute."""
+    if not home or not os.path.isabs(home):
+        return ""
+    return os.path.join(home, *_DEFAULTS[key])
+
+
 def invalid_values():
     """{key: value} for `paths` entries that could not be used.
 
