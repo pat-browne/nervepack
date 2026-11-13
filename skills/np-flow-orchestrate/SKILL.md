@@ -130,7 +130,7 @@ Handle these yourself:
 |---|---|
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
-| Stuck or silent | Read its transcript and PR before you call it blocked. |
+| Stuck or silent | Only for a silent child, read its transcript and PR before you call it blocked. |
 | Asked a question in its own session, not by SendMessage | Relay it to me, send the answer back, and restate the rule in the reply. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
