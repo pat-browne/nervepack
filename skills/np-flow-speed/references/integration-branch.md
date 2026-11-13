@@ -65,5 +65,5 @@ One integration branch pays those costs once.
 - **A worker that ends mid-gate.** Push its commits yourself and gate on the integration branch. Its own gate log may show tool temp-dir noise, not a test result.
 - **Default branch moves mid-gate.** Stop the gate, merge the default branch, resolve, and gate again. A gate on a stale base is not a result.
 - **Unanchored final review.** Give the reviewer the user's asks and the diff, not your ledger. It then grades against intent, not against your rulings.
-- **A score can reward the fault.** Check what a metric rewards before you gate on it. Replay scores that track per-second loudness reward the thrash a rider complained about.
+- **A score can reward the fault.** Check what a metric rewards before you gate on it. A metric that rewards intensity can reward the very fault users complained about.
 - **Cleanup.** Delete a source branch or worktree only when its tip is an ancestor of the integration head. Its tree must also be clean.
