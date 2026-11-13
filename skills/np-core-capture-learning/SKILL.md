@@ -51,19 +51,19 @@ harder, so bias conservative.
 
 ## Steps
 
-### 0. Sync first (durable captures only)
-Before step 2a, run [[np-core-sync]] so a durable capture lands on a current
-checkout. A stale checkout hides the skill you would extend and forks the repo.
-Skip this for a session-scoped capture to memory (step 2b).
+### Prerequisite: sync first (durable captures only)
+Before step 2a, make sure the checkout is current. A stale checkout hides the
+skill you would extend and forks the repo. Skip this for a session-scoped
+capture to memory (step 2b).
 
-Read the status file `~/.cache/np-core-sync-status`. If it is missing or
-unreadable, treat the checkout as stale and run `np-core-sync`. The status
-strings are the ones `np-core-sync` documents, so check that skill for current
-values.
+Read `~/.cache/np-core-sync-status`. Only `up to date` allows a durable capture.
 
 - `up to date`: go on.
-- `SKIPPED (dirty)` or `DIVERGED`: stop and surface it. Do not edit skills on
-  a stale tree.
+- Anything else, including a missing file or a value you do not recognize: run
+  [[np-core-sync]], then read the status again.
+- Still not `up to date`, or the sync failed: stop. Tell the user "Cannot
+  capture: checkout is stale", give the status value and any sync error, and
+  ask how to proceed. Do not edit skills on a stale tree.
 
 ### 1. Classify
 Read the user's intent. Apply the table above. State the verdict and the
