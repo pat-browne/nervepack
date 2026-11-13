@@ -2,8 +2,15 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:        # ad-hoc manual runs from the Actions UI
+
+# A new push cancels the superseded run. Runs on main never cancel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Least privilege for every job that does not say otherwise (#255/F9). Without
 # this the whole workflow ran with the repository default, which on a repo
@@ -21,6 +28,7 @@ permissions:
 jobs:
   syntax:
     name: Syntax sweep (stdlib-only)
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -62,6 +70,7 @@ jobs:
 
   regression:
     name: Regression suite (zero-dep)
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -75,7 +84,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # The runner discovers every test_*.sh / test_*.py under engine/setup/tests/
-      # (excluding the e2e suite, which needs a browser — see the dashboard-e2e job),
+      # (excluding the e2e suite, which needs a browser — see the dashboard-e2e job in ci-heavy.yml),
       # runs each hermetically, and writes a functionality-grouped Markdown report.
       - name: Run regression suite
         run: bash engine/setup/tests/run-all.sh --report regression-report.md
@@ -125,49 +134,9 @@ jobs:
           name: gate-verdict-regression
           path: gate-verdict-regression.json
 
-  dashboard-e2e:
-    name: Dashboard e2e (Playwright, informational)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true        # informational — never blocks merge
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          # Pin to 3.12: playwright 1.48.0 pins greenlet 3.1.1, which has no wheel for
-          # the very newest CPython (3.14) and fails to build from source in CI. The
-          # zero-dep `regression` job stays on "3.x".
-          python-version: "3.12"
-
-      - name: Install Playwright + chromium
-        run: |
-          pip install -r engine/setup/tests/e2e/requirements.txt
-          python3 -m playwright install --with-deps chromium
-
-      - name: Run e2e
-        working-directory: engine/setup/tests/e2e
-        run: python3 -m unittest test_implement_flow test_action_buttons_flow -v 2>&1 | tee "$GITHUB_WORKSPACE/e2e-report.txt"
-
-      - name: Publish e2e to job summary
-        if: always()
-        run: |
-          {
-            echo "## Dashboard e2e"
-            echo '```'
-            cat e2e-report.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload e2e report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-report
-          path: e2e-report.txt
-
   windows:
     name: Windows suite (Git-bash)
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: windows-latest        # required gate — the suite is green end-to-end under Git-bash
     timeout-minutes: 20
     defaults:
@@ -250,6 +219,7 @@ jobs:
 
   windows-bashfree:
     name: Bash-free MCP suite (no Git-bash)
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: windows-latest
     timeout-minutes: 15
     # Required gate (git-for-windows-free MCP milestone, #38, complete). Proves the
@@ -298,6 +268,7 @@ jobs:
 
   pii-guard:
     name: Secret/PII guard (terminal gate)
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [syntax, regression]    # terminal gate — runs only after the blocking jobs pass
@@ -333,7 +304,7 @@ jobs:
     # A normal job-level `if:` on event type — NOT the workflow-level `paths:`
     # filter that silently strands required checks (see np-spec-guard.py's own
     # "no base ref" exit-0 path for the same reasoning, belt and suspenders).
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     # PROMOTED to required (#254/F8). It shipped advisory in #248/F2 and has
     # run on every pull request since without a false positive, which is the
     # watch period change-specs/README.md asked for. Its context now sits in
@@ -383,7 +354,7 @@ jobs:
     name: Diff review (multi-lens, advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     # Advisory (#252/F6): posts PR comments, never approves, never requests
     # changes, never blocks - see np-diff-review.py's own docstring for the
     # measured evidence behind this. continue-on-error is almost decorative
@@ -471,7 +442,7 @@ jobs:
     # always(): this must run even when an upstream gate FAILED. Reading "which
     # required verdicts are missing" is the whole job - needs' default gating
     # would skip it exactly when it has the most to say.
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
     needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
     # PROMOTED to required (#255/F9), which change spec 0010 named as this
     # issue's first step. It shipped advisory in #254/F8 and reported correctly
@@ -548,7 +519,7 @@ jobs:
     name: Doc coupling (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -637,7 +608,7 @@ jobs:
     # where tier-gate failed. A record that exists only when the mechanism fires
     # cannot be audited for the case that matters - the one where it fired and
     # should not have.
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
     needs: [tier-gate]
     permissions:
       # `gh pr merge --auto` needs BOTH. This is the scope GitHub's own
@@ -734,7 +705,7 @@ jobs:
     # always(): this must still post when an upstream gate failed - that's
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
     needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate, auto-merge, doc-coupling]
     permissions:
       pull-requests: write   # to post/update the summary comment
