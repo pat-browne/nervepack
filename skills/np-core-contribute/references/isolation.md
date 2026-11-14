@@ -97,6 +97,20 @@ asymmetrically depending on which repo you isolated:
 `INDEX.md` conflicts on merge nearly every time, because both sides regenerated it.
 Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
+### A failed `worktree add` still creates its branch
+
+`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`, and the branch stays behind. Omitting `-b` does the same. Git then names the branch after the path's basename.
+
+Verified on git 2.54.0 in a scratch repo. Check before you retry:
+
+```bash
+git -C "$REPO" worktree list                 # is the path already a worktree?
+ls -d "$WT"                                  # does the path exist?
+git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
+```
+
+Pick a path nobody uses. Delete a leftover branch only when this session created it and its tip is the expected commit. Another session may own it.
+
 ## Engine changes are a PR, not a push
 
 The engine repo is public. Changes under `dashboard/`, `engine/`, and the
