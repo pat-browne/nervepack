@@ -119,11 +119,11 @@ What to do after the checks:
 - Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
 - Branch exists and the path is free: retry the add without `-b` to reuse the branch, or delete the branch if this session created it.
 - A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up.
-- `claim status` fails: treat every branch as claimed and delete nothing. A claim has no timeout, so a stale one is not proof the branch is free.
+- `claim status` fails: treat every branch as claimed and delete nothing. A claim with no heartbeat for seven days (by default) is pruned. A stale claim alone does not prove the branch is free.
 
 Delete with `git branch -D "<branch>"`. A failed add leaves no worktree, only the branch.
 
-Automated jobs never delete a leftover branch. They log its name in their own run log and do not retry.
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit. The next run repeats these checks.
 
 ## Engine changes are a PR, not a push
 
