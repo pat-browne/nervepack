@@ -99,7 +99,7 @@ Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
 ### A failed `worktree add` still creates its branch
 
-`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`, and the branch stays behind. Omitting `-b` does the same. Git then names the branch after the path's basename.
+`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. Omitting `-b` works the same way. Git creates a branch named after the path's basename before it checks the path. That branch also stays behind when the path exists.
 
 Verified on git 2.54.0 in a scratch repo. Check before you retry:
 
@@ -110,6 +110,8 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 ```
 
 Pick a path nobody uses. Delete a leftover branch only when this session created it and its tip is the expected commit. Another session may own it.
+
+To clean up after a failed add, first confirm no session owns the path or the branch. Remove a leftover worktree with `git worktree remove <path>`. Delete the branch with `git branch -D <branch>`. Use `--force` on the remove only after you confirm the worktree holds nothing you need.
 
 ## Engine changes are a PR, not a push
 
