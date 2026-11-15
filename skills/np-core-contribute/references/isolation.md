@@ -105,13 +105,13 @@ Verified on git 2.54.0 in a scratch repo. Check before you retry:
 
 ```bash
 git -C "$REPO" worktree list                 # is the path already a worktree?
-ls -d "$WT"                                  # does the path exist?
+ls -d "<path>"                               # does the path exist?
 git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
 ```
 
 Pick a path nobody uses. Delete a leftover branch only when this session created it and its tip is the expected commit. Another session may own it.
 
-To clean up after a failed add, first confirm no session owns the path or the branch. Remove a leftover worktree with `git worktree remove <path>`. Delete the branch with `git branch -D <branch>`. Use `--force` on the remove only after you confirm the worktree holds nothing you need.
+To clean up after a failed add, delete only what this session created. Ownership cannot be safely verified while another session runs. If you are not certain, coordinate with the other operator first. Remove a leftover worktree with `git worktree remove <path>`. Delete the branch with `git branch -D <branch>`. Use `--force` only after `git -C <path> status` shows no changes you need to keep. `--force` removes the worktree even when it has uncommitted changes.
 
 ## Engine changes are a PR, not a push
 
