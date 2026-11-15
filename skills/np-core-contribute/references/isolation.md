@@ -99,7 +99,7 @@ Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
 ### A failed `worktree add` still creates its branch
 
-`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. Omitting `-b` works the same way. Git creates a branch named after the path's basename before it checks the path. That branch also stays behind when the path exists.
+`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. Omitting `-b` has the same problem. Git creates a branch named after the path's basename first, and leaves it behind.
 
 Verified on git 2.54.0 in a scratch repo. Check before you retry:
 
@@ -109,9 +109,9 @@ ls -d "<path>"                               # does the path exist?
 git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
 ```
 
-Pick a path nobody uses. Delete a leftover branch only when this session created it and its tip is the expected commit. Another session may own it.
+Pick a path nobody uses.
 
-To clean up after a failed add, delete only what this session created. Ownership cannot be safely verified while another session runs. If you are not certain, coordinate with the other operator first. Remove a leftover worktree with `git worktree remove <path>`. Delete the branch with `git branch -D <branch>`. Use `--force` only after `git -C <path> status` shows no changes you need to keep. `--force` removes the worktree even when it has uncommitted changes.
+To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. If another session may be using it, do not delete. Coordinate with that operator first. A failed add leaves only the branch, so remove it with `git branch -D <branch>`. If `<path>` is a worktree, another session may own it, so leave it in place.
 
 ## Engine changes are a PR, not a push
 
