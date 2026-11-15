@@ -111,9 +111,19 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 
 Pick a path that the worktree list and `test -e` show as free. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds. If a claim covers the branch, do not delete.
+To clean up a leftover branch, delete it only when this session created it and its tip is the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds.
 
-Automated jobs never delete a leftover branch. They log its name and stop. A failed add leaves only the branch, so remove it with `git branch -D <branch>`. If `<path>` is a worktree, another session may own it, so leave it in place.
+What to do after the checks:
+
+- Path is already a worktree (that is why the add failed): another session may own it. Leave the worktree and its branch alone, and pick a different path.
+- Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
+- Branch exists and the path is free: retry the add without `-b` to reuse the branch, or delete the branch if this session created it.
+- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up.
+- `claim status` fails: treat every branch as claimed and delete nothing. A claim has no timeout, so a stale one is not proof the branch is free.
+
+Delete with `git branch -D "<branch>"`. A failed add leaves no worktree, only the branch.
+
+Automated jobs never delete a leftover branch. They log its name in their own run log and do not retry.
 
 ## Engine changes are a PR, not a push
 
