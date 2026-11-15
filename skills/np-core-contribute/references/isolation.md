@@ -109,9 +109,11 @@ test -e "<path>"                             # does the path exist?
 git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
 ```
 
-Pick a path that the `worktree list` and `test -e` checks above show as unused.
+Pick a path that the worktree list and `test -e` show as free. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. If another session may be using it, do not delete. Coordinate with that operator first. A failed add leaves only the branch, so remove it with `git branch -D <branch>`. If `<path>` is a worktree, another session may own it, so leave it in place.
+To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds. If a claim covers the branch, do not delete.
+
+Automated jobs never delete a leftover branch. They log its name and stop. A failed add leaves only the branch, so remove it with `git branch -D <branch>`. If `<path>` is a worktree, another session may own it, so leave it in place.
 
 ## Engine changes are a PR, not a push
 
