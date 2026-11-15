@@ -105,11 +105,11 @@ Verified on git 2.54.0 in a scratch repo. Check before you retry:
 
 ```bash
 git -C "$REPO" worktree list                 # is the path already a worktree?
-ls -d "<path>"                               # does the path exist?
+test -e "<path>"                             # does the path exist?
 git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
 ```
 
-Pick a path nobody uses.
+Pick a path that the `worktree list` and `test -e` checks above show as unused.
 
 To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. If another session may be using it, do not delete. Coordinate with that operator first. A failed add leaves only the branch, so remove it with `git branch -D <branch>`. If `<path>` is a worktree, another session may own it, so leave it in place.
 
