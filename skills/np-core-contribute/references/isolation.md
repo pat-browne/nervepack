@@ -111,7 +111,9 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 
 Pick an absolute path that the worktree list and `test -e` show as free. Every check resolves an absolute path the same way. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it. Its tip must match the commit that this session's add started from. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
+To clean up a leftover branch, delete it only when this session created it. Its tip must match the commit that this session's add started from. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete.
+
+A claim is a per-session record of the branch and worktree that a live session holds. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
 
 What to do after the checks:
 
