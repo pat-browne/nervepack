@@ -109,9 +109,9 @@ test -e "<path>"                             # does the path exist?
 git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
 ```
 
-Pick a path that the worktree list and `test -e` show as free. Name it after the branch, such as `<repo>-wt-<topic>`.
+Pick an absolute path that the worktree list and `test -e` show as free. Every check resolves an absolute path the same way. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. Git keeps no creator record, so only this session's own record counts. If that record does not show this session made the branch, do not delete. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
+To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
 
 What to do after the checks:
 
@@ -123,11 +123,13 @@ What to do after the checks:
 - `claim list` prints nothing, but `~/.cache/nervepack/claims.log` has error lines from the last 24 hours. Stop and delete nothing. Fix the logged error, then rerun `claim list`. If that fails, file a GitHub issue with the log lines. A stranded branch loses no work.
 - A claim with no heartbeat for `claims.stale_days` days (seven by default) is pruned. Pruning removes only the claim file, never the branch. Pruning logs nothing on success. A failed prune writes to `~/.cache/nervepack/claims.log`. A stale claim alone does not prove the branch is free.
 
-Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. Do not use `cli.py toggle param`. It writes configuration as a side effect, even for a read.
+Claims log lines starting `list_live:` mean the claims directory is unreadable. A `list_live <file>.json:` line means one claim file is unreadable. A `delete stale claim:` line means a stale claim file could not be removed. A `ctx:` line means git could not resolve the repo.
+
+Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. Do not use `cli.py toggle param`. It writes configuration and can commit that change during a cleanup run. The tool should not write on a read, so file an engine issue for it.
 
 Delete with `git branch -D "<branch>"`.
 
-Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. The job still does not delete the branch.
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. A person runs the checks above before any deletion.
 
 ## Engine changes are a PR, not a push
 
