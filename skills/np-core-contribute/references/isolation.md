@@ -111,7 +111,7 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 
 Pick a path that the worktree list and `test -e` show as free. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it and its tip is the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds.
+To clean up a leftover branch, delete it only when this session created it and its tip is the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line names a session, its branch, and its worktree.
 
 What to do after the checks:
 
@@ -119,14 +119,15 @@ What to do after the checks:
 - Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
 - Branch exists and the path is free: retry with `git worktree add <path> <branch>`, which reuses the branch. Or delete the branch if this session created it.
 - A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up. Find that operator through the session id and worktree the claim names. Leaving the branch costs only clutter, so no deadline applies.
-- `claim status` prints nothing, or an error: treat every branch as claimed and delete nothing. The command exits 0 even on failure, so read its output. A stranded branch loses no work, so leave it and fix the claim system first.
-- A claim with no heartbeat for `claims.stale_days` days (seven by default) is pruned. Pruning logs nothing on success. A failed prune writes to `~/.cache/nervepack/claims.log`. A stale claim alone does not prove the branch is free.
+- Claims are off: `python3 engine/nervepack_engine/np_toggle.py enabled claims` prints `off`. `claim list` then prints nothing for every branch. Stop and delete nothing.
+- `claim list` prints nothing, but `~/.cache/nervepack/claims.log` has new errors. Stop and delete nothing. A stranded branch loses no work, so leave it and file a GitHub issue on `pat-browne/nervepack`.
+- A claim with no heartbeat for `claims.stale_days` days (seven by default) is pruned. Pruning removes only the claim file, never the branch. Pruning logs nothing on success. A failed prune writes to `~/.cache/nervepack/claims.log`. A stale claim alone does not prove the branch is free.
 
-Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. Do not use `cli.py toggle param` to read. That command writes the value.
+Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. `cli.py toggle param` writes config even with one argument, so do not use it to read.
 
 Delete with `git branch -D "<branch>"`.
 
-Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. Do not delete the branch.
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. The job still does not delete the branch.
 
 ## Engine changes are a PR, not a push
 
