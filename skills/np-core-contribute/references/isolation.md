@@ -118,12 +118,15 @@ What to do after the checks:
 - Path is already a worktree (that is why the add failed): another session may own it. Leave the worktree and its branch alone, and pick a different path.
 - Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
 - Branch exists and the path is free: retry with `git worktree add <path> <branch>`, which reuses the branch. Or delete the branch if this session created it.
-- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up. Leaving the branch costs only clutter, so no deadline applies.
-- `claim status` fails: treat every branch as claimed and delete nothing. A stranded branch loses no work, so leave it and fix the claim system first. A claim with no heartbeat for `claims.stale_days` days is pruned, seven by default. The value lives in the `claims` row of `engine/setup/toggles.conf`. Check it with `python3 engine/nervepack_engine/cli.py toggle param claims.stale_days 7`. A stale claim alone does not prove the branch is free.
+- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up. Find that operator through the session id and worktree the claim names. Leaving the branch costs only clutter, so no deadline applies.
+- `claim status` prints nothing, or an error: treat every branch as claimed and delete nothing. The command exits 0 even on failure, so read its output. A stranded branch loses no work, so leave it and fix the claim system first.
+- A claim with no heartbeat for `claims.stale_days` days (seven by default) is pruned. Pruning logs nothing on success. A failed prune writes to `~/.cache/nervepack/claims.log`. A stale claim alone does not prove the branch is free.
 
-Delete with `git branch -D "<branch>"`. A failed add leaves no worktree, only the branch.
+Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. Do not use `cli.py toggle param` to read. That command writes the value.
 
-Automated jobs never delete a leftover branch. They print the branch name to their job log and exit. The next run repeats these checks. If the same name appears on the next run too, open a GitHub issue. Put the branch name and both run times in it. Do not delete the branch.
+Delete with `git branch -D "<branch>"`.
+
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. Do not delete the branch.
 
 ## Engine changes are a PR, not a push
 
