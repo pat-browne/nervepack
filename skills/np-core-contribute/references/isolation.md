@@ -99,7 +99,7 @@ Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
 ### A failed `worktree add` still creates its branch
 
-`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. If the path exists, omitting `-b` has the same problem. Git creates a branch named after the path's basename first, and leaves it behind.
+`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. If the path exists, omitting `-b` has the same outcome. Git creates a branch named after the path's basename before it checks the path. The add then fails and leaves that branch behind.
 
 Verified on git 2.54.0 in a scratch repo. Set `REPO` to your checkout, such as `REPO=~/Code/nervepack`. Then check before you retry:
 
@@ -111,7 +111,7 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 
 Pick an absolute path that the worktree list and `test -e` show as free. Every check resolves an absolute path the same way. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it. Its tip must be the expected commit. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
+To clean up a leftover branch, delete it only when this session created it. Its tip must match the commit that this session's add started from. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
 
 What to do after the checks:
 
