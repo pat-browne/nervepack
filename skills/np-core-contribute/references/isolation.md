@@ -101,7 +101,7 @@ Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
 `git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. Omitting `-b` has the same problem. Git creates a branch named after the path's basename first, and leaves it behind.
 
-Verified on git 2.54.0 in a scratch repo. Check before you retry:
+Verified on git 2.54.0 in a scratch repo. Set `REPO` to your checkout, such as `REPO=~/Code/nervepack`. Then check before you retry:
 
 ```bash
 git -C "$REPO" worktree list                 # is the path already a worktree?
@@ -111,19 +111,19 @@ git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch
 
 Pick a path that the worktree list and `test -e` show as free. Name it after the branch, such as `<repo>-wt-<topic>`.
 
-To clean up a leftover branch, delete it only when this session created it and its tip is the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds.
+To clean up a leftover branch, delete it only when this session created it and its tip is the expected commit. Find live claims with `python3 engine/nervepack_engine/cli.py claim status`. A claim names the branch and worktree that a session holds. The command lives in `engine/nervepack_engine/np_claims.py`.
 
 What to do after the checks:
 
 - Path is already a worktree (that is why the add failed): another session may own it. Leave the worktree and its branch alone, and pick a different path.
 - Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
 - Branch exists and the path is free: retry the add without `-b` to reuse the branch, or delete the branch if this session created it.
-- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up.
-- `claim status` fails: treat every branch as claimed and delete nothing. A claim with no heartbeat for seven days (by default) is pruned. A stale claim alone does not prove the branch is free.
+- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up. Leaving the branch costs only clutter, so no deadline applies.
+- `claim status` fails: treat every branch as claimed and delete nothing. A stranded branch loses no work, so leave it and fix the claim system first. A claim with no heartbeat for `claims.stale_days` days is pruned, seven by default. The key lives in `engine/setup/toggle-schema.json`. A stale claim alone does not prove the branch is free.
 
 Delete with `git branch -D "<branch>"`. A failed add leaves no worktree, only the branch.
 
-Automated jobs never delete a leftover branch. They print the branch name to their job log and exit. The next run repeats these checks.
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit. The next run repeats these checks. If the same name appears on the next run too, ask a person to check it.
 
 ## Engine changes are a PR, not a push
 
