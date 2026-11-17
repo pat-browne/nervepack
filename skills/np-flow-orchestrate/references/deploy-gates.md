@@ -50,7 +50,8 @@ or GitHub environment review). The post-deploy validation loop lives in
 ## One branch per repo per ticket
 
 Every worker brief names one branch per repo for the ticket. A merge into an integration
-branch does not retire it. Workers keep committing on it, squash-merge it into `dbx/dev` each dev round (data-bricks is squash-only). Before each
-re-merge they merge `origin/dbx/dev` into the ticket branch so the earlier squash commit is
-absorbed and add/add conflicts don't recur. They open the trunk PR from it. Never cut a new `fix/*` branch per
-dev deploy: parallel fix branches drift and must be coalesced before the trunk PR.
+branch does not retire it. Workers keep committing on it and squash-merge it into the
+integration branch each dev round (for squash-only repos). Before each re-merge they merge
+the integration branch into the ticket branch so the earlier squash commit is absorbed and
+add/add conflicts don't recur. They open the trunk PR from it. Never cut a new `fix/*`
+branch per dev deploy: parallel fix branches drift and must be coalesced before the trunk PR.
