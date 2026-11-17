@@ -59,9 +59,10 @@ brief names one feature branch per repo for the ticket.
 - Once proven in dev, the same feature branch merges into the main branch.
   Before opening that PR, check `git diff --stat origin/<main>...HEAD` shows only this ticket.
 - Never cut a new branch per dev deploy (for example `fix/<ticket>-<topic>`).
-  Parallel branches drift apart.
-- Before opening that pull request, the orchestrator session lists the ticket's
-  remote branches in each repo, for example `git branch -r --list "*<ticket-id>*"`.
-  Check the ticket ID matches `^[0-9]+$` first (`29612`, not `AB#29612`), and keep the quotes.
-- If that command fails, the orchestrator reports git's error text and holds the pull request.
-- The orchestrator reports any extra branch to the user in chat and holds the pull request.
+  Each new branch carries only part of the ticket, so no single branch holds all of it.
+- Before opening that pull request, the orchestrator checks the ticket ID matches `^[0-9]+$`
+  (`29612`, not `AB#29612`). It then lists the ticket's remote branches in each repo with
+  `git branch -r --list "*<ticket-id>*"`. The quotes stop the shell expanding `*`.
+- An extra branch is any listed branch other than the ticket's one feature branch.
+- If the list command fails, or an extra branch shows up, the orchestrator does not open
+  the pull request. It reports the exact branch names or git's error text to the user in chat.
