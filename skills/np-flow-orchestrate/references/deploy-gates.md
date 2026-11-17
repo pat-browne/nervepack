@@ -60,7 +60,11 @@ brief names one branch per repo for the ticket.
   Merging it back gives git a common base, so the next squash sees only new work.
   If a conflict still appears, resolve it on the ticket branch, then re-merge.
 - The pull request to the main branch opens from the same ticket branch.
-- Never cut a new `fix/*` branch per dev deploy. Parallel fix branches drift apart.
-- Before opening that pull request, list the remote branches that carry the ticket ID.
-  The orchestrator runs this check and reports each extra branch it finds.
-  Merge the extras into the ticket branch, then delete them.
+- Never cut a new branch per dev deploy (for example `fix/<ticket>-<topic>`).
+  Parallel branches drift apart.
+- Before opening that pull request, the orchestrator session lists the ticket's
+  remote branches in each repo, for example `git branch -r --list "*<ticket-id>*"`.
+  Quote the pattern, and use only the numeric ticket ID in it.
+- It reports any extra branch to the user in chat and holds the pull request.
+  Merge each extra into the ticket branch, resolving conflicts there, then delete it.
+  If a delete fails, name the branch in the report for manual cleanup.
