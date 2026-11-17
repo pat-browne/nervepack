@@ -46,3 +46,23 @@ or GitHub environment review). The post-deploy validation loop lives in
 - In dev and qa, run the jobs the change touched and check they succeed.
 - In prod, a job counts as proven only after a scheduled run succeeds. Never start
   prod jobs to prove a deploy.
+
+## One branch per repo per ticket
+
+A worker brief is the task prompt the orchestrator sends each worker session. Every
+brief names one feature branch per repo for the ticket.
+
+- Each dev deploy is a PR from the feature branch into the integration branch, squash-merged.
+  Resolve any conflicts in that PR.
+- Never merge the integration branch into the feature branch by hand. It pulls other
+  tickets' work into the main-branch PR.
+- Once proven in dev, the same feature branch merges into the main branch.
+  Before opening that PR, check `git diff --stat origin/<main>...HEAD` shows only this ticket.
+- Never cut a new branch per dev deploy (for example `fix/<ticket>-<topic>`).
+  Each new branch carries only part of the ticket, so no single branch holds all of it.
+- Before opening that pull request, the orchestrator checks the ticket ID matches `^[0-9]+$`
+  (`29612`, not `AB#29612`). It then lists the ticket's remote branches in each repo with
+  `git branch -r --list "*<ticket-id>*"`. The quotes stop the shell expanding `*`.
+- An extra branch is any listed branch other than the ticket's one feature branch.
+- If the list command fails, or an extra branch shows up, the orchestrator does not open
+  the pull request. It reports the exact branch names or git's error text to the user in chat.
