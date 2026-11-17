@@ -46,3 +46,10 @@ or GitHub environment review). The post-deploy validation loop lives in
 - In dev and qa, run the jobs the change touched and check they succeed.
 - In prod, a job counts as proven only after a scheduled run succeeds. Never start
   prod jobs to prove a deploy.
+
+## One branch per repo per ticket
+
+Every worker brief names one branch per repo for the ticket. A merge into an integration
+branch does not retire it. Workers keep committing on it, re-merge it for each dev round with a
+merge commit (never squash), and open the trunk PR from it. Never cut a new `fix/*` branch per
+dev deploy: parallel fix branches drift and must be coalesced before the trunk PR.
