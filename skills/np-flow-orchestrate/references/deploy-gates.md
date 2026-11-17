@@ -62,5 +62,6 @@ brief names one feature branch per repo for the ticket.
   Parallel branches drift apart.
 - Before opening that pull request, the orchestrator session lists the ticket's
   remote branches in each repo, for example `git branch -r --list "*<ticket-id>*"`.
-  The ticket ID is digits only (`29612`, not `AB#29612`). Quote the pattern in the shell.
-- It reports any extra branch to the user in chat and holds the pull request.
+  Check the ticket ID matches `^[0-9]+$` first (`29612`, not `AB#29612`), and keep the quotes.
+- If that command fails, the orchestrator reports git's error text and holds the pull request.
+- The orchestrator reports any extra branch to the user in chat and holds the pull request.
