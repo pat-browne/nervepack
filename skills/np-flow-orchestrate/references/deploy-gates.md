@@ -50,25 +50,17 @@ or GitHub environment review). The post-deploy validation loop lives in
 ## One branch per repo per ticket
 
 A worker brief is the task prompt the orchestrator sends each worker session. Every
-brief names one branch per repo for the ticket.
+brief names one feature branch per repo for the ticket.
 
-- A merge into the shared dev integration branch does not retire the ticket branch.
-  Workers keep committing on it.
-- Each deploy to dev merges the ticket branch into the integration branch again.
-- In a squash-only repo, first merge the integration branch into the ticket branch.
-  The last squash put the ticket's work on the integration branch as a new commit.
-  Merging it back gives git a common base, so the next squash sees only new work.
-  If the merge reports a conflict, resolve the marked files by hand on the ticket
-  branch, `git add` them, and `git commit` to complete the merge. If it cannot be
-  resolved, `git merge --abort` and report; the merge is safe to retry.
-- The pull request to the main branch opens from the same ticket branch.
-  Before opening it, check `git diff --stat origin/<main>...HEAD` shows only this ticket.
+- Each dev deploy is a PR from the feature branch into the integration branch, squash-merged.
+  Resolve any conflicts in that PR.
+- Never merge the integration branch into the feature branch by hand. It pulls other
+  tickets' work into the main-branch PR.
+- Once proven in dev, the same feature branch merges into the main branch.
+  Before opening that PR, check `git diff --stat origin/<main>...HEAD` shows only this ticket.
 - Never cut a new branch per dev deploy (for example `fix/<ticket>-<topic>`).
   Parallel branches drift apart.
 - Before opening that pull request, the orchestrator session lists the ticket's
   remote branches in each repo, for example `git branch -r --list "*<ticket-id>*"`.
   The ticket ID is digits only (`29612`, not `AB#29612`). Quote the pattern in the shell.
 - It reports any extra branch to the user in chat and holds the pull request.
-  Merge each extra into the ticket branch, resolving conflicts there, then delete it.
-  If a delete fails, report the branch name and git's error text (permission,
-  protected branch, network) for manual cleanup.
