@@ -56,8 +56,11 @@ brief names one branch per repo for the ticket.
   Workers keep committing on it.
 - Each deploy to dev merges the ticket branch into the integration branch again.
 - In a squash-only repo, first merge the integration branch into the ticket branch.
-  The merge commit brings in the earlier squash, so add/add conflicts don't recur.
+  The last squash put the ticket's work on the integration branch as a new commit.
+  Merging it back gives git a common base, so the next squash sees only new work.
+  If a conflict still appears, resolve it on the ticket branch, then re-merge.
 - The pull request to the main branch opens from the same ticket branch.
 - Never cut a new `fix/*` branch per dev deploy. Parallel fix branches drift apart.
-- Check before that pull request: list the remote branches that carry the ticket ID.
-  More than one per repo means merge the extras into the ticket branch, then delete them.
+- Before opening that pull request, list the remote branches that carry the ticket ID.
+  The orchestrator runs this check and reports each extra branch it finds.
+  Merge the extras into the ticket branch, then delete them.
