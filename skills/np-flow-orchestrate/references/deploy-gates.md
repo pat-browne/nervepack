@@ -58,7 +58,9 @@ brief names one branch per repo for the ticket.
 - In a squash-only repo, first merge the integration branch into the ticket branch.
   The last squash put the ticket's work on the integration branch as a new commit.
   Merging it back gives git a common base, so the next squash sees only new work.
-  If a conflict still appears, resolve it on the ticket branch, then re-merge.
+  If the merge reports a conflict, resolve the marked files by hand on the ticket
+  branch, `git add` them, and `git commit` to complete the merge. If it cannot be
+  resolved, `git merge --abort` and report; the merge is safe to retry.
 - The pull request to the main branch opens from the same ticket branch.
   Before opening it, check `git diff --stat origin/<main>...HEAD` shows only this ticket.
 - Never cut a new branch per dev deploy (for example `fix/<ticket>-<topic>`).
@@ -68,4 +70,5 @@ brief names one branch per repo for the ticket.
   The ticket ID is digits only (`29612`, not `AB#29612`). Quote the pattern in the shell.
 - It reports any extra branch to the user in chat and holds the pull request.
   Merge each extra into the ticket branch, resolving conflicts there, then delete it.
-  If a delete fails, name the branch in the report for manual cleanup.
+  If a delete fails, report the branch name and git's error text (permission,
+  protected branch, network) for manual cleanup.
