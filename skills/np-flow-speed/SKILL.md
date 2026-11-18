@@ -40,10 +40,10 @@ model that can do its job. The session default is never a worker's model.
 
 | Work | Model |
 |---|---|
-| Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps | Haiku |
+| Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps, merges, flag flips, branch cleanup | Haiku |
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
-| Fresh-eyes review of each change set (gets only the diff and the goal) | Haiku |
-| Coordination, hard calls, final verification | Coordinator (the session model) |
+| Fresh-eyes review of each change set or stream before integration (gets only the diff and the goal) | Haiku |
+| Coordination, hard calls, review of the integrated whole, final verification | Coordinator (the session model) |
 
 - Pass a model on every subagent spawn and every separate session. An unset model silently inherits the coordinator's model and costs the most. The coordinator rule is in [[np-flow-orchestrate]] § Worker models.
 - Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
@@ -55,6 +55,14 @@ model that can do its job. The session default is never a worker's model.
   references/nervepack-context.md. Workers recall related context first and
   capture at each milestone. The coordinator captures its own learnings before
   the final report, and again at the finish line if the session is still live.
+
+## Parallel runs
+
+- Prep the test env and prove the gate green before dispatch.
+- Land the score and fixtures first. No fixture's score may fall.
+- Check each worker's push claim with `git ls-remote`.
+
+Detail: references/parallel-run-lessons.md
 
 ## The finish line
 

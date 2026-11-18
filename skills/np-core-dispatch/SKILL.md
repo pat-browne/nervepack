@@ -34,6 +34,7 @@ continuation channel that isn't there.
    **Paste the prime and capture blocks** from references/nervepack-context.md into
    every brief: the agent recalls related nervepack context first, and saves
    learnings at each milestone, so a stall or exit loses nothing.
+   Add references/worker-brief-checklist.md for repo-editing workers.
 4. **Pick the lane.** Foreground when you want to review + relay the result this turn;
    background for long autonomous jobs that should notify on completion. **Always set the
    model:** a dispatched agent never inherits yours. The rule and tiers are in

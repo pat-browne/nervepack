@@ -1,7 +1,7 @@
 name: Claude PR Review
 on:
   pull_request:
-    types: [opened]
+    types: [opened, ready_for_review]
 permissions:
   id-token: write
   contents: read
@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   review:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
