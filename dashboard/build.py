@@ -311,13 +311,6 @@ def cluster_suggestions(records):
             c["auto_safe"] = c["auto_safe"] or bool(s.get("auto_safe"))
     return sorted(clusters, key=lambda x: (-suggestion_score(x), -x["count"], x["text"]))
 
-    for r in records:
-        sugg = r.get("suggestions")
-        if isinstance(sugg, list):
-            r["suggestions"] = [s for s in sugg
-                                if _norm(s.get("text", "")) not in resolved]
-    return records
-
 
 def _content_dir():
     """Resolve the content-overlay root, mirroring np_content.py's precedence:
