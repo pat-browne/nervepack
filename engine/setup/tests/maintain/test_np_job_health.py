@@ -73,6 +73,14 @@ class JobListTest(Base):
         self.assertEqual(rows["ado-status-sync"]["cadence_s"], 3600)
         self.assertFalse(rows["ado-status-sync"]["managed"])
 
+    def test_login_only_agent_is_never_overdue(self):
+        with open(os.path.join(self.la, "com.nervepack.nas-smb.plist"), "wb") as fh:
+            plistlib.dump({"Label": "com.nervepack.nas-smb", "RunAtLoad": True}, fh)
+        row = self.survey()["nas-smb"]
+        self.assertIsNone(row["cadence_s"])
+        self.assertEqual(row["schedule"], "at login")
+        self.assertFalse(row["overdue"])
+
     def test_plist_log_outside_log_dir_is_ignored(self):
         with open(os.path.join(self.la, "com.nervepack.extra.plist"), "wb") as fh:
             plistlib.dump({"Label": "com.nervepack.extra", "StandardOutPath": "/etc/hosts"}, fh)
@@ -115,6 +123,11 @@ class RowTest(Base):
         _write(os.path.join(self.logs, "aggregate-metrics.log"),
                "aggregated (NOT PUBLISHED: refused: overlay is on 'feat/x', not 'main'.)\n")
         self.assertEqual(self.survey()["aggregate-metrics"]["status"], "warn")
+
+    def test_headerless_log_judges_only_the_newest_line(self):
+        _write(os.path.join(self.logs, "aggregate-metrics.log"),
+               "aggregated (NOT PUBLISHED: push rejected)\nno-op: no metrics change\n")
+        self.assertEqual(self.survey()["aggregate-metrics"]["status"], "ok")
 
     def test_usage_limit_is_error(self):
         """A refused headless run prints no ERROR word, only the account message."""
