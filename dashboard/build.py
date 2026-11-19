@@ -11,6 +11,7 @@ Defaults: dashboard/data/metrics.jsonl -> dashboard/data/metrics.js
 import calendar
 import html
 import json
+import math
 import os
 import posixpath
 import re
@@ -202,16 +203,113 @@ def load_resolved(path):
     return resolved
 
 
+_STOP = frozenset("a an the to of for in on and or with before after when any all this that "
+                  "it its is be by from as at into even every each skill".split())
+SIMILAR = 0.4
+
+
+def suggestion_tokens(text):
+    """Content words of a suggestion, for paraphrase matching."""
+    words = "".join(c if c.isalnum() or c == "-" else " " for c in str(text).lower()).split()
+    return frozenset(w for w in words if w not in _STOP and len(w) > 1)
+
+
+class _SimIndex:
+    """Find an item whose token set has Jaccard >= SIMILAR with a probe.
+
+    An inverted index keeps this near-linear: a candidate must share a token,
+    and Jaccard >= 0.6 needs most tokens shared, so the probe's rarest tokens
+    are enough to find it."""
+
+    def __init__(self):
+        self._post = {}
+        self._items = []
+
+    def add(self, toks, item):
+        i = len(self._items)
+        self._items.append((toks, item))
+        for t in toks:
+            self._post.setdefault(t, []).append(i)
+
+    def find(self, toks):
+        if not toks:
+            return None
+        rare = sorted(toks, key=lambda t: len(self._post.get(t, ())))
+        # Jaccard >= SIMILAR means the match misses fewer than (1-SIMILAR) of our tokens.
+        probe = rare[:int(len(rare) * (1 - SIMILAR)) + 1]
+        seen = set()
+        for t in probe:
+            for i in self._post.get(t, ()):
+                if i in seen:
+                    continue
+                seen.add(i)
+                other, item = self._items[i]
+                if len(toks & other) / len(toks | other) >= SIMILAR:
+                    return item
+        return None
+
+
 def drop_resolved(records, resolved):
-    """Remove resolved suggestions from each record's suggestions[] (in place-safe)."""
+    """Remove resolved suggestions, and their paraphrases, from each record.
+
+    Exact (normalized) matches drop first. A suggestion that paraphrases a
+    resolved one drops too, so implementing one wording of a theme does not
+    leave its twenty rewordings on the board."""
     if not resolved:
         return records
+    idx = _SimIndex()
+    for text in resolved:
+        idx.add(suggestion_tokens(text), True)
     for r in records:
         sugg = r.get("suggestions")
         if isinstance(sugg, list):
             r["suggestions"] = [s for s in sugg
-                                if _norm(s.get("text", "")) not in resolved]
+                                if _norm(s.get("text", "")) not in resolved
+                                and not idx.find(suggestion_tokens(s.get("text", "")))]
     return records
+
+
+def suggestion_score(row):
+    """Confidence lifted by recurrence, so one theme raised in many sessions
+    beats a single high self-rated one-off."""
+    return (row.get("confidence") or 0) * (1 + 0.15 * math.log2(max(row.get("count") or 1, 1)))
+
+
+def cluster_suggestions(records):
+    """Open suggestions merged by exact text, then by paraphrase, ranked.
+
+    Returns [{text, confidence, target, auto_safe, count, members, ts}]. The
+    shown text is the highest-confidence wording, `count` how often the theme
+    was raised, `members` every distinct wording, `ts` the latest raising."""
+    clusters, by_key, idx = [], {}, _SimIndex()
+    for r in records:
+        for s in r.get("suggestions") or []:
+            text = " ".join(str(s.get("text", "")).split())
+            if not text:
+                continue
+            key = _norm(text)
+            conf = s.get("confidence", 0) or 0
+            c = by_key.get(key)
+            if c is None:
+                toks = suggestion_tokens(text)
+                c = idx.find(toks)
+                if c is None:
+                    c = {"text": text, "confidence": conf, "target": s.get("target", "other"),
+                         "auto_safe": False, "count": 0, "members": [], "ts": ""}
+                    clusters.append(c)
+                    idx.add(toks, c)
+                c["members"].append(text)
+                by_key[key] = c
+            c["count"] += 1
+            c["ts"] = max(c["ts"], str(r.get("ts") or ""))
+            if conf > c["confidence"]:
+                c["confidence"] = conf
+                c["text"] = text
+                c["target"] = s.get("target", c["target"])
+                if s.get("asset"):
+                    c["asset"] = s.get("asset")
+            c["auto_safe"] = c["auto_safe"] or bool(s.get("auto_safe"))
+    return sorted(clusters, key=lambda x: (-suggestion_score(x), -x["count"], x["text"]))
 
 
 def _content_dir():
@@ -1201,6 +1299,7 @@ def main(argv):
         fh.write(f"window.WIKI = {wiki};\n")
         fh.write(f"window.GRADUATION = {graduation};\n")
         fh.write(f"window.PROPOSALS = {proposals};\n")
+        fh.write(f"window.SUGGESTIONS = {json.dumps(cluster_suggestions(records))};\n")
         fh.write(f"window.BACKLOG = {backlog};\n")
     return 0
 

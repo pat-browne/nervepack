@@ -201,6 +201,30 @@ def push_to_main(repo, branch="main"):
 
 
 def _push(repo, branch):
+    ok, detail = _push_once(repo, branch)
+    if ok or not _is_behind(detail) or not _clean(repo):
+        return ok, detail
+    # Another writer pushed first. Rebase our commits onto theirs and push once
+    # more. A conflict aborts the rebase and keeps the first rejection.
+    r = subprocess.run(["git", "-C", repo, "pull", "-q", "--rebase", "origin", branch],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        subprocess.run(["git", "-C", repo, "rebase", "--abort"], capture_output=True)
+        return ok, detail
+    return _push_once(repo, branch)
+
+
+def _is_behind(detail):
+    return "fetch first" in detail or "non-fast-forward" in detail
+
+
+def _clean(repo):
+    r = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and not r.stdout.strip()
+
+
+def _push_once(repo, branch):
     try:
         r = subprocess.run(["git", "-C", repo, "push", "-q", "origin",
                             "HEAD:refs/heads/%s" % branch],

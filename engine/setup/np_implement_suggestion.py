@@ -281,9 +281,12 @@ def _resolve_content_repo(engine_repo):
 # It is matched against this allowlist, never used to build a path or command.
 # An unknown or absent tag keeps the historic engine-first order.
 _TARGET_ORDER = {
+    "content":   ("content", "engine"),
     "skills":    ("content", "engine"),
     "playbooks": ("content", "engine"),
     "hooks":     ("engine", "content"),
+    "agents":    ("engine", "content"),
+    "harness":   ("engine", "content"),
     "sync":      ("engine", "content"),
     "other":     ("engine", "content"),
 }

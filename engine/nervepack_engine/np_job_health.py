@@ -22,7 +22,8 @@ import np_toggle  # noqa: E402
 
 DAY = 86400
 _LABEL = "com.nervepack."
-_ERROR = re.compile(r"\bERROR\b|Traceback|agent run failed|auth failed|exited non-zero")
+_ERROR = re.compile(r"\bERROR\b|Traceback|agent run failed|auth failed|exited non-zero"
+                    r"|usage allocation|spend limit|API Error")
 _WARN = re.compile(r"NOT PUBLISHED|\brefused\b|\bWARN\b")
 _HEADER = re.compile(r"===.*\brun\b.*===")
 _TAIL_LINES = 20
@@ -140,14 +141,17 @@ def _status(block):
 
 
 def _last_run(log_path):
+    """The later of the newest stamp in the log and the file's mtime.
+
+    A job that writes no run header leaves its last stamp on the last success,
+    so a stamp alone made a job failing every hour read as weeks overdue."""
     stamp = np_maintenance_freshness.last_run(log_path)
-    if stamp:
-        return stamp
     try:
-        mtime = os.path.getmtime(log_path)
+        mtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(log_path), datetime.timezone.utc).strftime(_STAMP_FMT)
     except OSError:
-        return None
-    return datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc).strftime(_STAMP_FMT)
+        return stamp
+    return max(s for s in (stamp, mtime) if s)
 
 
 def _age_s(stamp):

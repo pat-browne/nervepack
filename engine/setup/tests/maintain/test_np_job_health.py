@@ -4,6 +4,7 @@ list comes from np_scheduler_install, plus any extra com.nervepack.* launchd
 agent found on disk. Every OS call goes through a seam, so these run anywhere."""
 import datetime
 import os
+import time
 import plistlib
 import sys
 import tempfile
@@ -115,8 +116,29 @@ class RowTest(Base):
                "aggregated (NOT PUBLISHED: refused: overlay is on 'feat/x', not 'main'.)\n")
         self.assertEqual(self.survey()["aggregate-metrics"]["status"], "warn")
 
+    def test_usage_limit_is_error(self):
+        """A refused headless run prints no ERROR word, only the account message."""
+        _write(os.path.join(self.logs, "compact.log"),
+               "%s === compact run ===\nYour usage allocation has been disabled by your admin\n" % _stamp(1))
+        _write(os.path.join(self.logs, "refine.log"),
+               "%s === refine run ===\nYou've hit your individual spend limit\n" % _stamp(1))
+        rows = self.survey()
+        self.assertEqual(rows["compact"]["status"], "error")
+        self.assertEqual(rows["refine"]["status"], "error")
+
+    def test_last_run_uses_newer_mtime_over_stale_stamp(self):
+        """A headerless log whose only stamp is old still ran recently: the
+        file mtime wins, so the job is not falsely shown 16 days overdue."""
+        path = os.path.join(self.logs, "skill-maintain.log")
+        _write(path, "%s checked, no mismatches\nunstamped failure line\n" % _stamp(24 * 16))
+        rows = self.survey()
+        self.assertFalse(rows["skill-maintain"]["overdue"])
+
     def test_overdue_and_never_ran(self):
-        _write(os.path.join(self.logs, "skill-maintain.log"), "%s done\n" % _stamp(24 * 5))
+        path = os.path.join(self.logs, "skill-maintain.log")
+        _write(path, "%s done\n" % _stamp(24 * 5))
+        old = time.time() - 5 * 86400   # untouched since that run
+        os.utime(path, (old, old))
         rows = self.survey()
         self.assertTrue(rows["skill-maintain"]["overdue"])
         self.assertIsNone(rows["episodic-maintain"]["last_run"])
