@@ -258,6 +258,15 @@
     .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); } }
   .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
                 background:var(--status-warn-bg); }
+  /* Job health lives under the wiki list in the sidepane: one column, compact. */
+  .sidehealth { flex:0 0 auto; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;
+                max-height:45vh; overflow-y:auto; }
+  .sidehealth .lbl { margin-bottom:4px; }
+  .sidehealth .kv { font-size:12px; margin-bottom:4px; }
+  .sidehealth .jobs { grid-template-columns:1fr; }
+  .sidehealth .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); }
+  .sidehealth .jobrow { padding-top:6px; padding-bottom:6px; font-size:12px; }
+  .sidehealth .jobrow .pill { font-size:10px; padding:1px 6px; }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
   /* Action errors live in one banner: role=alert, kept until dismissed, never a dialog. */
   #action-banner { margin:8px 0; }
@@ -331,6 +340,7 @@
              placeholder="Search wiki…" aria-label="Search wiki" autocomplete="off">
       <div class="wikicount" id="wiki-count"></div>
       <nav class="wikilist" id="wiki-list"></nav>
+      <section class="sidehealth" id="panel-jobs" aria-label="Scheduled job health"></section>
     </aside>
     <main class="content">
       <header class="pagehead">
@@ -355,9 +365,6 @@
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-ledger"></section>
         <section class="panel" id="panel-latest"></section>
-      </div>
-      <div class="grid" style="margin-top:16px">
-        <section class="panel full" id="panel-jobs"></section>
       </div>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
@@ -456,6 +463,9 @@
     return { sum, series };
   }
   function flattenSuggestions(records) {
+    // build.py clusters paraphrases and ranks by confidence x recurrence.
+    // Fall back to the raw per-session list for an older metrics.js.
+    if (Array.isArray(window.SUGGESTIONS)) return window.SUGGESTIONS.slice();
     const out = [];
     records.forEach(r => (r.suggestions || []).forEach(s =>
       out.push(Object.assign({ ts: r.ts }, s))));
@@ -806,7 +816,7 @@
     return parts.join(", ");
   }
   function renderJobs(jobs, served) {
-    const head = `<span class="lbl">Scheduled jobs</span>`;
+    const head = `<span class="lbl">Health checks</span>`;
     if (!Array.isArray(jobs)) {
       elJobs.innerHTML = head + empty(served
         ? "Could not load job health from the dashboard server. Check its log, then reload."
@@ -1495,7 +1505,9 @@
       return `<div class="sug">
         <div class="txt"><span class="sugtext">${esc(s.text)}</span>${verdict}
           <div class="meta"><span class="tag">${esc(s.target || "other")}</span>
-            ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""} · ${fmtDate(s.ts)}</div>
+            ${s.asset ? `<span class="tag">${esc(s.asset)}</span>` : ""}
+            ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""}
+            ${(s.count || 1) > 1 ? `<span class="tag" title="Raised in ${s.count} sessions as ${(s.members || []).length} wordings">×${s.count}</span>` : ""} · ${fmtDate(s.ts)}</div>
         </div>
         <span class="pill ${cls}">${conf}%</span>${rowActs}
       </div>`;

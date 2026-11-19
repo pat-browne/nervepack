@@ -48,7 +48,7 @@ class TestSecurityRecall(unittest.TestCase):
                       json.loads(out)["hookSpecificOutput"]["additionalContext"])
 
     def test_3_once_per_session_second_call_silent(self):
-        self._run("s3", "fix the security bug")
+        self._run("s3", "review this diff for security")
         out2 = self._run("s3", "another security concern here")
         self.assertEqual(out2, "")
 
@@ -85,6 +85,28 @@ class TestSecurityRecall(unittest.TestCase):
             fh.write("skills|shared|runtime|off|security_recall=on\n")
         out = self._run("s9", "security review this endpoint")
         self.assertEqual(out, "")
+
+    def test_11_bare_security_mention_is_silent(self):
+        """Talking ABOUT security is not asking for a review (the old bare-keyword
+        match fed the evaluator a stream of false 'invoke security-review' misses)."""
+        for i, prompt in enumerate([
+            "it feels like suggestions are only security related, why?",
+            "add the app to the network security group",
+            "use dependency injection for the db adapter",
+            "the security_recall hook fires too often",
+        ]):
+            self.assertEqual(self._run("s11-%d" % i, prompt), "", prompt)
+
+    def test_12_review_intent_fires(self):
+        for i, prompt in enumerate([
+            "review for security",
+            "security review of the auth module",
+            "audit this endpoint's security",
+            "is this open to sql injection?",
+            "check for XSS in the template",
+            "patch CVE-2024-1234",
+        ]):
+            self.assertTrue(self._run("s12-%d" % i, prompt), prompt)
 
     def test_10_state_dir_defaults_under_the_nervepack_cache(self):
         """Not a world-shared /tmp path — HOME-relative, like every other hook's state.

@@ -9,9 +9,18 @@ import re
 import np_toggle
 import np_dirs
 
-_PATTERN = re.compile(r"security|vulnerabilit|exploit|injection|xss|csrf|cve")
-_MSG = ("Security-review trigger (Nervepack): this prompt mentions security or "
-        "vulnerability keywords. Before proceeding, invoke the security-review skill "
+# Fire on review INTENT, not on any mention of the word. A bare "security"
+# match fired on prompts about security groups or about this hook, and the
+# evaluator then logged a false "skill not invoked" miss for each one.
+_REVIEW = r"(?:review|audit|check|scan|assess|harden|pentest|threat[- ]?model)\w*"
+_SUBJECT = r"(?:security|secure|vulnerab\w*)"
+_PATTERN = re.compile(
+    r"\b" + _REVIEW + r"\b[^.?!\n]{0,40}?\b" + _SUBJECT
+    + r"|\b" + _SUBJECT + r"\s+" + _REVIEW
+    + r"|vulnerab|exploit|\bxss\b|\bcsrf\b|\bssrf\b|\bcve-?\d"
+    + r"|\b(?:sql|command|shell|code|ldap|xpath|prompt)\s+injection|injection\s+attack")
+_MSG = ("Security-review trigger (Nervepack): this prompt asks for a security or "
+        "vulnerability review. Before proceeding, invoke the security-review skill "
         "to apply a structured security checklist. If your host has a dedicated "
         "skill (e.g. security-review), invoke it first.")
 

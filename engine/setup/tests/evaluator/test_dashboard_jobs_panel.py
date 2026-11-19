@@ -16,8 +16,9 @@ class TestJobsPanel(unittest.TestCase):
         m = re.search(r"function renderJobs\(.*?\n  \}\n", cls.html, re.S)
         cls.fn = m.group(0) if m else ""
 
-    def test_panel_sits_in_a_grid_row(self):
-        self.assertRegex(self.html, r'<div class="grid"[^>]*>\s*<section class="panel full" id="panel-jobs">')
+    def test_panel_sits_under_the_wiki_list_in_the_sidepane(self):
+        self.assertRegex(self.html, r'<nav class="wikilist" id="wiki-list"></nav>\s*'
+                                    r'<section class="sidehealth" id="panel-jobs"[^>]*></section>\s*</aside>')
 
     def test_fetches_jobs_endpoint_only_when_served(self):
         self.assertIn('fetch("/api/jobs", ', self.html)
