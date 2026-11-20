@@ -55,6 +55,9 @@ class Base(unittest.TestCase):
         return {r["name"]: r for r in nc.survey(today=TODAY, **kw)}
 
 
+POSIX = os.name != "nt"
+
+
 class TestStatus(Base):
     def test_literal_expiry_gives_ok_warn_expired(self):
         _registry(self.overlay, [
@@ -97,8 +100,9 @@ class TestStatus(Base):
         _write(tok, SECRET, 0o644)
         _write(tok + ".issued", "2026-11-01")
         row = self.survey()["f"]
-        self.assertEqual(row["status"], "warn")
-        self.assertIn("mode 644", " ".join(row["problems"]))
+        if POSIX:
+            self.assertEqual(row["status"], "warn")
+            self.assertIn("mode 644", " ".join(row["problems"]))
         os.chmod(tok, 0o600)
         row = self.survey()["f"]
         self.assertEqual((row["status"], row["days_left"]), ("ok", 346))
@@ -249,7 +253,8 @@ class TestRotate(Base):
         self.assertEqual((code, ran), (0, ["refresh"]))
         with open(tok + ".issued") as fh:
             self.assertEqual(fh.read().strip(), "2026-11-20")
-        self.assertEqual(os.stat(tok + ".issued").st_mode & 0o777, 0o600)
+        if POSIX:
+            self.assertEqual(os.stat(tok + ".issued").st_mode & 0o777, 0o600)
 
     def test_auto_failure_does_not_stamp(self):
         tok = os.path.join(self.tmp, "tok")
@@ -260,6 +265,14 @@ class TestRotate(Base):
         self.assertEqual(code, 3)
         self.assertFalse(os.path.exists(tok + ".issued"))
         self.assertIn("exit 3", msg)
+
+    def test_stamp_failure_is_reported_not_raised(self):
+        _registry(self.overlay, [{"name": "a", "store": {"kind": "vault", "item": "x"},
+                                  "issued_file": os.path.join(self.tmp, "no", "dir", "x.issued"),
+                                  "ttl_days": 30, "rotate": {"mode": "auto", "command": "r"}}])
+        code, msg = nc.rotate("a", today=TODAY, run_cmd=lambda c: 0)
+        self.assertEqual(code, 2)
+        self.assertIn("not written", msg)
 
     def test_unknown_name(self):
         code, msg = nc.rotate("nope", today=TODAY)

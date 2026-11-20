@@ -860,10 +860,12 @@
     if (c.days_left == null) return c.expires ? "" : "no expiry recorded";
     return c.days_left < 0 ? `expired ${-c.days_left}d ago` : `${c.days_left}d left`;
   }
-  function renderCreds(creds) {
+  function renderCreds(creds, served) {
     const head = `<span class="lbl">Credentials</span>`;
     if (!Array.isArray(creds)) {
-      elCreds.innerHTML = head + empty("Credential health needs the dashboard server.");
+      elCreds.innerHTML = head + empty(served
+        ? "Could not load credential health. A slow expires_cmd can time this out: run cli.py credentials to see which."
+        : "Credential health needs the dashboard server.");
       return;
     }
     if (!creds.length) { elCreds.innerHTML = head + empty("No credentials declared."); return; }
@@ -878,12 +880,12 @@
   }
   async function refreshCreds() {
     try {
-      const res = await fetch("/api/credentials", { signal: AbortSignal.timeout(10000) });
+      const res = await fetch("/api/credentials", { signal: AbortSignal.timeout(30000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
       renderCreds((await res.json()).credentials);
     } catch (e) {
       console.warn("GET /api/credentials failed:", e);
-      renderCreds(null);
+      renderCreds(null, true);
     }
   }
 

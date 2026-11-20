@@ -155,7 +155,8 @@ def _evaluate(entry, today, run):
             row["status"] = "missing"
             row["problems"].append("not found at %s" % loc)
             return row
-        if st.st_mode & 0o077:
+        # Windows reports 666 for every file, so the mode check means nothing there.
+        if os.name != "nt" and st.st_mode & 0o077:
             row["problems"].append("mode %o, want 600" % (st.st_mode & 0o777))
 
     if str(entry.get("expires", "")).lower() == "never":
@@ -248,7 +249,10 @@ def _rotate_one(entry, row, today, run_cmd):
         return code, "%s: rotation command failed, exit %s" % (row["name"], code)
     side = _issued_file(entry, row["location"])
     if side and entry.get("ttl_days"):
-        _stamp(side, today)
+        try:
+            _stamp(side, today)
+        except OSError as exc:
+            return 2, "%s: rotated, but the issued date was not written (%s)" % (row["name"], exc)
     return 0, "%s: rotated" % row["name"]
 
 
