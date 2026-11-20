@@ -9,6 +9,12 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Fixed
+- **Cron pushes sync with origin first.** `np_git_publish.sync_push()` fetches,
+  rebases, unions `*.jsonl`, rebuilds `metrics.js`, then pushes. An unresolvable
+  conflict aborts and logs, and never force-pushes. Agentic crons route through it
+  too. Before this, 31 content commits piled up behind rejected pushes (spec 0123).
+
 ### Added
 - **Per-feature model selection.** A `models` toggle row holds tier defaults and
   one param per feature. The dashboard Models panel sets them and probes each

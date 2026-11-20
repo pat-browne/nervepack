@@ -256,7 +256,7 @@ git add $_paths
 git commit -m "episodic(maintain): weekly drain ($(date -u +%F))" \
   -m "Themes touched: <list>. Notes merged: <N>. Compacted: <list or none>." \
   -- $_paths
-git push
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_git_publish.py" push "$(pwd)"
 ```
 
 Only after a successful commit, clear the processed inbox files:
