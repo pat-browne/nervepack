@@ -341,6 +341,7 @@
       <div class="wikicount" id="wiki-count"></div>
       <nav class="wikilist" id="wiki-list"></nav>
       <section class="sidehealth" id="panel-jobs" aria-label="Scheduled job health"></section>
+      <section class="sidehealth" id="panel-creds" aria-label="Credential health"></section>
     </aside>
     <main class="content">
       <header class="pagehead">
@@ -851,6 +852,41 @@
     }
   }
 
+  // ---- Credentials (GET /api/credentials, np_credentials). Served mode only. ----
+  const elCreds = document.getElementById("panel-creds");
+  const CRED_PILL = { ok: "pos", warn: "warn", unknown: "warn", expired: "neg", missing: "neg" };
+  const credBad = c => c.status !== "ok";
+  function credDays(c) {
+    if (c.days_left == null) return c.expires ? "" : "no expiry recorded";
+    return c.days_left < 0 ? `expired ${-c.days_left}d ago` : `${c.days_left}d left`;
+  }
+  function renderCreds(creds) {
+    const head = `<span class="lbl">Credentials</span>`;
+    if (!Array.isArray(creds)) {
+      elCreds.innerHTML = head + empty("Credential health needs the dashboard server.");
+      return;
+    }
+    if (!creds.length) { elCreds.innerHTML = head + empty("No credentials declared."); return; }
+    const bad = creds.filter(credBad).length;
+    const rows = [...creds].sort((a, b) => credBad(b) - credBad(a)).map(c => `<div class="sug jobrow${credBad(c) ? " bad" : ""}">
+        <div class="txt"><b>${esc(c.name)}</b> <span class="pill ${CRED_PILL[c.status] || ""}">${esc(c.status)}</span>
+          <div class="meta">${esc(credDays(c))} · ${esc(c.rotate_mode)} rotation${c.problems && c.problems.length ? " · " + esc(c.problems.join(", ")) : ""}</div>
+          ${credBad(c) && c.command ? `<div class="meta"><code>${esc(c.command)}</code></div>` : ""}
+        </div></div>`).join("");
+    const summary = `${creds.length} credential${creds.length === 1 ? "" : "s"}, ${bad ? bad + " need attention" : "all ok"}`;
+    elCreds.innerHTML = head + `<div class="kv">${esc(summary)}</div><div class="jobs">${rows}</div>`;
+  }
+  async function refreshCreds() {
+    try {
+      const res = await fetch("/api/credentials", { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      renderCreds((await res.json()).credentials);
+    } catch (e) {
+      console.warn("GET /api/credentials failed:", e);
+      renderCreds(null);
+    }
+  }
+
   // ---- render ----
   const M = (window.METRICS || []).slice();
   const S = window.TOKENS_SAVED || { total: 0, per_session: 0 };
@@ -869,6 +905,8 @@
   // Jobs render here, after empty() exists: the static-mode call runs synchronously.
   if (!SERVED) renderJobs(null);
   if (SERVED) refreshJobs();
+  if (!SERVED) renderCreds(null);
+  if (SERVED) refreshCreds();
 
   // ---- E · Feature toggles (served-mode only — the panel needs a backend to
   // write through). Fetches /api/toggles, renders a switch per bare feature +

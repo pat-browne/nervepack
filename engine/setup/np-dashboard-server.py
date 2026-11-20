@@ -13,6 +13,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
   GET  /api/models            -> model inventory, probe cache, probe_running
   GET  /api/jobs              -> {"jobs": [...]} scheduled-job health (np_job_health)
+  GET  /api/credentials       -> {"credentials": [...]} credential expiry (np_credentials)
   POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
   POST /api/compact/reject {file,title}  -> note in REJECTED.md, drop the entry
   POST /api/compact/apply  {file,title}  -> queue a `compact` agent job, {ok, started, text}
@@ -61,6 +62,7 @@ from np_dashboard_actions import ActionError  # noqa: E402
 import np_dirs
 import np_implement_suggestion  # noqa: E402
 import np_job_health  # noqa: E402
+import np_credentials  # noqa: E402
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
@@ -421,6 +423,15 @@ class Handler(BaseHTTPRequestHandler):
                     import traceback
                     traceback.print_exc(file=sys.stderr)
                     return self._json({"error": "job survey failed"}, 500)
+            if self.path.split("?")[0] == "/api/credentials":
+                if not np_toggle.enabled("maintain.credentials"):
+                    return self._json({"error": "not found"}, 404)
+                try:
+                    return self._json({"credentials": np_credentials.survey()})
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json({"error": "credential survey failed"}, 500)
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
                     return self._json({"error": "not found"}, 404)
