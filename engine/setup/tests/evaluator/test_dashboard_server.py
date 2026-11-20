@@ -421,6 +421,12 @@ class TestServer(unittest.TestCase):
         status, _ = self._post("/api/jobs/troubleshoot", {"name": "compact", "dry_run": True})
         self.assertEqual(status, 404)
 
+    def test_troubleshoot_missing_name_is_400(self):
+        for body in ({}, {"name": "  "}):
+            status, out = self._post("/api/jobs/troubleshoot", dict(body, dry_run=True))
+            self.assertEqual(status, 400, out)
+            self.assertEqual(json.loads(out)["error"], "missing name")
+
     def test_troubleshoot_unknown_job_is_stale_404(self):
         status, body = self._post("/api/jobs/troubleshoot", {"name": "no-such-job", "dry_run": True})
         self.assertEqual(status, 404)

@@ -547,6 +547,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "not found"}, 404)
                 body = self._body()
                 name = (body.get("name") or "").strip()
+                if not name:
+                    raise ActionError("bad_request", "missing name", "send the job name in the body", 400)
                 try:
                     rows = np_job_health.survey()
                 except Exception:
