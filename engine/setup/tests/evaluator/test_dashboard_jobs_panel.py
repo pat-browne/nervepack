@@ -35,6 +35,12 @@ class TestJobsPanel(unittest.TestCase):
         self.assertIn("jobSummary(", self.fn)
         self.assertIn("function jobSummary(", self.html)
 
+    def test_only_bad_rows_in_served_mode_get_a_troubleshoot_button(self):
+        self.assertRegex(self.fn, r"SERVED && jobBad\(j\) \? `<span class=\"rowacts\">")
+        self.assertEqual(self.fn.count("data-troubleshoot"), 2)  # one button, one wiring selector
+        self.assertIn('runJob(b, "/api/jobs/troubleshoot", { name: row.dataset.name }', self.fn)
+        self.assertIn('data-name="${esc(j.name)}"', self.fn)
+
     def test_static_and_error_fallback_note(self):
         self.assertIn("needs the dashboard server", self.html)
         self.assertRegex(self.html, r"if \(!SERVED\)[^\n]*renderJobs\(null\)")
