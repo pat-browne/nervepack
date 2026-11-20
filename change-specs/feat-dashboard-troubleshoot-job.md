@@ -9,6 +9,11 @@ blast_radius:
   - engine/setup/np_implement_suggestion.py
   - agents/np-flow-troubleshoot-job.md
   - change-specs/feat-dashboard-troubleshoot-job.md
+  - docs/ARCHITECTURE.md
+  - engine/setup/tests/evaluator/test_dashboard_jobs_panel.py
+  - engine/setup/tests/evaluator/test_dashboard_server.py
+  - engine/setup/tests/evaluator/test_implement_kind_overlay.py
+  - engine/setup/tests/evaluator/test_implement_kinds.py
 ---
 
 # 0122: Troubleshoot button on unhealthy health-check rows
