@@ -47,7 +47,10 @@ def _plist_cadence(data):
     cal = data.get("StartCalendarInterval")
     if isinstance(cal, dict) and "Weekday" in cal:
         return 7 * DAY, "weekly"
-    return DAY, "daily"
+    if cal:
+        return DAY, "daily"
+    # No interval or calendar: launchd starts it at login or on demand only.
+    return None, "at login" if data.get("RunAtLoad") else "on demand"
 
 
 def _read_plist(path):
@@ -126,7 +129,9 @@ def _last_block(log_path):
     for i in range(len(lines) - 1, -1, -1):
         if _HEADER.search(lines[i]):
             return lines[i + 1:]
-    return lines[-_TAIL_LINES:]
+    # No run header: each run appends one result line, so judge the newest.
+    tail = [ln for ln in lines[-_TAIL_LINES:] if ln.strip()]
+    return tail[-1:]
 
 
 def _status(block):
@@ -203,7 +208,8 @@ def _row(job, kind, la_dir, log_dir, cron, exits, schtasks_fn, grace):
     log = _log_for(job, log_dir)
     last = _last_run(log)
     age = _age_s(last) if last else None
-    limit = job["cadence_s"] + min(grace, job["cadence_s"])
+    cadence = job["cadence_s"]
+    limit = None if cadence is None else cadence + min(grace, cadence)
 
     return {"name": job["name"], "managed": job["managed"], "schedule": job["schedule"],
             "cadence_s": job["cadence_s"], "toggle": job["toggle"], "enabled": enabled,
@@ -211,7 +217,7 @@ def _row(job, kind, la_dir, log_dir, cron, exits, schtasks_fn, grace):
             "backend": kind, "log": log, "last_run": last,
             "age_h": None if age is None else round(age / 3600.0, 1),
             "status": _status(_last_block(log)), "exit": exits.get(_LABEL + job["name"]),
-            "overdue": bool(enabled) and (age is None or age > limit)}
+            "overdue": bool(enabled) and limit is not None and (age is None or age > limit)}
 
 
 # Every OS call goes through a seam so tests run on any platform.
