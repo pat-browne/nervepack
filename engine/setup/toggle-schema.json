@@ -268,6 +268,9 @@
   "maintain.job_health": {
     "description": "Scheduled-job health report: the doctor's job-health check and the dashboard's /api/jobs endpoint."
   },
+  "maintain.credentials": {
+    "description": "Credential expiry report: the doctor's credentials check and the dashboard's /api/credentials endpoint."
+  },
   "maintain.refine": {
     "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
   },

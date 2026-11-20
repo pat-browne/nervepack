@@ -18,7 +18,8 @@ class TestJobsPanel(unittest.TestCase):
 
     def test_panel_sits_under_the_wiki_list_in_the_sidepane(self):
         self.assertRegex(self.html, r'<nav class="wikilist" id="wiki-list"></nav>\s*'
-                                    r'<section class="sidehealth" id="panel-jobs"[^>]*></section>\s*</aside>')
+                                    r'<section class="sidehealth" id="panel-jobs"[^>]*></section>\s*'
+                                    r'<section class="sidehealth" id="panel-creds"[^>]*></section>\s*</aside>')
 
     def test_fetches_jobs_endpoint_only_when_served(self):
         self.assertIn('fetch("/api/jobs", ', self.html)
