@@ -239,7 +239,7 @@ def survey(backend=None, la_dir=None, log_dir=None, launchctl_fn=None,
             for j in jobs]
 
 
-def _problems(row):
+def problems(row):
     if not row["enabled"]:
         return []
     out = []
@@ -254,6 +254,9 @@ def _problems(row):
     return out
 
 
+_problems = problems  # old name, kept for callers
+
+
 # One doctor line, PASS or WARN. Never raises.
 def report():
     try:
@@ -263,7 +266,7 @@ def report():
     except Exception as exc:
         return "PASS (job-health survey unavailable: %s)" % type(exc).__name__
 
-    bad = [(r["name"], _problems(r)) for r in rows]
+    bad = [(r["name"], problems(r)) for r in rows]
     bad = [(n, p) for n, p in bad if p]
     if not bad:
         return "PASS (%d job(s) healthy)" % len(rows)

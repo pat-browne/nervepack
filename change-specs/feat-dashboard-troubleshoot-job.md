@@ -14,6 +14,8 @@ blast_radius:
   - engine/setup/tests/evaluator/test_dashboard_server.py
   - engine/setup/tests/evaluator/test_implement_kind_overlay.py
   - engine/setup/tests/evaluator/test_implement_kinds.py
+  - engine/nervepack_engine/np_job_health.py
+  - engine/setup/tests/maintain/test_np_job_health.py
 ---
 
 # 0122: Troubleshoot button on unhealthy health-check rows

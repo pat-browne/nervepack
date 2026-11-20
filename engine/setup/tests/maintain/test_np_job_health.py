@@ -206,5 +206,18 @@ class ReportTest(Base):
             self.assertTrue(jh.report().startswith("PASS"))
 
 
+class ProblemsTest(unittest.TestCase):
+    ROW = {"enabled": True, "installed": True, "status": "ok", "exit": 0, "overdue": False}
+
+    def test_public_problems_lists_each_fault(self):
+        row = dict(self.ROW, installed=False, status="error", exit=2, overdue=True)
+        self.assertEqual(jh.problems(row),
+                         ["not installed", "last run error", "exit 2", "overdue"])
+
+    def test_healthy_and_disabled_rows_have_none(self):
+        self.assertEqual(jh.problems(self.ROW), [])
+        self.assertEqual(jh.problems(dict(self.ROW, enabled=False, overdue=True)), [])
+
+
 if __name__ == "__main__":
     unittest.main()

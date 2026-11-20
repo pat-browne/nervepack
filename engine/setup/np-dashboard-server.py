@@ -547,13 +547,20 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "not found"}, 404)
                 body = self._body()
                 name = (body.get("name") or "").strip()
-                row = next((r for r in np_job_health.survey() if r["name"] == name), None)
+                try:
+                    rows = np_job_health.survey()
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json({"error": "job survey failed"}, 500)
+                row = next((r for r in rows if r["name"] == name), None)
                 if row is None:
                     raise ActionError("stale", "That job is no longer in the health checks.",
                                       "It was removed or renamed. Reload the page.", 404)
-                if not np_job_health._problems(row):
+                if not np_job_health.problems(row):
                     raise ActionError("bad_request", "job is healthy",
                                       "Only an unhealthy job can be troubleshot. Reload the page.", 400)
+                log("troubleshoot job queued: %s" % row["name"])
                 return self._json(start_job("job:%s" % row["name"], "troubleshoot",
                                             dry_run=bool(body.get("dry_run"))))
             if route == "/api/models/select":

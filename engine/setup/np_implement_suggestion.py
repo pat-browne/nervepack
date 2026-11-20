@@ -922,13 +922,13 @@ def _run_one(text, edited, target, ctx, kind=None):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
-    if kind == "troubleshoot":
+    if _normalize_kind(kind) == "troubleshoot":
         # Log text is untrusted and the agent has Bash, so an engine fix never
         # lands direct, whatever implement_mode says.
         mode = "pr"
     # Mode only affects engine landings. Overlay kind jobs always land direct
     # (see _land_result), so implement_mode cannot block them. Troubleshoot needs
-    # Bash to read logs and rerun the job, so it keeps the full tool list.
+    # Bash to read logs and run launchctl and crontab, so it keeps the full tool list.
     tools = _tools_for(kind)
     commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
     content_repo = _resolve_content_repo(repo)
@@ -1178,7 +1178,7 @@ def _kind_precheck_fn(kind, task):
     A proposal or lesson origin has already dealt with is a stale click.
     """
     if kind == "troubleshoot":
-        return None
+        return None  # the job name is checked server-side, and origin holds no per-job state
     if kind == "compact":
         fname, title = _split_proposal(task)
 
