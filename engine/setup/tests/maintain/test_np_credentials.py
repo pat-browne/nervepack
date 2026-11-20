@@ -169,6 +169,21 @@ class TestLayers(Base):
             row = self.survey()["s"]
         self.assertEqual((row["layer"], row["status"]), ("team", "ok"))
 
+    def test_team_layer_commands_never_run(self):
+        team = os.path.join(self.tmp, "team")
+        os.makedirs(team)
+        _registry(team, [{"name": "t", "expires_cmd": "evil",
+                          "rotate": {"mode": "auto", "command": "evil"}}])
+        ran = []
+        run = lambda c: ran.append(c) or 0  # noqa: E731
+        with mock.patch.dict(os.environ, {"NP_TEAM_DIR": team}):
+            row = {r["name"]: r for r in nc.survey(today=TODAY, run=run)}["t"]
+            code, msg = nc.rotate("t", today=TODAY, run_cmd=run, run=run)
+        self.assertEqual(ran, [])
+        self.assertIn("not run", " ".join(row["problems"]))
+        self.assertEqual(code, 2)
+        self.assertIn("evil", msg)
+
     def test_bad_registry_is_reported_not_raised(self):
         _write(os.path.join(self.overlay, "config", "credentials.json"), "{not json")
         rows = nc.survey(today=TODAY)

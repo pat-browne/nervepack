@@ -25,6 +25,9 @@ WARN_DAYS = 30
 CMD_TIMEOUT = 15
 ROTATE_TIMEOUT = 600
 _BAD = ("warn", "expired", "missing", "unknown")
+# Commands run only from layers the user owns. A team layer is written by
+# others, so its commands would run as this user unasked.
+_TRUSTED = ("engine", "personal")
 _errors = []
 
 
@@ -159,7 +162,9 @@ def _evaluate(entry, today, run):
         row["status"] = "warn" if row["problems"] else "ok"
         return row
     expires = _date(entry["expires"]) if entry.get("expires") else None
-    if expires is None and entry.get("expires_cmd"):
+    if expires is None and entry.get("expires_cmd") and entry["_layer"] not in _TRUSTED:
+        row["problems"].append("expires_cmd from %s layer not run" % entry["_layer"])
+    elif expires is None and entry.get("expires_cmd"):
         out = run(entry["expires_cmd"])
         expires = _date(out) if out else None
         if expires is None:
@@ -235,6 +240,9 @@ def _rotate_one(entry, row, today, run_cmd):
                    % (row["name"], row["status"], row["command"] or "see its skill"))
     if not row["command"]:
         return 2, "%s is marked auto but declares no command" % row["name"]
+    if entry["_layer"] not in _TRUSTED:
+        return 2, ("%s comes from the %s layer, so its command is not run. Run it yourself: %s"
+                   % (row["name"], entry["_layer"], row["command"]))
     code = run_cmd(row["command"])
     if code != 0:
         return code, "%s: rotation command failed, exit %s" % (row["name"], code)
