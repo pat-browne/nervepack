@@ -36,6 +36,21 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ENGINE = os.path.dirname(os.path.dirname(_HERE))
 
 
+def dashboard_env(content, resolved=None):
+    """The env build.py reads, from toggles. np_git_publish reuses it."""
+    env = dict(os.environ)
+    env["DASHBOARD_SESSIONS"] = np_toggle.param("evaluator.dashboard_sessions", "50")
+    env["DASHBOARD_DAYS"] = np_toggle.param("evaluator.dashboard_days", "14")
+    env["DASHBOARD_MIN_TOOL_CALLS"] = np_toggle.param("evaluator.min_tool_calls", "1")
+    env["WIKI_NAV"] = np_toggle.param("evaluator.wiki_nav", "on")
+    env["WIKI_MERMAID"] = np_toggle.param("evaluator.wiki_mermaid", "on")
+    env["NP_CONTENT_DIR"] = content
+    env["NP_LESSONS_DIR"] = os.path.join(content, "memory", "lessons")
+    env["NP_RESOLVED_SUGGESTIONS"] = resolved or os.path.join(
+        content, "dashboard", "data", "resolved-suggestions.txt")
+    return env
+
+
 def _prune_metrics(path, retain_days):
     cutoff = (datetime.datetime.now(datetime.timezone.utc)
               - datetime.timedelta(days=retain_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -169,15 +184,7 @@ def aggregate():
 
     if np_toggle.enabled("evaluator.dashboard"):
         metrics_js = os.path.join(content, "dashboard", "data", "metrics.js")
-        env = dict(os.environ)
-        env["DASHBOARD_SESSIONS"] = np_toggle.param("evaluator.dashboard_sessions", "50")
-        env["DASHBOARD_DAYS"] = np_toggle.param("evaluator.dashboard_days", "14")
-        env["DASHBOARD_MIN_TOOL_CALLS"] = np_toggle.param("evaluator.min_tool_calls", "1")
-        env["WIKI_NAV"] = np_toggle.param("evaluator.wiki_nav", "on")
-        env["WIKI_MERMAID"] = np_toggle.param("evaluator.wiki_mermaid", "on")
-        env["NP_CONTENT_DIR"] = content
-        env["NP_LESSONS_DIR"] = os.path.join(content, "memory", "lessons")
-        env["NP_RESOLVED_SUGGESTIONS"] = resolved
+        env = dashboard_env(content, resolved)
         try:
             subprocess.run(
                 [sys.executable, os.path.join(_ENGINE, "dashboard", "build.py"), metrics, metrics_js],

@@ -132,7 +132,7 @@ git -C "$CONTENT" commit -m "promote: weekly memory→content ($(date -u +%F))" 
   -m "Promoted <N> entries:
 - <name> → <target-file>" \
   -- skills wiki   # same explicit paths — never a bare commit
-git -C "$CONTENT" push
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_git_publish.py" push "$CONTENT"
 ```
 
 **A promotion to a GENERAL engine skill** (a `np-core-*`/`np-flow-*` or a general
@@ -144,7 +144,7 @@ ident "$NP"
 git -C "$NP" add skills INDEX.md .claude-plugin/plugin.json   # the engine-side paths you changed
 git -C "$NP" commit -m "promote: weekly memory→engine ($(date -u +%F))" -m "- <name> → <target>" \
   -- skills INDEX.md .claude-plugin/plugin.json   # path-limit the commit too (issue #11)
-git -C "$NP" push
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_git_publish.py" push "$NP"
 ```
 
 `cli.py setup link-skills` regenerates `INDEX.md` in the engine, so stage `INDEX.md` only in
