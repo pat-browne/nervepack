@@ -5,6 +5,7 @@ date: 2026-11-19
 tier: normal
 blast_radius:
   - engine/nervepack_engine/np_job_health.py
+  - engine/setup/tests/maintain/test_np_job_health.py
 ---
 
 # 0120: Stop job health showing false red
