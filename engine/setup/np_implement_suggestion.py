@@ -922,6 +922,10 @@ def _run_one(text, edited, target, ctx, kind=None):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
+    if kind == "troubleshoot":
+        # Log text is untrusted and the agent has Bash, so an engine fix never
+        # lands direct, whatever implement_mode says.
+        mode = "pr"
     # Mode only affects engine landings. Overlay kind jobs always land direct
     # (see _land_result), so implement_mode cannot block them. Troubleshoot needs
     # Bash to read logs and rerun the job, so it keeps the full tool list.

@@ -33,8 +33,8 @@ The agent reads the job's log and schedule entry, then fixes code or config in t
 repo or ends with `NOT_IMPLEMENTABLE: <diagnosis>`.
 
 The kind tries the engine, then the content overlay. It keeps Bash, unlike the
-compact and graduate kinds, because it must read logs and rerun the job. An engine
-fix lands per `evaluator.implement_mode`. An overlay fix lands direct.
+compact and graduate kinds, because it must read logs and run launchctl and crontab. An engine
+fix always lands as a PR. An overlay fix lands direct.
 
 Chosen option: "new kind", because it reuses the queue, lock, worktree and status path.
 
@@ -44,7 +44,7 @@ A credentials panel button. Fixing machine state outside the repo.
 
 ## Cross-cutting concerns
 
-- Security: the name is checked against the survey, and the task text comes from the row name only. The prompt treats log text as untrusted. The agent runs with Bash and no restriction flag.
+- Security: the name is checked against the survey, and the task text comes from the row name only. The prompt treats log text as untrusted. The agent runs with Bash and no restriction flag, so an engine fix always lands as a PR, never direct, and the agent never runs the job itself.
 - Privacy: the prompt forbids printing secrets.
 - Observability: the result shows on the row through the status file.
 

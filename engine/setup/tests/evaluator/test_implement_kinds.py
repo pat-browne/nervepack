@@ -167,6 +167,16 @@ class TestKinds(unittest.TestCase):
         branch = _git(self.engine, "log", "--format=%s", "np-suggest/job-compact").stdout
         self.assertIn("troubleshoot:", branch)
 
+    def test_troubleshoot_engine_fix_never_lands_direct(self):
+        def agent(prompt, tools, cwd, timeout):
+            with open(os.path.join(cwd, "fix.txt"), "w") as fh:
+                fh.write("fixed\n")
+            return (0, "done", "")
+        engine_main = _git(self.engine, "rev-parse", "main").stdout.strip()
+        self._troubleshoot(agent, "direct")
+        self.assertEqual(_git(self.engine, "rev-parse", "main").stdout.strip(), engine_main)
+        self.assertIn("troubleshoot:", _git(self.engine, "log", "--format=%s", "np-suggest/job-compact").stdout)
+
     def test_troubleshoot_diagnosis_only_reports_on_the_row(self):
         self._troubleshoot(lambda p, t, c, to: (0, "NOT_IMPLEMENTABLE: launchd plist missing, run installer", ""), "pr")
         import json
