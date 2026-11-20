@@ -19,6 +19,7 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/compact/apply  {file,title}  -> queue a `compact` agent job, {ok, started, text}
   POST /api/graduation/dismiss  {kind,name} -> persist a dismissal
   POST /api/graduation/graduate {kind,name} -> queue a `graduate` agent job, {ok, started, text}
+  POST /api/jobs/troubleshoot {name} -> queue a `troubleshoot` agent job for one unhealthy scheduled job
 
 This is a deliberate, documented exception to nervepack's "no service, no daemon"
 invariant: it is OFF by default, binds to 127.0.0.1 ONLY, serves a fixed directory,
@@ -541,6 +542,20 @@ class Handler(BaseHTTPRequestHandler):
                 np_dashboard_actions.dismiss(grad_dismissed_path(), kind, name)
                 log("graduation dismiss: %s:%s" % (kind, name))
                 return self._json({"ok": True})
+            if route == "/api/jobs/troubleshoot":
+                if not np_toggle.enabled("maintain.job_health"):
+                    return self._json({"error": "not found"}, 404)
+                body = self._body()
+                name = (body.get("name") or "").strip()
+                row = next((r for r in np_job_health.survey() if r["name"] == name), None)
+                if row is None:
+                    raise ActionError("stale", "That job is no longer in the health checks.",
+                                      "It was removed or renamed. Reload the page.", 404)
+                if not np_job_health._problems(row):
+                    raise ActionError("bad_request", "job is healthy",
+                                      "Only an unhealthy job can be troubleshot. Reload the page.", 400)
+                return self._json(start_job("job:%s" % row["name"], "troubleshoot",
+                                            dry_run=bool(body.get("dry_run"))))
             if route == "/api/models/select":
                 body = self._body()
                 key = np_model.feature_key(body.get("feature") or "")
@@ -707,7 +722,7 @@ def launch(argv, label, key=""):
 def start_job(text, kind="", extra=(), checks=JOB_CHECKS, dry_run=False):
     """Preflight, dedupe, then spawn one implement-machinery job.
 
-    `kind` is "" for a suggestion, else compact or graduate.
+    `kind` is "" for a suggestion, else compact, graduate or troubleshoot.
     """
     rows = preflight(checks, deep=dry_run)
     if dry_run:

@@ -833,12 +833,19 @@
         j.installed === false ? `<span class="pill neg">not installed</span>` : "",
         j.exit != null && j.exit !== 0 ? `<span class="pill neg">exit ${esc(j.exit)}</span>` : "",
       ].join(" ");
-      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}">
+      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}" data-name="${esc(j.name)}">
         <div class="txt"><b>${esc(j.name)}</b> <span class="pill ${pill}">${esc(j.status || "unknown")}</span> ${flags}
           <div class="meta">${jobAge(j.age_h)} · ${esc(j.schedule || "")} · ${j.enabled === false ? "toggle off" : "toggle on"}</div>
-        </div></div>`;
+        </div>${SERVED && jobBad(j) ? `<span class="rowacts">
+            <button class="btn sm primary" data-troubleshoot title="Run an agent that diagnoses and fixes this job.">Troubleshoot</button>
+          </span>` : ""}</div>`;
     }).join("");
     elJobs.innerHTML = head + `<div class="kv">${esc(jobSummary(jobs))}</div><div class="jobs">${rows}</div>`;
+    if (!SERVED) return;
+    elJobs.querySelectorAll("[data-troubleshoot]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/jobs/troubleshoot", { name: row.dataset.name }, () => setTimeout(refreshJobs, 4000));
+    }));
   }
   async function refreshJobs() {
     try {

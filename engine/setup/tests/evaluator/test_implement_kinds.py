@@ -133,6 +133,51 @@ class TestKinds(unittest.TestCase):
         self.assertIn("compact:", log)
         self.assertIn("graduate:", log)
 
+    def _troubleshoot(self, agent, mode):
+        orig = imp.np_toggle.param
+        imp.np_toggle.param = lambda name, default=None: mode if name == "evaluator.implement_mode" else orig(name, default)
+        self.addCleanup(setattr, imp.np_toggle, "param", orig)
+        return imp.implement(
+            "job:compact", None, repo=self.engine, kind="troubleshoot",
+            log_path=os.path.join(self._tmp.name, "log"),
+            lock_path=os.path.join(self._tmp.name, "lock"),
+            status_dir=self.status, prompt_file=self.prompt,
+            resolve_fn=lambda t, note="": self.resolved.append(t), agent_fn=agent,
+            gh_pr_create_fn=lambda *a: "")
+
+    def test_troubleshoot_engine_fix_follows_implement_mode(self):
+        tools_seen = []
+
+        def agent(prompt, tools, cwd, timeout):
+            tools_seen.append(tools)
+            if not os.path.exists(os.path.join(cwd, "engine-marker.txt")):
+                return (0, "NOT_IMPLEMENTABLE: wrong repo", "")
+            with open(os.path.join(cwd, "fix.txt"), "w") as fh:
+                fh.write("fixed\n")
+            return (0, "done", "")
+
+        engine_main = _git(self.engine, "rev-parse", "main").stdout.strip()
+        content_main = _git(self.content, "rev-parse", "main").stdout.strip()
+        self._troubleshoot(agent, "pr")
+        self.assertEqual(len(tools_seen), 1, "engine fix must stop the repo walk")
+        self.assertIn("Bash", tools_seen[0].split())
+        self.assertEqual(_git(self.engine, "rev-parse", "main").stdout.strip(), engine_main,
+                         "pr mode keeps the engine fix off main")
+        self.assertEqual(_git(self.content, "rev-parse", "main").stdout.strip(), content_main)
+        branch = _git(self.engine, "log", "--format=%s", "np-suggest/job-compact").stdout
+        self.assertIn("troubleshoot:", branch)
+
+    def test_troubleshoot_diagnosis_only_reports_on_the_row(self):
+        self._troubleshoot(lambda p, t, c, to: (0, "NOT_IMPLEMENTABLE: launchd plist missing, run installer", ""), "pr")
+        import json
+        files = [f for f in os.listdir(self.status) if f.endswith(".json")]
+        self.assertEqual(len(files), 1)
+        with open(os.path.join(self.status, files[0])) as fh:
+            st = json.load(fh)
+        self.assertEqual(st["state"], "not_implementable")
+        self.assertIn("launchd plist missing", st["ref"])
+        self.assertEqual(self.resolved, [], "troubleshoot never touches the suggestion ledger")
+
     def test_suggestion_job_keeps_bash(self):
         seen = []
         imp.implement("Do a thing", None, repo=self.engine,
@@ -169,6 +214,22 @@ class TestRestrictedArgv(unittest.TestCase):
         self.assertEqual(argv[argv.index("--disallowedTools") + 1], "Bash")
         allowed = argv[argv.index("--allowedTools") + 1]
         self.assertNotIn("Bash", allowed)
+
+    def test_troubleshoot_kind_is_known_with_its_own_prompt(self):
+        self.assertEqual(imp._normalize_kind("TroubleShoot"), "troubleshoot")
+        prompt = os.path.join(imp._NP, "agents", imp._KIND_PROMPTS["troubleshoot"])
+        self.assertTrue(os.path.isfile(prompt), prompt)
+
+    def test_troubleshoot_has_no_lesson_precheck(self):
+        # Any non-compact kind used to fall through to the lesson check.
+        self.assertIsNone(imp._kind_precheck_fn("troubleshoot", "job:compact"))
+        self.assertIsNotNone(imp._kind_precheck_fn("graduate", "failure:x"))
+
+    def test_troubleshoot_keeps_bash_and_overlay_kinds_do_not(self):
+        self.assertIn("Bash", imp._tools_for("troubleshoot").split())
+        for kind in ("compact", "graduate"):
+            self.assertNotIn("Bash", imp._tools_for(kind).split())
+        self.assertEqual(imp._tools_for(""), imp._AGENT_TOOLS)
 
     def test_suggestion_argv_unchanged(self):
         import np_model
