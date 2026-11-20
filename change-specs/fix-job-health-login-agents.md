@@ -2,7 +2,7 @@
 id: 0120
 status: accepted
 date: 2026-11-19
-tier: low
+tier: normal
 blast_radius:
   - engine/nervepack_engine/np_job_health.py
 ---
