@@ -129,6 +129,10 @@ class RowTest(Base):
                "aggregated (NOT PUBLISHED: push rejected)\nno-op: no metrics change\n")
         self.assertEqual(self.survey()["aggregate-metrics"]["status"], "ok")
 
+    def test_whitespace_only_log_is_unknown(self):
+        _write(os.path.join(self.logs, "aggregate-metrics.log"), "\n   \n\n")
+        self.assertEqual(self.survey()["aggregate-metrics"]["status"], "unknown")
+
     def test_usage_limit_is_error(self):
         """A refused headless run prints no ERROR word, only the account message."""
         _write(os.path.join(self.logs, "compact.log"),
