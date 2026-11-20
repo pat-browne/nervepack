@@ -273,6 +273,17 @@
       }
     },
     {
+      "id": "credentials",
+      "tier": "SHOULD",
+      "check": "core",
+      "title": "every declared credential is present, private and outside its rotation window",
+      "why": "Tokens, API keys and PATs expire or get revoked on an account move, and every consumer then fails silently. The registry (engine/setup/credentials.json plus <layer>/config/credentials.json) records where each one lives and when it expires, so the warning comes before the outage.",
+      "accept": "cli.py credentials shows no source as warn, expired, missing or unknown.",
+      "hints": {
+        "generic": "run python3 engine/nervepack_engine/cli.py credentials for the table. cli.py credentials rotate --due runs every auto rotation and prints the command for each manual one. Declare a new source in your overlay's config/credentials.json."
+      }
+    },
+    {
       "id": "episodic-freshness",
       "tier": "SHOULD",
       "check": "core",
