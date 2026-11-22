@@ -15,7 +15,7 @@ blast_radius:
   - engine/setup/tests/evaluator/test_np_git_publish.py
   - docs/ARCHITECTURE.md
   - CHANGELOG.md
-  - change-specs/fix-cron-push-sync-first.md
+  - change-specs/fix-content-sync-push.md
 ---
 
 # 0123: Cron pushes sync with origin first
