@@ -2,7 +2,7 @@
 id: 0123
 status: accepted
 date: 2026-11-20
-tier: normal
+tier: high
 blast_radius:
   - engine/setup/np_git_publish.py
   - engine/setup/np_aggregate.py
@@ -56,3 +56,9 @@ stays fast-forward only.
 
 A dirty tree behind origin still refuses, as before. The skill-maintain and
 aggregate status lines now carry the conflict path instead of `push rejected`.
+
+## Rollback
+
+Revert the merge commit. Crons fall back to a single push with a
+`pull --rebase` retry. Commits stranded by a conflict stay on the local branch,
+so nothing is lost either way.
