@@ -1,8 +1,8 @@
 """Extract the CURRENT TURN from a Claude Code transcript JSONL.
 
 Pure by design: one file read, no toggles, no hook JSON, no subprocess. This is
-the single place that knows Claude Code's transcript shape, so a format change
-has exactly one file to fix (turn_gate.py stays untouched).
+one of the two places that know Claude Code's transcript shape (the other is
+its sibling np_transcript_signals.py), so a format change has two files to fix.
 
 Turn boundary: the last record with type=="user" AND promptSource=="typed",
 or promptSource=="sdk" with origin.kind=="human" (desktop app and SDK hosts).

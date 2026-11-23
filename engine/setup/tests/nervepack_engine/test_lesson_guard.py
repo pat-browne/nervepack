@@ -342,5 +342,18 @@ class TestLessonGuard(unittest.TestCase):
         self.assertIn("additionalContext", json.loads(out)["hookSpecificOutput"])
 
 
+    def test_resolved_lesson_never_gates(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| nuke | rm -rf | ask | delete |\n")
+        self._write("nuke.md",
+            "---\nname: nuke\nprovenance: failure\nstatus: resolved\n"
+            "enforce:\n  tool_name_match: \"Read\"\n  gate: ask\n---\n**Avoid:** rm -rf.\n")
+        self.assertEqual(self._run({"tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/x"}}), "")
+        open(os.path.join(self.state, "s9-nuke-gate-armed"), "a").close()
+        self.assertEqual(self._run({"tool_name": "Read", "session_id": "s9",
+                                    "tool_input": {"file_path": "/f"}}), "")
+
+
 if __name__ == "__main__":
     unittest.main()

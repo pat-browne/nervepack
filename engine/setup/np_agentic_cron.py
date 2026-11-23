@@ -356,7 +356,24 @@ def episodic_maintain():
                 _log(_EPISODIC_MAINTAIN, "resources: merged %d record(s)" % merged)
     except Exception as exc:
         _log(_EPISODIC_MAINTAIN, "resources drain raised: %r" % (exc,))
+    _resolve_lessons()
     return _run(_EPISODIC_MAINTAIN)
+
+
+def _resolve_lessons():
+    """Mark lessons resolved whose linked issue closed or PR merged. The agent run
+    commits the edits. Fails open when gh is missing or logged out."""
+    try:
+        if (np_toggle.enabled("memory.maintain") and np_toggle.enabled("lessons")
+                and np_toggle.param("lessons.resolve", "on") == "on"
+                and not os.environ.get("NERVEPACK_AGENT")
+                and np_content.content_is_explicit()):
+            import np_lesson_resolve
+            done = np_lesson_resolve.sweep([np_content.layer_dir("lessons")])
+            if done:
+                _log(_EPISODIC_MAINTAIN, "lessons: resolved %d (%s)" % (len(done), ", ".join(done)))
+    except Exception as exc:
+        _log(_EPISODIC_MAINTAIN, "lesson resolve raised: %r" % (exc,))
 
 
 # --- refine (Task 2) ----------------------------------------------------------

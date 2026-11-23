@@ -9,6 +9,15 @@ It does not track any individual user's personal content overlay.
 
 ## [Unreleased]
 
+### Added
+- **Signal pre-pass for capture.** `np_transcript_signals.py` lists friction with
+  `file:line` before the capture model runs: human turns, interrupts, questions,
+  permission denials, hook blocks, tool errors (with retry outcome), blocked results and
+  repeated skills. Each struggle must anchor to one, or capture drops it (spec 0124).
+- **Closed state for lessons.** A lesson block's `resolved_by` GitHub link is checked
+  daily with `gh`. A closed issue or merged PR sets `status: resolved`, and recall and the
+  guard skip the block. Fails open without `gh` (spec 0124).
+
 ### Fixed
 - **Cron pushes sync with origin first.** `np_git_publish.sync_push()` fetches,
   rebases, unions `*.jsonl`, rebuilds `metrics.js`, then pushes. An unresolvable

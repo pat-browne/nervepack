@@ -400,6 +400,21 @@ empty), items whose normalized text is under 20 characters, items whose raw text
 over 2000 characters, and duplicates of any item still in the undrained inbox. Dropped items are listed in the record's `guard.dropped`. Param
 `memory.write_guard` (default on).
 
+**Signal pre-pass.** Before the capture model runs, `np_transcript_signals.collect()`
+reads the transcript and its subagent files. It lists human turns, interrupts, questions
+to the human, permission denials, hook blocks, tool errors, blocked results and repeated
+skills, each with `file:line`. Each error notes whether the same tool later succeeded and
+how many attempts it took. The list goes into the prompt, and each struggle must cite one
+entry as `anchor`. Struggles with no real anchor are dropped. Param `memory.signals`
+(default on).
+
+**Closed state.** A lesson block may carry `resolved_by`, a GitHub issue or PR URL (or
+`owner/repo#n`). The daily episodic-maintain cron runs `np_lesson_resolve.sweep()` first.
+It asks `gh` about each link and sets `status: resolved` plus `resolved_on` once the issue
+closes or the PR merges. `lesson_recall` and both `lesson_guard` phases skip resolved
+blocks, and graduation treats them as done. No `gh`, or a logged-out `gh`, changes nothing.
+Param `lessons.resolve` (default on).
+
 **Body format (paired rules).** Each entry is one line under an `## <objective>`
 heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.
 DON'T → DO is the default; a lone DO is allowed for a win (no invented DON'T); a lone

@@ -101,6 +101,26 @@ class GatingAndPreflightTest(unittest.TestCase):
         result = np_agentic_cron.episodic_maintain()
         self.assertNotEqual(result, "skipped: memory.maintain disabled")
 
+    # -- lesson resolve sweep (closed issue / merged PR) ----------------------
+    def _sweep_call(self, local):
+        import np_lesson_resolve
+        content = os.path.join(self.tmp, "content")
+        os.makedirs(content)
+        _write(self.local, local)
+        with mock.patch.dict(os.environ, {"NP_CONTENT_DIR": content}), \
+                mock.patch.object(np_lesson_resolve, "sweep", return_value=["t"]) as m:
+            np_agentic_cron.episodic_maintain()
+        return m, content
+
+    def test_resolve_sweep_runs_on_content_lessons(self):
+        m, content = self._sweep_call("memory.maintain=on\n")
+        m.assert_called_once_with([os.path.join(content, "memory", "lessons")])
+        self.assertIn("lessons: resolved 1", self._log_text())
+
+    def test_resolve_sweep_param_off(self):
+        m, _ = self._sweep_call("memory.maintain=on\nlessons.resolve=off\n")
+        m.assert_not_called()
+
     # -- content-dir-explicit skip (issue #12), bash section 1 ---------------
     def test_content_implicit_fallback_skips(self):
         _write(self.local, "memory.maintain=on\n")

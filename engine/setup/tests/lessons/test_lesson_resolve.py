@@ -1,0 +1,92 @@
+# np-test: lesson resolved state | happy
+"""np_lesson_resolve: a lesson linked to a GitHub issue or PR turns resolved once it closes or merges."""
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_PKG = os.path.normpath(os.path.join(_HERE, "..", "..", "..", "nervepack_engine"))
+if _PKG not in sys.path:
+    sys.path.insert(0, _PKG)
+
+import np_lesson_resolve as res  # noqa: E402
+
+FAIL = ("---\nname: t\nkind: lesson\nprovenance: failure\nstatus: candidate\n"
+        "resolved_by: https://github.com/o/r/pull/7\n---\n## X\n- DO y\n")
+SUCC = "---\nname: t\nkind: lesson\nprovenance: success\nstatus: candidate\n---\n## Z\n- DO w\n"
+
+
+def _runner(outputs):
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        out = outputs.get(cmd[1] if cmd[:2] != ["gh", "api"] else cmd[2], "")
+        if isinstance(out, Exception):
+            raise out
+        return subprocess.CompletedProcess(cmd, 0 if out is not None else 1, out or "", "")
+    run.calls = calls
+    return run
+
+
+class TestResolve(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.f = os.path.join(self.tmp, "t.md")
+        with open(self.f, "w") as fh:
+            fh.write(FAIL + SUCC)
+
+    def test_parse_ref(self):
+        self.assertEqual(res.parse_ref("https://github.com/o/r/pull/7"), ("o", "r", "7"))
+        self.assertEqual(res.parse_ref("https://github.com/o/r/issues/12"), ("o", "r", "12"))
+        self.assertEqual(res.parse_ref("o/r#3"), ("o", "r", "3"))
+        self.assertIsNone(res.parse_ref("https://evil.example/o/r/pull/7"))
+        self.assertIsNone(res.parse_ref("o/r#3; rm -rf /"))
+
+    def test_resolved_provenances(self):
+        self.assertEqual(res.resolved_provenances(self.f), set())
+        with open(self.f, "w") as fh:
+            fh.write(FAIL.replace("status: candidate", "status: resolved") + SUCC)
+        self.assertEqual(res.resolved_provenances(self.f), {"failure"})
+        self.assertTrue(res.is_resolved(self.f, "failure"))
+        self.assertFalse(res.is_resolved(self.f, "success"))
+        self.assertEqual(res.resolved_provenances(os.path.join(self.tmp, "none.md")), set())
+
+    def test_sweep_marks_merged_pr_block_only(self):
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t2026-11-20T00:00:00Z"})
+        done = res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh", today="2026-11-23")
+        self.assertEqual(done, ["t"])
+        text = open(self.f).read()
+        self.assertIn("status: resolved\nresolved_on: 2026-11-23\nresolved_by:", text)
+        self.assertEqual(text.count("status: resolved"), 1)
+        self.assertIn("provenance: success\nstatus: candidate", text)
+
+    def test_open_issue_or_closed_unmerged_pr_stays(self):
+        for out in ("open\t", "closed\t"):
+            with self.subTest(out=out):
+                run = _runner({"auth": "", "repos/o/r/issues/7": out})
+                self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
+        self.assertNotIn("status: resolved", open(self.f).read())
+
+    def test_closed_issue_resolves(self):
+        with open(self.f, "w") as fh:
+            fh.write(FAIL.replace("pull/7", "issues/7"))
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t"})
+        self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), ["t"])
+
+    def test_fail_open_without_gh_or_login(self):
+        self.assertEqual(res.sweep([self.tmp], runner=_runner({}), which=lambda _: None), [])
+        run = _runner({"auth": None})
+        self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
+        self.assertEqual(len(run.calls), 1)
+        run = _runner({"auth": "", "repos/o/r/issues/7": OSError("boom")})
+        self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
+        self.assertNotIn("status: resolved", open(self.f).read())
+
+
+if __name__ == "__main__":
+    unittest.main()

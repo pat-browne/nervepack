@@ -464,5 +464,21 @@ class TestLessonRecall(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "g21-sub")))
 
 
+    def test_resolved_block_is_not_recalled(self):
+        self._write("INDEX.md",
+            "| topic | tool_match | gate | topic_triggers |\n|---|---|---|---|\n"
+            "| gitflow | | | merge |\n")
+        self._write("gitflow.md",
+            "---\nname: gitflow\nprovenance: failure\nstatus: resolved\n---\n"
+            "**Do:** rebase onto main before merging.\n"
+            "---\nname: gitflow\nprovenance: success\n---\n"
+            "**Title:** Squash-merge feature branches\n"
+            "**When:** landing a reviewed feature branch\n"
+            "**Do:** squash-merge to keep history linear.\n")
+        ctx = json.loads(self._run("sr", "about to merge"))["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("rebase onto main", ctx)
+        self.assertIn("Squash-merge", ctx)
+
+
 if __name__ == "__main__":
     unittest.main()

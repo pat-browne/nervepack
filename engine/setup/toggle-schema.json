@@ -18,6 +18,10 @@
     "type": "bool",
     "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
   },
+  "lessons.resolve": {
+    "type": "bool",
+    "description": "Daily, mark a lesson block resolved once its resolved_by GitHub issue closes or PR merges."
+  },
   "lessons.recall_min_hits": {
     "type": "number",
     "min": 1,
@@ -27,6 +31,10 @@
     "type": "number",
     "min": 1,
     "description": "Most lesson topics injected per prompt, ranked by hits then trigger rarity."
+  },
+  "memory.signals": {
+    "type": "bool",
+    "description": "Run the deterministic friction pre-pass before capture and drop struggles with no file:line anchor."
   },
   "memory.write_guard": {
     "type": "bool",

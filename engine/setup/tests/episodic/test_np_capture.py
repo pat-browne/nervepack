@@ -139,6 +139,8 @@ class TestNpCapture(unittest.TestCase):
         self.assertEqual(record["mode"], "checkpoint")
 
     def test_8_struggles_and_strategies_passthrough_with_redaction(self):
+        with open(self.toggles_conf, "w") as fh:  # anchoring has its own tests
+            fh.write("memory|shared|runtime|on|signals=off\n")
         # Ported from the retiring tests/playbook/test_capture_strategies.sh and
         # test_capture_struggles.sh -- struggles[]/strategies[] arrays survive
         # capture + scrub into the inbox record, secrets redacted, symmetric to
@@ -372,6 +374,8 @@ class TestNpCapture(unittest.TestCase):
         self.assertEqual(self._records()[0], {"session_id": "s", "headline": "h"})
 
     def test_guard_runs_inside_capture_end_to_end(self):
+        with open(self.toggles_conf, "w") as fh:  # anchoring has its own tests
+            fh.write("memory|shared|runtime|on|signals=off\n")
         note = json.dumps({"headline": "h", "body": "b", "candidate_topics": [], "keywords": [],
                            "struggles": [self._struggle("n/a", fix="none"),
                                          self._struggle("CI job hung for six hours with no timeout set")],
@@ -399,6 +403,59 @@ class TestNpCapture(unittest.TestCase):
         r = self._records()[0]
         self.assertEqual(r["struggles"], [])
         self.assertEqual(r["guard"]["dropped"][0]["reason"], "junk")
+
+
+class TestCaptureSignals(unittest.TestCase):
+    """The deterministic signal pre-pass feeds the prompt and anchors struggles."""
+    setUp = TestNpCapture.setUp
+    _payload = TestNpCapture._payload
+    _inbox_line = TestNpCapture._inbox_line
+
+    def _transcript(self, records):
+        with open(self.transcript, "w") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+
+    def _note(self, anchors):
+        items = [{"symptom": "edit failed on stale old_string text", "cause": "c",
+                  "fix": "re-read the file before editing it", "anchor": a} for a in anchors]
+        return json.dumps({"headline": "h", "body": "b", "candidate_topics": [],
+                           "keywords": [], "struggles": items})
+
+    def test_signals_in_prompt_and_unanchored_struggles_dropped(self):
+        self._transcript([
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "1", "name": "Edit", "input": {}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "1", "content": "boom", "is_error": True}]}},
+        ])
+        with mock.patch.object(np_capture.np_model, "complete",
+                               return_value=self._note(["transcript.jsonl:2", "transcript.jsonl:99", ""])) as m:
+            np_capture.capture(self._payload())
+        prompt = m.call_args[0][0]
+        self.assertIn("FRICTION SIGNALS", prompt)
+        self.assertIn("transcript.jsonl:2 tool_error", prompt)
+        record = json.loads(self._inbox_line())
+        self.assertEqual([s["anchor"] for s in record["struggles"]], ["transcript.jsonl:2"])
+        self.assertEqual(record["signals"], {"tool_error": 1})
+
+    def test_no_signals_means_no_struggles(self):
+        with mock.patch.object(np_capture.np_model, "complete",
+                               return_value=self._note(["transcript.jsonl:1"])) as m:
+            np_capture.capture(self._payload())
+        self.assertIn("no friction signals", m.call_args[0][0])
+        self.assertEqual(json.loads(self._inbox_line())["struggles"], [])
+
+    def test_signals_param_off_keeps_old_behavior(self):
+        with open(self.toggles_conf, "w") as fh:
+            fh.write("memory|shared|runtime|on|signals=off\n")
+        with mock.patch.object(np_capture.np_model, "complete",
+                               return_value=self._note([""])) as m:
+            np_capture.capture(self._payload())
+        self.assertNotIn("FRICTION SIGNALS", m.call_args[0][0])
+        record = json.loads(self._inbox_line())
+        self.assertEqual(len(record["struggles"]), 1)
+        self.assertNotIn("signals", record)
 
 
 if __name__ == "__main__":
