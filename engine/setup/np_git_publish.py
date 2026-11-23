@@ -211,11 +211,15 @@ def sync_push(repo, branch="main", regen=None):
     generated file takes origin's copy, then `regen(repo)` rebuilds it and the
     result is committed. Any other conflict aborts the rebase and returns
     (False, why) with the local commits intact. Never force-pushes.
-    Returns (ok, detail). Never raises.
+    A push rejected as behind gets one more sync and push, for a writer that
+    pushed mid-sync. Returns (ok, detail). Never raises. On success, detail
+    carries a fetch warning or is empty.
     """
     regen = regen or rebuild_generated
     detail = ""
-    for _ in range(2):  # a second pass covers a writer that pushes mid-sync
+    # Two passes. If origin moves between our sync and our push, sync again.
+    # Behind a second time means a busy remote, so give up and report.
+    for _ in range(2):
         ok, note = _sync(repo, branch, regen)
         if not ok:
             return ok, note
@@ -323,6 +327,9 @@ def _resolve(repo, path):
         return _git(repo, "checkout", "--ours", "--", path)[0] == 0
     if not path.endswith(".jsonl"):
         return False
+    target = os.path.realpath(os.path.join(repo, path))
+    if not target.startswith(os.path.realpath(repo) + os.sep):
+        return False  # git never emits such a path. Refuse anyway.
     rc2, origin_side, _ = _show_raw(repo, ":2:" + path)
     rc3, local_side, _ = _show_raw(repo, ":3:" + path)
     if rc2 != 0 or rc3 != 0:  # deleted on one side
@@ -334,7 +341,7 @@ def _resolve(repo, path):
             seen.add(line)
             out.append(line)
     try:
-        with open(os.path.join(repo, path), "w", encoding="utf-8") as fh:
+        with open(target, "w", encoding="utf-8") as fh:
             fh.write("\n".join(out) + "\n")
     except OSError as exc:
         print("np_git_publish: cannot write union of %s: %s" % (path, exc),

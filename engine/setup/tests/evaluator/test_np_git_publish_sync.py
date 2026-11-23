@@ -189,6 +189,10 @@ class Diverged(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("fetch failed", why)
 
+    def test_resolve_refuses_a_path_outside_the_repo(self):
+        self.assertFalse(np_git_publish._resolve(self.local, "../escape.jsonl"))
+        self.assertFalse(os.path.exists(os.path.join(self.local, "..", "escape.jsonl")))
+
     def test_rebase_check_on_a_non_repo_is_false(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertFalse(np_git_publish._rebase_in_progress(d))
