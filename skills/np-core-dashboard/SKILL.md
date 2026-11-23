@@ -88,6 +88,15 @@ rm -f ~/.cache/nervepack/dashboard-open-boot
 edits the committed manifest (repo-wide default). Both are read by `np_param`, local
 first. See [[np-core-toggle]].
 
+## Verify a dashboard change live
+
+- The CLI is `engine/nervepack_engine/cli.py`. There is no `engine/cli.py` or root `cli.py`.
+- The server port is `evaluator.dashboard_port`. A curl GET needs `Host: 127.0.0.1:<port>`.
+- A curl POST also needs `X-Requested-With: nervepack`, or the server returns 403 `forbidden`.
+- Action routes accept `"dry_run": true`. That runs the preflight and spawns no agent.
+- After a merge, `open-dashboard` can keep the old server (same pid and code fingerprint). Kill the pid, rerun `open-dashboard`, and confirm `/api/health` `code` changed.
+- The CI spec guard fails when the diff touches paths outside the change spec `blast_radius`. List the tests and `docs/ARCHITECTURE.md` too.
+
 ## Related
 
 - [[np-core-suggestions-review]] — triage the suggestions panel (served mode powers its buttons)
