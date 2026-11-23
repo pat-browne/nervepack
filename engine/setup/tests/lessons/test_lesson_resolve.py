@@ -104,5 +104,28 @@ class TestResolve(unittest.TestCase):
         self.assertFalse(res.is_resolved(self.f, "failure"))
 
 
+    def test_owner_outside_allowlist_ignored_and_logged(self):
+        logged = []
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t2026-11-20T00:00:00Z\t"})
+        out = res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh",
+                        owners={"demo-user"}, log=logged.append)
+        self.assertEqual(out, [])
+        self.assertEqual(len(run.calls), 1)
+        self.assertIn("o/r#7", logged[0])
+        out = res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh", owners={"O"})
+        self.assertEqual(out, ["t"])
+
+    def test_default_owners_from_remotes(self):
+        def run(cmd, **kw):
+            url = {"a": "https://github.com/demo-user/nervepack\n",
+                   "b": "git@github.com:Acme-Org/x.git\n", "c": ""}[cmd[2]]
+            return subprocess.CompletedProcess(cmd, 0 if url else 1, url, "")
+        self.assertEqual(res.default_owners(["a", "b", "c"], runner=run), {"demo-user", "acme-org"})
+
+    def test_parse_owners_param(self):
+        self.assertEqual(res.parse_owners("demo-user + Acme-Org"), {"demo-user", "acme-org"})
+        self.assertEqual(res.parse_owners(""), set())
+
+
 if __name__ == "__main__":
     unittest.main()

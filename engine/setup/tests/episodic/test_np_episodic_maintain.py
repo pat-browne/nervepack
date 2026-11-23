@@ -114,8 +114,13 @@ class GatingAndPreflightTest(unittest.TestCase):
 
     def test_resolve_sweep_runs_on_content_lessons(self):
         m, content = self._sweep_call("memory.maintain=on\n")
-        m.assert_called_once_with([os.path.join(content, "memory", "lessons")])
+        self.assertEqual(m.call_args[0][0], [os.path.join(content, "memory", "lessons")])
+        self.assertIsInstance(m.call_args[1]["owners"], set)
         self.assertIn("lessons: resolved 1", self._log_text())
+
+    def test_resolve_owners_param_wins(self):
+        m, _ = self._sweep_call("memory.maintain=on\nlessons.resolve_owners=Acme + pat\n")
+        self.assertEqual(m.call_args[1]["owners"], {"acme", "pat"})
 
     def test_resolve_sweep_param_off(self):
         m, _ = self._sweep_call("memory.maintain=on\nlessons.resolve=off\n")

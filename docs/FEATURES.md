@@ -413,7 +413,9 @@ entry as `anchor`. Struggles with no real anchor are dropped. Param `memory.sign
 It asks `gh` about each link and sets `status: resolved` plus `resolved_on` once the issue
 closes or the PR merges. `lesson_recall` and both `lesson_guard` phases skip resolved
 blocks, and graduation treats them as done. No `gh`, or a logged-out `gh`, changes nothing.
-Param `lessons.resolve` (default on).
+Only links whose owner is in `lessons.resolve_owners` (`+`-delimited) count. Empty means
+the owners of the engine and content origin remotes. Other links are ignored and logged.
+An issue counts only when closed as completed. Param `lessons.resolve` (default on).
 
 **Body format (paired rules).** Each entry is one line under an `## <objective>`
 heading: `- DON'T <x> → DO <y> — **when** <scope> — **why** <reason>. [[episodic/<topic>]]`.

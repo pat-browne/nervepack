@@ -22,6 +22,10 @@
     "type": "bool",
     "description": "Daily, mark a lesson block resolved once its resolved_by GitHub issue closes or PR merges."
   },
+  "lessons.resolve_owners": {
+    "type": "string",
+    "description": "GitHub owners whose issue or PR links may resolve a lesson, joined by +. Empty uses the owners of the engine and content origin remotes."
+  },
   "lessons.recall_min_hits": {
     "type": "number",
     "min": 1,

@@ -369,7 +369,12 @@ def _resolve_lessons():
                 and not os.environ.get("NERVEPACK_AGENT")
                 and np_content.content_is_explicit()):
             import np_lesson_resolve
-            done = np_lesson_resolve.sweep([np_content.layer_dir("lessons")])
+            owners = np_lesson_resolve.parse_owners(np_toggle.param("lessons.resolve_owners", ""))
+            if not owners:
+                owners = np_lesson_resolve.default_owners([_NP, np_content.content_dir()])
+            done = np_lesson_resolve.sweep(
+                [np_content.layer_dir("lessons")], owners=owners,
+                log=lambda msg: _log(_EPISODIC_MAINTAIN, "lessons: " + msg))
             if done:
                 _log(_EPISODIC_MAINTAIN, "lessons: resolved %d (%s)" % (len(done), ", ".join(done)))
     except Exception as exc:

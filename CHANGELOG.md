@@ -16,7 +16,11 @@ It does not track any individual user's personal content overlay.
   repeated skills. Each struggle must anchor to one, or capture drops it (spec 0124).
 - **Closed state for lessons.** A lesson block's `resolved_by` GitHub link is checked
   daily with `gh`. A closed issue or merged PR sets `status: resolved`, and recall and the
-  guard skip the block. Fails open without `gh` (spec 0124).
+  guard skip the block. Only owners in `lessons.resolve_owners` count, defaulting to
+  the engine and content remote owners. Fails open without `gh` (spec 0124).
+- **Provider-key redaction in the transcript extractor.** `np-transcript-extract.py` runs
+  `np_scrub` before capture sees the text. `np_scrub` now also catches Stripe, Google API
+  and Hugging Face key shapes (spec 0124).
 
 ### Fixed
 - **Cron pushes sync with origin first.** `np_git_publish.sync_push()` fetches,

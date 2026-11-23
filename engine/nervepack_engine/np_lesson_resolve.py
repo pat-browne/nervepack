@@ -11,6 +11,27 @@ _URL = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+)/(?:issues|pull)/(\d
 _SHORT = re.compile(r"^([\w.-]+)/([\w.-]+)#(\d+)$")
 _JQ = '[.state, (.pull_request.merged_at // ""), (.state_reason // "")] | @tsv'
 _TIMEOUT = 20
+_REMOTE_OWNER = re.compile(r"github\.com[/:]([\w.-]+)/")
+
+
+def parse_owners(value):
+    """Owner set from a `+`-delimited param (commas split toggle params)."""
+    return {o.strip().lower() for o in (value or "").split("+") if o.strip()}
+
+
+def default_owners(repos, runner=subprocess.run):
+    """GitHub owners of the given repos' origin remotes: the user's own orgs."""
+    owners = set()
+    for repo in repos:
+        try:
+            r = runner(["git", "-C", repo, "remote", "get-url", "origin"],
+                       capture_output=True, text=True, timeout=_TIMEOUT)
+        except Exception:
+            continue
+        m = _REMOTE_OWNER.search(r.stdout or "") if r.returncode == 0 else None
+        if m:
+            owners.add(m.group(1).lower())
+    return owners
 
 
 def parse_ref(value):
@@ -91,11 +112,13 @@ def _gh_ready(runner, which):
         return False
 
 
-def sweep(lesson_dirs, runner=subprocess.run, which=shutil.which, today=None):
+def sweep(lesson_dirs, runner=subprocess.run, which=shutil.which, today=None,
+          owners=None, log=None):
     """Mark linked lesson blocks resolved and return the changed topics."""
     if not _gh_ready(runner, which):
         return []
     today = today or datetime.date.today().isoformat()
+    owners = None if owners is None else {o.lower() for o in owners}
     changed = []
     for d in lesson_dirs:
         try:
@@ -110,6 +133,11 @@ def sweep(lesson_dirs, runner=subprocess.run, which=shutil.which, today=None):
                 raw = _field(lines, start, end, "resolved_by")
                 ref = parse_ref(raw)
                 if not ref or _field(lines, start, end, "status") == "resolved":
+                    continue
+                if owners is not None and ref[0].lower() not in owners:
+                    if log:
+                        log("ignored resolved_by %s/%s#%s in %s: owner not allowed" % (
+                            ref[0], ref[1], ref[2], name))
                     continue
                 if _landed(ref, "/pull/" in raw, runner):
                     lines = _mark(lines, start, end, today)

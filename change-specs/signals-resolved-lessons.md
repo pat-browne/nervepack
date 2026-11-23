@@ -11,6 +11,8 @@ blast_radius:
   - engine/nervepack_engine/hooks/lesson_recall.py
   - engine/nervepack_engine/hooks/lesson_guard.py
   - engine/setup/np_agentic_cron.py
+  - engine/setup/np-transcript-extract.py
+  - engine/nervepack_engine/np_scrub.py
   - engine/setup/np_graduation_detect.py
   - engine/setup/toggles.conf
   - engine/setup/toggle-schema.json
@@ -74,3 +76,5 @@ anchored struggle.
 Set `memory.signals=off` and `lessons.resolve=off`, or revert the commit.
 
 ## Deviations
+
+- 2026-11-23: added `np-transcript-extract.py` and `np_scrub.py` to the blast radius. Security review found raw provider keys reached the capture model, and `resolved_by` accepted any owner.
