@@ -1,6 +1,6 @@
 """Deterministic friction signals from one Claude Code transcript and its subagents.
 
-Port of data-base PR 113's session_signals.py, run before capture distills struggles.
+A deterministic transcript signal reader, run before capture distills struggles.
 Beside np_turn_parse.py, the only other module that knows the transcript shape.
 """
 # Adds human_interrupt and splits errors into permission_denied, hook_block, tool_error.
