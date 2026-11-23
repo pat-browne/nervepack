@@ -76,7 +76,7 @@ git commit -m "refine: weekly maintenance $(date -u +%F)" \
   -m "$(printf 'lint: %d skill issues\nxref: %d drifts' \
         "$LINT_FIXES" "$XREF_FIXES")" \
   -- $_paths
-git push
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/setup/np_git_publish.py" push "$(pwd)"
 ```
 
 If nothing changed, exit silently. No empty commits.

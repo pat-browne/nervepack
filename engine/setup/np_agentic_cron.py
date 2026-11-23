@@ -31,6 +31,7 @@ if _ENGINE_PKG not in sys.path:
 import dataclasses
 import datetime
 import os
+import subprocess
 import sys
 
 import np_content
@@ -154,22 +155,47 @@ def _extra_roots_note(cfg):
             "- `%s/skills/` -- a SEPARATE git repo rooted at `%s`%s. Stage and "
             "commit ONLY the paths you changed there via `git -C \"%s\" add "
             "<paths> && git -C \"%s\" commit -m ... -- <paths>`, then "
-            "`git -C \"%s\" push`. Never combine its commit with this repo's "
-            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, r))
+            "`python3 \"%s/engine/setup/np_git_publish.py\" push \"%s\"` (it "
+            "syncs with origin first). Never combine its commit with this repo's "
+            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, _NP, r))
     return "\n".join(lines) + "\n"
 
 
-def _off_main_refusal(cfg, target):
-    """A refusal status when any repo this cron commits into is off main."""
+def _commit_repos(cfg, target):
+    """Every repo this cron commits into."""
     if not cfg.commits_in_target:
-        return ""
+        return []
     repos = [target]
     if cfg.extra_roots:
         try:
             repos += [r for r in np_content.merge_roots() if r and r != _NP]
         except Exception:
             pass
-    for repo in repos:
+    return repos
+
+
+def _ahead_of_upstream(repo):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", "@{u}..HEAD"],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() not in ("", "0")
+
+
+def _publish_leftovers(cfg, target):
+    """Sync and push commits the agent left unpushed. Failure detail or ""."""
+    failed = []
+    for repo in _commit_repos(cfg, target):
+        if not _ahead_of_upstream(repo):
+            continue
+        ok, why = np_git_publish.publish(repo)
+        _log(cfg, "publish %s: %s" % (repo, ("ok " + why).strip() if ok else why))
+        if not ok:
+            failed.append(why)
+    return "; ".join(failed)
+
+
+def _off_main_refusal(cfg, target):
+    """A refusal status when any repo this cron commits into is off main."""
+    for repo in _commit_repos(cfg, target):
         head = np_git_publish.off_main(repo)
         if head is not None:
             msg = np_git_publish.off_main_message(cfg.name, repo, head)
@@ -274,6 +300,10 @@ def _run(cfg):
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"
+    unpublished = _publish_leftovers(cfg, target)
+    if unpublished:
+        # np_job_health WARNs on "NOT PUBLISHED". Keep the phrase.
+        return "incomplete: agent run completed (NOT PUBLISHED: %s)" % unpublished
     return "ok: agent run completed"
 
 

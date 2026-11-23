@@ -99,7 +99,7 @@ class PushToMain(unittest.TestCase):
             self.assertIn("detached", why)
 
     def test_surfaces_a_rejected_push_instead_of_swallowing_it(self):
-        """On main, but the remote moved ahead: git rejects, and we must say so."""
+        """On main, remote moved and the edits conflict: sync aborts and says so."""
         with tempfile.TemporaryDirectory() as d:
             local, bare = _repo_with_origin(d)
             other = os.path.join(d, "other")
@@ -116,9 +116,8 @@ class PushToMain(unittest.TestCase):
             _run("git", "-C", local, "commit", "-q", "-am", "local diverged")
             ok, why = np_git_publish.push_to_main(local)
             self.assertFalse(ok)
-            self.assertIn("rejected", why)
-            self.assertIn("exit", why)          # the status is always carried
-            self.assertRegex(why, r"exit \d+")  # and it is a real number
+            self.assertIn("conflict", why)
+            self.assertIn("f.txt", why)
 
     def _remote_moves(self, d, bare, name="g.txt"):
         other = os.path.join(d, "other")
@@ -160,7 +159,7 @@ class PushToMain(unittest.TestCase):
             _run("git", "-C", local, "add", "wip.txt")
             ok, why = np_git_publish.push_to_main(local)
             self.assertFalse(ok)
-            self.assertIn("rejected", why)
+            self.assertIn("uncommitted", why)
             self.assertTrue(os.path.exists(os.path.join(local, "wip.txt")))
 
     def test_a_rejected_push_detail_stays_one_bounded_line(self):
