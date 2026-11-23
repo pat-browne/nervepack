@@ -57,7 +57,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(res.resolved_provenances(os.path.join(self.tmp, "none.md")), set())
 
     def test_sweep_marks_merged_pr_block_only(self):
-        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t2026-11-20T00:00:00Z"})
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t2026-11-20T00:00:00Z\tcompleted"})
         done = res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh", today="2026-11-23")
         self.assertEqual(done, ["t"])
         text = open(self.f).read()
@@ -66,7 +66,7 @@ class TestResolve(unittest.TestCase):
         self.assertIn("provenance: success\nstatus: candidate", text)
 
     def test_open_issue_or_closed_unmerged_pr_stays(self):
-        for out in ("open\t", "closed\t"):
+        for out in ("open\t\t", "closed\t\tcompleted"):
             with self.subTest(out=out):
                 run = _runner({"auth": "", "repos/o/r/issues/7": out})
                 self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
@@ -75,7 +75,7 @@ class TestResolve(unittest.TestCase):
     def test_closed_issue_resolves(self):
         with open(self.f, "w") as fh:
             fh.write(FAIL.replace("pull/7", "issues/7"))
-        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t"})
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t\tcompleted"})
         self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), ["t"])
 
     def test_fail_open_without_gh_or_login(self):
@@ -86,6 +86,22 @@ class TestResolve(unittest.TestCase):
         run = _runner({"auth": "", "repos/o/r/issues/7": OSError("boom")})
         self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
         self.assertNotIn("status: resolved", open(self.f).read())
+
+
+    def test_dot_segments_rejected(self):
+        self.assertIsNone(res.parse_ref("https://github.com/../r/pull/7"))
+        self.assertIsNone(res.parse_ref("./r#7"))
+
+    def test_issue_closed_not_planned_stays_open(self):
+        with open(self.f, "w") as fh:
+            fh.write(FAIL.replace("pull/7", "issues/7"))
+        run = _runner({"auth": "", "repos/o/r/issues/7": "closed\t\tnot_planned"})
+        self.assertEqual(res.sweep([self.tmp], runner=run, which=lambda _: "/bin/gh"), [])
+
+    def test_any_open_failure_block_keeps_gate(self):
+        with open(self.f, "w") as fh:
+            fh.write(FAIL.replace("status: candidate", "status: resolved") + FAIL)
+        self.assertFalse(res.is_resolved(self.f, "failure"))
 
 
 if __name__ == "__main__":

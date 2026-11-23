@@ -9,7 +9,7 @@ import subprocess
 
 _URL = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+)/(?:issues|pull)/(\d+)/?$")
 _SHORT = re.compile(r"^([\w.-]+)/([\w.-]+)#(\d+)$")
-_JQ = '[.state, (.pull_request.merged_at // "")] | @tsv'
+_JQ = '[.state, (.pull_request.merged_at // ""), (.state_reason // "")] | @tsv'
 _TIMEOUT = 20
 
 
@@ -17,7 +17,9 @@ def parse_ref(value):
     """(owner, repo, number) from a GitHub issue/PR URL or `owner/repo#n`, else None."""
     value = (value or "").strip().strip("\"'")
     m = _URL.match(value) or _SHORT.match(value)
-    return m.groups() if m else None
+    if not m or any(part.strip(".") == "" for part in m.groups()[:2]):
+        return None
+    return m.groups()
 
 
 def _blocks(lines):
@@ -49,7 +51,11 @@ def resolved_provenances(path):
 
 
 def is_resolved(path, provenance):
-    return provenance in resolved_provenances(path)
+    """True only when every block of this provenance is resolved, so one open block keeps its gate."""
+    lines = _read(path)
+    status = [_field(lines, s, e, "status") for s, e in _blocks(lines)
+              if _field(lines, s, e, "provenance") == provenance]
+    return bool(status) and all(x == "resolved" for x in status)
 
 
 def _landed(ref, is_pr, runner):
@@ -61,10 +67,10 @@ def _landed(ref, is_pr, runner):
         return None
     if r.returncode != 0:
         return None
-    state, _, merged = (r.stdout or "").strip("\n").partition("\t")
+    state, merged, reason = ((r.stdout or "").strip("\n").split("\t") + ["", ""])[:3]
     if is_pr or merged.strip():
         return bool(merged.strip())
-    return state.strip() == "closed"
+    return state.strip() == "closed" and reason.strip() == "completed"
 
 
 def _mark(lines, start, end, today):

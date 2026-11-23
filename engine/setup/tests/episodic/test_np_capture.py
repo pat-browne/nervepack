@@ -427,13 +427,14 @@ class TestCaptureSignals(unittest.TestCase):
             {"type": "assistant", "message": {"content": [
                 {"type": "tool_use", "id": "1", "name": "Edit", "input": {}}]}},
             {"type": "user", "message": {"content": [
-                {"type": "tool_result", "tool_use_id": "1", "content": "boom", "is_error": True}]}},
+                {"type": "tool_result", "tool_use_id": "1", "content": "boom sk-ABCDEFGHIJKLMNOPQRSTUV", "is_error": True}]}},
         ])
         with mock.patch.object(np_capture.np_model, "complete",
                                return_value=self._note(["transcript.jsonl:2", "transcript.jsonl:99", ""])) as m:
             np_capture.capture(self._payload())
         prompt = m.call_args[0][0]
         self.assertIn("FRICTION SIGNALS", prompt)
+        self.assertNotIn("sk-ABCDEFGHIJKLMNOPQRSTUV", prompt.split("FRICTION SIGNALS", 1)[1])
         self.assertIn("transcript.jsonl:2 tool_error", prompt)
         record = json.loads(self._inbox_line())
         self.assertEqual([s["anchor"] for s in record["struggles"]], ["transcript.jsonl:2"])

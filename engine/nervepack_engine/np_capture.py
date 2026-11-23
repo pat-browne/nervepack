@@ -322,7 +322,7 @@ def capture(payload, mode="session-end"):
     prompt = _PROMPT_HEAD + convo
     if signals is not None:
         rendered = np_transcript_signals.render(signals)
-        prompt += (_SIGNALS_HEAD + rendered + "\n") if rendered else _NO_SIGNALS
+        prompt += (_SIGNALS_HEAD + _scrubbed(rendered) + "\n") if rendered else _NO_SIGNALS
     prompt += _PROMPT_TAIL + (_SIGNALS_RULE if signals is not None else "")
 
     raw = np_model.complete(prompt, _SYS, feature="capture")
