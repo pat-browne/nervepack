@@ -30,8 +30,8 @@ if _ENGINE_PKG not in sys.path:
 
 import dataclasses
 import datetime
-import subprocess
 import os
+import subprocess
 import sys
 
 import np_content
@@ -174,19 +174,23 @@ def _commit_repos(cfg, target):
     return repos
 
 
+def _ahead_of_upstream(repo):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", "@{u}..HEAD"],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() not in ("", "0")
+
+
 def _publish_leftovers(cfg, target):
-    """Sync and push commits the agent left unpushed. Status suffix or ""."""
+    """Sync and push commits the agent left unpushed. Failure detail or ""."""
     failed = []
     for repo in _commit_repos(cfg, target):
-        rc = subprocess.run(["git", "-C", repo, "rev-list", "--count", "@{u}..HEAD"],
-                            capture_output=True, text=True)
-        if rc.returncode != 0 or rc.stdout.strip() in ("", "0"):
+        if not _ahead_of_upstream(repo):
             continue
         ok, why = np_git_publish.publish(repo)
-        _log(cfg, "publish %s: %s" % (repo, "ok" if ok else why))
+        _log(cfg, "publish %s: %s" % (repo, ("ok " + why).strip() if ok else why))
         if not ok:
             failed.append(why)
-    return " (NOT PUBLISHED: %s)" % "; ".join(failed) if failed else ""
+    return "; ".join(failed)
 
 
 def _off_main_refusal(cfg, target):
@@ -296,7 +300,11 @@ def _run(cfg):
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"
-    return "ok: agent run completed" + _publish_leftovers(cfg, target)
+    unpublished = _publish_leftovers(cfg, target)
+    if unpublished:
+        # np_job_health WARNs on "NOT PUBLISHED". Keep the phrase.
+        return "incomplete: agent run completed (NOT PUBLISHED: %s)" % unpublished
+    return "ok: agent run completed"
 
 
 # --- memory-promote (Task 0) -------------------------------------------------

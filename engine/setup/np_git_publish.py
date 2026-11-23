@@ -216,23 +216,28 @@ def sync_push(repo, branch="main", regen=None):
     regen = regen or rebuild_generated
     detail = ""
     for _ in range(2):  # a second pass covers a writer that pushes mid-sync
-        ok, detail = _sync(repo, branch, regen)
+        ok, note = _sync(repo, branch, regen)
         if not ok:
-            return ok, detail
+            return ok, note
         ok, detail = _push_once(repo, branch)
-        if ok or not _is_behind(detail):
-            return ok, detail
+        if ok:
+            # On success the detail carries a fetch warning, so the cron logs it.
+            return ok, note
+        if not _is_behind(detail):
+            return ok, "%s; %s" % (detail, note) if note else detail
     return False, detail
 
 
 def _sync(repo, branch, regen):
-    """Bring HEAD on top of origin/<branch>. (ok, why)."""
+    """Bring HEAD on top of origin/<branch>. (ok, why).
+
+    A failed fetch is ok with a note: the push still runs and says the rest.
+    """
     rc, _, err = _git(repo, "fetch", "-q", "origin", branch)
     if rc != 0:
-        # Offline: the push itself will say what is wrong.
-        print("np_git_publish: fetch failed in %s: %s" % (repo, _one_line(err)),
-              file=sys.stderr)
-        return True, ""
+        note = "fetch failed in %s: %s" % (repo, _one_line(err))
+        print("np_git_publish: %s" % note, file=sys.stderr)
+        return True, note
     base = "refs/remotes/origin/" + branch
     if _git(repo, "merge-base", "--is-ancestor", base, "HEAD")[0] == 0:
         return True, ""
@@ -296,7 +301,9 @@ def _rebase(repo, base):
 
 
 def _rebase_in_progress(repo):
-    gd = _git(repo, "rev-parse", "--git-dir")[1]
+    rc, gd, _ = _git(repo, "rev-parse", "--git-dir")
+    if rc != 0 or not gd:
+        return False
     gd = gd if os.path.isabs(gd) else os.path.join(repo, gd)
     return any(os.path.exists(os.path.join(gd, d)) for d in ("rebase-merge", "rebase-apply"))
 
@@ -312,21 +319,27 @@ def _resolve(repo, path):
     In a rebase, stage 2 is origin's side and stage 3 is the local commit.
     """
     if path in GENERATED:
+        # --ours is origin here. Take it, then rebuild after the rebase.
         return _git(repo, "checkout", "--ours", "--", path)[0] == 0
     if not path.endswith(".jsonl"):
         return False
-    rc2, theirs, _ = _show_raw(repo, ":2:" + path)
-    rc3, ours, _ = _show_raw(repo, ":3:" + path)
+    rc2, origin_side, _ = _show_raw(repo, ":2:" + path)
+    rc3, local_side, _ = _show_raw(repo, ":3:" + path)
     if rc2 != 0 or rc3 != 0:  # deleted on one side
         return False
     seen = set()
     out = []
-    for line in theirs.splitlines() + ours.splitlines():
+    for line in origin_side.splitlines() + local_side.splitlines():
         if line.strip() and line not in seen:
             seen.add(line)
             out.append(line)
-    with open(os.path.join(repo, path), "w", encoding="utf-8") as fh:
-        fh.write("\n".join(out) + "\n")
+    try:
+        with open(os.path.join(repo, path), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(out) + "\n")
+    except OSError as exc:
+        print("np_git_publish: cannot write union of %s: %s" % (path, exc),
+              file=sys.stderr)
+        return False
     return True
 
 
@@ -348,8 +361,12 @@ def rebuild_generated(repo):
     build = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))), "dashboard", "build.py")
     import np_aggregate  # lazy: np_aggregate imports this module
-    subprocess.run([sys.executable, build, src, out], env=np_aggregate.dashboard_env(repo),
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    # Raise on failure. _sync turns it into a failed publish, so a stale
+    # metrics.js never reaches origin.
+    r = subprocess.run([sys.executable, build, src, out], env=np_aggregate.dashboard_env(repo),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if r.returncode != 0:
+        raise RuntimeError("build.py exit %d: %s" % (r.returncode, _one_line(r.stderr)))
 
 
 def _is_behind(detail):

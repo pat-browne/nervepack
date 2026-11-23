@@ -147,6 +147,52 @@ class Diverged(unittest.TestCase):
         self.assertTrue(ok, why)
         self.assertEqual(len(self._origin_file(JSONL).splitlines()), 3)
 
+    def _jsonl_race(self):
+        _write(self.other, JSONL, '{"id":2}\n', "a")
+        _commit(self.other, "remote batch", ".")
+        _git(self.other, "push", "-q", "origin", "HEAD:main")
+        _write(self.local, JSONL, '{"id":3}\n', "a")
+        _commit(self.local, "cron batch", ".")
+
+    def test_failed_rebuild_blocks_the_push(self):
+        self._jsonl_race()
+        origin_before = _git(self.bare, "rev-parse", "main")
+
+        def boom(repo):
+            raise RuntimeError("build.py exit 1")
+        ok, why = np_git_publish.sync_push(self.local, regen=boom)
+        self.assertFalse(ok)
+        self.assertIn("build.py exit 1", why)
+        self.assertEqual(_git(self.bare, "rev-parse", "main"), origin_before)
+
+    def test_union_write_error_aborts_cleanly(self):
+        self._jsonl_race()
+        head_before = _git(self.local, "rev-parse", "HEAD")
+        with mock.patch.object(np_git_publish, "open", create=True,
+                               side_effect=OSError("disk full")):
+            ok, why = np_git_publish.sync_push(self.local, regen=_count_regen)
+        self.assertFalse(ok)
+        self.assertIn(JSONL, why)
+        self.assertEqual(_git(self.local, "rev-parse", "HEAD"), head_before)
+
+    def test_fetch_failure_is_reported_on_success_too(self):
+        _write(self.local, "memory/x.md", "ours\n")
+        _commit(self.local, "cron commit", ".")
+        real = np_git_publish._git
+
+        def no_fetch(repo, *args):
+            if args and args[0] == "fetch":
+                return 1, "", "could not resolve host"
+            return real(repo, *args)
+        with mock.patch.object(np_git_publish, "_git", side_effect=no_fetch):
+            ok, why = np_git_publish.sync_push(self.local)
+        self.assertTrue(ok)
+        self.assertIn("fetch failed", why)
+
+    def test_rebase_check_on_a_non_repo_is_false(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertFalse(np_git_publish._rebase_in_progress(d))
+
     def test_cli_exits_nonzero_on_conflict(self):
         _write(self.other, "skills/s/SKILL.md", "theirs\n")
         _commit(self.other, "remote edit", ".")

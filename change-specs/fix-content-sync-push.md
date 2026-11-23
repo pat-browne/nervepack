@@ -13,6 +13,7 @@ blast_radius:
   - agents/np-flow-episodic-maintain.md
   - engine/setup/tests/evaluator/test_np_git_publish_sync.py
   - engine/setup/tests/evaluator/test_np_git_publish.py
+  - engine/setup/tests/memory/test_np_memory_promote.py
   - docs/ARCHITECTURE.md
   - CHANGELOG.md
   - change-specs/fix-content-sync-push.md
