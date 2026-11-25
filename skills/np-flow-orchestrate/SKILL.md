@@ -102,6 +102,8 @@ itself. This section owns the rule for every coordinator, including
   the two when the report lands, and settle any gap with a test.
 - Send a wrong finding or a wrong change back to its worker with the evidence.
   A second failure follows the step-up rule in [[np-flow-speed]].
+- Log each correction in the decisions log: the claim, the evidence and the
+  fix.
 
 ## Close-out: capture, then archive
 
