@@ -91,6 +91,13 @@ itself. This section owns the rule for every coordinator, including
   names another model.
 - A worker sends a hard call back as a decision request: the options and its
   pick. You decide, tell the worker, and record the call in the ledger.
+- Run independent work in parallel. Dispatch every worker whose task needs no
+  other worker's result in one batch.
+- Confirm or correct every worker result before it lands. A report is a claim.
+  Rerun its tests and its numbers from the worker's branch. Read the diff
+  against the goal. Spot-check the evidence behind each finding.
+- Send a wrong finding or a wrong change back to its worker with the evidence.
+  A second failure follows the step-up rule in [[np-flow-speed]].
 
 ## Close-out: capture, then archive
 
