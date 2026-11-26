@@ -2,7 +2,7 @@
 id: fix-dashboard-sidebar-wiki
 status: accepted
 date: 2026-11-26
-tier: standard
+tier: normal
 blast_radius:
   - dashboard/index.html
   - engine/setup/tests/evaluator/test_dashboard_sidebar_layout.py
