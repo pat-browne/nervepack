@@ -91,44 +91,23 @@ itself. This section owns the rule for every coordinator, including
   names another model.
 - A worker sends a hard call back as a decision request: the options and its
   pick. You decide, tell the worker, and record the call in the ledger.
-- Run independent work in parallel. Dispatch every worker whose task needs no
-  other worker's result in one batch.
+- Run independent work in parallel, in one batch.
 - Confirm or correct every worker result before it lands. A report is a claim.
-  Rerun its tests and its numbers from the worker's branch. Read the diff
-  against the goal. Spot-check the evidence behind each finding.
-- Form your own theory first. Before a diagnosis worker reports, read the raw
-  evidence and write your root-cause theory and one prediction that would
-  refute it. Keep it out of the brief, so the worker is not anchored. Compare
-  the two when the report lands, and settle any gap with a test.
-- Send a wrong finding or a wrong change back to its worker with the evidence.
-  A second failure follows the step-up rule in [[np-flow-speed]].
-- Log each correction in the decisions log: the claim, the evidence and the
-  fix.
+- Form your own theory first, before a diagnosis worker reports.
+- Send a wrong finding back to its worker with the evidence. Log each correction.
+
+Full rules: references/worker-verification.md
 
 ## Close-out: capture, then archive
 
 This section owns the rule for every coordinator, including [[np-core-dispatch]]
 and [[np-flow-speed]]. A child that met its stated goal and sits idle gets closed
-out, never left open.
+out, never left open. Confirm the goal from evidence, send it
+[[np-core-capture-learning]], check the capture landed, confirm a clean pushed
+worktree, then archive and mark its ledger row `done`. A child that ends on a
+gate or question with no capture report stays open as `waiting on me`.
 
-1. Confirm the goal is met from evidence: merged PR, pushed commit, or report
-   verified. A child still owed a step (live checks, a merge, an answer) stays
-   open.
-2. Send it [[np-core-capture-learning]] as one message. Tell it to take no new
-   work after the capture.
-3. Wait for its capture report. Check where the capture landed: a commit, a
-   branch, or memory.
-4. Run `git -C "$worktree" status -sb`, where `$worktree` is the child's
-   working directory. Archive only when the tree is clean and the branch is not
-   ahead of its remote. Otherwise, or if the command fails (missing worktree,
-   git error), ask the child to commit and push, or leave it open as
-   `waiting on me`.
-5. Archive the child. Mark its row in § The ledger `done`, with the PR if one
-   exists and the capture location.
-
-A child that ends its turn on a gate or a question, with no capture report,
-stays open as `waiting on me`. Archiving can remove the child's folder. Never
-archive a child whose folder another live session uses.
+Full steps: references/close-out.md
 
 ## The loop
 
