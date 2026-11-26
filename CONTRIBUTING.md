@@ -58,6 +58,22 @@ python3 engine/setup/tests/<area>/test_<name>.py     # stdlib unittest
 bash    engine/setup/tests/<area>/test_<name>.sh     # bash test
 ```
 
+### Preview a dashboard change
+
+The live dashboard server reads `dashboard/index.html` fresh from the main
+checkout on every load. A fast-forward pull of `main` ships a merged change,
+with no restart. To preview a branch first, serve its worktree on a spare port.
+The worktree has no `dashboard/data`, so link the main checkout's copy, and
+remove the link before you commit.
+
+```bash
+ln -s ~/Code/nervepack/dashboard/data dashboard/data
+NP_DASH_PORT=8799 python3 engine/setup/np-dashboard-server.py
+```
+
+Check a short viewport as well as a tall one. A sidebar squeeze only shows
+when the screen is short.
+
 ## Conventions
 
 - **Simplicity first, and keep changes surgical.** Write the minimum that solves the
