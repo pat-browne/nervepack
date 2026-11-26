@@ -1,6 +1,6 @@
-# np-test: dashboard-sidebar-layout | wiki list keeps its height, credentials start collapsed
+# np-test: dashboard-sidebar-layout | wiki list keeps its height, health panels start collapsed
 """Static guards: the health panels must not squeeze the wiki list, and
-credentials render folded so the topics stay visible."""
+both health panels render folded so the topics stay visible."""
 import os
 import re
 import unittest
@@ -21,6 +21,8 @@ class TestSidebarLayout(unittest.TestCase):
             cls.html = fh.read()
         m = re.search(r"function renderCreds\(.*?\n  \}\n", cls.html, re.S)
         cls.creds = m.group(0) if m else ""
+        m = re.search(r"function renderJobs\(.*?\n  \}\n", cls.html, re.S)
+        cls.jobs = m.group(0) if m else ""
 
     def test_wiki_list_has_a_floor(self):
         self.assertRegex(rule(self.html, ".wikilist"), r"min-height:\s*min\(")
@@ -30,11 +32,19 @@ class TestSidebarLayout(unittest.TestCase):
         self.assertRegex(body, r"flex:\s*0 1 auto")
         self.assertRegex(body, r"min-height:\s*0")
 
+    def assert_folded(self, fn, name):
+        self.assertTrue(fn, name + " missing")
+        self.assertIn('<details class="sidefold"', fn)
+        self.assertNotRegex(fn, r'<details class="sidefold" open')
+        self.assertIn("<summary>", fn)
+        # A refresh keeps a fold the user opened.
+        self.assertIn('querySelector("details.sidefold[open]")', fn)
+
     def test_credentials_render_folded(self):
-        self.assertTrue(self.creds, "renderCreds missing")
-        self.assertIn('<details class="credfold"', self.creds)
-        self.assertNotRegex(self.creds, r'<details class="credfold" open')
-        self.assertIn("<summary>", self.creds)
+        self.assert_folded(self.creds, "renderCreds")
+
+    def test_health_checks_render_folded(self):
+        self.assert_folded(self.jobs, "renderJobs")
 
 
 if __name__ == "__main__":
