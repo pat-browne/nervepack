@@ -67,7 +67,8 @@ The worktree has no `dashboard/data`, so link the main checkout's copy, and
 remove the link before you commit.
 
 ```bash
-ln -s "${NP_DIR:-$HOME/Code/nervepack}/dashboard/data" dashboard/data
+main=$(git worktree list --porcelain | sed -n "1s/^worktree //p")
+ln -s "$main/dashboard/data" dashboard/data
 NP_DASH_PORT=8799 python3 engine/setup/np-dashboard-server.py
 ```
 
