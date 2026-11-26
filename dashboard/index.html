@@ -40,7 +40,8 @@
                 border:1px solid var(--border); border-radius:var(--radius-sm);
                 background:var(--surface-alt); color:var(--text); margin-bottom:10px; }
   .wikisearch:focus-visible { outline:2px solid var(--accent-sage); outline-offset:1px; }
-  .wikilist { overflow-y:auto; flex:1; margin:0 -4px; padding:0 4px; }
+  /* The floor keeps topics visible when the health panels below grow. */
+  .wikilist { overflow-y:auto; flex:1 1 auto; min-height:min(40vh, 320px); margin:0 -4px; padding:0 4px; }
   .wikicount { font-size:11px; color:var(--text-tertiary); margin-bottom:8px; }
   .wikiitem { display:block; padding:8px 8px; border-radius:var(--radius-sm);
               text-decoration:none; color:inherit; border-top:1px solid var(--border); }
@@ -259,8 +260,14 @@
   .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
                 background:var(--status-warn-bg); }
   /* Job health lives under the wiki list in the sidepane: one column, compact. */
-  .sidehealth { flex:0 0 auto; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;
-                max-height:45vh; overflow-y:auto; }
+  /* Health panels shrink and scroll before the wiki list loses its floor. */
+  .sidehealth { flex:0 1 auto; min-height:0; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;
+                max-height:30vh; overflow-y:auto; }
+  .credfold > summary { cursor:pointer; font-size:12px; list-style:none; }
+  .credfold > summary::-webkit-details-marker { display:none; }
+  .credfold > summary::before { content:"\25B8"; margin-right:6px; font-size:9px; color:var(--text-tertiary); }
+  .credfold[open] > summary::before { content:"\25BE"; }
+  .credfold > summary .lbl { display:inline; }
   .sidehealth .lbl { margin-bottom:4px; }
   .sidehealth .kv { font-size:12px; margin-bottom:4px; }
   .sidehealth .jobs { grid-template-columns:1fr; }
@@ -883,7 +890,10 @@
           ${credBad(c) && c.command ? `<div class="meta"><code>${esc(c.command)}</code></div>` : ""}
         </div></div>`).join("");
     const summary = `${creds.length} credential${creds.length === 1 ? "" : "s"}, ${bad ? bad + " need attention" : "all ok"}`;
-    elCreds.innerHTML = head + `<div class="kv">${esc(summary)}</div><div class="jobs">${rows}</div>`;
+    // Folded by default so the wiki keeps the sidebar. A refresh keeps the user's choice.
+    const wasOpen = !!elCreds.querySelector("details.credfold[open]");
+    elCreds.innerHTML = `<details class="credfold"${wasOpen ? " open" : ""}><summary><span class="lbl">Credentials</span> · ${esc(summary)}</summary>`
+      + `<div class="jobs">${rows}</div></details>`;
   }
   async function refreshCreds() {
     try {
