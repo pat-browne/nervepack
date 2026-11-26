@@ -1,5 +1,5 @@
 ---
-id: fix-dashboard-sidebar-wiki
+id: 0125
 status: accepted
 date: 2026-11-26
 tier: normal
@@ -8,7 +8,7 @@ blast_radius:
   - engine/setup/tests/evaluator/test_dashboard_sidebar_layout.py
 ---
 
-# fix-dashboard-sidebar-wiki: wiki list keeps its height
+# 0125: wiki list keeps its height
 
 ## Context and problem statement
 
