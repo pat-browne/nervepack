@@ -123,6 +123,10 @@ class TestRouting(_Base):
             self.assertEqual(imp._kind_repos(kind), ("content",))
         self.assertEqual(imp._kind_repos(""), None)
 
+    def test_troubleshoot_tries_engine_first_then_content(self):
+        self.assertEqual(imp._kind_repos("troubleshoot"), ("engine", "content"))
+        self.assertEqual(imp._kind_repos(" Troubleshoot "), ("engine", "content"))
+
     def test_kind_job_never_tries_the_engine(self):
         st = self.run_job("2026-10-15.md :: np-kb-c vs np-kb-d", "compact")
         self.assertEqual([c[0] for c in self.calls], ["content"])

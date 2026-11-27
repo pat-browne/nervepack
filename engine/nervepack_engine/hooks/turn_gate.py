@@ -31,11 +31,7 @@ import np_turn_parse
 _UI_EXT = (".html", ".css", ".scss", ".sass", ".less", ".jsx", ".tsx",
            ".vue", ".svelte", ".astro", ".dart")
 _EXEMPT = re.compile(r"(^|[/\\])(tests?|fixtures?|__snapshots__|node_modules|dist|build)"
-                     r"([/\\]|$)|\.min\."
-                     # planner Plans owns these files and their format.
-                     # Brief prefixes match planner tracker types. Add new ones in both gates.
-                     r"|(^|[/\\])\.planner-plans([/\\]|$)"
-                     r"|(^|[/\\])briefs[/\\](ado_workitem|github_issue|jira_issue|linear_issue)-[^/\\]+\.md$", re.I)
+                     r"([/\\]|$)|\.min\.", re.I)
 _SPEC_DOC = re.compile(r"[/\\]docs[/\\]superpowers[/\\](?:specs|plans)[/\\]", re.I)
 
 # Sent with every block. Without it the model answers again in full and the

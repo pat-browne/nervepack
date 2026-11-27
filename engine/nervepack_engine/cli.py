@@ -58,6 +58,7 @@ from nervepack_engine.hooks import security_recall  # noqa: E402
 from nervepack_engine.hooks import session_flush  # noqa: E402
 from nervepack_engine.hooks import skill_trigger_recall  # noqa: E402
 from nervepack_engine.hooks import spec_review  # noqa: E402
+from nervepack_engine.hooks import speed_mark  # noqa: E402
 from nervepack_engine.hooks import struggle_escalation  # noqa: E402
 from nervepack_engine.hooks import turn_gate  # noqa: E402
 import np_aggregate  # noqa: E402
@@ -109,6 +110,7 @@ _HOOKS = {
     "session-flush": session_flush.run,
     "skill-trigger-recall": skill_trigger_recall.run,
     "spec-review": spec_review.run,
+    "speed-mark": speed_mark.run,
     "struggle-escalation": struggle_escalation.run,
     "turn-gate": turn_gate.run,
 }
@@ -244,7 +246,7 @@ def _parse_merge_wait_args(argv):
 _COMMANDS = (
     "resume-write", "cron", "setup", "layout", "onboard", "implement-suggestion",
     "merge-wait", "suggestion-resolve", "suggestion-unresolve", "toggle", "doctor",
-    "instruction-block", "sync", "open-dashboard", "claim", "hook",
+    "credentials", "instruction-block", "sync", "open-dashboard", "claim", "hook",
 )
 
 
@@ -488,6 +490,11 @@ def main(argv=None):
         except Exception as exc:
             _bail("doctor", "unhandled exception: %r" % exc)
             return 1
+
+    if argv[0] == "credentials":
+        # A user command: status table, --json, or rotate <name>|--due.
+        import np_credentials
+        return np_credentials.main(argv[1:])
 
     if argv[0] == "instruction-block":
         if len(argv) < 3 or argv[1] not in ("install", "remove"):

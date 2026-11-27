@@ -38,7 +38,7 @@ Single-day and daily jobs render the same bytes as before.
 
 ## Non-goals
 
-The data-base-side skill and the agent phases do not change. The agent's
+The team-kb-side skill and the agent phases do not change. The agent's
 "already ran today" guard keeps a day to one PR.
 
 ## Cross-cutting concerns

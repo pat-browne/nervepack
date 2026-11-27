@@ -190,5 +190,48 @@ class TestWorktreeExclusion(unittest.TestCase):
         self.assertEqual(self._scan().returncode, 1)
 
 
+
+class TestDeniedTerms(unittest.TestCase):
+    """A hashed term blocks in any spelling and is never echoed."""
+
+    def setUp(self):
+        import hashlib, importlib.util
+        spec = importlib.util.spec_from_file_location("np_publish_scan", SCAN)
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+        self.deny = {hashlib.sha256(b"acmecorp").hexdigest()}
+        self.root = tempfile.mkdtemp()
+
+    def _scan(self, files):
+        for rel, content in files.items():
+            p = os.path.join(self.root, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as fh:
+                fh.write(content)
+        return self.mod.scan(self.root, set(), self.deny)
+
+    def test_every_spelling_blocks(self):
+        for i, text in enumerate(("AcmeCorp", "acme-corp", "ACMECORP", "acme corp", "np-kb-acmecorp-ado")):
+            hits = self._scan({"f%d.md" % i: "we use %s here\n" % text})
+            self.assertTrue(any(h[0] == "f%d.md" % i for h in hits), text)
+
+    def test_path_blocks(self):
+        hits = self._scan({"skills/np-kb-acmecorp-x/SKILL.md": "clean\n"})
+        self.assertTrue(any(h[2] == "denied-term" for h in hits))
+
+    def test_term_is_never_echoed(self):
+        hits = self._scan({"x.md": "AcmeCorp\n"})
+        self.assertFalse(any("cme" in h[3] for h in hits))
+
+    def test_unrelated_words_pass(self):
+        self.assertEqual(self._scan({"y.md": "acme tools and corp finance\n"}), [])
+
+    def test_engine_hash_file_holds_only_digests(self):
+        path = os.path.join(REPO, "publish", "deny-term-hashes.txt")
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                self.assertRegex(line, r"^[0-9a-f]{64}$")
+
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,7 @@ if _ENGINE_PKG not in sys.path:
 import dataclasses
 import datetime
 import os
+import subprocess
 import sys
 
 import np_content
@@ -154,22 +155,47 @@ def _extra_roots_note(cfg):
             "- `%s/skills/` -- a SEPARATE git repo rooted at `%s`%s. Stage and "
             "commit ONLY the paths you changed there via `git -C \"%s\" add "
             "<paths> && git -C \"%s\" commit -m ... -- <paths>`, then "
-            "`git -C \"%s\" push`. Never combine its commit with this repo's "
-            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, r))
+            "`python3 \"%s/engine/setup/np_git_publish.py\" push \"%s\"` (it "
+            "syncs with origin first). Never combine its commit with this repo's "
+            "commit." % (r, r, cfg.extra_roots_repo_detail, r, r, _NP, r))
     return "\n".join(lines) + "\n"
 
 
-def _off_main_refusal(cfg, target):
-    """A refusal status when any repo this cron commits into is off main."""
+def _commit_repos(cfg, target):
+    """Every repo this cron commits into."""
     if not cfg.commits_in_target:
-        return ""
+        return []
     repos = [target]
     if cfg.extra_roots:
         try:
             repos += [r for r in np_content.merge_roots() if r and r != _NP]
         except Exception:
             pass
-    for repo in repos:
+    return repos
+
+
+def _ahead_of_upstream(repo):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", "@{u}..HEAD"],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() not in ("", "0")
+
+
+def _publish_leftovers(cfg, target):
+    """Sync and push commits the agent left unpushed. Failure detail or ""."""
+    failed = []
+    for repo in _commit_repos(cfg, target):
+        if not _ahead_of_upstream(repo):
+            continue
+        ok, why = np_git_publish.publish(repo)
+        _log(cfg, "publish %s: %s" % (repo, ("ok " + why).strip() if ok else why))
+        if not ok:
+            failed.append(why)
+    return "; ".join(failed)
+
+
+def _off_main_refusal(cfg, target):
+    """A refusal status when any repo this cron commits into is off main."""
+    for repo in _commit_repos(cfg, target):
         head = np_git_publish.off_main(repo)
         if head is not None:
             msg = np_git_publish.off_main_message(cfg.name, repo, head)
@@ -274,6 +300,10 @@ def _run(cfg):
     if not ok:
         _log(cfg, "ERROR: agent run exited non-zero")
         return "agent run failed"
+    unpublished = _publish_leftovers(cfg, target)
+    if unpublished:
+        # np_job_health WARNs on "NOT PUBLISHED". Keep the phrase.
+        return "incomplete: agent run completed (NOT PUBLISHED: %s)" % unpublished
     return "ok: agent run completed"
 
 
@@ -326,7 +356,29 @@ def episodic_maintain():
                 _log(_EPISODIC_MAINTAIN, "resources: merged %d record(s)" % merged)
     except Exception as exc:
         _log(_EPISODIC_MAINTAIN, "resources drain raised: %r" % (exc,))
+    _resolve_lessons()
     return _run(_EPISODIC_MAINTAIN)
+
+
+def _resolve_lessons():
+    """Mark lessons resolved whose linked issue closed or PR merged. The agent run
+    commits the edits. Fails open when gh is missing or logged out."""
+    try:
+        if (np_toggle.enabled("memory.maintain") and np_toggle.enabled("lessons")
+                and np_toggle.param("lessons.resolve", "on") == "on"
+                and not os.environ.get("NERVEPACK_AGENT")
+                and np_content.content_is_explicit()):
+            import np_lesson_resolve
+            owners = np_lesson_resolve.parse_owners(np_toggle.param("lessons.resolve_owners", ""))
+            if not owners:
+                owners = np_lesson_resolve.default_owners([_NP, np_content.content_dir()])
+            done = np_lesson_resolve.sweep(
+                [np_content.layer_dir("lessons")], owners=owners,
+                log=lambda msg: _log(_EPISODIC_MAINTAIN, "lessons: " + msg))
+            if done:
+                _log(_EPISODIC_MAINTAIN, "lessons: resolved %d (%s)" % (len(done), ", ".join(done)))
+    except Exception as exc:
+        _log(_EPISODIC_MAINTAIN, "lesson resolve raised: %r" % (exc,))
 
 
 # --- refine (Task 2) ----------------------------------------------------------
@@ -373,16 +425,16 @@ def compact():
 
 
 # --- kb-promote-scan ----------------------------------------------------------
-# Weekly (Mon 08:45): run data-base's harness-promote-scan skill in a fresh
-# data-base worktree and open a PR if it queued anything. The prompt owns the
-# worktree, branch, and PR steps, so the cwd is only a launch point.
+# Weekdays 11:00: run a team KB repo's harness-promote-scan skill in a fresh
+# worktree of that repo. The prompt owns the worktree, branch, and PR steps,
+# so the cwd is only a launch point.
 _KB_PROMOTE_SCAN = CronConfig(
     name="kb-promote-scan",
     toggle="maintain.kb_promote_scan",
     prompt_rel_path=os.path.join("agents", "np-flow-kb-promote-scan.md"),
     log_env="KB_PROMOTE_SCAN_LOG",
     log_basename="kb-promote-scan.log",
-    # cwd only. The agent commits in its own data-base worktree, never here,
+    # cwd only. The agent commits in its own KB worktree, never here,
     # so _run() finds no engine changes and skips its commit step.
     commit_target="engine",
     content_gated=False,
@@ -391,9 +443,23 @@ _KB_PROMOTE_SCAN = CronConfig(
 )
 
 
+# Param -> env var. Values live only in toggles.local, so the engine never
+# names the KB repo.
+_KB_PARAMS = (("kb_dir", "PROMOTE_KB_DIR"), ("kb_repo", "PROMOTE_KB_REPO"),
+              ("kb_base", "PROMOTE_KB_BASE"), ("kb_gates", "PROMOTE_KB_GATES"),
+              ("commit_trailer", "PROMOTE_COMMIT_TRAILER"))
+
+
 def kb_promote_scan():
     """Cron entrypoint (dispatched by cli.py as `cron kb-promote-scan`).
-    Returns a short status string; never raises."""
+    Returns a short status string and never raises."""
+    if np_toggle.enabled(_KB_PROMOTE_SCAN.toggle):
+        for key, var in _KB_PARAMS:
+            value = (np_toggle.param("maintain.kb_promote_scan." + key, "") or "").strip()
+            if value:
+                os.environ[var] = os.path.expanduser(value) if key == "kb_dir" else value
+        if not (os.environ.get("PROMOTE_KB_DIR") and os.environ.get("PROMOTE_KB_REPO")):
+            return "skipped: maintain.kb_promote_scan.kb_dir or kb_repo not configured"
     return _run(_KB_PROMOTE_SCAN)
 
 

@@ -40,7 +40,8 @@
                 border:1px solid var(--border); border-radius:var(--radius-sm);
                 background:var(--surface-alt); color:var(--text); margin-bottom:10px; }
   .wikisearch:focus-visible { outline:2px solid var(--accent-sage); outline-offset:1px; }
-  .wikilist { overflow-y:auto; flex:1; margin:0 -4px; padding:0 4px; }
+  /* The floor keeps topics visible when the health panels below grow. */
+  .wikilist { overflow-y:auto; flex:1 1 auto; min-height:min(40vh, 320px); margin:0 -4px; padding:0 4px; }
   .wikicount { font-size:11px; color:var(--text-tertiary); margin-bottom:8px; }
   .wikiitem { display:block; padding:8px 8px; border-radius:var(--radius-sm);
               text-decoration:none; color:inherit; border-top:1px solid var(--border); }
@@ -258,6 +259,20 @@
     .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); } }
   .jobrow.bad { border-left:3px solid var(--status-warn); padding-left:8px;
                 background:var(--status-warn-bg); }
+  /* Job health lives under the wiki list in the sidepane: one column, compact. */
+  /* Health panels shrink and scroll before the wiki list loses its floor. */
+  .sidehealth { flex:0 1 auto; min-height:0; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;
+                max-height:30vh; overflow-y:auto; }
+  .sidefold > summary { cursor:pointer; font-size:12px; list-style:none; }
+  .sidefold > summary::-webkit-details-marker { display:none; }
+  .sidefold > summary::before { content:"\25B8"; margin-right:6px; font-size:9px; color:var(--text-tertiary); }
+  .sidefold[open] > summary::before { content:"\25BE"; }
+  .sidefold > summary .lbl { display:inline; }
+  .sidehealth .lbl { margin-bottom:4px; }
+  .sidehealth .jobs { grid-template-columns:1fr; }
+  .sidehealth .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); }
+  .sidehealth .jobrow { padding-top:6px; padding-bottom:6px; font-size:12px; }
+  .sidehealth .jobrow .pill { font-size:10px; padding:1px 6px; }
   .note { font-size:11px; color:var(--text-tertiary); margin-top:6px; }
   /* Action errors live in one banner: role=alert, kept until dismissed, never a dialog. */
   #action-banner { margin:8px 0; }
@@ -331,6 +346,8 @@
              placeholder="Search wiki…" aria-label="Search wiki" autocomplete="off">
       <div class="wikicount" id="wiki-count"></div>
       <nav class="wikilist" id="wiki-list"></nav>
+      <section class="sidehealth" id="panel-jobs" aria-label="Scheduled job health"></section>
+      <section class="sidehealth" id="panel-creds" aria-label="Credential health"></section>
     </aside>
     <main class="content">
       <header class="pagehead">
@@ -355,9 +372,6 @@
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-ledger"></section>
         <section class="panel" id="panel-latest"></section>
-      </div>
-      <div class="grid" style="margin-top:16px">
-        <section class="panel full" id="panel-jobs"></section>
       </div>
       <div class="grid" style="margin-top:16px">
         <section class="panel" id="panel-wins"></section>
@@ -456,6 +470,9 @@
     return { sum, series };
   }
   function flattenSuggestions(records) {
+    // build.py clusters paraphrases and ranks by confidence x recurrence.
+    // Fall back to the raw per-session list for an older metrics.js.
+    if (Array.isArray(window.SUGGESTIONS)) return window.SUGGESTIONS.slice();
     const out = [];
     records.forEach(r => (r.suggestions || []).forEach(s =>
       out.push(Object.assign({ ts: r.ts }, s))));
@@ -806,7 +823,7 @@
     return parts.join(", ");
   }
   function renderJobs(jobs, served) {
-    const head = `<span class="lbl">Scheduled jobs</span>`;
+    const head = `<span class="lbl">Health checks</span>`;
     if (!Array.isArray(jobs)) {
       elJobs.innerHTML = head + empty(served
         ? "Could not load job health from the dashboard server. Check its log, then reload."
@@ -822,12 +839,22 @@
         j.installed === false ? `<span class="pill neg">not installed</span>` : "",
         j.exit != null && j.exit !== 0 ? `<span class="pill neg">exit ${esc(j.exit)}</span>` : "",
       ].join(" ");
-      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}">
+      return `<div class="sug jobrow${jobBad(j) ? " bad" : ""}" data-name="${esc(j.name)}">
         <div class="txt"><b>${esc(j.name)}</b> <span class="pill ${pill}">${esc(j.status || "unknown")}</span> ${flags}
           <div class="meta">${jobAge(j.age_h)} · ${esc(j.schedule || "")} · ${j.enabled === false ? "toggle off" : "toggle on"}</div>
-        </div></div>`;
+        </div>${SERVED && jobBad(j) ? `<span class="rowacts">
+            <button class="btn sm primary" data-troubleshoot title="Run an agent that diagnoses and fixes this job.">Troubleshoot</button>
+          </span>` : ""}</div>`;
     }).join("");
-    elJobs.innerHTML = head + `<div class="kv">${esc(jobSummary(jobs))}</div><div class="jobs">${rows}</div>`;
+    // Folded by default so the wiki keeps the sidebar. A refresh keeps the user's choice.
+    const wasOpen = !!elJobs.querySelector("details.sidefold[open]");
+    elJobs.innerHTML = `<details class="sidefold"${wasOpen ? " open" : ""}><summary><span class="lbl">Health checks</span> · ${esc(jobSummary(jobs))}</summary>`
+      + `<div class="jobs">${rows}</div></details>`;
+    if (!SERVED) return;
+    elJobs.querySelectorAll("[data-troubleshoot]").forEach(b => b.addEventListener("click", () => {
+      const row = b.closest(".sug");
+      runJob(b, "/api/jobs/troubleshoot", { name: row.dataset.name }, () => setTimeout(refreshJobs, 4000));
+    }));
   }
   async function refreshJobs() {
     try {
@@ -838,6 +865,46 @@
     } catch (e) {
       console.warn("GET /api/jobs failed:", e);
       renderJobs(null, true);
+    }
+  }
+
+  // ---- Credentials (GET /api/credentials, np_credentials). Served mode only. ----
+  const elCreds = document.getElementById("panel-creds");
+  const CRED_PILL = { ok: "pos", warn: "warn", unknown: "warn", expired: "neg", missing: "neg" };
+  const credBad = c => c.status !== "ok";
+  function credDays(c) {
+    if (c.days_left == null) return c.expires ? "" : "no expiry recorded";
+    return c.days_left < 0 ? `expired ${-c.days_left}d ago` : `${c.days_left}d left`;
+  }
+  function renderCreds(creds, served) {
+    const head = `<span class="lbl">Credentials</span>`;
+    if (!Array.isArray(creds)) {
+      elCreds.innerHTML = head + empty(served
+        ? "Could not load credential health. A slow expires_cmd can time this out: run cli.py credentials to see which."
+        : "Credential health needs the dashboard server.");
+      return;
+    }
+    if (!creds.length) { elCreds.innerHTML = head + empty("No credentials declared."); return; }
+    const bad = creds.filter(credBad).length;
+    const rows = [...creds].sort((a, b) => credBad(b) - credBad(a)).map(c => `<div class="sug jobrow${credBad(c) ? " bad" : ""}">
+        <div class="txt"><b>${esc(c.name)}</b> <span class="pill ${CRED_PILL[c.status] || ""}">${esc(c.status)}</span>
+          <div class="meta">${esc(credDays(c))} · ${esc(c.rotate_mode)} rotation${c.problems && c.problems.length ? " · " + esc(c.problems.join(", ")) : ""}</div>
+          ${credBad(c) && c.command ? `<div class="meta"><code>${esc(c.command)}</code></div>` : ""}
+        </div></div>`).join("");
+    const summary = `${creds.length} credential${creds.length === 1 ? "" : "s"}, ${bad ? bad + " need attention" : "all ok"}`;
+    // Folded by default so the wiki keeps the sidebar. A refresh keeps the user's choice.
+    const wasOpen = !!elCreds.querySelector("details.sidefold[open]");
+    elCreds.innerHTML = `<details class="sidefold"${wasOpen ? " open" : ""}><summary><span class="lbl">Credentials</span> · ${esc(summary)}</summary>`
+      + `<div class="jobs">${rows}</div></details>`;
+  }
+  async function refreshCreds() {
+    try {
+      const res = await fetch("/api/credentials", { signal: AbortSignal.timeout(30000) });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      renderCreds((await res.json()).credentials);
+    } catch (e) {
+      console.warn("GET /api/credentials failed:", e);
+      renderCreds(null, true);
     }
   }
 
@@ -859,6 +926,8 @@
   // Jobs render here, after empty() exists: the static-mode call runs synchronously.
   if (!SERVED) renderJobs(null);
   if (SERVED) refreshJobs();
+  if (!SERVED) renderCreds(null);
+  if (SERVED) refreshCreds();
 
   // ---- E · Feature toggles (served-mode only — the panel needs a backend to
   // write through). Fetches /api/toggles, renders a switch per bare feature +
@@ -1495,7 +1564,9 @@
       return `<div class="sug">
         <div class="txt"><span class="sugtext">${esc(s.text)}</span>${verdict}
           <div class="meta"><span class="tag">${esc(s.target || "other")}</span>
-            ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""} · ${fmtDate(s.ts)}</div>
+            ${s.asset ? `<span class="tag">${esc(s.asset)}</span>` : ""}
+            ${s.auto_safe ? '<span class="tag">auto-safe</span>' : ""}
+            ${(s.count || 1) > 1 ? `<span class="tag" title="Raised in ${s.count} sessions as ${(s.members || []).length} wordings">×${s.count}</span>` : ""} · ${fmtDate(s.ts)}</div>
         </div>
         <span class="pill ${cls}">${conf}%</span>${rowActs}
       </div>`;

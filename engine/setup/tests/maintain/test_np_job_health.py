@@ -4,6 +4,7 @@ list comes from np_scheduler_install, plus any extra com.nervepack.* launchd
 agent found on disk. Every OS call goes through a seam, so these run anywhere."""
 import datetime
 import os
+import time
 import plistlib
 import sys
 import tempfile
@@ -72,6 +73,14 @@ class JobListTest(Base):
         self.assertEqual(rows["ado-status-sync"]["cadence_s"], 3600)
         self.assertFalse(rows["ado-status-sync"]["managed"])
 
+    def test_login_only_agent_is_never_overdue(self):
+        with open(os.path.join(self.la, "com.nervepack.nas-smb.plist"), "wb") as fh:
+            plistlib.dump({"Label": "com.nervepack.nas-smb", "RunAtLoad": True}, fh)
+        row = self.survey()["nas-smb"]
+        self.assertIsNone(row["cadence_s"])
+        self.assertEqual(row["schedule"], "at login")
+        self.assertFalse(row["overdue"])
+
     def test_plist_log_outside_log_dir_is_ignored(self):
         with open(os.path.join(self.la, "com.nervepack.extra.plist"), "wb") as fh:
             plistlib.dump({"Label": "com.nervepack.extra", "StandardOutPath": "/etc/hosts"}, fh)
@@ -115,8 +124,38 @@ class RowTest(Base):
                "aggregated (NOT PUBLISHED: refused: overlay is on 'feat/x', not 'main'.)\n")
         self.assertEqual(self.survey()["aggregate-metrics"]["status"], "warn")
 
+    def test_headerless_log_judges_only_the_newest_line(self):
+        _write(os.path.join(self.logs, "aggregate-metrics.log"),
+               "aggregated (NOT PUBLISHED: push rejected)\nno-op: no metrics change\n")
+        self.assertEqual(self.survey()["aggregate-metrics"]["status"], "ok")
+
+    def test_whitespace_only_log_is_unknown(self):
+        _write(os.path.join(self.logs, "aggregate-metrics.log"), "\n   \n\n")
+        self.assertEqual(self.survey()["aggregate-metrics"]["status"], "unknown")
+
+    def test_usage_limit_is_error(self):
+        """A refused headless run prints no ERROR word, only the account message."""
+        _write(os.path.join(self.logs, "compact.log"),
+               "%s === compact run ===\nYour usage allocation has been disabled by your admin\n" % _stamp(1))
+        _write(os.path.join(self.logs, "refine.log"),
+               "%s === refine run ===\nYou've hit your individual spend limit\n" % _stamp(1))
+        rows = self.survey()
+        self.assertEqual(rows["compact"]["status"], "error")
+        self.assertEqual(rows["refine"]["status"], "error")
+
+    def test_last_run_uses_newer_mtime_over_stale_stamp(self):
+        """A headerless log whose only stamp is old still ran recently: the
+        file mtime wins, so the job is not falsely shown 16 days overdue."""
+        path = os.path.join(self.logs, "skill-maintain.log")
+        _write(path, "%s checked, no mismatches\nunstamped failure line\n" % _stamp(24 * 16))
+        rows = self.survey()
+        self.assertFalse(rows["skill-maintain"]["overdue"])
+
     def test_overdue_and_never_ran(self):
-        _write(os.path.join(self.logs, "skill-maintain.log"), "%s done\n" % _stamp(24 * 5))
+        path = os.path.join(self.logs, "skill-maintain.log")
+        _write(path, "%s done\n" % _stamp(24 * 5))
+        old = time.time() - 5 * 86400   # untouched since that run
+        os.utime(path, (old, old))
         rows = self.survey()
         self.assertTrue(rows["skill-maintain"]["overdue"])
         self.assertIsNone(rows["episodic-maintain"]["last_run"])
@@ -165,6 +204,19 @@ class ReportTest(Base):
     def test_report_never_raises(self):
         with mock.patch.object(jh, "survey", side_effect=RuntimeError("boom")):
             self.assertTrue(jh.report().startswith("PASS"))
+
+
+class ProblemsTest(unittest.TestCase):
+    ROW = {"enabled": True, "installed": True, "status": "ok", "exit": 0, "overdue": False}
+
+    def test_public_problems_lists_each_fault(self):
+        row = dict(self.ROW, installed=False, status="error", exit=2, overdue=True)
+        self.assertEqual(jh.problems(row),
+                         ["not installed", "last run error", "exit 2", "overdue"])
+
+    def test_healthy_and_disabled_rows_have_none(self):
+        self.assertEqual(jh.problems(self.ROW), [])
+        self.assertEqual(jh.problems(dict(self.ROW, enabled=False, overdue=True)), [])
 
 
 if __name__ == "__main__":

@@ -58,6 +58,10 @@ _RULES = [
      rb'["\']?\s*[:=]\s*)(?:"[^"]*"|\'[^\']*\'|[^\s"\',;&]+)', rb'\1[REDACTED-SECRET]'),
     # Provider keys with dashes (sk-proj-, sk-ant-api03-) and bearer tokens of any length.
     (rb'sk-[A-Za-z0-9_-]{20,}', rb'[REDACTED-SECRET]'),
+    # Stripe, Google API and Hugging Face key shapes.
+    (rb'\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}', rb'[REDACTED-SECRET]'),
+    (rb'\bAIza[0-9A-Za-z_-]{35}', rb'[REDACTED-SECRET]'),
+    (rb'\bhf_[A-Za-z0-9]{30,}', rb'[REDACTED-SECRET]'),
     (rb'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+', rb'Bearer [REDACTED-SECRET]'),
     # Command-line credentials (security review of stack_facts[].evidence).
     # URL userinfo and "Authorization: <scheme> <value>" headers are redacted by the rules

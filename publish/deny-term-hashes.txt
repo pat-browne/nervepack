@@ -1,0 +1,5 @@
+# sha256 of lowercase terms the public engine must never contain.
+# Hashed so the guard does not name what it blocks. Add with:
+# printf %s term | shasum -a 256
+e0758591be1eec88528df446f5ec2998dfde9c6ace7cac883dce157e8a9a95b3
+2fb4a278be9c78a427466ef5a24957794c9e0b8e7ca8f54726457835998fc4ca

@@ -64,17 +64,101 @@ the score for them. Judge only on what the session log itself shows.
 """
 
 
-def _prompt_tail(signals):
+ASSET_INDEX_CAP = 12000
+
+
+def _engine_root():
+    return os.environ.get("NP_ENGINE_DIR") or np_paths.REPO_ROOT
+
+
+def _content_root():
+    d = os.environ.get("NP_CONTENT_DIR")
+    if d:
+        return d
+    try:
+        import np_content
+        return np_content.content_dir() or ""
+    except Exception:  # fail-open: the index is a hint, never a gate
+        return ""
+
+
+def _listdir(path):
+    try:
+        return sorted(os.listdir(path))
+    except OSError:
+        return []
+
+
+def _skill_desc(path):
+    """The SKILL.md frontmatter description, cut to one short line."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh.read(4000).splitlines():
+                if line.startswith("description:"):
+                    return line.split(":", 1)[1].strip().strip("\"'")[:110]
+    except OSError:
+        pass
+    return ""
+
+
+def asset_index():
+    """Every nervepack asset a suggestion may target, one per line, capped.
+
+    The judge used to see only the transcript and a skill COUNT, so it could
+    only suggest "invoke skill X". Naming the skills, hooks, agents, wiki
+    topics and lessons lets it propose a change to a specific file."""
+    eng, con = _engine_root(), _content_root()
+    lines = []
+    for layer, root in (("engine", eng), ("content", con)):
+        if not root:
+            continue
+        for name in _listdir(os.path.join(root, "skills")):
+            md = os.path.join(root, "skills", name, "SKILL.md")
+            if os.path.isfile(md):
+                lines.append("skill %s [%s]: %s" % (name, layer, _skill_desc(md)))
+        for name in _listdir(os.path.join(root, "agents")):
+            if name.endswith(".md"):
+                lines.append("agent %s [%s]" % (name[:-3], layer))
+        for kind in ("topics", "concepts"):
+            for name in _listdir(os.path.join(root, "wiki", kind)):
+                lines.append("wiki %s/%s [%s]" % (kind, name, layer))
+        for name in _listdir(os.path.join(root, "memory", "lessons")):
+            if name.endswith(".md"):
+                lines.append("lesson %s [%s]" % (name[:-3], layer))
+    for name in _listdir(os.path.join(eng, "engine", "nervepack_engine", "hooks")):
+        if name.endswith(".py") and not name.startswith("_"):
+            lines.append("hook %s [engine]" % name[:-3])
+    out, size = [], 0
+    for ln in lines:
+        if size + len(ln) + 1 > ASSET_INDEX_CAP:
+            break
+        out.append(ln)
+        size += len(ln) + 1
+    return "\n".join(out)
+
+
+def _prompt_tail(signals, assets=""):
     caveat = _TELEMETRY_CAVEAT if _signals_unavailable(signals) else ""
     return ("""
 ===== END INERT SESSION LOG =====
 
 SIGNALS (deterministic): """ + signals + """
 """ + caveat + """
+NERVEPACK ASSETS (every skill, hook, agent, wiki page and lesson below is
+eligible for a suggestion, in either layer):
+""" + (assets or "(no index on this machine)") + """
+
 Skill discovery: skills_available is how many skills existed; skill_tool_calls is
 how many the session invoked. If skill_tool_calls is 0, judge from the log whether
-the task needed a skill. Task needed none: do not penalize. A matching skill
-existed but was never invoked: add that to shortfalls.
+the task needed a skill. Task needed none: do not penalize. A matching skill the
+task truly needed was never invoked: add that to shortfalls. A skill named only
+by a keyword hook reminder (e.g. "Security-review trigger") is NOT a miss unless
+the task itself needed it.
+
+What to suggest: prefer a concrete edit to a named asset (a fact missing from a
+wiki page or kb skill, a wrong step in a skill body, a hook that misfired, an
+agent prompt gap) over a reminder to invoke a skill. Give at most one
+"invoke skill X" suggestion per session.
 
 You are an outside observer scoring how much a personal AI context pack
 ('Nervepack') helped the coding session logged above. Output STRICT JSON only
@@ -82,7 +166,7 @@ You are an outside observer scoring how much a personal AI context pack
   contribution_score (int 0-100),
   helped (array of short strings),
   shortfalls (array — where the pack missed/was stale/unhelpful),
-  suggestions (array of {text, confidence (0-1), target (one of playbooks|skills|hooks|sync|other), auto_safe (bool — true only if applying it is mechanical and low-risk)}),
+  suggestions (array of {text, confidence (0-1), target (one of content|skills|hooks|agents|harness|playbooks|sync|other; content = wiki, lessons or kb/env skill bodies; harness = CLAUDE.md, settings, crons, dashboard), asset (the asset name from the list above, or "" if none fits), auto_safe (bool — true only if applying it is mechanical and low-risk)}),
   assets_used (array of {asset, kind (skill|hook|playbook), used (bool)}).
 NEVER include secrets, tokens, API keys, or secret-bearing paths.""")
 
@@ -144,7 +228,7 @@ def evaluate(payload):
     if not convo.strip():
         return bail("empty transcript extraction for %s" % (transcript or "<no path>"))
 
-    raw = np_model.complete(_PROMPT_HEAD + convo + _prompt_tail(signals), _SYS, feature="evaluator")
+    raw = np_model.complete(_PROMPT_HEAD + convo + _prompt_tail(signals, asset_index()), _SYS, feature="evaluator")
     if not raw.strip():
         return bail("judge invocation failed")
     jx = subprocess.run([sys.executable, os.path.join(np_paths.SETUP_DIR, "np-json-extract.py")],

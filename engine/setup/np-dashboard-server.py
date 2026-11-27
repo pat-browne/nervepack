@@ -13,11 +13,13 @@ http://127.0.0.1:<port>/ so the dashboard's action buttons have a backend:
   POST /api/clear   {}        -> resolve ALL open suggestions (reset), {ok, count}
   GET  /api/models            -> model inventory, probe cache, probe_running
   GET  /api/jobs              -> {"jobs": [...]} scheduled-job health (np_job_health)
+  GET  /api/credentials       -> {"credentials": [...]} credential expiry (np_credentials)
   POST /api/models/probe {model?} -> start a detached probe job, {ok, started}
   POST /api/compact/reject {file,title}  -> note in REJECTED.md, drop the entry
   POST /api/compact/apply  {file,title}  -> queue a `compact` agent job, {ok, started, text}
   POST /api/graduation/dismiss  {kind,name} -> persist a dismissal
   POST /api/graduation/graduate {kind,name} -> queue a `graduate` agent job, {ok, started, text}
+  POST /api/jobs/troubleshoot {name} -> queue a `troubleshoot` agent job for one unhealthy scheduled job
 
 This is a deliberate, documented exception to nervepack's "no service, no daemon"
 invariant: it is OFF by default, binds to 127.0.0.1 ONLY, serves a fixed directory,
@@ -61,6 +63,7 @@ from np_dashboard_actions import ActionError  # noqa: E402
 import np_dirs
 import np_implement_suggestion  # noqa: E402
 import np_job_health  # noqa: E402
+import np_credentials  # noqa: E402
 import np_model  # noqa: E402
 import np_suggestion_resolve  # noqa: E402
 import np_toggle  # noqa: E402
@@ -421,6 +424,15 @@ class Handler(BaseHTTPRequestHandler):
                     import traceback
                     traceback.print_exc(file=sys.stderr)
                     return self._json({"error": "job survey failed"}, 500)
+            if self.path.split("?")[0] == "/api/credentials":
+                if not np_toggle.enabled("maintain.credentials"):
+                    return self._json({"error": "not found"}, 404)
+                try:
+                    return self._json({"credentials": np_credentials.survey()})
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json({"error": "credential survey failed"}, 500)
             if self.path.split("?")[0] == "/api/toggles":
                 if not toggle_ui_enabled():
                     return self._json({"error": "not found"}, 404)
@@ -530,6 +542,29 @@ class Handler(BaseHTTPRequestHandler):
                 np_dashboard_actions.dismiss(grad_dismissed_path(), kind, name)
                 log("graduation dismiss: %s:%s" % (kind, name))
                 return self._json({"ok": True})
+            if route == "/api/jobs/troubleshoot":
+                if not np_toggle.enabled("maintain.job_health"):
+                    return self._json({"error": "not found"}, 404)
+                body = self._body()
+                name = (body.get("name") or "").strip()
+                if not name:
+                    raise ActionError("bad_request", "missing name", "send the job name in the body", 400)
+                try:
+                    rows = np_job_health.survey()
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json({"error": "job survey failed"}, 500)
+                row = next((r for r in rows if r["name"] == name), None)
+                if row is None:
+                    raise ActionError("stale", "That job is no longer in the health checks.",
+                                      "It was removed or renamed. Reload the page.", 404)
+                if not np_job_health.problems(row):
+                    raise ActionError("bad_request", "job is healthy",
+                                      "Only an unhealthy job can be troubleshot. Reload the page.", 400)
+                log("troubleshoot job queued: %s" % row["name"])
+                return self._json(start_job("job:%s" % row["name"], "troubleshoot",
+                                            dry_run=bool(body.get("dry_run"))))
             if route == "/api/models/select":
                 body = self._body()
                 key = np_model.feature_key(body.get("feature") or "")
@@ -696,7 +731,7 @@ def launch(argv, label, key=""):
 def start_job(text, kind="", extra=(), checks=JOB_CHECKS, dry_run=False):
     """Preflight, dedupe, then spawn one implement-machinery job.
 
-    `kind` is "" for a suggestion, else compact or graduate.
+    `kind` is "" for a suggestion, else compact, graduate or troubleshoot.
     """
     rows = preflight(checks, deep=dry_run)
     if dry_run:
