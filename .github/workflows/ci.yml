@@ -442,7 +442,7 @@ jobs:
     # always(): this must run even when an upstream gate FAILED. Reading "which
     # required verdicts are missing" is the whole job - needs' default gating
     # would skip it exactly when it has the most to say.
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review]
     # PROMOTED to required (#255/F9), which change spec 0010 named as this
     # issue's first step. It shipped advisory in #254/F8 and reported correctly
@@ -608,7 +608,7 @@ jobs:
     # where tier-gate failed. A record that exists only when the mechanism fires
     # cannot be audited for the case that matters - the one where it fired and
     # should not have.
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     needs: [tier-gate]
     permissions:
       # `gh pr merge --auto` needs BOTH. This is the scope GitHub's own
@@ -705,7 +705,7 @@ jobs:
     # always(): this must still post when an upstream gate failed - that's
     # the whole point (F4/#250). needs' default gating would otherwise skip
     # this job the moment any one of them fails or is skipped.
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'pull_request'
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     needs: [syntax, regression, windows, windows-bashfree, pii-guard, spec-guard, diff-review, tier-gate, auto-merge, doc-coupling]
     permissions:
       pull-requests: write   # to post/update the summary comment

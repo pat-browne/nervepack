@@ -43,8 +43,8 @@ model that can do its job. The session default is never a worker's model.
 |---|---|
 | Search, file reads, lookups, mechanical edits, running tests, CI checks, git and PR steps, merges, flag flips, branch cleanup | Haiku |
 | Implementation, research, debugging, code review, multi-step edits | Sonnet |
-| Fresh-eyes review of each change set or stream before integration (gets only the diff and the goal) | Haiku |
-| Coordination, hard calls, review of the integrated whole, final verification | Coordinator (the session model) |
+| Fresh-eyes review of each change set or stream (one worker's branch) before integration (gets only the diff and the goal) | Haiku |
+| Coordination, hard calls, review of the merged branches together, final verification | Coordinator (the session model) |
 
 - Pass a model on every subagent spawn and every separate session. An unset model silently inherits the coordinator's model and costs the most. The coordinator rule is in [[np-flow-orchestrate]] § Worker models.
 - Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
