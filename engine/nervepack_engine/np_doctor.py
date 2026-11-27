@@ -207,6 +207,11 @@ def _core_check(cap_id, np):
         # every scheduled job, including ones outside the maintenance list.
         import np_job_health
         return np_job_health.report()
+    if cap_id == "credentials":
+        # Advisory: expiry and file mode for every credential the engine and
+        # content layers declare. Metadata only, never a secret value.
+        import np_credentials
+        return np_credentials.report()
     if cap_id == "episodic-freshness":
         # Advisory, and deliberately NOT the same question as maintenance-freshness:
         # that one asks "did the cron fire", this asks "did anything come out". The

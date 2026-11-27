@@ -10,9 +10,13 @@ across episodic-capture.sh and np-evaluator.sh. One tested extractor, one cap kn
 Usage:  np-transcript-extract.py <transcript.jsonl> [cap_bytes]
 Fail-open: any read/parse error -> empty stdout, exit 0 (the caller bails cleanly).
 """
-import sys
 import json
+import os
 import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nervepack_engine"))
+import np_scrub  # noqa: E402  provider-key redaction, shared with the inbox write
 
 # Collapse pathological long base64/hex runs (a cat'd binary, a data: URI, an
 # embedded blob inside a tool_result TEXT block — which §6's image-block skip does
@@ -23,7 +27,8 @@ _BLOB = re.compile(r"[A-Za-z0-9+/=_-]{500,}")
 
 
 def _scrub_blobs(text):
-    return _BLOB.sub("[binary/base64 omitted]", text)
+    text = _BLOB.sub("[binary/base64 omitted]", text)
+    return np_scrub.scrub(text.encode("utf-8")).decode("utf-8", "replace")
 
 
 def extract(path):

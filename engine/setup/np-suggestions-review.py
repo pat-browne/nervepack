@@ -39,37 +39,13 @@ DEFAULT_RESOLVED = os.environ.get("NP_RESOLVED_SUGGESTIONS", _build.default_reso
 
 
 def open_suggestions(metrics_path, resolved_path):
-    """Deduped, ranked OPEN suggestions, highest confidence first.
+    """Clustered, ranked OPEN suggestions (see build.cluster_suggestions).
 
-    Returns [{text, confidence, target, auto_safe, count}]. `count` is how many
-    sessions raised the (normalized) suggestion — a weak signal of recurrence."""
+    Returns [{text, confidence, target, auto_safe, count, members, ts}].
+    Resolved texts and their paraphrases are excluded."""
     records = _build.load_records(metrics_path)
     resolved = _build.load_resolved(resolved_path)
-    best = {}
-    for r in records:
-        for s in r.get("suggestions", []) or []:
-            text = " ".join(str(s.get("text", "")).split())
-            if not text:
-                continue
-            key = _build._norm(text)
-            if key in resolved:
-                continue
-            conf = s.get("confidence", 0) or 0
-            e = best.get(key)
-            if e is None:
-                best[key] = {
-                    "text": text, "confidence": conf,
-                    "target": s.get("target", "other"),
-                    "auto_safe": bool(s.get("auto_safe")), "count": 1,
-                }
-            else:
-                e["count"] += 1
-                if conf > e["confidence"]:
-                    e["confidence"] = conf
-                    e["target"] = s.get("target", e["target"])
-                e["auto_safe"] = e["auto_safe"] or bool(s.get("auto_safe"))
-    return sorted(best.values(),
-                  key=lambda x: (-x["confidence"], -x["count"], x["text"]))
+    return _build.cluster_suggestions(_build.drop_resolved(records, resolved))
 
 
 def _topped(rows, top):
@@ -97,7 +73,8 @@ def cmd_clear(args):
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(args.resolved, "a") as fh:
         for r in rows:
-            fh.write(r["text"] + "\t" + ts + "\n")
+            for text in r.get("members") or [r["text"]]:
+                fh.write(text + "\t" + ts + "\n")
     if not args.no_build:
         try:  # rebuild metrics.js so the dashboard drops them immediately
             _build.main([_build.__file__, args.metrics, _build.DEFAULT_OUT])

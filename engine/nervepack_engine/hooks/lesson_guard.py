@@ -37,6 +37,7 @@ import os
 import re
 
 import np_content
+import np_lesson_resolve
 import np_toggle
 
 _HEADER_RE = re.compile(r'^\*\*(Symptom|Why|Do|Avoid|Title|When):')
@@ -165,6 +166,9 @@ def run(payload_text):
                 if tnm and tool_match == tnm and tool_match != _first_block_value(f, "tool_match"):
                     np_toggle.signal(sid, "lesson-skip misplaced-tool-name %s %s" % (topic, tool_match))
                     continue
+            if _TOPIC_RE.match(topic) and np_lesson_resolve.is_resolved(
+                    os.path.join(lesson_dir, topic + ".md"), "failure"):
+                continue  # resolved: its linked issue closed or PR merged
             try:
                 if re.search(tool_match, cmd):
                     return _fire_gate(sid, lesson_dir, cmd, gate, topic)
@@ -189,6 +193,8 @@ def run(payload_text):
                 if not re.fullmatch(tnm, tool_name):
                     continue
             except re.error:
+                continue
+            if np_lesson_resolve.is_resolved(f, "failure"):
                 continue
             topic = name[:-3]
             armed = os.path.join(state_dir, "%s-%s-gate-armed" % (

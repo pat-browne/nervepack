@@ -50,6 +50,16 @@ spec declares one, every id is four digits, and no two specs share one. It lives
 in the suite rather than in `spec-guard` because a collision is a repo-wide
 property, and that gate only ever reads the files a pull request touched.
 
+Run the gate locally before you push, and commit first. It reads commits,
+not the working tree. On an uncommitted diff it reports `exempt diff` and
+passes, which proves nothing.
+The id is the next free four-digit number on `origin/main`, and the gate
+names the tier the diff forces.
+
+```bash
+python3 engine/setup/np-spec-guard.py --root . --base origin/main --head HEAD --branch "$(git branch --show-current)" --author <your-github-login>
+```
+
 ## `[NEEDS CLARIFICATION]`
 
 Mark an underspecified point with this exact string rather than guessing.

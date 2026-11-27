@@ -45,16 +45,38 @@ class TestReview(unittest.TestCase):
 
     def test_rank_dedupe_and_count(self):
         rows = self._open()
-        # gamma (.95) > alpha (.90, deduped from .9/.7, count 2) > beta (.50)
-        self.assertEqual([r["text"] for r in rows], ["Do gamma", "Do alpha", "Do beta"])
+        # recurrence weighs in: alpha (.90 x2 sessions) > gamma (.95 x1) > beta (.50)
+        self.assertEqual([r["text"] for r in rows], ["Do alpha", "Do gamma", "Do beta"])
         alpha = next(r for r in rows if r["text"] == "Do alpha")
         self.assertEqual(alpha["count"], 2)          # both sessions, one entry
         self.assertEqual(alpha["confidence"], 0.9)   # max confidence kept
         self.assertTrue(alpha["auto_safe"])          # OR'd across occurrences
 
+    def test_paraphrases_cluster_into_one_row(self):
+        with open(self.metrics, "w") as fh:
+            fh.write('{"ts":"t","suggestions":['
+                     '{"text":"Invoke security-review skill before analyzing code changes","confidence":0.95},'
+                     '{"text":"Invoke the security-review skill before analyzing code changes for security","confidence":0.98},'
+                     '{"text":"Add the SQL Server tempdb fact to np-kb-sqlserver","confidence":0.7}]}\n')
+        rows = self._open()
+        self.assertEqual(len(rows), 2)
+        sec = next(r for r in rows if "security" in r["text"])
+        self.assertEqual(sec["count"], 2)
+        self.assertEqual(len(sec["members"]), 2)
+
+    def test_clear_resolves_every_cluster_member(self):
+        with open(self.metrics, "w") as fh:
+            fh.write('{"ts":"t","suggestions":['
+                     '{"text":"Invoke security-review skill before analyzing code changes","confidence":0.95},'
+                     '{"text":"Invoke the security-review skill before analyzing code changes for security","confidence":0.98}]}\n')
+        run(["clear", "--no-build"], self.metrics, self.resolved)
+        self.assertEqual(self._open(), [])
+        with open(self.resolved) as fh:
+            self.assertEqual(len(fh.read().strip().splitlines()), 2)
+
     def test_top_n_limits(self):
         rows = json.loads(run(["list", "--top", "2", "--json"], self.metrics, self.resolved))
-        self.assertEqual([r["text"] for r in rows], ["Do gamma", "Do alpha"])
+        self.assertEqual([r["text"] for r in rows], ["Do alpha", "Do gamma"])
 
     def test_clear_resolves_all_and_is_idempotent(self):
         out = run(["clear", "--no-build"], self.metrics, self.resolved)
@@ -71,7 +93,7 @@ class TestReview(unittest.TestCase):
 
     def test_clear_top_n_leaves_the_rest_open(self):
         run(["clear", "--top", "1", "--no-build"], self.metrics, self.resolved)
-        self.assertEqual([r["text"] for r in self._open()], ["Do alpha", "Do beta"])
+        self.assertEqual([r["text"] for r in self._open()], ["Do gamma", "Do beta"])
 
     def test_already_resolved_is_excluded(self):
         with open(self.resolved, "w") as fh:

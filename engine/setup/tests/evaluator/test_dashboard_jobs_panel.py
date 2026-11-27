@@ -16,8 +16,10 @@ class TestJobsPanel(unittest.TestCase):
         m = re.search(r"function renderJobs\(.*?\n  \}\n", cls.html, re.S)
         cls.fn = m.group(0) if m else ""
 
-    def test_panel_sits_in_a_grid_row(self):
-        self.assertRegex(self.html, r'<div class="grid"[^>]*>\s*<section class="panel full" id="panel-jobs">')
+    def test_panel_sits_under_the_wiki_list_in_the_sidepane(self):
+        self.assertRegex(self.html, r'<nav class="wikilist" id="wiki-list"></nav>\s*'
+                                    r'<section class="sidehealth" id="panel-jobs"[^>]*></section>\s*'
+                                    r'<section class="sidehealth" id="panel-creds"[^>]*></section>\s*</aside>')
 
     def test_fetches_jobs_endpoint_only_when_served(self):
         self.assertIn('fetch("/api/jobs", ', self.html)
@@ -32,6 +34,12 @@ class TestJobsPanel(unittest.TestCase):
         self.assertIn("jobBad(j) ? \" bad\"", self.fn)
         self.assertIn("jobSummary(", self.fn)
         self.assertIn("function jobSummary(", self.html)
+
+    def test_only_bad_rows_in_served_mode_get_a_troubleshoot_button(self):
+        self.assertRegex(self.fn, r"SERVED && jobBad\(j\) \? `<span class=\"rowacts\">")
+        self.assertEqual(self.fn.count("data-troubleshoot"), 2)  # one button, one wiring selector
+        self.assertIn('runJob(b, "/api/jobs/troubleshoot", { name: row.dataset.name }', self.fn)
+        self.assertIn('data-name="${esc(j.name)}"', self.fn)
 
     def test_static_and_error_fallback_note(self):
         self.assertIn("needs the dashboard server", self.html)

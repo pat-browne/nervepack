@@ -21,6 +21,7 @@ import os
 import re
 
 import np_content
+import np_lesson_resolve
 import np_recall_common
 import np_toggle
 
@@ -149,6 +150,8 @@ def _arm_if_gated(f, state_dir, sid, topic):
         return
     if "provenance: failure" not in whole or not _TOOL_NAME_MATCH_RE.search(whole):
         return
+    if np_lesson_resolve.is_resolved(f, "failure"):
+        return
     try:
         os.makedirs(state_dir, exist_ok=True)
         # Slashes become "_" in both ids, so an INDEX topic like "../x" stays in state_dir.
@@ -247,7 +250,10 @@ def run(payload_text, pii_filter_fn=None):
     for _, _, _, topic, f in candidates[:_top()]:
         if not os.path.isfile(f):
             continue
+        resolved = np_lesson_resolve.resolved_provenances(f)
         for prov, body, paired in _lesson_blocks(f):
+            if prov in resolved:
+                continue  # its linked issue closed or PR merged
             # Never inject a bare "[topic]" tag for a body recall can't read.
             entry = "[%s] %s\n" % (topic, body) if body.strip() else ""
             if paired:

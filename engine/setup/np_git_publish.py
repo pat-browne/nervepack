@@ -201,6 +201,192 @@ def push_to_main(repo, branch="main"):
 
 
 def _push(repo, branch):
+    return sync_push(repo, branch)
+
+
+def sync_push(repo, branch="main", regen=None):
+    """Fetch, rebase unpushed commits onto origin/<branch>, then push.
+
+    A conflict in a `*.jsonl` file is a union of both sides. A conflict in a
+    generated file takes origin's copy, then `regen(repo)` rebuilds it and the
+    result is committed. Any other conflict aborts the rebase and returns
+    (False, why) with the local commits intact. Never force-pushes.
+    A push rejected as behind gets one more sync and push, for a writer that
+    pushed mid-sync. Returns (ok, detail). Never raises. On success, detail
+    carries a fetch warning or is empty.
+    """
+    regen = regen or rebuild_generated
+    detail = ""
+    # Two passes. If origin moves between our sync and our push, sync again.
+    # Behind a second time means a busy remote, so give up and report.
+    for _ in range(2):
+        ok, note = _sync(repo, branch, regen)
+        if not ok:
+            return ok, note
+        ok, detail = _push_once(repo, branch)
+        if ok:
+            # On success the detail carries a fetch warning, so the cron logs it.
+            return ok, note
+        if not _is_behind(detail):
+            return ok, "%s; %s" % (detail, note) if note else detail
+    return False, detail
+
+
+def _sync(repo, branch, regen):
+    """Bring HEAD on top of origin/<branch>. (ok, why).
+
+    A failed fetch is ok with a note: the push still runs and says the rest.
+    """
+    rc, _, err = _git(repo, "fetch", "-q", "origin", branch)
+    if rc != 0:
+        note = "fetch failed in %s: %s" % (repo, _one_line(err))
+        print("np_git_publish: %s" % note, file=sys.stderr)
+        return True, note
+    base = "refs/remotes/origin/" + branch
+    if _git(repo, "merge-base", "--is-ancestor", base, "HEAD")[0] == 0:
+        return True, ""
+    if not _clean(repo):
+        return False, ("refused: %s is behind origin/%s and has uncommitted "
+                       "changes, so it cannot rebase" % (repo, branch))
+    ahead = _git(repo, "rev-list", "--count", base + "..HEAD")[1] or "0"
+    rc, why, rebuilt = _rebase(repo, base)
+    if rc != 0:
+        msg = ("sync conflict (%s): rebase onto origin/%s aborted, %s commit(s) "
+               "kept local in %s" % (why, branch, ahead, repo))
+        print("np_git_publish: %s" % msg, file=sys.stderr)
+        return False, msg
+    if rebuilt:
+        try:
+            regen(repo)
+        except Exception as exc:
+            return False, "regenerate after sync failed: %s" % exc
+        paths = [p for p in GENERATED if os.path.exists(os.path.join(repo, p))]
+        if paths and _git(repo, "status", "--porcelain", "--", *paths)[1]:
+            _git(repo, "add", "--", *paths)
+            rc, _, err = _git(repo, "commit", "-q", "-m",
+                              "sync: rebuild generated files after rebase", "--", *paths)
+            if rc != 0:
+                return False, "commit of rebuilt files failed: %s" % _one_line(err)
+    return True, ""
+
+
+# Files rebuilt from a source, never merged by hand.
+GENERATED = ("dashboard/data/metrics.js",)
+
+
+def _rebase(repo, base):
+    """Rebase HEAD onto base, resolving what is safe. (rc, why, rebuilt)."""
+    env = ["-c", "core.editor=true"]
+    rc, _, err = _git(repo, *env, "rebase", "-q", base)
+    rebuilt = False
+    for _ in range(1000):
+        if rc == 0:
+            # A rebase that replayed a generated file may leave it stale.
+            return 0, "", rebuilt or _touches_generated(repo, base)
+        files = _git(repo, "diff", "--name-only", "--diff-filter=U")[1].split()
+        if not files:
+            # Stopped with nothing unmerged: an emptied commit, or a real error.
+            if _rebase_in_progress(repo) and not _git(repo, "diff", "--cached", "--quiet")[0]:
+                rc, _, err = _git(repo, *env, "rebase", "--skip")
+                continue
+            break
+        bad = [f for f in files if not _resolve(repo, f)]
+        if bad:
+            _git(repo, "rebase", "--abort")
+            return 1, ", ".join(bad), False
+        rebuilt = rebuilt or any(f in GENERATED for f in files)
+        _git(repo, "add", "--", *files)
+        if _git(repo, "diff", "--cached", "--quiet")[0] == 0:
+            rc, _, err = _git(repo, *env, "rebase", "--skip")
+        else:
+            rc, _, err = _git(repo, *env, "rebase", "--continue")
+    _git(repo, "rebase", "--abort")
+    return 1, _one_line(err) or "rebase failed", False
+
+
+def _rebase_in_progress(repo):
+    rc, gd, _ = _git(repo, "rev-parse", "--git-dir")
+    if rc != 0 or not gd:
+        return False
+    gd = gd if os.path.isabs(gd) else os.path.join(repo, gd)
+    return any(os.path.exists(os.path.join(gd, d)) for d in ("rebase-merge", "rebase-apply"))
+
+
+def _touches_generated(repo, base):
+    changed = _git(repo, "diff", "--name-only", base, "HEAD")[1].split()
+    return any(f in GENERATED or f.endswith("metrics.jsonl") for f in changed)
+
+
+def _resolve(repo, path):
+    """Resolve one conflicted path in place. False when it needs a person.
+
+    In a rebase, stage 2 is origin's side and stage 3 is the local commit.
+    """
+    if path in GENERATED:
+        # --ours is origin here. Take it, then rebuild after the rebase.
+        return _git(repo, "checkout", "--ours", "--", path)[0] == 0
+    if not path.endswith(".jsonl"):
+        return False
+    target = os.path.realpath(os.path.join(repo, path))
+    if not target.startswith(os.path.realpath(repo) + os.sep):
+        return False  # git never emits such a path. Refuse anyway.
+    rc2, origin_side, _ = _show_raw(repo, ":2:" + path)
+    rc3, local_side, _ = _show_raw(repo, ":3:" + path)
+    if rc2 != 0 or rc3 != 0:  # deleted on one side
+        return False
+    seen = set()
+    out = []
+    for line in origin_side.splitlines() + local_side.splitlines():
+        if line.strip() and line not in seen:
+            seen.add(line)
+            out.append(line)
+    try:
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(out) + "\n")
+    except OSError as exc:
+        print("np_git_publish: cannot write union of %s: %s" % (path, exc),
+              file=sys.stderr)
+        return False
+    return True
+
+
+def _show_raw(repo, spec):
+    try:
+        r = subprocess.run(["git", "-C", repo, "show", spec], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return 1, "", str(exc)
+    return r.returncode, r.stdout, r.stderr
+
+
+def rebuild_generated(repo):
+    """Rebuild dashboard/data/metrics.js from metrics.jsonl, as np_aggregate does."""
+    src = os.path.join(repo, "dashboard", "data", "metrics.jsonl")
+    out = os.path.join(repo, "dashboard", "data", "metrics.js")
+    if not (os.path.isfile(src) and os.path.isfile(out)):
+        return
+    build = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "dashboard", "build.py")
+    import np_aggregate  # lazy: np_aggregate imports this module
+    # Raise on failure. _sync turns it into a failed publish, so a stale
+    # metrics.js never reaches origin.
+    r = subprocess.run([sys.executable, build, src, out], env=np_aggregate.dashboard_env(repo),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if r.returncode != 0:
+        raise RuntimeError("build.py exit %d: %s" % (r.returncode, _one_line(r.stderr)))
+
+
+def _is_behind(detail):
+    return "fetch first" in detail or "non-fast-forward" in detail
+
+
+def _clean(repo):
+    r = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                       capture_output=True, text=True)
+    return r.returncode == 0 and not r.stdout.strip()
+
+
+def _push_once(repo, branch):
     try:
         r = subprocess.run(["git", "-C", repo, "push", "-q", "origin",
                             "HEAD:refs/heads/%s" % branch],
@@ -217,3 +403,22 @@ def _push(repo, branch):
             detail += ": %s" % err
         return False, "push rejected (%s)" % detail
     return True, ""
+
+
+def main(argv):
+    """CLI for agentic crons: `np_git_publish.py push <repo> [branch]`."""
+    if len(argv) < 2 or argv[0] != "push":
+        print("usage: np_git_publish.py push <repo> [branch]", file=sys.stderr)
+        return 2
+    branch = argv[2] if len(argv) > 2 else "main"
+    ok, why = publish(argv[1], branch)
+    if not ok:
+        print("np_git_publish: %s" % why, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "nervepack_engine"))
+    sys.exit(main(sys.argv[1:]))

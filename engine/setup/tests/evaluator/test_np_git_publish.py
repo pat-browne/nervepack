@@ -99,7 +99,7 @@ class PushToMain(unittest.TestCase):
             self.assertIn("detached", why)
 
     def test_surfaces_a_rejected_push_instead_of_swallowing_it(self):
-        """On main, but the remote moved ahead: git rejects, and we must say so."""
+        """On main, remote moved and the edits conflict: sync aborts and says so."""
         with tempfile.TemporaryDirectory() as d:
             local, bare = _repo_with_origin(d)
             other = os.path.join(d, "other")
@@ -116,9 +116,51 @@ class PushToMain(unittest.TestCase):
             _run("git", "-C", local, "commit", "-q", "-am", "local diverged")
             ok, why = np_git_publish.push_to_main(local)
             self.assertFalse(ok)
-            self.assertIn("rejected", why)
-            self.assertIn("exit", why)          # the status is always carried
-            self.assertRegex(why, r"exit \d+")  # and it is a real number
+            self.assertIn("conflict", why)
+            self.assertIn("f.txt", why)
+
+    def _remote_moves(self, d, bare, name="g.txt"):
+        other = os.path.join(d, "other")
+        _run("git", "clone", "-q", bare, other)
+        _run("git", "-C", other, "config", "user.email", "t@example.com")
+        _run("git", "-C", other, "config", "user.name", "T")
+        with open(os.path.join(other, name), "w") as fh:
+            fh.write("remote-side\n")
+        _run("git", "-C", other, "add", name)
+        _run("git", "-C", other, "commit", "-q", "-m", "remote moved")
+        _run("git", "-C", other, "push", "-q", "origin", "HEAD:main")
+
+    def test_retries_once_after_rebasing_a_non_conflicting_race(self):
+        """Another writer pushed first ("fetch first"). A clean rebase then a
+        second push publishes, instead of leaving aggregate-metrics on WARN."""
+        with tempfile.TemporaryDirectory() as d:
+            local, bare = _repo_with_origin(d)
+            self._remote_moves(d, bare)
+            with open(os.path.join(local, "f.txt"), "a") as fh:
+                fh.write("local-side\n")
+            _run("git", "-C", local, "commit", "-q", "-am", "local diverged")
+            ok, why = np_git_publish.push_to_main(local)
+            self.assertTrue(ok, why)
+            log = subprocess.run(["git", "-C", bare, "log", "--format=%s", "main"],
+                                 capture_output=True, text=True).stdout
+            self.assertIn("local diverged", log)
+            self.assertIn("remote moved", log)
+
+    def test_no_retry_on_a_dirty_checkout(self):
+        """Never rebase over uncommitted work (no autostash)."""
+        with tempfile.TemporaryDirectory() as d:
+            local, bare = _repo_with_origin(d)
+            self._remote_moves(d, bare)
+            with open(os.path.join(local, "f.txt"), "a") as fh:
+                fh.write("local-side\n")
+            _run("git", "-C", local, "commit", "-q", "-am", "local diverged")
+            with open(os.path.join(local, "wip.txt"), "w") as fh:
+                fh.write("uncommitted\n")
+            _run("git", "-C", local, "add", "wip.txt")
+            ok, why = np_git_publish.push_to_main(local)
+            self.assertFalse(ok)
+            self.assertIn("uncommitted", why)
+            self.assertTrue(os.path.exists(os.path.join(local, "wip.txt")))
 
     def test_a_rejected_push_detail_stays_one_bounded_line(self):
         """Git's rejection stderr is multi-line. A status line must stay parseable."""
