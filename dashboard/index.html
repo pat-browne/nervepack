@@ -263,13 +263,12 @@
   /* Health panels shrink and scroll before the wiki list loses its floor. */
   .sidehealth { flex:0 1 auto; min-height:0; border-top:1px solid var(--border); margin-top:12px; padding-top:12px;
                 max-height:30vh; overflow-y:auto; }
-  .credfold > summary { cursor:pointer; font-size:12px; list-style:none; }
-  .credfold > summary::-webkit-details-marker { display:none; }
-  .credfold > summary::before { content:"\25B8"; margin-right:6px; font-size:9px; color:var(--text-tertiary); }
-  .credfold[open] > summary::before { content:"\25BE"; }
-  .credfold > summary .lbl { display:inline; }
+  .sidefold > summary { cursor:pointer; font-size:12px; list-style:none; }
+  .sidefold > summary::-webkit-details-marker { display:none; }
+  .sidefold > summary::before { content:"\25B8"; margin-right:6px; font-size:9px; color:var(--text-tertiary); }
+  .sidefold[open] > summary::before { content:"\25BE"; }
+  .sidefold > summary .lbl { display:inline; }
   .sidehealth .lbl { margin-bottom:4px; }
-  .sidehealth .kv { font-size:12px; margin-bottom:4px; }
   .sidehealth .jobs { grid-template-columns:1fr; }
   .sidehealth .jobs > .sug:nth-child(2) { border-top:1px solid var(--border); }
   .sidehealth .jobrow { padding-top:6px; padding-bottom:6px; font-size:12px; }
@@ -847,7 +846,10 @@
             <button class="btn sm primary" data-troubleshoot title="Run an agent that diagnoses and fixes this job.">Troubleshoot</button>
           </span>` : ""}</div>`;
     }).join("");
-    elJobs.innerHTML = head + `<div class="kv">${esc(jobSummary(jobs))}</div><div class="jobs">${rows}</div>`;
+    // Folded by default so the wiki keeps the sidebar. A refresh keeps the user's choice.
+    const wasOpen = !!elJobs.querySelector("details.sidefold[open]");
+    elJobs.innerHTML = `<details class="sidefold"${wasOpen ? " open" : ""}><summary><span class="lbl">Health checks</span> · ${esc(jobSummary(jobs))}</summary>`
+      + `<div class="jobs">${rows}</div></details>`;
     if (!SERVED) return;
     elJobs.querySelectorAll("[data-troubleshoot]").forEach(b => b.addEventListener("click", () => {
       const row = b.closest(".sug");
@@ -891,8 +893,8 @@
         </div></div>`).join("");
     const summary = `${creds.length} credential${creds.length === 1 ? "" : "s"}, ${bad ? bad + " need attention" : "all ok"}`;
     // Folded by default so the wiki keeps the sidebar. A refresh keeps the user's choice.
-    const wasOpen = !!elCreds.querySelector("details.credfold[open]");
-    elCreds.innerHTML = `<details class="credfold"${wasOpen ? " open" : ""}><summary><span class="lbl">Credentials</span> · ${esc(summary)}</summary>`
+    const wasOpen = !!elCreds.querySelector("details.sidefold[open]");
+    elCreds.innerHTML = `<details class="sidefold"${wasOpen ? " open" : ""}><summary><span class="lbl">Credentials</span> · ${esc(summary)}</summary>`
       + `<div class="jobs">${rows}</div></details>`;
   }
   async function refreshCreds() {
