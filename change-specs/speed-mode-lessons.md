@@ -10,7 +10,7 @@ blast_radius:
   - skills/np-flow-speed/**
   - skills/np-core-dispatch/**
   - INDEX.md
-  - change-specs/ci-draft-prs-heavy-tier.md
+  - change-specs/speed-mode-lessons.md
 ---
 
 # 0127: Draft PRs skip CI, heavy jobs run once per batch
