@@ -10,6 +10,25 @@ It does not track any individual user's personal content overlay.
 ## [Unreleased]
 
 ### Added
+- **Signal pre-pass for capture.** `np_transcript_signals.py` lists friction with
+  `file:line` before the capture model runs: human turns, interrupts, questions,
+  permission denials, hook blocks, tool errors (with retry outcome), blocked results and
+  repeated skills. Each struggle must anchor to one, or capture drops it (spec 0124).
+- **Closed state for lessons.** A lesson block's `resolved_by` GitHub link is checked
+  daily with `gh`. A closed issue or merged PR sets `status: resolved`, and recall and the
+  guard skip the block. Only owners in `lessons.resolve_owners` count, defaulting to
+  the engine and content remote owners. Fails open without `gh` (spec 0124).
+- **Provider-key redaction in the transcript extractor.** `np-transcript-extract.py` runs
+  `np_scrub` before capture sees the text. `np_scrub` now also catches Stripe, Google API
+  and Hugging Face key shapes (spec 0124).
+
+### Fixed
+- **Cron pushes sync with origin first.** `np_git_publish.sync_push()` fetches,
+  rebases, unions `*.jsonl`, rebuilds `metrics.js`, then pushes. An unresolvable
+  conflict aborts and logs, and never force-pushes. Agentic crons route through it
+  too. Before this, 31 content commits piled up behind rejected pushes (spec 0123).
+
+### Added
 - **Per-feature model selection.** A `models` toggle row holds tier defaults and
   one param per feature. The dashboard Models panel sets them and probes each
   model. A retired model shows a banner linking to its feature row (spec 0042).

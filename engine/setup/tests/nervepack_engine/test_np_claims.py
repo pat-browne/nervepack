@@ -298,6 +298,26 @@ class PositionTests(ClaimsCase):
                       "If that session is gone, run: cli.py claim release --session aaaaaaaa-1",
                       text.split("\n"))
 
+    def test_read_only_peer_gets_no_stop(self):
+        np_claims.write("aaaaaaaa-1", self.repo, force=True, phase="read-only")
+        np_claims.write("cccccccc-3", self.repo, force=True)
+        text = np_claims.render(np_claims.position("cccccccc-3", self.repo))
+        self.assertNotIn("STOP: aaaaaaaa", text)
+
+    def test_read_only_session_sees_no_stop(self):
+        np_claims.write("cccccccc-3", self.repo, force=True, phase="read-only")
+        pos = np_claims.position("cccccccc-3", self.repo)
+        self.assertEqual(pos["same_worktree"], [])
+
+    def test_read_only_session_sees_no_overlap(self):
+        np_claims.write("dddddddd-4", self.repo, force=True, paths=["a.py"])
+        np_claims.write("eeeeeeee-5", self.repo, force=True, paths=["a.py"], phase="read-only")
+        self.assertEqual(np_claims.position("eeeeeeee-5", self.repo)["overlaps"], [])
+
+    def test_read_only_peer_does_not_raise_rank(self):
+        np_claims.write("aaaaaaaa-1", self.repo, force=True, phase="read-only")
+        self.assertEqual(np_claims.position("bbbbbbbb-2", self.wt)["rank"], 1)
+
     def test_render_empty_when_alone(self):
         np_claims.release("bbbbbbbb-2", self.wt)
         self.assertEqual(np_claims.render(np_claims.position("aaaaaaaa-1", self.repo)), "")

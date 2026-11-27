@@ -18,6 +18,14 @@
     "type": "bool",
     "description": "Whether lesson entries with an enforce block gate/warn at the tool call."
   },
+  "lessons.resolve": {
+    "type": "bool",
+    "description": "Daily, mark a lesson block resolved once its resolved_by GitHub issue closes or PR merges."
+  },
+  "lessons.resolve_owners": {
+    "type": "string",
+    "description": "GitHub owners whose issue or PR links may resolve a lesson, joined by +. Empty uses the owners of the engine and content origin remotes."
+  },
   "lessons.recall_min_hits": {
     "type": "number",
     "min": 1,
@@ -27,6 +35,10 @@
     "type": "number",
     "min": 1,
     "description": "Most lesson topics injected per prompt, ranked by hits then trigger rarity."
+  },
+  "memory.signals": {
+    "type": "bool",
+    "description": "Run the deterministic friction pre-pass before capture and drop struggles with no file:line anchor."
   },
   "memory.write_guard": {
     "type": "bool",
@@ -268,6 +280,9 @@
   "maintain.job_health": {
     "description": "Scheduled-job health report: the doctor's job-health check and the dashboard's /api/jobs endpoint."
   },
+  "maintain.credentials": {
+    "description": "Credential expiry report: the doctor's credentials check and the dashboard's /api/credentials endpoint."
+  },
   "maintain.refine": {
     "description": "Weekly lint + cross-reference audit pass over skills/wiki content."
   },
@@ -275,7 +290,7 @@
     "description": "Weekly skill dedup + split-proposal pass."
   },
   "maintain.kb_promote_scan": {
-    "description": "Weekly (Mon) data-base harness-promote-scan run; opens a data-base PR when it queues items."
+    "description": "Weekday harness-promote-scan run against a team KB repo. Set kb_dir, kb_repo, kb_base, kb_gates and commit_trailer in toggles.local. Skips when unset."
   },
   "pii_filter": {
     "description": "Context-window and storage-time PII scrubbing for recalled/injected content. Off by default."
@@ -329,6 +344,15 @@
   "gates.spec_review": {
     "type": "bool",
     "description": "Whether the spec-review hook asks, before the first implementation edit, that the branch's governing spec or plan has been read. Local scope: turning it off applies to this machine only."
+  },
+  "gates.speed_silent": {
+    "type": "bool",
+    "description": "Whether a session running np-flow-speed (and its subagents) silences the spec-review ask. Off makes the gate ask in speed mode too."
+  },
+  "gates.speed_silent_ttl_h": {
+    "type": "number",
+    "min": 0.01,
+    "description": "Hours a speed-mode marker silences spec-review. Must be a positive number. A non-numeric or non-positive value is ignored and the 12 h default applies."
   },
   "gates.drift_guard.enforce": {
     "type": "bool",
@@ -472,7 +496,7 @@
       "off",
       "block"
     ],
-    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and escalates to ask after two retries."
+    "description": "Mode for categorical findings (em dash, semicolon, marketing adjective). block denies the write and adds context without a permission decision after two retries."
   },
   "form_gate.rate": {
     "type": "enum",

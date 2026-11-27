@@ -42,7 +42,7 @@ class TestExtract(unittest.TestCase):
             "providers/Microsoft.Sql/servers/s1\n"
             "arn:aws:s3:::my-bucket/key 198.51.100.4/16 203.0.113.5:5432 api.example.com "
             "SELECT * FROM dbo.Camper JOIN [DW].[mart].[Fact] x definitionId=42 "
-            "https://dev.azure.com/org/proj/_git/data-base port 8080 setup.py package.json"
+            "https://dev.azure.com/org/proj/_git/team-kb port 8080 setup.py package.json"
         )
         got = ids(np_resources.extract(text))
         self.assertEqual(got["arn:aws:s3:::my-bucket/key"], "arn")
@@ -53,7 +53,7 @@ class TestExtract(unittest.TestCase):
         self.assertEqual(got["dbo.Camper"], "db-object")
         self.assertEqual(got["DW.mart.Fact"], "db-object")
         self.assertEqual(got["definitionId=42"], "pipeline-id")
-        self.assertEqual(got["dev.azure.com/org/proj/_git/data-base"], "repo")
+        self.assertEqual(got["dev.azure.com/org/proj/_git/team-kb"], "repo")
         self.assertEqual(got["port 8080"], "port")
         self.assertTrue(any(t == "azure-resource-id" for t in got.values()))
         self.assertNotIn("setup.py", got)
@@ -185,7 +185,7 @@ class TestBounds(JournalBase):
 class TestCrawl(JournalBase):
     def _seed_journal(self):
         np_journal.append_block("sid-1", "SessionStart", {"goal": "fix sync"},
-                                extra_lines=["**Repo:** data-base @ main (abc, clean) [checkout: /x]"])
+                                extra_lines=["**Repo:** team-kb @ main (abc, clean) [checkout: /x]"])
         np_journal.append_block(
             "sid-1", "PreCompact",
             {"goal": "fix sync", "struggles": "retry loop on 429 from the sync API", "wins": "exponential backoff fixed the sync retry loop",
@@ -203,10 +203,10 @@ class TestCrawl(JournalBase):
 
     def test_crawl_feeds_episodic_and_resources_inboxes(self):
         self._seed_journal()
-        self.assertTrue(np_journal.crawl("sid-1", "/work/data-base"))
+        self.assertTrue(np_journal.crawl("sid-1", "/work/team-kb"))
         epi = self._inbox("EPISODIC_INBOX")
         self.assertEqual(len(epi), 1)
-        self.assertEqual(epi[0]["project"], "data-base")
+        self.assertEqual(epi[0]["project"], "team-kb")
         self.assertEqual(epi[0]["crawl_struggles"][0]["symptom"], "retry loop on 429 from the sync API")
         self.assertEqual(epi[0]["crawl_strategies"][0]["content"], "exponential backoff fixed the sync retry loop")
         self.assertIn("use jitter (because thundering herd)", epi[0]["body"])
@@ -216,11 +216,11 @@ class TestCrawl(JournalBase):
         res = self._inbox("NP_RESOURCES_INBOX")
         self.assertEqual(res[0]["id"], "api.example.com")
         self.assertEqual(res[0]["purpose"], "sync target")
-        self.assertEqual(res[0]["repo"], "data-base")
+        self.assertEqual(res[0]["repo"], "team-kb")
 
     def test_cleanup_only_after_crawl_and_crawl_runs_once(self):
         self._seed_journal()
-        np_journal.crawl_and_cleanup("sid-1", "/w/data-base")
+        np_journal.crawl_and_cleanup("sid-1", "/w/team-kb")
         self.assertFalse(os.path.exists(np_journal.journal_path("sid-1")))
         self.assertEqual(len(self._inbox("EPISODIC_INBOX")), 1)
 

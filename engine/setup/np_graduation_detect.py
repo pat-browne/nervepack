@@ -29,7 +29,7 @@ import sys
 import np_frontmatter
 
 SKIP_NAMES = {"INDEX.md", "README.md"}
-DONE_STATUS = {"graduated", "promoted", "archived"}
+DONE_STATUS = {"graduated", "promoted", "archived", "resolved"}
 
 
 def _int_env(name, default):

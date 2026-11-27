@@ -58,6 +58,14 @@ worktree.
   and to run /np-core-capture-learning at each milestone. A child is not done
   until its final report has a "Captured:" line.
 
+- Every brief tells the child to send you each question, blocker and finding
+  by SendMessage. Each message names the ticket, the ask, the options and the
+  child's recommendation. The child waits for your reply. It asks you by
+  SendMessage first. If that call errors, it asks in its own session and starts
+  the message with `SendMessage failed:`.
+  Relay its message to me as sent. Read its transcript to verify a fact it
+  reports, and read more if anything looks wrong or missing.
+
 - Small calls are yours, but tell me after you make them. Scope, security, or
   anything customers see comes to me.
 
@@ -83,31 +91,23 @@ itself. This section owns the rule for every coordinator, including
   names another model.
 - A worker sends a hard call back as a decision request: the options and its
   pick. You decide, tell the worker, and record the call in the ledger.
+- Run independent work in parallel, in one batch.
+- Confirm or correct every worker result before it lands. A report is a claim.
+- Form your own theory first, before a diagnosis worker reports.
+- Send a wrong finding back to its worker with the evidence. Log each correction.
+
+Full rules: references/worker-verification.md
 
 ## Close-out: capture, then archive
 
 This section owns the rule for every coordinator, including [[np-core-dispatch]]
 and [[np-flow-speed]]. A child that met its stated goal and sits idle gets closed
-out, never left open.
+out, never left open. Confirm the goal from evidence, send it
+[[np-core-capture-learning]], check the capture landed, confirm a clean pushed
+worktree, then archive and mark its ledger row `done`. A child that ends on a
+gate or question with no capture report stays open as `waiting on me`.
 
-1. Confirm the goal is met from evidence: merged PR, pushed commit, or report
-   verified. A child still owed a step (live checks, a merge, an answer) stays
-   open.
-2. Send it [[np-core-capture-learning]] as one message. Tell it to take no new
-   work after the capture.
-3. Wait for its capture report. Check where the capture landed: a commit, a
-   branch, or memory.
-4. Run `git -C "$worktree" status -sb`, where `$worktree` is the child's
-   working directory. Archive only when the tree is clean and the branch is not
-   ahead of its remote. Otherwise, or if the command fails (missing worktree,
-   git error), ask the child to commit and push, or leave it open as
-   `waiting on me`.
-5. Archive the child. Mark its row in § The ledger `done`, with the PR if one
-   exists and the capture location.
-
-A child that ends its turn on a gate or a question, with no capture report,
-stays open as `waiting on me`. Archiving can remove the child's folder. Never
-archive a child whose folder another live session uses.
+Full steps: references/close-out.md
 
 ## The loop
 
@@ -125,7 +125,8 @@ Handle these yourself:
 |---|---|
 | "Ready to merge" | Read the diff, the merge gate and CI yourself. |
 | Small technical call | Decide, tell the child, list it in the next update. |
-| Stuck or silent | Read its transcript and PR before you call it blocked. |
+| Stuck or silent (ended its turn with no message to you) | Read its transcript and PR before you call it blocked. |
+| Asked a question in its own session, not by SendMessage | Relay it to me. Send my answer to the child by SendMessage, and remind it to use SendMessage next time. If your SendMessage errors too, tell me and post the answer as a new prompt in the child's session, which wakes it. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
 Before a worker PR is ready or merged, the coordinator dispatches the reviews

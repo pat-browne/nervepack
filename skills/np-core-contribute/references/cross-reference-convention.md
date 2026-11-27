@@ -37,7 +37,7 @@ because a different repo you were just working in used plain names.
 
 ## The incident
 
-A session wrote a PR-description shape into a `data-base` skill (`concise-
+A session wrote a PR-description shape into a `team-kb` skill (`concise-
 output`), cross-referencing a sibling skill (`pr`) with a relative markdown
 link: `` [`pr`](../pr/SKILL.md) ``. That repo's own dominant convention,
 visible in a dozen other skills, is a plain backtick name with no path. The

@@ -42,7 +42,7 @@ class TestFormGateComposition(unittest.TestCase):
     def test_semicolon_in_markdown_is_flagged_through_the_real_entry_point(self):
         """The categorical channel reaches the real cli.py either way.
 
-        Whether the decision is "ask" or "allow" (with additionalContext) is
+        Whether the output is "ask" or context only (no decision) is
         governed by the form_gate.categorical toggle param -- ships as `warn`
         in this task, flips to `ask` in Task 6 after the corpus check. This
         test proves the whole chain (extraction -> stripping -> lint ->
@@ -61,7 +61,7 @@ class TestFormGateComposition(unittest.TestCase):
         if not proc.stdout.strip():
             self.skipTest("no content overlay linter on this machine")
         data = json.loads(proc.stdout)["hookSpecificOutput"]
-        self.assertIn(data["permissionDecision"], ("ask", "allow"))
+        self.assertIn(data.get("permissionDecision"), (None, "ask", "deny"))
         reason = data.get("permissionDecisionReason") or data.get("additionalContext") or ""
         self.assertIn("semicolon", reason)
 

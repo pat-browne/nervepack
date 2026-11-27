@@ -249,6 +249,17 @@ class CommitRoutingTest(unittest.TestCase):
         self.assertEqual(engine_before, self._head(self.np))
         self.assertEqual(result, "ok: agent run completed")
 
+    def test_unpublished_commit_is_incomplete_not_ok(self):
+        """A left-behind commit that fails to publish is not an ok run."""
+        with mock.patch.object(np_agentic_cron.np_llm_agent, "run_agent",
+                               side_effect=self._promote_stub()), \
+             mock.patch.object(np_agentic_cron, "_ahead_of_upstream", return_value=True), \
+             mock.patch.object(np_agentic_cron.np_git_publish, "publish",
+                               return_value=(False, "sync conflict (x)")):
+            result = np_agentic_cron.memory_promote()
+        self.assertTrue(result.startswith("incomplete: "), result)
+        self.assertIn("NOT PUBLISHED: sync conflict (x)", result)
+
     def test_no_op_when_agent_makes_no_commit(self):
         overlay_before = self._head(self.overlay)
         with mock.patch.object(np_agentic_cron.np_llm_agent, "run_agent",
