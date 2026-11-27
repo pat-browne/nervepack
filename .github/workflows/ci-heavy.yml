@@ -1,0 +1,61 @@
+name: CI heavy
+
+# The heavy tier. It runs once per batch: when a ready PR gets the
+# `merge-ready` label, and on every push to main. It is informational, so no
+# required check lives here. The fast gate stays in ci.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  dashboard-e2e:
+    name: Dashboard e2e (Playwright, informational)
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'merge-ready' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true        # informational — never blocks merge
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # Pin to 3.12: playwright 1.48.0 pins greenlet 3.1.1, which has no wheel for
+          # the very newest CPython (3.14) and fails to build from source in CI. The
+          # zero-dep `regression` job stays on "3.x".
+          python-version: "3.12"
+
+      - name: Install Playwright + chromium
+        run: |
+          pip install -r engine/setup/tests/e2e/requirements.txt
+          python3 -m playwright install --with-deps chromium
+
+      - name: Run e2e
+        working-directory: engine/setup/tests/e2e
+        run: python3 -m unittest test_implement_flow test_action_buttons_flow -v 2>&1 | tee "$GITHUB_WORKSPACE/e2e-report.txt"
+
+      - name: Publish e2e to job summary
+        if: always()
+        run: |
+          {
+            echo "## Dashboard e2e"
+            echo '```'
+            cat e2e-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload e2e report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: e2e-report.txt
