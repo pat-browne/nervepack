@@ -26,7 +26,7 @@ extend rather than create overlapping duplicates.
 | [np-flow-merge-gate](skills/np-flow-merge-gate/SKILL.md) | 83 | Wait for concurrent work on a repo (worktree agent, cron, teammate) to finish, then merge if clean or ask on conflicts. Use on "wait to merge", "merge when the other branch finishes", "is it safe to merge yet". Also covers a `claim status` STOP at task start, when a live session holds your branch. |
 | [np-flow-orchestrate](skills/np-flow-orchestrate/SKILL.md) | 179 | Use when several tickets of one kind of work should run at once, each in its own session and worktree, with one coordinator driving them. Triggers: "orchestrate my tickets", "run these tickets in parallel", "be my orchestrator", "/np-orchestrate". |
 | [np-flow-quota-watch](skills/np-flow-quota-watch/SKILL.md) | 53 | Detect a claude.ai usage-limit (quota) violation and get nudged to resume automatically once it resets. Use when a session hit "usage limit reached", when debugging why the resume nudge didn't fire, or when asked to check quota-watch status, install/enable/disable it, or adjust its resume delay. |
-| [np-flow-speed](skills/np-flow-speed/SKILL.md) | 159 | Use when the user wants a change delivered end to end with no clarifying questions or permission check-ins. Triggers: "speed mode", "/np-speed", "just ship it", "no questions", "don't ask, just do it". |
+| [np-flow-speed](skills/np-flow-speed/SKILL.md) | 156 | Use when the user wants a change delivered end to end with no clarifying questions or permission check-ins. Triggers: "speed mode", "/np-speed", "just ship it", "no questions", "don't ask, just do it". |
 
 ## Archived skills
 
