@@ -137,11 +137,11 @@ ledger as `waiting on me`.
 The coordinator dispatches these and relays every link:
 
 - A code review (`/code-review`) in read-only subagents, one per PR or repo.
-  Send every Hard block back to the worker. Get every Soft warning fixed or answered.
-- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. CI disabled means no gate.
-  Say so; test a trial merge (`<base>` = PR target):
-  `git merge --no-commit --no-ff origin/<base>`, test, `git merge --abort`.
-  On conflicts, abort; worker rebases. Give the user every check and deploy link.
+  Send every Hard block back to the worker. Fix every Soft warning or reply with a reason.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. No CI means no gate: tell the user.
+  Then, on the PR branch, `git merge --no-commit --no-ff origin/<base>` (the PR target),
+  run the tests, and `git merge --abort`. A conflict goes back to the worker to rebase.
+  Any other failure stops the merge and goes to the user. Give the user every check and deploy link.
 
 ## The ledger
 
