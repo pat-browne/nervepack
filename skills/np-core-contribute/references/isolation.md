@@ -97,6 +97,42 @@ asymmetrically depending on which repo you isolated:
 `INDEX.md` conflicts on merge nearly every time, because both sides regenerated it.
 Never hand-merge it: take either side, then rerun `link-skills` to regenerate.
 
+### A failed `worktree add` still creates its branch
+
+`git worktree add -b <branch> <path>` creates the branch before it checks the path. If `<path>` already exists, git exits 128 with `already exists`. The branch still exists, with no worktree attached. If the path exists, omitting `-b` has the same outcome. Git creates a branch named after the path's basename before it checks the path. The add then fails and leaves that branch behind.
+
+Verified on git 2.54.0 in a scratch repo. Set `REPO` to your checkout, such as `REPO=~/Code/nervepack`. Then check before you retry:
+
+```bash
+git -C "$REPO" worktree list                 # is the path already a worktree?
+test -e "<path>"                             # does the path exist?
+git -C "$REPO" branch --list "<branch>"      # did a failed add leave the branch?
+```
+
+Pick an absolute path that the worktree list and `test -e` show as free. Every check resolves an absolute path the same way. Name it after the branch, such as `<repo>-wt-<topic>`.
+
+To clean up a leftover branch, delete it only when this session created it. Its tip must match the commit that this session's add started from. Git keeps no creator record. Delete only when this session's own work shows it ran the add. If you cannot show that, do not delete.
+
+A claim is a per-session record of the branch and worktree that a live session holds. Find live claims with `python3 engine/nervepack_engine/cli.py claim list`. Each line is space-separated: session prefix, branch, worktree, phase (`-` if unset), then comma-separated paths.
+
+What to do after the checks:
+
+- Path is already a worktree (that is why the add failed): another session may own it. Leave the worktree and its branch alone, and pick a different path.
+- Path exists but is not a worktree: leave it, pick a different path, and delete the orphaned branch only if the rule above allows.
+- Branch exists and the path is free: retry with `git worktree add <path> <branch>`, which reuses the branch. Or delete the branch if this session created it.
+- A claim covers the branch: do not delete it. Use a new branch and path, and ask the claiming session's operator to clean up. Find that operator through the session id and worktree path in the claim. Leaving the branch costs only clutter, so no deadline applies. If nobody answers, leave the branch and open a GitHub issue.
+- Claims are off: `python3 engine/nervepack_engine/np_toggle.py enabled claims` prints `off`. `claim list` then prints nothing for every branch. Stop and delete nothing.
+- `claim list` prints nothing, but `~/.cache/nervepack/claims.log` has error lines from the last 24 hours. Stop and delete nothing. Fix the logged error, then rerun `claim list`. If that fails, file a GitHub issue with the log lines. A stranded branch loses no work.
+- A claim with no heartbeat for `claims.stale_days` days (seven by default) is pruned. Pruning removes only the claim file, never the branch. Pruning logs nothing on success. A failed prune writes to `~/.cache/nervepack/claims.log`. A stale claim alone does not prove the branch is free.
+
+Claims log lines starting `list_live:` mean the claims directory is unreadable. A `list_live <file>.json:` line means one claim file is unreadable. A `delete stale claim:` line means a stale claim file could not be removed. A `ctx:` line means git could not resolve the repo.
+
+Read the value with `python3 engine/nervepack_engine/np_toggle.py param claims.stale_days 7`. It prints 7 when unset. Do not use `cli.py toggle param`. It writes configuration and can commit that change during a cleanup run. The tool should not write on a read, so file an engine issue for it.
+
+Delete with `git branch -D "<branch>"`.
+
+Automated jobs never delete a leftover branch. They print the branch name to their job log and exit, and nothing alerts on it. The next run repeats these checks. If the same name appears again, open a GitHub issue with the branch name and both run times. A person runs the checks above before any deletion.
+
 ## Engine changes are a PR, not a push
 
 The engine repo is public. Changes under `dashboard/`, `engine/`, and the

@@ -22,7 +22,8 @@ import np_toggle  # noqa: E402
 
 DAY = 86400
 _LABEL = "com.nervepack."
-_ERROR = re.compile(r"\bERROR\b|Traceback|agent run failed|auth failed|exited non-zero")
+_ERROR = re.compile(r"\bERROR\b|Traceback|agent run failed|auth failed|exited non-zero"
+                    r"|usage allocation|spend limit|API Error")
 _WARN = re.compile(r"NOT PUBLISHED|\brefused\b|\bWARN\b")
 _HEADER = re.compile(r"===.*\brun\b.*===")
 _TAIL_LINES = 20
@@ -46,7 +47,10 @@ def _plist_cadence(data):
     cal = data.get("StartCalendarInterval")
     if isinstance(cal, dict) and "Weekday" in cal:
         return 7 * DAY, "weekly"
-    return DAY, "daily"
+    if cal:
+        return DAY, "daily"
+    # No interval or calendar: launchd starts it at login or on demand only.
+    return None, "at login" if data.get("RunAtLoad") else "on demand"
 
 
 def _read_plist(path):
@@ -125,7 +129,9 @@ def _last_block(log_path):
     for i in range(len(lines) - 1, -1, -1):
         if _HEADER.search(lines[i]):
             return lines[i + 1:]
-    return lines[-_TAIL_LINES:]
+    # No run header: each run appends one result line, so judge the newest.
+    tail = [ln for ln in lines[-_TAIL_LINES:] if ln.strip()]
+    return tail[-1:]
 
 
 def _status(block):
@@ -140,14 +146,17 @@ def _status(block):
 
 
 def _last_run(log_path):
+    """The later of the newest stamp in the log and the file's mtime.
+
+    A job that writes no run header leaves its last stamp on the last success,
+    so a stamp alone made a job failing every hour read as weeks overdue."""
     stamp = np_maintenance_freshness.last_run(log_path)
-    if stamp:
-        return stamp
     try:
-        mtime = os.path.getmtime(log_path)
+        mtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(log_path), datetime.timezone.utc).strftime(_STAMP_FMT)
     except OSError:
-        return None
-    return datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc).strftime(_STAMP_FMT)
+        return stamp
+    return max(s for s in (stamp, mtime) if s)
 
 
 def _age_s(stamp):
@@ -199,7 +208,8 @@ def _row(job, kind, la_dir, log_dir, cron, exits, schtasks_fn, grace):
     log = _log_for(job, log_dir)
     last = _last_run(log)
     age = _age_s(last) if last else None
-    limit = job["cadence_s"] + min(grace, job["cadence_s"])
+    cadence = job["cadence_s"]
+    limit = None if cadence is None else cadence + min(grace, cadence)
 
     return {"name": job["name"], "managed": job["managed"], "schedule": job["schedule"],
             "cadence_s": job["cadence_s"], "toggle": job["toggle"], "enabled": enabled,
@@ -207,7 +217,7 @@ def _row(job, kind, la_dir, log_dir, cron, exits, schtasks_fn, grace):
             "backend": kind, "log": log, "last_run": last,
             "age_h": None if age is None else round(age / 3600.0, 1),
             "status": _status(_last_block(log)), "exit": exits.get(_LABEL + job["name"]),
-            "overdue": bool(enabled) and (age is None or age > limit)}
+            "overdue": bool(enabled) and limit is not None and (age is None or age > limit)}
 
 
 # Every OS call goes through a seam so tests run on any platform.
@@ -229,7 +239,7 @@ def survey(backend=None, la_dir=None, log_dir=None, launchctl_fn=None,
             for j in jobs]
 
 
-def _problems(row):
+def problems(row):
     if not row["enabled"]:
         return []
     out = []
@@ -244,6 +254,9 @@ def _problems(row):
     return out
 
 
+_problems = problems  # old name, kept for callers
+
+
 # One doctor line, PASS or WARN. Never raises.
 def report():
     try:
@@ -253,7 +266,7 @@ def report():
     except Exception as exc:
         return "PASS (job-health survey unavailable: %s)" % type(exc).__name__
 
-    bad = [(r["name"], _problems(r)) for r in rows]
+    bad = [(r["name"], problems(r)) for r in rows]
     bad = [(n, p) for n, p in bad if p]
     if not bad:
         return "PASS (%d job(s) healthy)" % len(rows)

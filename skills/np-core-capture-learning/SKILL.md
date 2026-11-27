@@ -60,7 +60,28 @@ current PR you're debugging."
 If the user disagrees, switch routes. They have final say.
 
 ### 2a. Durable → nervepack
-Delegate to [[np-core-contribute]]. Follow its full protocol: preflight for other
+First make sure the checkout is current. A stale one hides the skill you would
+extend and forks the repo.
+
+Read the sync status. Only `up to date` allows the capture.
+
+```bash
+cat ~/.cache/np-core-sync-status
+```
+
+For any other content, or a missing or empty file, run the sync and read the
+status again. See [[np-core-sync]].
+
+```bash
+python3 "${NP_DIR:-$HOME/Code/nervepack}/engine/nervepack_engine/cli.py" sync exit
+```
+
+If the sync exits nonzero or the status is still not `up to date`, stop. Tell
+the user "Cannot capture: checkout is stale." Quote the status line and the last
+lines of the sync output, and ask how to proceed. Do not edit skills on a stale
+tree.
+
+Then delegate to [[np-core-contribute]]. Follow its full protocol: preflight for other
 writers, sync first, check `INDEX.md`, pick the right skill (extend over create),
 write the edit, regenerate index, diff, commit, ask before push.
 

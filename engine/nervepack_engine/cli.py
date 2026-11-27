@@ -246,7 +246,7 @@ def _parse_merge_wait_args(argv):
 _COMMANDS = (
     "resume-write", "cron", "setup", "layout", "onboard", "implement-suggestion",
     "merge-wait", "suggestion-resolve", "suggestion-unresolve", "toggle", "doctor",
-    "instruction-block", "sync", "open-dashboard", "claim", "hook",
+    "credentials", "instruction-block", "sync", "open-dashboard", "claim", "hook",
 )
 
 
@@ -490,6 +490,11 @@ def main(argv=None):
         except Exception as exc:
             _bail("doctor", "unhandled exception: %r" % exc)
             return 1
+
+    if argv[0] == "credentials":
+        # A user command: status table, --json, or rotate <name>|--due.
+        import np_credentials
+        return np_credentials.main(argv[1:])
 
     if argv[0] == "instruction-block":
         if len(argv) < 3 or argv[1] not in ("install", "remove"):

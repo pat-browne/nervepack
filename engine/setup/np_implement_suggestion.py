@@ -281,9 +281,12 @@ def _resolve_content_repo(engine_repo):
 # It is matched against this allowlist, never used to build a path or command.
 # An unknown or absent tag keeps the historic engine-first order.
 _TARGET_ORDER = {
+    "content":   ("content", "engine"),
     "skills":    ("content", "engine"),
     "playbooks": ("content", "engine"),
     "hooks":     ("engine", "content"),
+    "agents":    ("engine", "content"),
+    "harness":   ("engine", "content"),
     "sync":      ("engine", "content"),
     "other":     ("engine", "content"),
 }
@@ -295,6 +298,7 @@ _DEFAULT_ORDER = ("engine", "content")
 _KIND_PROMPTS = {
     "compact": "np-flow-apply-compact-proposal.md",
     "graduate": "np-flow-graduate-candidate.md",
+    "troubleshoot": "np-flow-troubleshoot-job.md",
 }
 
 
@@ -305,9 +309,23 @@ _KIND_PROMPTS = {
 _KIND_REPOS = ("content",)
 
 
+# Troubleshoot fixes a scheduled job, whose code lives in the engine. It tries
+# the engine first. An engine commit lands per implement_mode like a suggestion
+# (a PR in pr mode); a content overlay commit still lands direct.
+_TROUBLESHOOT_REPOS = ("engine", "content")
+
+
+def _tools_for(kind):
+    """Tool list for a job: overlay kinds get no Bash, the rest keep it."""
+    return _KIND_TOOLS if _normalize_kind(kind) in ("compact", "graduate") else _AGENT_TOOLS
+
+
 def _kind_repos(kind):
     """Repos a kind job may run in, or None for a plain suggestion."""
-    return _KIND_REPOS if _normalize_kind(kind) else None
+    k = _normalize_kind(kind)
+    if k == "troubleshoot":
+        return _TROUBLESHOOT_REPOS
+    return _KIND_REPOS if k else None
 
 
 def _normalize_kind(kind):
@@ -904,9 +922,14 @@ def _run_one(text, edited, target, ctx, kind=None):
         return
 
     mode = np_toggle.param("evaluator.implement_mode", "pr")
-    # Mode only affects engine landings. Kind jobs run in the overlay, which
-    # always lands direct (see _land), so implement_mode cannot block them.
-    tools = _KIND_TOOLS if kind else _AGENT_TOOLS
+    if _normalize_kind(kind) == "troubleshoot":
+        # Log text is untrusted and the agent has Bash, so an engine fix never
+        # lands direct, whatever implement_mode says.
+        mode = "pr"
+    # Mode only affects engine landings. Overlay kind jobs always land direct
+    # (see _land_result), so implement_mode cannot block them. Troubleshoot needs
+    # Bash to read logs and run launchctl and crontab, so it keeps the full tool list.
+    tools = _tools_for(kind)
     commit_msg = ("%s: %s" % (kind, _slug(task)))[:72] if kind else None
     content_repo = _resolve_content_repo(repo)
     slug = _slug(task)
@@ -1154,6 +1177,8 @@ def _kind_precheck_fn(kind, task):
     The dashboard reads the local overlay checkout, which can lag origin.
     A proposal or lesson origin has already dealt with is a stale click.
     """
+    if kind == "troubleshoot":
+        return None  # the job name is checked server-side, and origin holds no per-job state
     if kind == "compact":
         fname, title = _split_proposal(task)
 

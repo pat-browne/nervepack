@@ -51,6 +51,9 @@ model that can do its job. The session default is never a worker's model.
 - A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker escalates to the coordinator. If the coordinator cannot finish it either, it stops and surfaces it to the user.
 - Record each step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
+- The coordinator dispatches independent work in parallel. It confirms or
+  corrects every worker finding and change before it lands. The rule is in
+  [[np-flow-orchestrate]] § Worker models.
 - Briefing and supervision follow [[np-core-dispatch]]. The tier split mirrors the model selection policy in `AGENTS.md`.
 - Every worker brief carries the prime and capture blocks from `np-core-dispatch`
   references/nervepack-context.md. Workers recall related context first and

@@ -404,6 +404,59 @@ class TestServer(unittest.TestCase):
         self.assertIn("strategy:s1", seen)
         self.assertIn("--kind=graduate", seen)
 
+    # ---- troubleshoot an unhealthy scheduled job ----
+    def _fresh_log(self, name):
+        d = os.path.join(self.tmp.name, "job-logs")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, name + ".log"), "w") as fh:
+            fh.write("=== run ===\nall good\n")
+
+    def _bad_job(self):
+        jobs = json.loads(self._get("/api/jobs")[1])["jobs"]
+        return next(j["name"] for j in jobs if j["enabled"] and j["overdue"])
+
+    def test_troubleshoot_off_toggle_is_404(self):
+        with open(self.toggles_conf, "a") as fh:
+            fh.write("maintain.job_health|shared|runtime|off|\n")
+        status, _ = self._post("/api/jobs/troubleshoot", {"name": "compact", "dry_run": True})
+        self.assertEqual(status, 404)
+
+    def test_troubleshoot_missing_name_is_400(self):
+        for body in ({}, {"name": "  "}):
+            status, out = self._post("/api/jobs/troubleshoot", dict(body, dry_run=True))
+            self.assertEqual(status, 400, out)
+            self.assertEqual(json.loads(out)["error"], "missing name")
+
+    def test_troubleshoot_unknown_job_is_stale_404(self):
+        status, body = self._post("/api/jobs/troubleshoot", {"name": "no-such-job", "dry_run": True})
+        self.assertEqual(status, 404)
+        self.assertEqual(json.loads(body)["code"], "stale")
+
+    def test_troubleshoot_healthy_job_is_400(self):
+        self._fresh_log("compact")
+        try:
+            status, body = self._post("/api/jobs/troubleshoot", {"name": "compact", "dry_run": True})
+        finally:
+            os.remove(os.path.join(self.tmp.name, "job-logs", "compact.log"))
+        self.assertEqual(status, 400, body)
+        self.assertEqual(json.loads(body)["code"], "bad_request")
+
+    def test_troubleshoot_unhealthy_job_dry_run_names_the_kind(self):
+        name = self._bad_job()
+        status, body = self._post("/api/jobs/troubleshoot", {"name": name, "dry_run": True})
+        self.assertEqual(status, 200, body)
+        out = json.loads(body)
+        self.assertEqual((out["kind"], out["text"]), ("troubleshoot", "job:" + name))
+
+    def test_troubleshoot_spawns_a_troubleshoot_job(self):
+        name = self._bad_job()
+        try: os.remove(self.impl_sentinel)
+        except FileNotFoundError: pass
+        status, body = self._post("/api/jobs/troubleshoot", {"name": name})
+        self.assertEqual(status, 200, body)
+        seen = self._wait_sentinel("--kind=troubleshoot")
+        self.assertIn("job:" + name, seen)
+
     def test_implement_missing_text_is_400(self):
         status, _ = self._post("/api/implement", {})
         self.assertEqual(status, 400)
