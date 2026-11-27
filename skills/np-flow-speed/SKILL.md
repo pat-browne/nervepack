@@ -48,7 +48,7 @@ model that can do its job. The session default is never a worker's model.
 
 - Pass a model on every subagent and session. An unset model inherits the coordinator's, the costliest. Rule: [[np-flow-orchestrate]] § Worker models.
 - Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
-- A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker escalates to the coordinator. If the coordinator cannot finish it either, it stops and surfaces it to the user.
+- A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker goes to the coordinator. If it fails too, surface it to the user.
 - Record each step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
 - The coordinator dispatches independent work in parallel. It confirms or
@@ -62,7 +62,7 @@ model that can do its job. The session default is never a worker's model.
 
 ## Parallel runs
 
-Prove the gate green, land the score first, and check pushes with `git ls-remote`.
+Prove the gate green, land the score first (no fixture's score may fall), and check pushes with `git ls-remote`.
 Detail: references/parallel-run-lessons.md
 
 ## The finish line
