@@ -129,14 +129,18 @@ Handle these yourself:
 | Asked a question in its own session, not by SendMessage | Relay it to me. Send my answer to the child by SendMessage, and remind it to use SendMessage next time. If your SendMessage errors too, tell me and post the answer as a new prompt in the child's session, which wakes it. |
 | Done, failed or ended with no `Captured:` line | Send it one message: run /np-core-capture-learning now. A session already gone gets a Haiku agent that captures from its transcript. |
 
-Before a worker PR is ready or merged, the coordinator dispatches the reviews
-and owns relaying the links:
-
-- [[np-flow-code-review]] in read-only subagents, one per PR or repo. Fix every Hard block. Fix or answer every Soft warning.
-- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. CI disabled means no gate: say so, run a trial-merge preflight. Give the user every check and deploy run link.
-
 Several decisions pending? Ask the most blocking one. Keep the rest in the
 ledger as `waiting on me`.
+
+## Before a worker PR merges
+
+The coordinator dispatches these and relays every link:
+
+- A code review (`/code-review`) in read-only subagents, one per PR or repo.
+  Send every Hard block back to the worker to fix. Get every Soft warning fixed or answered.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. CI disabled means no gate.
+  Say so, then run the local suite on a trial merge: `git merge --no-commit --no-ff origin/<base>`,
+  test, `git merge --abort`. Give the user every check and deploy run link.
 
 ## The ledger
 
@@ -166,7 +170,8 @@ references/deploy-gates.md before approving any gate.
 
 ## What this is not
 
-- Not [[np-core-dispatch]]. Dispatch hands one task to one agent.
+- Not [[np-core-dispatch]]. Dispatch hands one task to one agent. This runs a
+  fleet of user-planned tickets.
 - Not [[np-flow-speed]]. Speed mode removes check-ins for one deliverable. The
   orchestrator keeps the user on every plan and risky merge.
 - Not a coding session. A coordinator that edits code has stopped coordinating.
