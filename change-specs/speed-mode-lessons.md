@@ -31,6 +31,9 @@ Chosen option: option 1. Drafts skip every job. `ready_for_review` starts the
 full run. The e2e job moves to `ci-heavy.yml`, triggered by the `merge-ready`
 label and by pushes to main. Runs off main cancel when a newer push lands.
 
+The `push` trigger now covers main only. A branch push with no PR runs no CI.
+A branch gets CI by opening a PR, or by a manual `workflow_dispatch` run.
+
 ## Non-goals
 
 Changing which checks are required, or what any gate checks.
