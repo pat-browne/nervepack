@@ -46,9 +46,9 @@ model that can do its job. The session default is never a worker's model.
 | Fresh-eyes review of each change set or stream (one worker's branch) before integration (gets only the diff and the goal) | Haiku |
 | Coordination, hard calls, review of the merged branches together, final verification | Coordinator (the session model) |
 
-- Pass a model on every subagent spawn and every separate session. An unset model silently inherits the coordinator's model and costs the most. The coordinator rule is in [[np-flow-orchestrate]] § Worker models.
+- Pass a model on every subagent and session. An unset model inherits the coordinator's, the costliest. Rule: [[np-flow-orchestrate]] § Worker models.
 - Start each worker at its tier in the table. A worker fails when it reports it could not finish, or its output fails verification.
-- A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker escalates to the coordinator. If the coordinator cannot finish it either, it stops and surfaces it to the user.
+- A failed Haiku worker reruns once on Sonnet. A failed Sonnet worker goes to the coordinator. If it fails too, surface it to the user.
 - Record each step-up in the decisions log.
 - The coordinator does no hands-on work a worker could do.
 - The coordinator dispatches independent work in parallel. It confirms or
@@ -62,16 +62,16 @@ model that can do its job. The session default is never a worker's model.
 
 ## Parallel runs
 
-- Prep the test env and prove the gate green before dispatch.
-- Land the score and fixtures first. No fixture's score may fall.
-- Check each worker's push claim with `git ls-remote`.
-
+Prove the gate green, land the score first (no fixture's score may fall), and check pushes with `git ls-remote`.
 Detail: references/parallel-run-lessons.md
 
 ## The finish line
 
 Opening the PR starts this phase. It ends only when the deploy has landed and
 a live check passes. Do not hand back at "PR open" or "merged".
+
+Before a PR is ready or merged, run the review and CI checks in
+[[np-flow-orchestrate]] § Before a worker PR merges.
 
 1. **Review bot.** On a repo with the bot ([[np-kb-pr-review-bot]]), wait for
    its review and the responder run. With no bot, or a run that posted

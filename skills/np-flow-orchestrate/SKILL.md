@@ -132,6 +132,17 @@ Handle these yourself:
 Several decisions pending? Ask the most blocking one. Keep the rest in the
 ledger as `waiting on me`.
 
+## Before a worker PR merges
+
+The coordinator dispatches these and relays every link:
+
+- A code review (`/code-review`) in read-only subagents, one per PR or repo.
+  Hard blocks go back to the worker. Fix each Soft warning or give a reason.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. No CI is no gate: tell the user.
+  On the PR branch, run `git merge --no-commit --no-ff origin/<PR target>`, tests,
+  and `git merge --abort`. A conflict goes to the worker. Other failures go to
+  the user. Give the user every check and deploy link.
+
 ## The ledger
 
 Keep one memory file with a row per ticket. Columns: ticket, child session,
@@ -164,6 +175,5 @@ references/deploy-gates.md before approving any gate.
   fleet of user-planned tickets.
 - Not [[np-flow-speed]]. Speed mode removes check-ins for one deliverable. The
   orchestrator keeps the user on every plan and risky merge.
-
 - Not a coding session. A coordinator that edits code has stopped coordinating.
 - Not a way past the repo's `CLAUDE.md`. Deploy rules still bind every child.
