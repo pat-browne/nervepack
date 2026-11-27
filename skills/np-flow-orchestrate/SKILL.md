@@ -138,7 +138,7 @@ The coordinator dispatches these and relays every link:
 
 - A code review (`/code-review`) in read-only subagents, one per PR or repo.
   Hard blocks go back to the worker. Fix each Soft warning or give a reason.
-- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. No CI means no gate: tell the user.
+- [[np-kb-testing-ci]]: confirm a CI gate runs on the PR. No CI is no gate: tell the user.
   On the PR branch, run `git merge --no-commit --no-ff origin/<base>`, the tests,
   then `git merge --abort`. A conflict goes to the worker. Other failures go to
   the user. Give the user every check and deploy link.
